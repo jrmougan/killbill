@@ -21,10 +21,20 @@ export async function PATCH(
     // Verify User is the Receiver (only receiver can confirm/reject)
     // Or Sender can cancel if PENDING? For now, simplistic rule: Receiver controls status.
     const settlement = await prisma.settlement.findUnique({
-        where: { id }
+        where: { id },
+        include: { group: true }
     });
 
     if (!settlement) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Enforce Group Context: User must be in the group AND it must be their active group
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+    });
+
+    if (settlement.groupId !== user?.activeGroupId) {
+        return NextResponse.json({ error: 'Settlement does not belong to your active group' }, { status: 403 });
+    }
 
     if (settlement.toUserId !== userId) {
         return NextResponse.json({ error: 'Only the receiver can update status' }, { status: 403 });

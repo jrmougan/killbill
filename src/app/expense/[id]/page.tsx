@@ -15,7 +15,11 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
         where: { id: id },
         include: {
             paidBy: true,
-
+            splits: {
+                include: {
+                    user: true
+                }
+            }
         }
     });
 
@@ -67,8 +71,37 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     </div>
                 </div>
 
-                <div className="p-8 text-center text-muted-foreground border border-dashed border-white/10 rounded-xl">
-                    Detalle de liquidaciones simplificado.
+                <div className="space-y-4">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1">Reparto</h3>
+                    <div className="bg-card border border-white/10 rounded-2xl overflow-hidden">
+                        {expense.splits.length === 0 ? (
+                            <div className="p-8 text-center text-muted-foreground border-dashed border-white/10">
+                                No hay detalles de reparto para este gasto.
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-white/5">
+                                {expense.splits.map((split: any) => (
+                                    <div key={split.id} className="flex items-center justify-between p-4 bg-white/5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center text-xs overflow-hidden">
+                                                {split.user.avatar || "👤"}
+                                            </div>
+                                            <div>
+                                                <p className="font-medium text-sm">{split.userId === userId ? "Ti" : split.user.name}</p>
+                                                {split.userId === expense.paidById && (
+                                                    <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-tighter">Pagador</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-mono font-bold">{split.amount.toFixed(2)}€</p>
+                                            <p className="text-[10px] text-muted-foreground uppercase">Deuda</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

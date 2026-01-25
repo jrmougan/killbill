@@ -62,6 +62,22 @@ export async function POST(request: Request) {
                 }
             ]
         };
+    } else {
+        // Split among all group members
+        const groupMembers = await prisma.userGroup.findMany({
+            where: { groupId: user.activeGroupId },
+            select: { userId: true }
+        });
+
+        if (groupMembers.length > 0) {
+            const splitAmount = amount / groupMembers.length;
+            expenseData.splits = {
+                create: groupMembers.map((m: any) => ({
+                    userId: m.userId,
+                    amount: splitAmount
+                }))
+            };
+        }
     }
 
     const expense = await prisma.expense.create({
