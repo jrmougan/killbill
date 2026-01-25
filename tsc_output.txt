@@ -1,0 +1,13 @@
+src/app/api/expenses/route.ts(26,41): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/dashboard/page.tsx(29,38): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+src/app/dashboard/page.tsx(29,43): error TS7006: Parameter 'u' implicitly has an 'any' type.
+src/app/dashboard/page.tsx(46,21): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/app/dashboard/page.tsx(48,50): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/app/dashboard/page.tsx(67,21): error TS7006: Parameter 'm' implicitly has an 'any' type.
+src/app/dashboard/page.tsx(70,42): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/app/dashboard/page.tsx(70,78): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+src/app/dashboard/page.tsx(70,83): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/app/dashboard/page.tsx(71,45): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/app/dashboard/page.tsx(71,79): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+src/app/dashboard/page.tsx(71,84): error TS7006: Parameter 's' implicitly has an 'any' type.
+src/lib/db.ts(1,10): error TS2305: Module '"@prisma/client"' has no exported member 'PrismaClient'.

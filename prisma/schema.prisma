@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = "mysql://root:toor@127.0.0.1:3306/killbill"
+}
+
+model Group {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique // For invites
+  createdAt DateTime @default(now())
+
+  users       User[]
+  expenses    Expense[]
+  settlements Settlement[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?  @unique
+  pin       String?
+  avatar    String?
+  password  String?
+  createdAt DateTime @default(now())
+
+  groupId String?
+  group   Group?  @relation(fields: [groupId], references: [id])
+
+  expensesPaid Expense[] @relation("Payer")
+  splits       Split[]
+
+  settlementsPaid     Settlement[] @relation("SettlementPayer")
+  settlementsReceived Settlement[] @relation("SettlementReceiver")
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  description String
+  amount      Float
+  date        DateTime @default(now())
+  category    String   @default("other")
+  status      String   @default("OPEN") // OPEN, PARTIAL, SETTLED
+
+  paidById String
+  paidBy   User   @relation("Payer", fields: [paidById], references: [id])
+
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id])
+
+  splits Split[]
+
+  settlementDebts SettlementDebt[]
+  settlementPayments SettlementPayment[]
+
+  @@index([groupId])
+  @@index([paidById])
+}
+
+model Split {
+  id     String @id @default(cuid())
+  amount Float
+
+  expenseId String
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([expenseId])
+  @@index([userId])
+}
+
+model Settlement {
+  id   String   @id @default(cuid())
+  date DateTime @default(now())
+
+  // Who is settling their debt (The Debtor)
+  fromUserId String
+  fromUser   User   @relation("SettlementPayer", fields: [fromUserId], references: [id])
+
+  // Who is receiving the settlement (The Creditor)
+  toUserId String
+  toUser   User   @relation("SettlementReceiver", fields: [toUserId], references: [id])
+
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id])
+
+  amount Float // Total amount of the settlement (Keeping for easy querying)
+  status String @default("PENDING") // PENDING, CONFIRMED, REJECTED
+
+  // Relations
+  debts    SettlementDebt[]
+  payments SettlementPayment[]
+
+  @@index([groupId])
+  @@index([fromUserId])
+  @@index([toUserId])
+}
+
+model SettlementDebt {
+  id           String     @id @default(cuid())
+  settlementId String
+  settlement   Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  // The expense/split being paid off
+  expenseId String
+  expense   Expense @relation(fields: [expenseId], references: [id])
+
+  amount Float // Amount of this specific debt being settled
+
+  @@index([settlementId])
+  @@index([expenseId])
+}
+
+model SettlementPayment {
+  id           String     @id @default(cuid())
+  settlementId String
+  settlement   Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  type   String // "CASH", "BIZUM", "TRANSFER", "EXPENSE"
+  amount Float
+
+  // For Expense type (Existing Expense)
+  // If linked to an existing expense I PAID, we settle it (partially)
+  expenseId String?
+  expense   Expense? @relation(fields: [expenseId], references: [id])
+
+  // For New Expense type (Ad-hoc)
+  description String?
+  category    String?
+
+  @@index([settlementId])
+}
