@@ -50,10 +50,14 @@ export async function POST(request: Request) {
             });
         } else {
             // Create new
+            const groupType = body.groupType || "GROUP";
+            const groupName = groupType === "COUPLE" ? `${name}'s Couple` : `${name}'s Group`;
+
             const newGroup = await prisma.group.create({
                 data: {
-                    name: `${name}'s Group`,
+                    name: groupName,
                     code: Math.random().toString(36).substring(7).toUpperCase(),
+                    type: groupType,
                 },
             });
 

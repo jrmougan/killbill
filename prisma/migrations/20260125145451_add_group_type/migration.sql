@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `Group` ADD COLUMN `type` ENUM('GROUP', 'COUPLE') NOT NULL DEFAULT 'GROUP';

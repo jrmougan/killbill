@@ -10,8 +10,9 @@ datasource db {
 model Group {
   id        String   @id @default(cuid())
   name      String
-  code      String   @unique // For invites
-  createdAt DateTime @default(now())
+  code      String    @unique // For invites
+  type      GroupType @default(GROUP)
+  createdAt DateTime  @default(now())
 
   users       User[]
   expenses    Expense[]
@@ -96,4 +97,9 @@ model Settlement {
   @@index([groupId])
   @@index([fromUserId])
   @@index([toUserId])
+}
+
+enum GroupType {
+  GROUP
+  COUPLE
 }

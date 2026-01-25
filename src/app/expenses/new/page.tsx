@@ -2,9 +2,9 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, Users, User } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function NewExpensePage() {
@@ -13,6 +13,20 @@ export default function NewExpensePage() {
     const [description, setDescription] = useState("");
     const [category, setCategory] = useState("food");
     const [loading, setLoading] = useState(false);
+
+    // New State for Split
+    const [splitType, setSplitType] = useState<"ALL" | "INDIVIDUAL">("ALL");
+    const [beneficiaryId, setBeneficiaryId] = useState<string | null>(null);
+    const [members, setMembers] = useState<{ id: string, name: string, avatar: string | null }[]>([]);
+
+    useEffect(() => {
+        fetch("/api/groups/members")
+            .then(res => res.json())
+            .then(data => {
+                if (data.members) setMembers(data.members);
+            })
+            .catch(err => console.error("Failed to fetch members", err));
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -24,7 +38,8 @@ export default function NewExpensePage() {
                 body: JSON.stringify({
                     amount: parseFloat(amount),
                     description,
-                    category
+                    category,
+                    beneficiaryId: splitType === "INDIVIDUAL" ? beneficiaryId : null
                 }),
             });
 
@@ -68,6 +83,49 @@ export default function NewExpensePage() {
                             step="0.01"
                         />
                     </div>
+                </div>
+
+                {/* Split Type Selection */}
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 rounded-xl">
+                        <button
+                            type="button"
+                            onClick={() => setSplitType("ALL")}
+                            className={`py-2 text-sm font-medium rounded-lg transition-all ${splitType === "ALL" ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-white"}`}
+                        >
+                            Entre todos
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setSplitType("INDIVIDUAL")}
+                            className={`py-2 text-sm font-medium rounded-lg transition-all ${splitType === "INDIVIDUAL" ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-white"}`}
+                        >
+                            Para alguien
+                        </button>
+                    </div>
+
+                    {splitType === "INDIVIDUAL" && (
+                        <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <label className="text-sm font-medium ml-1">¿Para quién es?</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {members.map((member) => (
+                                    <button
+                                        key={member.id}
+                                        type="button"
+                                        onClick={() => setBeneficiaryId(member.id)}
+                                        className={`p-3 rounded-xl border border-white/5 flex flex-col items-center gap-2 transition-all ${beneficiaryId === member.id ? "bg-primary/20 border-primary" : "bg-white/5 hover:bg-white/10"}`}
+                                    >
+                                        <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[1px]">
+                                            <div className="h-full w-full rounded-full bg-black flex items-center justify-center text-xs font-bold">
+                                                {member.avatar || "👤"}
+                                            </div>
+                                        </div>
+                                        <span className="text-xs truncate w-full text-center">{member.name}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-4">

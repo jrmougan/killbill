@@ -5,7 +5,7 @@ export interface Balance {
 
 export function calculateBalances(
     users: { id: string }[],
-    expenses: { paidById: string; amount: number }[],
+    expenses: { paidById: string; amount: number; splits?: { userId: string, amount: number }[] }[],
     settlements: { fromUserId: string; toUserId: string; amount: number }[],
     currentUserId: string
 ): Record<string, number> {
@@ -26,7 +26,23 @@ export function calculateBalances(
     // Calculate net expense position (paid - share)
     users.forEach(u => {
         const paid = paidByUser[u.id] || 0;
-        balances[u.id] = paid - fairShare;
+
+        // Calculate fair share based on splits
+        let myShare = 0;
+        expenses.forEach(e => {
+            if (e.splits && e.splits.length > 0) {
+                // If splits exist, check if I am in them
+                const mySplit = e.splits.find(s => s.userId === u.id);
+                if (mySplit) {
+                    myShare += mySplit.amount;
+                }
+            } else {
+                // Shared equally
+                myShare += e.amount / numUsers;
+            }
+        });
+
+        balances[u.id] = paid - myShare;
     });
 
     // Apply settlements
@@ -50,7 +66,7 @@ export function calculateBalances(
 // Negative = They owe me
 export function getMyDebts(
     users: { id: string }[],
-    expenses: { paidById: string; amount: number }[],
+    expenses: { paidById: string; amount: number; splits?: { userId: string, amount: number }[] }[],
     settlements: { fromUserId: string; toUserId: string; amount: number }[],
     currentUserId: string
 ): Record<string, number> {

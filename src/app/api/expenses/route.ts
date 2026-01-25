@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { description, amount, category } = body;
+    const { description, amount, category, beneficiaryId } = body;
 
     const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -45,14 +45,27 @@ export async function POST(request: Request) {
 
     if (!user?.groupId) return NextResponse.json({ error: 'No Group' }, { status: 400 });
 
+    const expenseData: any = {
+        description,
+        amount,
+        category,
+        paidById: userId,
+        groupId: user.groupId,
+    };
+
+    if (beneficiaryId) {
+        expenseData.splits = {
+            create: [
+                {
+                    userId: beneficiaryId,
+                    amount: amount
+                }
+            ]
+        };
+    }
+
     const expense = await prisma.expense.create({
-        data: {
-            description,
-            amount,
-            category,
-            paidById: userId,
-            groupId: user.groupId,
-        },
+        data: expenseData
     });
 
     return NextResponse.json({ success: true, expenseId: expense.id });

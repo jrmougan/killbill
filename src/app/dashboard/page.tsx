@@ -61,6 +61,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const rawExpenses = await prisma.expense.findMany({
         where: { groupId: user.groupId! },
         orderBy: { date: 'desc' },
+        include: { splits: true }, // Include splits
         take: 20,
     });
 
@@ -72,7 +73,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // Calculate Balances
     const balances = calculateBalances(
         members,
-        rawExpenses.map(e => ({ paidById: e.paidById, amount: e.amount })),
+        rawExpenses.map(e => ({ paidById: e.paidById, amount: e.amount, splits: e.splits })),
         settlements,
         userId
     );
@@ -86,7 +87,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         category: e.category as any,
         date: e.date.toISOString(),
         paidBy: e.paidById,
-        splits: [],
+        splits: e.splits.map((s: any) => ({ userId: s.userId, amount: s.amount })), // Map to simple type
     }));
 
     return (
@@ -96,7 +97,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
                         Hola, {user.name}
                     </h1>
-                    <p className="text-sm text-muted-foreground">Grupo: {user.group.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                        {user.group.type === "COUPLE" ? "Pareja" : `Grupo: ${user.group.name}`}
+                    </p>
                 </div>
                 <div className="flex items-center gap-2">
                     <LogoutButton />
