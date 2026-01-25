@@ -4,77 +4,40 @@ import { ExpenseCard } from "@/components/dashboard/expense-card";
 import { InviteCard } from "@/components/dashboard/invite-card";
 import { JoinGroupCard } from "@/components/dashboard/join-group-card";
 import { Expense } from "@/types";
-import { Plus, GripHorizontal, Users, Heart } from "lucide-react";
+import { Plus, GripHorizontal, Heart } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { calculateBalances } from "@/lib/finance";
-import { GroupSelector } from "@/components/dashboard/group-selector";
+import { cn } from "@/lib/utils";
 
 export const dynamic = 'force-dynamic';
 
-// Next.js 16: searchParams is a Promise
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ code?: string }> }) {
+export default async function DashboardPage() {
     const cookieStore = await cookies();
     const userId = cookieStore.get("user_id")?.value;
     if (!userId) redirect("/login");
 
-    const { code: inviteCode } = await searchParams;
-
-    // Handle Invite Code - Join group and set as active
-    if (inviteCode) {
-        const invitedGroup = await prisma.group.findUnique({ where: { code: inviteCode } });
-
-        if (invitedGroup) {
-            // Check if already a member
-            const existingMembership = await prisma.userGroup.findUnique({
-                where: { userId_groupId: { userId, groupId: invitedGroup.id } },
-            });
-
-            if (!existingMembership) {
-                await prisma.userGroup.create({
-                    data: { userId, groupId: invitedGroup.id, role: "MEMBER" },
-                });
-            }
-
-            // Set as active
-            await prisma.user.update({
-                where: { id: userId },
-                data: { activeGroupId: invitedGroup.id },
-            });
-
-            // Redirect to clean URL
-            redirect("/dashboard");
-        }
-    }
-
-    // Fetch User with activeGroup and all groups
+    // Fetch User with couple and partner
     const user = await prisma.user.findUnique({
         where: { id: userId },
         include: {
-            activeGroup: {
+            couple: {
                 include: {
-                    members: {
-                        include: { user: true },
-                    },
+                    members: true,
                 },
-            },
-            groups: {
-                include: { group: true },
             },
         },
     });
 
     if (!user) {
-        return <div className="p-10 text-center">User not found. <Link href="/login" className="underline">Login again</Link></div>;
+        return <div className="p-10 text-center">Usuario no encontrado. <Link href="/login" className="underline">Login de nuevo</Link></div>;
     }
 
-    const allGroups = user.groups.map(ug => ug.group);
-
-    // No active group - show onboarding
-    if (!user.activeGroup) {
+    // No couple - show onboarding
+    if (!user.couple) {
         return (
             <div className="flex flex-col h-full min-h-screen p-4 space-y-6">
                 <header className="flex justify-between items-center pt-2">
@@ -89,30 +52,37 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
                 <GlassCard className="text-center py-10 space-y-6">
                     <div className="space-y-2">
-                        <h2 className="text-xl font-bold">¿Cómo quieres empezar?</h2>
-                        <p className="text-muted-foreground text-sm">
-                            Crea un grupo para compartir gastos con amigos o una pareja para gestionar los gastos entre los dos.
+                        <Heart className="h-16 w-16 text-pink-500 mx-auto animate-pulse" />
+                        <h2 className="text-2xl font-bold">Empieza con tu pareja</h2>
+                        <p className="text-muted-foreground text-sm max-w-[280px] mx-auto">
+                            Gestiona vuestros gastos compartidos, viajes y ahorros en un solo lugar.
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <Link href="/groups/new?type=GROUP">
-                            <GlassCard className="cursor-pointer hover:bg-white/10 transition-all py-6 flex flex-col items-center gap-2">
-                                <Users className="h-8 w-8 text-primary" />
-                                <span className="font-bold">Crear Grupo</span>
-                                <span className="text-xs text-muted-foreground">Para amigos, piso, viajes...</span>
-                            </GlassCard>
-                        </Link>
-                        <Link href="/groups/new?type=COUPLE">
-                            <GlassCard className="cursor-pointer hover:bg-white/10 transition-all py-6 flex flex-col items-center gap-2">
-                                <Heart className="h-8 w-8 text-pink-500" />
-                                <span className="font-bold">Crear Pareja</span>
-                                <span className="text-xs text-muted-foreground">Gastos compartidos de pareja</span>
-                            </GlassCard>
-                        </Link>
+                    <div className="grid grid-cols-1 gap-4 px-4">
+                        <form action={async () => {
+                            'use server';
+                            const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+                            await prisma.couple.create({
+                                data: {
+                                    name: "Nuestra Pareja",
+                                    code,
+                                    members: { connect: { id: userId } }
+                                }
+                            });
+                            redirect("/dashboard");
+                        }}>
+                            <Button type="submit" size="lg" className="w-full h-16 text-lg font-bold">
+                                Crear Pareja <Heart className="ml-2 h-5 w-5 fill-current" />
+                            </Button>
+                        </form>
                     </div>
 
-                    <div className="pt-4">
+                    <div className="pt-4 px-4">
+                        <div className="relative mb-6">
+                            <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-white/10"></span></div>
+                            <div className="relative flex justify-center text-xs uppercase"><span className="bg-black px-2 text-muted-foreground">O únete a una</span></div>
+                        </div>
                         <JoinGroupCard />
                     </div>
                 </GlassCard>
@@ -120,14 +90,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         );
     }
 
-    // Active group exists - show normal dashboard
-    const activeGroup = user.activeGroup;
-    const members = activeGroup.members.map(m => m.user);
+    // Couple exists - show normal dashboard
+    const couple = user.couple;
+    const members = couple.members;
+    const partner = members.find(m => m.id !== userId);
     const usersMap = members.reduce<Record<string, any>>((acc, u) => ({ ...acc, [u.id]: u }), {});
 
-    // Fetch Expenses for active group
+    // Fetch Expenses for couple
     const rawExpenses = await prisma.expense.findMany({
-        where: { groupId: activeGroup.id },
+        where: { coupleId: couple.id },
         orderBy: { date: 'desc' },
         include: { splits: true },
         take: 20,
@@ -135,7 +106,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
     // Fetch Settlements
     const settlements = await prisma.settlement.findMany({
-        where: { groupId: activeGroup.id },
+        where: { coupleId: couple.id },
     });
 
     // Calculate Balances
@@ -165,10 +136,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
                         Hola, {user.name}
                     </h1>
-                    <GroupSelector
-                        currentGroup={activeGroup}
-                        allGroups={allGroups}
-                    />
+                    <div className="flex items-center gap-1 text-muted-foreground text-sm">
+                        <Heart className="h-3 w-3 text-pink-500 fill-pink-500" />
+                        <span>{partner ? `Pareja con ${partner.name}` : "Esperando a tu pareja..."}</span>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <LogoutButton />
@@ -180,31 +151,75 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 </div>
             </header>
 
-            <section className="grid grid-cols-2 gap-3">
-                <GlassCard className="bg-primary/10 border-primary/20">
-                    <span className="text-xs text-primary/80 uppercase font-bold tracking-wider">Debes</span>
-                    <p className="text-2xl font-bold text-primary mt-1">
-                        {myBalance < 0 ? Math.abs(myBalance).toFixed(2) : "0.00"}€
-                    </p>
-                </GlassCard>
-                <GlassCard className="bg-emerald-500/10 border-emerald-500/20">
-                    <span className="text-xs text-emerald-400 uppercase font-bold tracking-wider">Te Deben</span>
-                    <p className="text-2xl font-bold text-emerald-400 mt-1">
-                        {myBalance > 0 ? myBalance.toFixed(2) : "0.00"}€
+            <section className="grid grid-cols-1 gap-4">
+                <GlassCard className={cn(
+                    "p-6 flex flex-col items-center justify-center text-center border-b-4",
+                    myBalance > 0 ? "border-emerald-500 bg-emerald-500/5" :
+                        myBalance < 0 ? "border-primary bg-primary/5" : "border-white/10 bg-white/5"
+                )}>
+                    <span className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground mb-1">Tu Balance</span>
+                    <h2 className={cn(
+                        "text-5xl font-mono font-bold",
+                        myBalance > 0 ? "text-emerald-400" : myBalance < 0 ? "text-primary" : "text-white"
+                    )}>
+                        {myBalance > 0 ? "+" : ""}{myBalance.toFixed(2)}€
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-2">
+                        {myBalance > 0 ? `Te deben ${myBalance.toFixed(2)}€` :
+                            myBalance < 0 ? `Debes ${Math.abs(myBalance).toFixed(2)}€` : "Estás al día"}
                     </p>
                 </GlassCard>
             </section>
 
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
                 <Link href="/settle" className="flex-1">
-                    <Button className="w-full" variant="ghost">
+                    <Button className="w-full bg-white/5 hover:bg-white/10 text-white border-white/10" variant="ghost">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Liquidar
+                    </Button>
+                </Link>
+                <Link href="/settle/history" className="flex-1">
+                    <Button className="w-full bg-white/5 hover:bg-white/10 text-white border-white/10" variant="ghost">
                         <GripHorizontal className="mr-2 h-4 w-4" />
-                        Liquidar Deuda
+                        Historial
                     </Button>
                 </Link>
             </div>
 
-            <InviteCard code={activeGroup.code} />
+            <section className="space-y-4">
+                <h2 className="text-lg font-semibold ml-1">Estado de Cuentas</h2>
+                <GlassCard className="p-0 overflow-hidden border-white/5">
+                    <div className="divide-y divide-white/5">
+                        {members.map(member => {
+                            const balance = balances[member.id] || 0;
+                            const isMe = member.id === userId;
+                            return (
+                                <div key={member.id} className="flex items-center justify-between p-4 bg-white/[0.02]">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-lg overflow-hidden">
+                                            {member.avatar || "👤"}
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-sm">{isMe ? "Tú" : member.name}</p>
+                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Balance Total</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className={cn(
+                                            "font-mono font-bold text-lg",
+                                            balance > 0 ? "text-emerald-400" : balance < 0 ? "text-primary" : "text-muted-foreground"
+                                        )}>
+                                            {balance > 0 ? "+" : ""}{balance.toFixed(2)}€
+                                        </p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </GlassCard>
+            </section>
+
+            {!partner && <InviteCard code={couple.code} />}
 
             <section className="space-y-4">
                 <div className="flex items-center justify-between">

@@ -14,14 +14,14 @@ export async function POST(request: Request) {
         where: { id: userId },
     });
 
-    if (!user?.activeGroupId) return NextResponse.json({ error: 'No Group' }, { status: 400 });
+    if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
     await prisma.settlement.create({
         data: {
             amount,
             fromUserId: userId,
             toUserId: toUserId || userId,
-            groupId: user.activeGroupId,
+            coupleId: user.coupleId,
             method: method || "CASH" // CASH, BIZUM, etc.
         },
     });

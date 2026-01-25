@@ -10,17 +10,20 @@ export default async function SettlementHistoryPage() {
     const userId = cookieStore.get("user_id")?.value;
     if (!userId) redirect("/login");
 
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { coupleId: true }
+    });
+
+    if (!user?.coupleId) redirect("/dashboard");
+
     const settlements = await prisma.settlement.findMany({
         where: {
-            OR: [
-                { fromUserId: userId },
-                { toUserId: userId }
-            ]
+            coupleId: user.coupleId
         },
         include: {
             fromUser: true,
             toUser: true,
-
         },
         orderBy: { date: 'desc' }
     });

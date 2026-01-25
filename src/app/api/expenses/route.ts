@@ -11,10 +11,10 @@ export async function GET(request: Request) {
         where: { id: userId },
     });
 
-    if (!user?.activeGroupId) return NextResponse.json({ expenses: [] });
+    if (!user?.coupleId) return NextResponse.json({ expenses: [] });
 
     const expenses = await prisma.expense.findMany({
-        where: { groupId: user.activeGroupId },
+        where: { coupleId: user.coupleId },
         include: {
             paidBy: {
                 select: { name: true }
@@ -43,14 +43,14 @@ export async function POST(request: Request) {
         where: { id: userId },
     });
 
-    if (!user?.activeGroupId) return NextResponse.json({ error: 'No Group' }, { status: 400 });
+    if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
     const expenseData: any = {
         description,
         amount,
         category,
         paidById: userId,
-        groupId: user.activeGroupId,
+        coupleId: user.coupleId,
     };
 
     if (beneficiaryId) {
@@ -63,17 +63,17 @@ export async function POST(request: Request) {
             ]
         };
     } else {
-        // Split among all group members
-        const groupMembers = await prisma.userGroup.findMany({
-            where: { groupId: user.activeGroupId },
-            select: { userId: true }
+        // Split among couple members (max 2)
+        const coupleMembers = await prisma.user.findMany({
+            where: { coupleId: user.coupleId },
+            select: { id: true }
         });
 
-        if (groupMembers.length > 0) {
-            const splitAmount = amount / groupMembers.length;
+        if (coupleMembers.length > 0) {
+            const splitAmount = amount / coupleMembers.length;
             expenseData.splits = {
-                create: groupMembers.map((m: any) => ({
-                    userId: m.userId,
+                create: coupleMembers.map((m: any) => ({
+                    userId: m.id,
                     amount: splitAmount
                 }))
             };
@@ -81,7 +81,6 @@ export async function POST(request: Request) {
     }
 
     const expense = await prisma.expense.create({
-        // @ts-ignore - Prisma types might be stale
         data: expenseData
     });
 

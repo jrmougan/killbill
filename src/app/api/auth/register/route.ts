@@ -34,26 +34,18 @@ export async function POST(request: Request) {
             },
         });
 
-        // If invite code provided, join that group
+        // If invite code provided, join that couple
         if (inviteCode) {
-            const group = await prisma.group.findUnique({
+            const couple = await prisma.couple.findUnique({
                 where: { code: inviteCode },
+                include: { members: true }
             });
 
-            if (group) {
-                // Add to UserGroup junction table
-                await prisma.userGroup.create({
-                    data: {
-                        userId: user.id,
-                        groupId: group.id,
-                        role: "MEMBER",
-                    },
-                });
-
-                // Set as active group
+            if (couple && couple.members.length < 2) {
+                // Set coupleId
                 await prisma.user.update({
                     where: { id: user.id },
-                    data: { activeGroupId: group.id },
+                    data: { coupleId: couple.id },
                 });
             }
         }

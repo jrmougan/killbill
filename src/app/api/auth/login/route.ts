@@ -28,28 +28,18 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
         }
 
-        // 3. Handle Group Invite
+        // 3. Handle Couple Invite
         if (inviteCode) {
-            const group = await prisma.group.findUnique({
+            const couple = await prisma.couple.findUnique({
                 where: { code: inviteCode },
+                include: { members: true }
             });
 
-            if (group) {
-                // Check if already member
-                const membership = await prisma.userGroup.findUnique({
-                    where: { userId_groupId: { userId: user.id, groupId: group.id } }
-                });
-
-                if (!membership) {
-                    await prisma.userGroup.create({
-                        data: { userId: user.id, groupId: group.id, role: "MEMBER" }
-                    });
-                }
-
-                // Set as active group
+            if (couple && couple.members.length < 2) {
+                // Set coupleId
                 await prisma.user.update({
                     where: { id: user.id },
-                    data: { activeGroupId: group.id },
+                    data: { coupleId: couple.id },
                 });
             }
         }

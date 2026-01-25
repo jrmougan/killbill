@@ -2,10 +2,11 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Check, Users, User } from "lucide-react";
+import { ArrowLeft, Check, Heart, User } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 
 export default function NewExpensePage() {
     const router = useRouter();
@@ -14,19 +15,26 @@ export default function NewExpensePage() {
     const [category, setCategory] = useState("food");
     const [loading, setLoading] = useState(false);
 
-    // New State for Split
-    const [splitType, setSplitType] = useState<"ALL" | "INDIVIDUAL">("ALL");
-    const [beneficiaryId, setBeneficiaryId] = useState<string | null>(null);
+    // Simplified Split Selection for Couples
+    const [splitWithPartner, setSplitWithPartner] = useState(true);
     const [members, setMembers] = useState<{ id: string, name: string, avatar: string | null }[]>([]);
+    const [userId, setUserId] = useState<string | null>(null);
 
     useEffect(() => {
-        fetch("/api/groups/members")
+        fetch("/api/couple")
             .then(res => res.json())
             .then(data => {
-                if (data.members) setMembers(data.members);
+                if (data.couple) {
+                    setMembers(data.couple.members);
+                }
             })
-            .catch(err => console.error("Failed to fetch members", err));
+            .catch(err => console.error("Failed to fetch couple", err));
+
+        const uid = document.cookie.split('; ').find(row => row.startsWith('user_id='))?.split('=')[1];
+        setUserId(uid || null);
     }, []);
+
+    const partner = members.find(m => m.id !== userId);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -39,7 +47,7 @@ export default function NewExpensePage() {
                     amount: parseFloat(amount),
                     description,
                     category,
-                    beneficiaryId: splitType === "INDIVIDUAL" ? beneficiaryId : null
+                    beneficiaryId: splitWithPartner ? null : userId
                 }),
             });
 
@@ -55,7 +63,7 @@ export default function NewExpensePage() {
     };
 
     return (
-        <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto relative">
+        <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto relative pb-24">
             <header className="flex items-center gap-4 pt-2">
                 <Link href="/dashboard">
                     <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
@@ -67,7 +75,6 @@ export default function NewExpensePage() {
 
             <form onSubmit={handleSubmit} className="flex-1 space-y-8 mt-4">
 
-                {/* Helper for Amount */}
                 <div className="space-y-2 text-center py-6">
                     <label className="text-sm text-muted-foreground uppercase tracking-widest font-bold">¿Cuánto ha sido?</label>
                     <div className="relative inline-block w-full max-w-[200px]">
@@ -85,46 +92,30 @@ export default function NewExpensePage() {
                     </div>
                 </div>
 
-                {/* Split Type Selection */}
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 rounded-xl">
                         <button
                             type="button"
-                            onClick={() => setSplitType("ALL")}
-                            className={`py-2 text-sm font-medium rounded-lg transition-all ${splitType === "ALL" ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-white"}`}
+                            onClick={() => setSplitWithPartner(true)}
+                            className={`py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${splitWithPartner ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-white"}`}
                         >
-                            Entre todos
+                            <Heart className={cn("h-4 w-4", splitWithPartner && "fill-current")} />
+                            Los dos
                         </button>
                         <button
                             type="button"
-                            onClick={() => setSplitType("INDIVIDUAL")}
-                            className={`py-2 text-sm font-medium rounded-lg transition-all ${splitType === "INDIVIDUAL" ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-white"}`}
+                            onClick={() => setSplitWithPartner(false)}
+                            className={`py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${!splitWithPartner ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-white"}`}
                         >
-                            Para alguien
+                            <User className="h-4 w-4" />
+                            Solo yo
                         </button>
                     </div>
 
-                    {splitType === "INDIVIDUAL" && (
-                        <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                            <label className="text-sm font-medium ml-1">¿Para quién es?</label>
-                            <div className="grid grid-cols-3 gap-2">
-                                {members.map((member) => (
-                                    <button
-                                        key={member.id}
-                                        type="button"
-                                        onClick={() => setBeneficiaryId(member.id)}
-                                        className={`p-3 rounded-xl border border-white/5 flex flex-col items-center gap-2 transition-all ${beneficiaryId === member.id ? "bg-primary/20 border-primary" : "bg-white/5 hover:bg-white/10"}`}
-                                    >
-                                        <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[1px]">
-                                            <div className="h-full w-full rounded-full bg-black flex items-center justify-center text-xs font-bold">
-                                                {member.avatar || "👤"}
-                                            </div>
-                                        </div>
-                                        <span className="text-xs truncate w-full text-center">{member.name}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                    {splitWithPartner && partner && (
+                        <p className="text-center text-xs text-muted-foreground animate-in fade-in duration-500">
+                            Se dividirá 50/50 con <strong>{partner.name}</strong>
+                        </p>
                     )}
                 </div>
 
@@ -132,7 +123,7 @@ export default function NewExpensePage() {
                     <div className="space-y-2">
                         <label className="text-sm font-medium ml-1">Concepto</label>
                         <Input
-                            placeholder="Ej: Compra semanal"
+                            placeholder="Ej: Cena romántica"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
                             required
@@ -157,11 +148,11 @@ export default function NewExpensePage() {
                     </div>
                 </div>
 
-                <div className="pt-8">
+                <div className="pt-4">
                     <Button
                         type="submit"
                         size="lg"
-                        className="w-full text-base h-14 shadow-xl shadow-primary/20"
+                        className="w-full text-base h-16 shadow-xl shadow-primary/20 font-bold"
                         isLoading={loading}
                     >
                         Guardar Gasto <Check className="ml-2 h-5 w-5" />

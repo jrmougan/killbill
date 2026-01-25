@@ -7,15 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Group {
+model Couple {
   id        String    @id @default(cuid())
-  name      String
+  name      String?
   code      String    @unique // For invites
-  type      GroupType @default(GROUP)
   createdAt DateTime  @default(now())
 
-  members     UserGroup[]
-  activeUsers User[]       @relation("ActiveGroup") // Users who have this as active
+  members     User[]
   expenses    Expense[]
   settlements Settlement[]
 }
@@ -29,30 +27,15 @@ model User {
   password  String?
   createdAt DateTime @default(now())
 
-  // Multi-group support
-  activeGroupId String?
-  activeGroup   Group?      @relation("ActiveGroup", fields: [activeGroupId], references: [id])
-  groups        UserGroup[]
+  // Couple support (one user, one couple)
+  coupleId String?
+  couple   Couple? @relation(fields: [coupleId], references: [id])
 
   expensesPaid Expense[] @relation("Payer")
   splits       Split[]
 
   settlementsPaid     Settlement[] @relation("SettlementPayer")
   settlementsReceived Settlement[] @relation("SettlementReceiver")
-}
-
-model UserGroup {
-  id       String   @id @default(cuid())
-  userId   String
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  groupId  String
-  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  role     String   @default("MEMBER") // OWNER, ADMIN, MEMBER
-  joinedAt DateTime @default(now())
-
-  @@unique([userId, groupId])
-  @@index([userId])
-  @@index([groupId])
 }
 
 model Expense {
@@ -66,12 +49,12 @@ model Expense {
   paidById String
   paidBy   User   @relation("Payer", fields: [paidById], references: [id])
 
-  groupId String
-  group   Group  @relation(fields: [groupId], references: [id])
+  coupleId String
+  couple   Couple @relation(fields: [coupleId], references: [id])
 
   splits Split[]
 
-  @@index([groupId])
+  @@index([coupleId])
   @@index([paidById])
 }
 
@@ -101,19 +84,14 @@ model Settlement {
   toUserId String
   toUser   User   @relation("SettlementReceiver", fields: [toUserId], references: [id])
 
-  groupId String
-  group   Group  @relation(fields: [groupId], references: [id])
+  coupleId String
+  couple   Couple @relation(fields: [coupleId], references: [id])
 
-  amount Float // Total amount of the settlement (Keeping for easy querying)
+  amount Float // Total amount of the settlement
   status String @default("PENDING") // PENDING, CONFIRMED, REJECTED
   method String @default("CASH") // CASH, BIZUM, TRANSFER, etc.
 
-  @@index([groupId])
+  @@index([coupleId])
   @@index([fromUserId])
   @@index([toUserId])
-}
-
-enum GroupType {
-  GROUP
-  COUPLE
 }

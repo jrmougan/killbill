@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 
 export async function PATCH(
     request: Request,
-    { params }: { params: Promise<{ id: string }> } // params is distinct from the request
+    { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params;
     const cookieStore = await cookies();
@@ -18,22 +18,19 @@ export async function PATCH(
         return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    // Verify User is the Receiver (only receiver can confirm/reject)
-    // Or Sender can cancel if PENDING? For now, simplistic rule: Receiver controls status.
     const settlement = await prisma.settlement.findUnique({
         where: { id },
-        include: { group: true }
     });
 
     if (!settlement) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Enforce Group Context: User must be in the group AND it must be their active group
+    // Enforce Couple Context
     const user = await prisma.user.findUnique({
         where: { id: userId },
     });
 
-    if (settlement.groupId !== user?.activeGroupId) {
-        return NextResponse.json({ error: 'Settlement does not belong to your active group' }, { status: 403 });
+    if (settlement.coupleId !== user?.coupleId) {
+        return NextResponse.json({ error: 'Settlement does not belong to your couple' }, { status: 403 });
     }
 
     if (settlement.toUserId !== userId) {
