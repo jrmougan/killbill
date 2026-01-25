@@ -8,7 +8,10 @@ export async function POST(request: Request) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { amount, toUserId } = body;
+    const { amount, toUserId, method } = body;
+
+    // Simplification: We don't link settlements to specific expenses anymore.
+    // It is just a transfer of value between users.
 
     const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -22,6 +25,7 @@ export async function POST(request: Request) {
             fromUserId: userId,
             toUserId: toUserId || userId,
             groupId: user.groupId,
+            method: method || "CASH" // CASH, BIZUM, etc.
         },
     });
 

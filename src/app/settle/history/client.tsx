@@ -12,11 +12,11 @@ interface Settlement {
     amount: number;
     date: Date;
     status: string;
+    method: string;
     fromUserId: string;
     toUserId: string;
     fromUser: { name: string; avatar: string };
     toUser: { name: string; avatar: string };
-    payments: { type: string; amount: number; description?: string; expense?: { description: string } }[];
 }
 
 interface SettlementHistoryClientProps {
@@ -91,20 +91,12 @@ export function SettlementHistoryClient({ settlements, currentUserId }: Settleme
                                 </div>
                             </div>
 
-                            {/* Breakdown */}
-                            <div className="bg-black/20 rounded-lg p-3 text-sm space-y-1">
-                                {s.payments.map((p, i) => (
-                                    <div key={i} className="flex justify-between text-muted-foreground">
-                                        <span className="flex items-center gap-2">
-                                            {p.type === "EXPENSE" ? <Receipt className="h-3 w-3" /> : "💶"}
-                                            {p.type === "EXPENSE"
-                                                ? (p.expense?.description || p.description || "Gasto")
-                                                : (p.type === "BIZUM" ? "Bizum" : "Efectivo")
-                                            }
-                                        </span>
-                                        <span>{p.amount.toFixed(2)}€</span>
-                                    </div>
-                                ))}
+                            {/* Method Display */}
+                            <div className="bg-black/20 rounded-lg p-3 text-sm flex justify-between items-center text-muted-foreground">
+                                <span className="flex items-center gap-2">
+                                    {s.method === "BIZUM" ? <Receipt className="h-3 w-3" /> : "💶"}
+                                    {s.method === "BIZUM" ? "Bizum / Transferencia" : (s.method === "CASH" ? "Efectivo" : s.method)}
+                                </span>
                             </div>
 
                             {/* Actions (Only for Receiver currently) */}

@@ -5,21 +5,17 @@ import Link from "next/link";
 import { ArrowLeft, Calendar, FileText, User, Receipt, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export default async function ExpenseDetailPage({ params }: { params: { id: string } }) {
+export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
     const cookieStore = await cookies();
     const userId = cookieStore.get("user_id")?.value;
     if (!userId) redirect("/login");
 
     const expense = await prisma.expense.findUnique({
-        where: { id: params.id },
+        where: { id: id },
         include: {
             paidBy: true,
-            settlementDebts: {
-                include: { settlement: { include: { fromUser: true, toUser: true } } }
-            },
-            settlementPayments: {
-                include: { settlement: { include: { fromUser: true, toUser: true } } }
-            }
+
         }
     });
 
@@ -71,47 +67,9 @@ export default async function ExpenseDetailPage({ params }: { params: { id: stri
                     </div>
                 </div>
 
-                {/* Audit Trail: Settlements where this expense was PAID OFF (Debt) */}
-                {expense.settlementDebts.length > 0 && (
-                    <div className="space-y-3">
-                        <h3 className="font-bold text-lg flex items-center gap-2">
-                            <Wallet className="h-5 w-5 text-emerald-400" /> Liquidaciones Recibidas
-                        </h3>
-                        {expense.settlementDebts.map(sd => (
-                            <div key={sd.id} className="p-4 rounded-xl bg-card border border-emerald-500/20 flex justify-between items-center">
-                                <div>
-                                    <p className="font-bold text-sm">Pago de {sd.settlement.fromUser.name}</p>
-                                    <p className="text-xs text-muted-foreground">{new Date(sd.settlement.date).toLocaleDateString()}</p>
-                                </div>
-                                <span className="font-mono font-bold text-emerald-400">-{sd.amount.toFixed(2)}€</span>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {/* Audit Trail: Settlements where this expense was USED AS PAYMENT (Credit) */}
-                {expense.settlementPayments.length > 0 && (
-                    <div className="space-y-3">
-                        <h3 className="font-bold text-lg flex items-center gap-2">
-                            <Receipt className="h-5 w-5 text-purple-400" /> Usado como Pago
-                        </h3>
-                        {expense.settlementPayments.map(sp => (
-                            <div key={sp.id} className="p-4 rounded-xl bg-card border border-purple-500/20 flex justify-between items-center">
-                                <div>
-                                    <p className="font-bold text-sm">Compensaste deuda con {sp.settlement.toUser.name}</p>
-                                    <p className="text-xs text-muted-foreground">{new Date(sp.settlement.date).toLocaleDateString()}</p>
-                                </div>
-                                <span className="font-mono font-bold text-purple-400">-{sp.amount.toFixed(2)}€</span>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {expense.settlementDebts.length === 0 && expense.settlementPayments.length === 0 && (
-                    <div className="p-8 text-center text-muted-foreground border border-dashed border-white/10 rounded-xl">
-                        No hay movimientos de liquidación asociados.
-                    </div>
-                )}
+                <div className="p-8 text-center text-muted-foreground border border-dashed border-white/10 rounded-xl">
+                    Detalle de liquidaciones simplificado.
+                </div>
             </div>
         </div>
     );

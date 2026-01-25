@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "mysql"
-  url      = "mysql://root:toor@127.0.0.1:3306/killbill"
+  url      = env("DATABASE_URL")
 }
 
 model Group {
@@ -53,8 +53,7 @@ model Expense {
 
   splits Split[]
 
-  settlementDebts SettlementDebt[]
-  settlementPayments SettlementPayment[]
+
 
   @@index([groupId])
   @@index([paidById])
@@ -91,47 +90,10 @@ model Settlement {
 
   amount Float // Total amount of the settlement (Keeping for easy querying)
   status String @default("PENDING") // PENDING, CONFIRMED, REJECTED
+  method String @default("CASH") // CASH, BIZUM, TRANSFER, etc.
 
   // Relations
-  debts    SettlementDebt[]
-  payments SettlementPayment[]
-
   @@index([groupId])
   @@index([fromUserId])
   @@index([toUserId])
-}
-
-model SettlementDebt {
-  id           String     @id @default(cuid())
-  settlementId String
-  settlement   Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
-
-  // The expense/split being paid off
-  expenseId String
-  expense   Expense @relation(fields: [expenseId], references: [id])
-
-  amount Float // Amount of this specific debt being settled
-
-  @@index([settlementId])
-  @@index([expenseId])
-}
-
-model SettlementPayment {
-  id           String     @id @default(cuid())
-  settlementId String
-  settlement   Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
-
-  type   String // "CASH", "BIZUM", "TRANSFER", "EXPENSE"
-  amount Float
-
-  // For Expense type (Existing Expense)
-  // If linked to an existing expense I PAID, we settle it (partially)
-  expenseId String?
-  expense   Expense? @relation(fields: [expenseId], references: [id])
-
-  // For New Expense type (Ad-hoc)
-  description String?
-  category    String?
-
-  @@index([settlementId])
 }

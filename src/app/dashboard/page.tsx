@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
 import { ExpenseCard } from "@/components/dashboard/expense-card";
 import { InviteCard } from "@/components/dashboard/invite-card";
+import { JoinGroupCard } from "@/components/dashboard/join-group-card";
 import { Expense, User } from "@/types";
 import { Plus, GripHorizontal } from "lucide-react";
 import Link from "next/link";
@@ -54,7 +55,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
     const members = user.group.users;
     // Explicitly type accumulator and current value
-    const usersMap = members.reduce((acc: Record<string, any>, u: any) => ({ ...acc, [u.id]: u }), {} as Record<string, any>);
+    const usersMap = members.reduce<Record<string, any>>((acc, u) => ({ ...acc, [u.id]: u }), {});
 
     // Fetch Expenses
     const rawExpenses = await prisma.expense.findMany({
@@ -132,6 +133,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             </div>
 
             <InviteCard code={user.group.code} />
+            <JoinGroupCard />
 
             <section className="space-y-4">
                 <div className="flex items-center justify-between">

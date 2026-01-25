@@ -20,7 +20,7 @@ export default async function SettlementHistoryPage() {
         include: {
             fromUser: true,
             toUser: true,
-            payments: { include: { expense: true } }
+
         },
         orderBy: { date: 'desc' }
     });
