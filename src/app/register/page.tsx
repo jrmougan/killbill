@@ -14,7 +14,6 @@ function RegisterForm() {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [groupType, setGroupType] = useState<"GROUP" | "COUPLE">("GROUP");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
@@ -26,7 +25,8 @@ function RegisterForm() {
         try {
             const res = await fetch("/api/auth/register", {
                 method: "POST",
-                body: JSON.stringify({ name, email, password, inviteCode, groupType }),
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, email, password, inviteCode }),
             });
 
             const data = await res.json();
@@ -52,7 +52,9 @@ function RegisterForm() {
                     Kill Bill
                 </h1>
                 <p className="text-muted-foreground">
-                    {inviteCode ? "Has sido invitado a un grupo. Crea una cuenta para unirte." : "Crea tu cuenta para empezar."}
+                    {inviteCode
+                        ? "Has sido invitado a un grupo. Crea una cuenta para unirte."
+                        : "Crea tu cuenta para empezar."}
                 </p>
             </div>
 
@@ -60,25 +62,6 @@ function RegisterForm() {
                 {error && (
                     <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
                         {error}
-                    </div>
-                )}
-
-                {!inviteCode && (
-                    <div className="grid grid-cols-2 gap-4 pb-2">
-                        <div
-                            className={`cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-2 transition-all ${groupType === "GROUP" ? "bg-primary/20 border-primary" : "bg-white/5 border-white/10 hover:bg-white/10"}`}
-                            onClick={() => setGroupType("GROUP")}
-                        >
-                            <span className="text-2xl">👥</span>
-                            <span className="font-bold text-sm">Grupo</span>
-                        </div>
-                        <div
-                            className={`cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-2 transition-all ${groupType === "COUPLE" ? "bg-primary/20 border-primary" : "bg-white/5 border-white/10 hover:bg-white/10"}`}
-                            onClick={() => setGroupType("COUPLE")}
-                        >
-                            <span className="text-2xl">❤️</span>
-                            <span className="font-bold text-sm">Pareja</span>
-                        </div>
                     </div>
                 )}
 
@@ -119,7 +102,10 @@ function RegisterForm() {
 
                 <div className="text-center text-sm text-muted-foreground mt-4">
                     ¿Ya tienes cuenta?{" "}
-                    <Link href={`/login${inviteCode ? `?code=${inviteCode}` : ''}`} className="text-primary hover:underline">
+                    <Link
+                        href={`/login${inviteCode ? `?code=${inviteCode}` : ""}`}
+                        className="text-primary hover:underline"
+                    >
                         Inicia sesión
                     </Link>
                 </div>
@@ -133,5 +119,5 @@ export default function RegisterPage() {
         <Suspense>
             <RegisterForm />
         </Suspense>
-    )
+    );
 }

@@ -3,14 +3,15 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { ExpenseCard } from "@/components/dashboard/expense-card";
 import { InviteCard } from "@/components/dashboard/invite-card";
 import { JoinGroupCard } from "@/components/dashboard/join-group-card";
-import { Expense, User } from "@/types";
-import { Plus, GripHorizontal } from "lucide-react";
+import { Expense } from "@/types";
+import { Plus, GripHorizontal, Users, Heart } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { calculateBalances } from "@/lib/finance";
+import { GroupSelector } from "@/components/dashboard/group-selector";
 
 export const dynamic = 'force-dynamic';
 
@@ -22,52 +23,119 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
     const { code: inviteCode } = await searchParams;
 
-    // Handle Invite / Group Switch BEFORE fetching user for render
-    if (inviteCode && userId) {
-        // Wait, simple prisma call
+    // Handle Invite Code - Join group and set as active
+    if (inviteCode) {
         const invitedGroup = await prisma.group.findUnique({ where: { code: inviteCode } });
 
         if (invitedGroup) {
-            // Check current group
-            const currentUser = await prisma.user.findUnique({ where: { id: userId } });
-            if (currentUser && currentUser.groupId !== invitedGroup.id) {
-                await prisma.user.update({
-                    where: { id: userId },
-                    data: { groupId: invitedGroup.id }
+            // Check if already a member
+            const existingMembership = await prisma.userGroup.findUnique({
+                where: { userId_groupId: { userId, groupId: invitedGroup.id } },
+            });
+
+            if (!existingMembership) {
+                await prisma.userGroup.create({
+                    data: { userId, groupId: invitedGroup.id, role: "MEMBER" },
                 });
             }
+
+            // Set as active
+            await prisma.user.update({
+                where: { id: userId },
+                data: { activeGroupId: invitedGroup.id },
+            });
+
+            // Redirect to clean URL
+            redirect("/dashboard");
         }
     }
 
-    // Fetch User & Group (will get the new group if updated)
+    // Fetch User with activeGroup and all groups
     const user = await prisma.user.findUnique({
         where: { id: userId },
-        include: { group: { include: { users: true } } }
+        include: {
+            activeGroup: {
+                include: {
+                    members: {
+                        include: { user: true },
+                    },
+                },
+            },
+            groups: {
+                include: { group: true },
+            },
+        },
     });
 
     if (!user) {
         return <div className="p-10 text-center">User not found. <Link href="/login" className="underline">Login again</Link></div>;
     }
 
-    if (!user.group) {
-        return <div className="p-10 text-center">No group found. <Link href="/login" className="underline">Login again</Link></div>;
+    const allGroups = user.groups.map(ug => ug.group);
+
+    // No active group - show onboarding
+    if (!user.activeGroup) {
+        return (
+            <div className="flex flex-col h-full min-h-screen p-4 space-y-6">
+                <header className="flex justify-between items-center pt-2">
+                    <div>
+                        <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
+                            Hola, {user.name}
+                        </h1>
+                        <p className="text-sm text-muted-foreground">¡Bienvenido a Kill Bill!</p>
+                    </div>
+                    <LogoutButton />
+                </header>
+
+                <GlassCard className="text-center py-10 space-y-6">
+                    <div className="space-y-2">
+                        <h2 className="text-xl font-bold">¿Cómo quieres empezar?</h2>
+                        <p className="text-muted-foreground text-sm">
+                            Crea un grupo para compartir gastos con amigos o una pareja para gestionar los gastos entre los dos.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <Link href="/groups/new?type=GROUP">
+                            <GlassCard className="cursor-pointer hover:bg-white/10 transition-all py-6 flex flex-col items-center gap-2">
+                                <Users className="h-8 w-8 text-primary" />
+                                <span className="font-bold">Crear Grupo</span>
+                                <span className="text-xs text-muted-foreground">Para amigos, piso, viajes...</span>
+                            </GlassCard>
+                        </Link>
+                        <Link href="/groups/new?type=COUPLE">
+                            <GlassCard className="cursor-pointer hover:bg-white/10 transition-all py-6 flex flex-col items-center gap-2">
+                                <Heart className="h-8 w-8 text-pink-500" />
+                                <span className="font-bold">Crear Pareja</span>
+                                <span className="text-xs text-muted-foreground">Gastos compartidos de pareja</span>
+                            </GlassCard>
+                        </Link>
+                    </div>
+
+                    <div className="pt-4">
+                        <JoinGroupCard />
+                    </div>
+                </GlassCard>
+            </div>
+        );
     }
 
-    const members = user.group.users;
-    // Explicitly type accumulator and current value
+    // Active group exists - show normal dashboard
+    const activeGroup = user.activeGroup;
+    const members = activeGroup.members.map(m => m.user);
     const usersMap = members.reduce<Record<string, any>>((acc, u) => ({ ...acc, [u.id]: u }), {});
 
-    // Fetch Expenses
+    // Fetch Expenses for active group
     const rawExpenses = await prisma.expense.findMany({
-        where: { groupId: user.groupId! },
+        where: { groupId: activeGroup.id },
         orderBy: { date: 'desc' },
-        include: { splits: true }, // Include splits
+        include: { splits: true },
         take: 20,
     });
 
     // Fetch Settlements
     const settlements = await prisma.settlement.findMany({
-        where: { groupId: user.groupId! },
+        where: { groupId: activeGroup.id },
     });
 
     // Calculate Balances
@@ -87,7 +155,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         category: e.category as any,
         date: e.date.toISOString(),
         paidBy: e.paidById,
-        splits: e.splits.map((s: any) => ({ userId: s.userId, amount: s.amount })), // Map to simple type
+        splits: e.splits.map((s: any) => ({ userId: s.userId, amount: s.amount })),
     }));
 
     return (
@@ -97,9 +165,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
                         Hola, {user.name}
                     </h1>
-                    <p className="text-sm text-muted-foreground">
-                        {user.group.type === "COUPLE" ? "Pareja" : `Grupo: ${user.group.name}`}
-                    </p>
+                    <GroupSelector
+                        currentGroup={activeGroup}
+                        allGroups={allGroups}
+                    />
                 </div>
                 <div className="flex items-center gap-2">
                     <LogoutButton />
@@ -135,8 +204,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 </Link>
             </div>
 
-            <InviteCard code={user.group.code} />
-            <JoinGroupCard />
+            <InviteCard code={activeGroup.code} />
 
             <section className="space-y-4">
                 <div className="flex items-center justify-between">

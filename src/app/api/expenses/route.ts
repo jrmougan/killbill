@@ -11,10 +11,10 @@ export async function GET(request: Request) {
         where: { id: userId },
     });
 
-    if (!user?.groupId) return NextResponse.json({ expenses: [] });
+    if (!user?.activeGroupId) return NextResponse.json({ expenses: [] });
 
     const expenses = await prisma.expense.findMany({
-        where: { groupId: user.groupId },
+        where: { groupId: user.activeGroupId },
         include: {
             paidBy: {
                 select: { name: true }
@@ -43,14 +43,14 @@ export async function POST(request: Request) {
         where: { id: userId },
     });
 
-    if (!user?.groupId) return NextResponse.json({ error: 'No Group' }, { status: 400 });
+    if (!user?.activeGroupId) return NextResponse.json({ error: 'No Group' }, { status: 400 });
 
     const expenseData: any = {
         description,
         amount,
         category,
         paidById: userId,
-        groupId: user.groupId,
+        groupId: user.activeGroupId,
     };
 
     if (beneficiaryId) {
@@ -65,6 +65,7 @@ export async function POST(request: Request) {
     }
 
     const expense = await prisma.expense.create({
+        // @ts-ignore - Prisma types might be stale
         data: expenseData
     });
 

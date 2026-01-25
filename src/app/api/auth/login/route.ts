@@ -34,10 +34,22 @@ export async function POST(request: Request) {
                 where: { code: inviteCode },
             });
 
-            if (group && user.groupId !== group.id) {
+            if (group) {
+                // Check if already member
+                const membership = await prisma.userGroup.findUnique({
+                    where: { userId_groupId: { userId: user.id, groupId: group.id } }
+                });
+
+                if (!membership) {
+                    await prisma.userGroup.create({
+                        data: { userId: user.id, groupId: group.id, role: "MEMBER" }
+                    });
+                }
+
+                // Set as active group
                 await prisma.user.update({
                     where: { id: user.id },
-                    data: { groupId: group.id },
+                    data: { activeGroupId: group.id },
                 });
             }
         }

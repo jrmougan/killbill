@@ -13,24 +13,32 @@ export default async function SettlePage() {
 
     const user = await prisma.user.findUnique({
         where: { id: userId },
-        include: { group: { include: { users: true } } }
+        include: {
+            activeGroup: {
+                include: {
+                    members: {
+                        include: { user: true }
+                    }
+                }
+            }
+        }
     });
 
-    if (!user || !user.group) {
+    if (!user || !user.activeGroup) {
         return redirect("/dashboard");
     }
 
-    const { group } = user;
-    const members = group.users;
+    const { activeGroup } = user;
+    const members = activeGroup.members.map(m => m.user);
 
-    // Fetch Expenses
+    // Fetch Expenses for active group
     const rawExpenses = await prisma.expense.findMany({
-        where: { groupId: group.id },
+        where: { groupId: activeGroup.id },
     });
 
-    // Fetch Settlements without detailed debts and payments (they are gone)
+    // Fetch Settlements for active group
     const settlements = await prisma.settlement.findMany({
-        where: { groupId: group.id },
+        where: { groupId: activeGroup.id },
     });
 
     // Calculate My Debts (High Level)

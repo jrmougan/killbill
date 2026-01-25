@@ -11,12 +11,12 @@ export async function GET(request: Request) {
         where: { id: userId },
     });
 
-    if (!user?.groupId) return NextResponse.json({ error: 'No Group' }, { status: 400 });
+    if (!user?.activeGroupId) return NextResponse.json({ error: 'No Group' }, { status: 400 });
 
-    const group = await prisma.group.findUnique({
-        where: { id: user.groupId },
+    const groupMembers = await prisma.userGroup.findMany({
+        where: { groupId: user.activeGroupId },
         include: {
-            users: {
+            user: {
                 select: {
                     id: true,
                     name: true,
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
         }
     });
 
-    if (!group) return NextResponse.json({ error: 'Group Not Found' }, { status: 404 });
+    const members = groupMembers.map(gm => gm.user);
 
-    return NextResponse.json({ members: group.users });
+    return NextResponse.json({ members });
 }

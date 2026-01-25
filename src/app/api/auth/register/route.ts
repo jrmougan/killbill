@@ -24,7 +24,7 @@ export async function POST(request: Request) {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create user
+        // Create user (no group yet)
         const user = await prisma.user.create({
             data: {
                 name,
@@ -34,37 +34,28 @@ export async function POST(request: Request) {
             },
         });
 
-        // Handle Group (Join existing or Create new)
-        let group;
+        // If invite code provided, join that group
         if (inviteCode) {
-            group = await prisma.group.findUnique({
+            const group = await prisma.group.findUnique({
                 where: { code: inviteCode },
             });
-        }
 
-        if (group) {
-            // Join existing
-            await prisma.user.update({
-                where: { id: user.id },
-                data: { groupId: group.id },
-            });
-        } else {
-            // Create new
-            const groupType = body.groupType || "GROUP";
-            const groupName = groupType === "COUPLE" ? `${name}'s Couple` : `${name}'s Group`;
+            if (group) {
+                // Add to UserGroup junction table
+                await prisma.userGroup.create({
+                    data: {
+                        userId: user.id,
+                        groupId: group.id,
+                        role: "MEMBER",
+                    },
+                });
 
-            const newGroup = await prisma.group.create({
-                data: {
-                    name: groupName,
-                    code: Math.random().toString(36).substring(7).toUpperCase(),
-                    type: groupType,
-                },
-            });
-
-            await prisma.user.update({
-                where: { id: user.id },
-                data: { groupId: newGroup.id },
-            });
+                // Set as active group
+                await prisma.user.update({
+                    where: { id: user.id },
+                    data: { activeGroupId: group.id },
+                });
+            }
         }
 
         // Set Session
