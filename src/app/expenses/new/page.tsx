@@ -4,9 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Check, Heart, User } from "lucide-react";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { createWorker } from 'tesseract.js';
+import { Camera, Image as ImageIcon, Loader2, X } from "lucide-react";
 
 export default function NewExpensePage() {
     const router = useRouter();
@@ -19,6 +21,14 @@ export default function NewExpensePage() {
     const [splitWithPartner, setSplitWithPartner] = useState(true);
     const [members, setMembers] = useState<{ id: string, name: string, avatar: string | null }[]>([]);
     const [userId, setUserId] = useState<string | null>(null);
+
+    // Receipt OCR States
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [receiptFile, setReceiptFile] = useState<File | null>(null);
+    const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+    const [isOcrRunning, setIsOcrRunning] = useState(false);
+    const [ocrProgress, setOcrProgress] = useState(0);
+    const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
 
     useEffect(() => {
         fetch("/api/couple")
@@ -36,18 +46,106 @@ export default function NewExpensePage() {
 
     const partner = members.find(m => m.id !== userId);
 
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setReceiptFile(file);
+        setReceiptPreview(URL.createObjectURL(file));
+        await runOCR(file);
+    };
+
+    const runOCR = async (file: File) => {
+        setIsOcrRunning(true);
+        setOcrProgress(0);
+        try {
+            const worker = await createWorker('spa', 1, {
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        setOcrProgress(Math.round(m.progress * 100));
+                    }
+                }
+            });
+
+            const { data: { text } } = await worker.recognize(file);
+            console.log("OCR Result:", text);
+
+            // Basic parsing logic
+            // Look for patterns like "TOTAL" or "EUR" or "€" followed by numbers
+            const lines = text.split('\n');
+            let foundAmount = "";
+            let foundDescription = "";
+
+            // Try to find the total amount
+            // Patterns: TOTAL 12.34, EUR 12.34, 12,34€ etc
+            const amountRegex = /(?:total|importe|eur|€)\s*[:=]?\s*(\d+[.,]\d{2})/i;
+            const fallbackAmountRegex = /(\d+[.,]\d{2})/;
+
+            for (const line of lines) {
+                const match = line.match(amountRegex);
+                if (match) {
+                    foundAmount = match[1].replace(',', '.');
+                    break;
+                }
+            }
+
+            if (!foundAmount) {
+                // Try fallback search for any price-like number from the bottom up (usually totals are at the end)
+                for (let i = lines.length - 1; i >= 0; i--) {
+                    const match = lines[i].match(fallbackAmountRegex);
+                    if (match) {
+                        foundAmount = match[1].replace(',', '.');
+                        break;
+                    }
+                }
+            }
+
+            // Try to find a description (first line often has the store name)
+            if (lines.length > 0) {
+                foundDescription = lines[0].trim();
+            }
+
+            if (foundAmount) setAmount(foundAmount);
+            if (foundDescription) setDescription(foundDescription);
+
+            await worker.terminate();
+        } catch (err) {
+            console.error("OCR Error:", err);
+        } finally {
+            setIsOcrRunning(false);
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
         try {
+            let uploadedUrl = receiptUrl;
+
+            // Upload image if present
+            if (receiptFile && !uploadedUrl) {
+                const formData = new FormData();
+                formData.append('file', receiptFile);
+                const uploadRes = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const uploadData = await uploadRes.json();
+                if (uploadData.success) {
+                    uploadedUrl = uploadData.url;
+                    setReceiptUrl(uploadedUrl);
+                }
+            }
+
             const res = await fetch("/api/expenses", {
                 method: "POST",
                 body: JSON.stringify({
                     amount: parseFloat(amount),
                     description,
                     category,
-                    beneficiaryId: splitWithPartner ? null : userId
+                    beneficiaryId: splitWithPartner ? null : userId,
+                    receiptUrl: uploadedUrl
                 }),
             });
 
@@ -74,6 +172,68 @@ export default function NewExpensePage() {
             </header>
 
             <form onSubmit={handleSubmit} className="flex-1 space-y-8 mt-4">
+
+                {/* Receipt Upload/Preview Zone */}
+                <div className="space-y-4">
+                    {!receiptPreview ? (
+                        <div
+                            onClick={() => fileInputRef.current?.click()}
+                            className="w-full aspect-video rounded-2xl border-2 border-dashed border-white/10 bg-white/5 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/[0.08] transition-all group"
+                        >
+                            <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <Camera className="h-6 w-6 text-primary" />
+                            </div>
+                            <div className="text-center">
+                                <p className="font-semibold text-sm">Escanear Ticket</p>
+                                <p className="text-xs text-muted-foreground">La magia del OCR hará el resto</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="relative rounded-2xl overflow-hidden border border-white/10 aspect-video bg-black/40">
+                            <img
+                                src={receiptPreview}
+                                alt="Ticket preview"
+                                className="w-full h-full object-contain"
+                            />
+                            <Button
+                                type="button"
+                                variant="destructive"
+                                size="icon"
+                                className="absolute top-2 right-2 h-8 w-8 rounded-full"
+                                onClick={() => {
+                                    setReceiptFile(null);
+                                    setReceiptPreview(null);
+                                    setReceiptUrl(null);
+                                }}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+
+                            {isOcrRunning && (
+                                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-4 animate-in fade-in duration-300">
+                                    <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                                    <div className="text-center">
+                                        <p className="font-bold text-white">Leyendo ticket...</p>
+                                        <p className="text-xs text-primary">{ocrProgress}%</p>
+                                    </div>
+                                    <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-primary transition-all duration-300"
+                                            style={{ width: `${ocrProgress}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                    />
+                </div>
 
                 <div className="space-y-2 text-center py-6">
                     <label className="text-sm text-muted-foreground uppercase tracking-widest font-bold">¿Cuánto ha sido?</label>

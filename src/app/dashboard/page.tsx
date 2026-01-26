@@ -126,6 +126,7 @@ export default async function DashboardPage() {
         category: e.category as any,
         date: e.date.toISOString(),
         paidBy: e.paidById,
+        receiptUrl: e.receiptUrl,
         splits: e.splits.map((s: any) => ({ userId: s.userId, amount: s.amount })),
     }));
 

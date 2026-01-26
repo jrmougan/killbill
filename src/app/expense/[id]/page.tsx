@@ -91,6 +91,19 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         )}
                     </div>
                 </div>
+
+                {expense.receiptUrl && (
+                    <div className="space-y-4">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1">Ticket de Compra</h3>
+                        <div className="rounded-2xl border border-white/10 overflow-hidden bg-white/5">
+                            <img
+                                src={expense.receiptUrl}
+                                alt="Ticket"
+                                className="w-full h-auto max-h-[400px] object-contain mx-auto"
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

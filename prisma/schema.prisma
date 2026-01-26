@@ -1,10 +1,10 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 model Couple {
@@ -45,6 +45,9 @@ model Expense {
   date        DateTime @default(now())
   category    String   @default("other")
   status      String   @default("OPEN") // OPEN, PARTIAL, SETTLED
+
+  receiptUrl  String?
+  receiptData Json?
 
   paidById String
   paidBy   User   @relation("Payer", fields: [paidById], references: [id])

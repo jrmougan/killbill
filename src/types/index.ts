@@ -17,6 +17,7 @@ export interface Expense {
     paidBy: string; // UserId
     date: string; // ISO date
     category: "food" | "transport" | "utilities" | "entertainment" | "rent" | "other";
+    receiptUrl?: string;
     splits: Split[]; // Who is this for?
 }
 

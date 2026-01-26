@@ -41,7 +41,10 @@ export function ExpenseCard({ expense, paidByUser }: ExpenseCardProps) {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                    <h3 className="font-medium truncate text-base">{expense.description}</h3>
+                    <div className="flex items-center gap-2">
+                        <h3 className="font-medium truncate text-base">{expense.description}</h3>
+                        {expense.receiptUrl && <Receipt size={12} className="text-primary shrink-0" />}
+                    </div>
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <span className="font-medium text-foreground/80">{paidByUser.name}</span> pagó
                     </p>
