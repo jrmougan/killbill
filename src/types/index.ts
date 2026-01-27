@@ -10,14 +10,22 @@ export interface Split {
     amount: number; // Share of the expense
 }
 
+export interface ReceiptItem {
+    description: string;
+    quantity: number;
+    price: number;
+    total: number;
+}
+
 export interface Expense {
     id: string;
     description: string;
     amount: number;
     paidBy: string; // UserId
     date: string; // ISO date
-    category: "food" | "transport" | "utilities" | "entertainment" | "rent" | "other";
+    category: "food" | "transport" | "utilities" | "entertainment" | "rent" | "shopping" | "other";
     receiptUrl?: string;
+    receiptData?: ReceiptItem[];
     splits: Split[]; // Who is this for?
 }
 

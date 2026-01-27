@@ -8,7 +8,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { createWorker } from 'tesseract.js';
-import { Camera, Image as ImageIcon, Loader2, X } from "lucide-react";
+import { Camera, Image as ImageIcon, Loader2, X, Plus, Trash2, Calculator } from "lucide-react";
+import { ReceiptItem } from "@/types";
 
 export default function NewExpensePage() {
     const router = useRouter();
@@ -29,6 +30,7 @@ export default function NewExpensePage() {
     const [isOcrRunning, setIsOcrRunning] = useState(false);
     const [ocrProgress, setOcrProgress] = useState(0);
     const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+    const [receiptItems, setReceiptItems] = useState<ReceiptItem[]>([]);
 
     useEffect(() => {
         fetch("/api/couple")
@@ -70,27 +72,70 @@ export default function NewExpensePage() {
             const { data: { text } } = await worker.recognize(file);
             console.log("OCR Result:", text);
 
-            // Basic parsing logic
-            // Look for patterns like "TOTAL" or "EUR" or "€" followed by numbers
+            // Advanced parsing logic
             const lines = text.split('\n');
             let foundAmount = "";
             let foundDescription = "";
+            const detectedItems: ReceiptItem[] = [];
 
-            // Try to find the total amount
-            // Patterns: TOTAL 12.34, EUR 12.34, 12,34€ etc
-            const amountRegex = /(?:total|importe|eur|€)\s*[:=]?\s*(\d+[.,]\d{2})/i;
-            const fallbackAmountRegex = /(\d+[.,]\d{2})/;
+            // Regex for price at the end of the line:  ... 12.34 or ... 12,34 A
+            const priceRegex = /\s(\d+[.,]\d{2})(?:\s*[A-Z])?$/;
+            // Regex for quantity: 2 x 1.50 or 2x1.50
+            const qtyRegex = /(\d+(?:[.,]\d+)?)\s*[xX]\s*(\d+[.,]\d{2})/;
+
+            // Ignore common garbage lines
+            const ignoredKeywords = ['cif', 'nif', 'tel', 'calle', 'plaza', 'avda', 'factura', 'ticket', 'fecha', 'hora', 'total', 'entregado', 'cambio'];
 
             for (const line of lines) {
-                const match = line.match(amountRegex);
-                if (match) {
-                    foundAmount = match[1].replace(',', '.');
-                    break;
+                const cleanLine = line.trim();
+                const lowerLine = cleanLine.toLowerCase();
+                if (cleanLine.length < 5) continue; // Too short
+
+                // Check for total
+                const amountMatch = cleanLine.match(/(?:total|importe|eur|€)\s*[:=]?\s*(\d+[.,]\d{2})/i);
+                if (amountMatch) {
+                    foundAmount = amountMatch[1].replace(',', '.');
+                    continue; // Is total line, not item
+                }
+
+                // Check for item
+                // 1. Check if it ends with a price
+                const priceMatch = cleanLine.match(priceRegex);
+                if (priceMatch && !ignoredKeywords.some(k => lowerLine.includes(k))) {
+                    let price = parseFloat(priceMatch[1].replace(',', '.'));
+                    let desc = cleanLine.replace(priceMatch[0], '').trim();
+                    let qty = 1;
+                    let unitPrice = price;
+
+                    // 2. Check for quantity pattern inside description
+                    const qtyMatch = cleanLine.match(qtyRegex);
+                    if (qtyMatch) {
+                        qty = parseFloat(qtyMatch[1].replace(',', '.'));
+                        unitPrice = parseFloat(qtyMatch[2].replace(',', '.'));
+                        // Clean desc further
+                        desc = desc.replace(qtyMatch[0], '').trim();
+                    }
+
+                    // Heuristic: If description is purely symbols or numbers, ignore
+                    if (!/^[\d\W]+$/.test(desc) && desc.length > 2) {
+                        detectedItems.push({
+                            description: desc,
+                            quantity: qty,
+                            price: unitPrice,
+                            total: price
+                        });
+                    }
                 }
             }
 
-            if (!foundAmount) {
-                // Try fallback search for any price-like number from the bottom up (usually totals are at the end)
+            // Fallback for amount if not found (look for highest number, usually total)
+            if (!foundAmount && detectedItems.length > 0) {
+                // Sum of items
+                const sum = detectedItems.reduce((acc, item) => acc + item.total, 0);
+                foundAmount = sum.toFixed(2);
+            } else if (!foundAmount) {
+                // Old fallback
+                const fallbackAmountRegex = /(\d+[.,]\d{2})/;
                 for (let i = lines.length - 1; i >= 0; i--) {
                     const match = lines[i].match(fallbackAmountRegex);
                     if (match) {
@@ -100,13 +145,19 @@ export default function NewExpensePage() {
                 }
             }
 
-            // Try to find a description (first line often has the store name)
+            // Fallback description
             if (lines.length > 0) {
-                foundDescription = lines[0].trim();
+                // find first non-empty line
+                const firstLine = lines.find(l => l.trim().length > 3);
+                if (firstLine) foundDescription = firstLine.trim();
             }
 
             if (foundAmount) setAmount(foundAmount);
             if (foundDescription) setDescription(foundDescription);
+            if (detectedItems.length > 0) {
+                setReceiptItems(detectedItems);
+                setCategory('shopping'); // Auto-switch to shopping
+            }
 
             await worker.terminate();
         } catch (err) {
@@ -114,6 +165,32 @@ export default function NewExpensePage() {
         } finally {
             setIsOcrRunning(false);
         }
+    };
+
+    const updateAmountFromItems = () => {
+        const total = receiptItems.reduce((sum, item) => sum + item.total, 0);
+        setAmount(total.toFixed(2));
+    };
+
+    const addItem = () => {
+        setReceiptItems([...receiptItems, { description: "", quantity: 1, price: 0, total: 0 }]);
+    };
+
+    const updateItem = (index: number, field: keyof ReceiptItem, value: any) => {
+        const newItems = [...receiptItems];
+        const item = { ...newItems[index], [field]: value };
+
+        // Auto-calc total or price
+        if (field === 'quantity' || field === 'price') {
+            item.total = Number((item.quantity * item.price).toFixed(2));
+        }
+
+        newItems[index] = item;
+        setReceiptItems(newItems);
+    };
+
+    const removeItem = (index: number) => {
+        setReceiptItems(receiptItems.filter((_, i) => i !== index));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -145,7 +222,8 @@ export default function NewExpensePage() {
                     description,
                     category,
                     beneficiaryId: splitWithPartner ? null : userId,
-                    receiptUrl: uploadedUrl
+                    receiptUrl: uploadedUrl,
+                    receiptData: receiptItems.length > 0 ? receiptItems : undefined
                 }),
             });
 
@@ -252,6 +330,75 @@ export default function NewExpensePage() {
                     </div>
                 </div>
 
+                {/* Items Breakdown Table */}
+                {(receiptItems.length > 0 || category === 'shopping') && (
+                    <div className="space-y-3 animate-in fade-in slide-in-from-top-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-bold ml-1 flex items-center gap-2">
+                                <Calculator className="h-4 w-4 text-primary" />
+                                Desglose de Ticket
+                            </h3>
+                            <div className="flex gap-2">
+                                {receiptItems.length > 0 && (
+                                    <Button type="button" variant="ghost" size="sm" onClick={updateAmountFromItems} className="h-7 text-xs">
+                                        Usar Total ({receiptItems.reduce((acc, i) => acc + i.total, 0).toFixed(2)}€)
+                                    </Button>
+                                )}
+                                <Button type="button" variant="secondary" size="sm" onClick={addItem} className="h-7">
+                                    <Plus className="h-3 w-3 mr-1" /> Item
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="rounded-xl border border-white/10 overflow-hidden bg-black/20">
+                            {receiptItems.length === 0 ? (
+                                <div className="p-4 text-center text-sm text-muted-foreground">
+                                    Añade items manualmente o escanea un ticket
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-white/5">
+                                    {receiptItems.map((item, idx) => (
+                                        <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 p-2 items-center hover:bg-white/5 transition-colors">
+                                            <input
+                                                className="bg-transparent text-sm w-full focus:outline-none font-medium truncate"
+                                                value={item.description}
+                                                onChange={(e) => updateItem(idx, 'description', e.target.value)}
+                                                placeholder="Producto"
+                                            />
+                                            <div className="flex items-center gap-1">
+                                                <input
+                                                    type="number"
+                                                    className="bg-transparent text-xs w-8 text-right focus:outline-none text-muted-foreground"
+                                                    value={item.quantity}
+                                                    onChange={(e) => updateItem(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                                                />
+                                                <span className="text-xs text-muted-foreground">x</span>
+                                                <input
+                                                    type="number"
+                                                    className="bg-transparent text-xs w-12 text-right focus:outline-none text-muted-foreground"
+                                                    value={item.price}
+                                                    onChange={(e) => updateItem(idx, 'price', parseFloat(e.target.value) || 0)}
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
+                                            <div className="font-bold text-sm w-16 text-right">
+                                                {item.total.toFixed(2)}
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeItem(idx)}
+                                                className="text-muted-foreground hover:text-red-400 p-1"
+                                            >
+                                                <Trash2 className="h-3 w-3" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 rounded-xl">
                         <button
@@ -293,7 +440,7 @@ export default function NewExpensePage() {
                     <div className="space-y-2">
                         <label className="text-sm font-medium ml-1">Categoría</label>
                         <div className="grid grid-cols-3 gap-2">
-                            {["food", "rent", "utilities", "transport", "entertainment", "other"].map((cat) => (
+                            {["food", "shopping", "rent", "utilities", "transport", "entertainment", "other"].map((cat) => (
                                 <button
                                     key={cat}
                                     type="button"

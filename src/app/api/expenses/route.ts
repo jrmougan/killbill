@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { description, amount, category, beneficiaryId, receiptUrl } = body;
+    const { description, amount, category, beneficiaryId, receiptUrl, receiptData } = body;
 
     const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -52,6 +52,7 @@ export async function POST(request: Request) {
         paidById: userId,
         coupleId: user.coupleId,
         receiptUrl: receiptUrl || null,
+        receiptData: receiptData || undefined, // Prisma Json handling
     };
 
     if (beneficiaryId) {

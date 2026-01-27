@@ -1,10 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Heart } from "lucide-react";
+import { ArrowLeft, Heart, Calculator } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { ReceiptItem } from "@/types";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -91,6 +92,36 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         )}
                     </div>
                 </div>
+
+                {expense.receiptData && (expense.receiptData as any).length > 0 && (
+                    <div className="space-y-4">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1 flex items-center gap-2">
+                            <Calculator className="h-4 w-4 text-primary" />
+                            Desglose de Compra
+                        </h3>
+                        <div className="rounded-2xl border border-white/10 overflow-hidden bg-black/20">
+                            <div className="divide-y divide-white/5">
+                                {(expense.receiptData as unknown as ReceiptItem[]).map((item, idx) => (
+                                    <div key={idx} className="grid grid-cols-[1fr_auto_auto] gap-2 p-3 items-center text-sm">
+                                        <div className="font-medium truncate">{item.description}</div>
+                                        <div className="text-right text-muted-foreground text-xs">
+                                            {item.quantity > 1 && `${item.quantity} x ${item.price.toFixed(2)}`}
+                                        </div>
+                                        <div className="font-bold text-right w-16">
+                                            {item.total.toFixed(2)}€
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="bg-white/5 p-3 flex justify-between items-center border-t border-white/5">
+                                <span className="font-bold text-sm text-muted-foreground">Total Detallado</span>
+                                <span className="font-mono font-bold">
+                                    {(expense.receiptData as unknown as ReceiptItem[]).reduce((acc, i) => acc + i.total, 0).toFixed(2)}€
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {expense.receiptUrl && (
                     <div className="space-y-4">
