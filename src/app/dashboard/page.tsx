@@ -96,23 +96,26 @@ export default async function DashboardPage() {
     const partner = members.find(m => m.id !== userId);
     const usersMap = members.reduce<Record<string, any>>((acc, u) => ({ ...acc, [u.id]: u }), {});
 
-    // Fetch Expenses for couple
-    const rawExpenses = await prisma.expense.findMany({
+    // Fetch ALL Expenses for balance calculation
+    const allExpenses = await prisma.expense.findMany({
         where: { coupleId: couple.id },
-        orderBy: { date: 'desc' },
         include: { splits: true },
-        take: 20,
     });
+
+    // Get only recent for display
+    const rawExpenses = allExpenses
+        .sort((a, b) => b.date.getTime() - a.date.getTime())
+        .slice(0, 20);
 
     // Fetch Settlements
     const settlements = await prisma.settlement.findMany({
         where: { coupleId: couple.id },
     });
 
-    // Calculate Balances
+    // Calculate Balances using ALL expenses
     const balances = calculateBalances(
         members,
-        rawExpenses.map(e => ({ paidById: e.paidById, amount: e.amount, splits: e.splits })),
+        allExpenses.map(e => ({ paidById: e.paidById, amount: e.amount, splits: e.splits })),
         settlements,
         userId
     );
@@ -188,36 +191,62 @@ export default async function DashboardPage() {
             </div>
 
             <section className="space-y-4">
-                <h2 className="text-lg font-semibold ml-1">Estado de Cuentas</h2>
-                <GlassCard className="p-0 overflow-hidden border-white/5">
-                    <div className="divide-y divide-white/5">
-                        {members.map(member => {
-                            const balance = balances[member.id] || 0;
-                            const isMe = member.id === userId;
-                            return (
-                                <div key={member.id} className="flex items-center justify-between p-4 bg-white/[0.02]">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center text-lg overflow-hidden">
-                                            {member.avatar || "👤"}
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-sm">{isMe ? "Tú" : member.name}</p>
-                                            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Balance Total</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className={cn(
-                                            "font-mono font-bold text-lg",
-                                            balance > 0 ? "text-emerald-400" : balance < 0 ? "text-primary" : "text-muted-foreground"
-                                        )}>
-                                            {balance > 0 ? "+" : ""}{balance.toFixed(2)}€
-                                        </p>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </GlassCard>
+                <h2 className="text-lg font-semibold ml-1">Resumen del Mes</h2>
+                {(() => {
+                    const now = new Date();
+                    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+                    const thisMonthExpenses = rawExpenses.filter(e => new Date(e.date) >= startOfMonth);
+                    const lastMonthExpenses = rawExpenses.filter(e => {
+                        const d = new Date(e.date);
+                        return d >= startOfLastMonth && d <= endOfLastMonth;
+                    });
+
+                    const totalThisMonth = thisMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
+                    const totalLastMonth = lastMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+                    const categoryTotals = thisMonthExpenses.reduce<Record<string, number>>((acc, e) => {
+                        acc[e.category] = (acc[e.category] || 0) + e.amount;
+                        return acc;
+                    }, {});
+                    const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];
+
+                    const categoryEmojis: Record<string, string> = {
+                        food: "🍕", transport: "🚗", entertainment: "🎬", shopping: "🛍️",
+                        bills: "📄", health: "💊", travel: "✈️", other: "📦"
+                    };
+
+                    const percentChange = totalLastMonth > 0
+                        ? ((totalThisMonth - totalLastMonth) / totalLastMonth * 100).toFixed(0)
+                        : null;
+
+                    return (
+                        <div className="grid grid-cols-3 gap-2">
+                            <GlassCard className="p-4 text-center">
+                                <span className="text-2xl mb-1 block">💰</span>
+                                <p className="text-xs text-muted-foreground uppercase tracking-wider">Este mes</p>
+                                <p className="text-lg font-bold font-mono">{totalThisMonth.toFixed(0)}€</p>
+                            </GlassCard>
+                            <GlassCard className="p-4 text-center">
+                                <span className="text-2xl mb-1 block">{topCategory ? categoryEmojis[topCategory[0]] || "📊" : "📊"}</span>
+                                <p className="text-xs text-muted-foreground uppercase tracking-wider">Top</p>
+                                <p className="text-lg font-bold capitalize">{topCategory ? topCategory[0] : "-"}</p>
+                            </GlassCard>
+                            <GlassCard className="p-4 text-center">
+                                <span className="text-2xl mb-1 block">{percentChange && Number(percentChange) > 0 ? "📈" : "📉"}</span>
+                                <p className="text-xs text-muted-foreground uppercase tracking-wider">vs Anterior</p>
+                                <p className={cn(
+                                    "text-lg font-bold font-mono",
+                                    percentChange && Number(percentChange) > 0 ? "text-red-400" : "text-emerald-400"
+                                )}>
+                                    {percentChange ? `${Number(percentChange) > 0 ? "+" : ""}${percentChange}%` : "-"}
+                                </p>
+                            </GlassCard>
+                        </div>
+                    );
+                })()}
             </section>
 
             {!partner && <InviteCard code={couple.code} />}

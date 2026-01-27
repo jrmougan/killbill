@@ -39,11 +39,11 @@ export default function NewExpensePage() {
                 if (data.couple) {
                     setMembers(data.couple.members);
                 }
+                if (data.userId) {
+                    setUserId(data.userId);
+                }
             })
             .catch(err => console.error("Failed to fetch couple", err));
-
-        const uid = document.cookie.split('; ').find(row => row.startsWith('user_id='))?.split('=')[1];
-        setUserId(uid || null);
     }, []);
 
     const partner = members.find(m => m.id !== userId);
@@ -221,7 +221,7 @@ export default function NewExpensePage() {
                     amount: parseFloat(amount),
                     description,
                     category,
-                    beneficiaryId: splitWithPartner ? null : userId,
+                    beneficiaryId: splitWithPartner ? null : partner?.id,
                     receiptUrl: uploadedUrl,
                     receiptData: receiptItems.length > 0 ? receiptItems : undefined
                 }),
@@ -415,13 +415,13 @@ export default function NewExpensePage() {
                             className={`py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${!splitWithPartner ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-white"}`}
                         >
                             <User className="h-4 w-4" />
-                            Solo yo
+                            Solo para {partner?.name || "pareja"}
                         </button>
                     </div>
 
-                    {splitWithPartner && partner && (
+                    {!splitWithPartner && partner && (
                         <p className="text-center text-xs text-muted-foreground animate-in fade-in duration-500">
-                            Se dividirá 50/50 con <strong>{partner.name}</strong>
+                            100% del gasto es para <strong>{partner.name}</strong>
                         </p>
                     )}
                 </div>
@@ -465,7 +465,7 @@ export default function NewExpensePage() {
                         Guardar Gasto <Check className="ml-2 h-5 w-5" />
                     </Button>
                 </div>
-            </form>
-        </div>
+            </form >
+        </div >
     );
 }

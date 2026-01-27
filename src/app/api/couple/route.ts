@@ -18,9 +18,9 @@ export async function GET(request: Request) {
         }
     });
 
-    if (!user?.coupleId) return NextResponse.json({ couple: null });
+    if (!user?.coupleId) return NextResponse.json({ couple: null, userId });
 
-    return NextResponse.json({ couple: user.couple });
+    return NextResponse.json({ couple: user.couple, userId });
 }
 
 export async function POST(request: Request) {
