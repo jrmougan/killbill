@@ -2,14 +2,14 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Check, Heart, User } from "lucide-react";
+import { ArrowLeft, Check, Heart, User, Camera, Image as ImageIcon, Loader2, X, Plus, Trash2, Calculator } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { createWorker } from 'tesseract.js';
-import { Camera, Image as ImageIcon, Loader2, X, Plus, Trash2, Calculator } from "lucide-react";
 import { ReceiptItem } from "@/types";
+import { parseOCRText } from "@/lib/ocr_parser";
 
 export default function NewExpensePage() {
     const router = useRouter();
@@ -72,85 +72,7 @@ export default function NewExpensePage() {
             const { data: { text } } = await worker.recognize(file);
             console.log("OCR Result:", text);
 
-            // Advanced parsing logic
-            const lines = text.split('\n');
-            let foundAmount = "";
-            let foundDescription = "";
-            const detectedItems: ReceiptItem[] = [];
-
-            // Regex for price at the end of the line:  ... 12.34 or ... 12,34 A
-            const priceRegex = /\s(\d+[.,]\d{2})(?:\s*[A-Z])?$/;
-            // Regex for quantity: 2 x 1.50 or 2x1.50
-            const qtyRegex = /(\d+(?:[.,]\d+)?)\s*[xX]\s*(\d+[.,]\d{2})/;
-
-            // Ignore common garbage lines
-            const ignoredKeywords = ['cif', 'nif', 'tel', 'calle', 'plaza', 'avda', 'factura', 'ticket', 'fecha', 'hora', 'total', 'entregado', 'cambio'];
-
-            for (const line of lines) {
-                const cleanLine = line.trim();
-                const lowerLine = cleanLine.toLowerCase();
-                if (cleanLine.length < 5) continue; // Too short
-
-                // Check for total
-                const amountMatch = cleanLine.match(/(?:total|importe|eur|€)\s*[:=]?\s*(\d+[.,]\d{2})/i);
-                if (amountMatch) {
-                    foundAmount = amountMatch[1].replace(',', '.');
-                    continue; // Is total line, not item
-                }
-
-                // Check for item
-                // 1. Check if it ends with a price
-                const priceMatch = cleanLine.match(priceRegex);
-                if (priceMatch && !ignoredKeywords.some(k => lowerLine.includes(k))) {
-                    let price = parseFloat(priceMatch[1].replace(',', '.'));
-                    let desc = cleanLine.replace(priceMatch[0], '').trim();
-                    let qty = 1;
-                    let unitPrice = price;
-
-                    // 2. Check for quantity pattern inside description
-                    const qtyMatch = cleanLine.match(qtyRegex);
-                    if (qtyMatch) {
-                        qty = parseFloat(qtyMatch[1].replace(',', '.'));
-                        unitPrice = parseFloat(qtyMatch[2].replace(',', '.'));
-                        // Clean desc further
-                        desc = desc.replace(qtyMatch[0], '').trim();
-                    }
-
-                    // Heuristic: If description is purely symbols or numbers, ignore
-                    if (!/^[\d\W]+$/.test(desc) && desc.length > 2) {
-                        detectedItems.push({
-                            description: desc,
-                            quantity: qty,
-                            price: unitPrice,
-                            total: price
-                        });
-                    }
-                }
-            }
-
-            // Fallback for amount if not found (look for highest number, usually total)
-            if (!foundAmount && detectedItems.length > 0) {
-                // Sum of items
-                const sum = detectedItems.reduce((acc, item) => acc + item.total, 0);
-                foundAmount = sum.toFixed(2);
-            } else if (!foundAmount) {
-                // Old fallback
-                const fallbackAmountRegex = /(\d+[.,]\d{2})/;
-                for (let i = lines.length - 1; i >= 0; i--) {
-                    const match = lines[i].match(fallbackAmountRegex);
-                    if (match) {
-                        foundAmount = match[1].replace(',', '.');
-                        break;
-                    }
-                }
-            }
-
-            // Fallback description
-            if (lines.length > 0) {
-                // find first non-empty line
-                const firstLine = lines.find(l => l.trim().length > 3);
-                if (firstLine) foundDescription = firstLine.trim();
-            }
+            const { amount: foundAmount, description: foundDescription, items: detectedItems } = parseOCRText(text);
 
             if (foundAmount) setAmount(foundAmount);
             if (foundDescription) setDescription(foundDescription);
@@ -167,10 +89,12 @@ export default function NewExpensePage() {
         }
     };
 
-    const updateAmountFromItems = () => {
-        const total = receiptItems.reduce((sum, item) => sum + item.total, 0);
-        setAmount(total.toFixed(2));
-    };
+    useEffect(() => {
+        if (receiptItems.length > 0) {
+            const total = receiptItems.reduce((sum, item) => sum + item.total, 0);
+            setAmount(total.toFixed(2));
+        }
+    }, [receiptItems]);
 
     const addItem = () => {
         setReceiptItems([...receiptItems, { description: "", quantity: 1, price: 0, total: 0 }]);
@@ -339,11 +263,6 @@ export default function NewExpensePage() {
                                 Desglose de Ticket
                             </h3>
                             <div className="flex gap-2">
-                                {receiptItems.length > 0 && (
-                                    <Button type="button" variant="ghost" size="sm" onClick={updateAmountFromItems} className="h-7 text-xs">
-                                        Usar Total ({receiptItems.reduce((acc, i) => acc + i.total, 0).toFixed(2)}€)
-                                    </Button>
-                                )}
                                 <Button type="button" variant="secondary" size="sm" onClick={addItem} className="h-7">
                                     <Plus className="h-3 w-3 mr-1" /> Item
                                 </Button>
@@ -465,7 +384,7 @@ export default function NewExpensePage() {
                         Guardar Gasto <Check className="ml-2 h-5 w-5" />
                     </Button>
                 </div>
-            </form >
-        </div >
+            </form>
+        </div>
     );
 }
