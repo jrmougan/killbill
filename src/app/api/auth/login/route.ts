@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { cookies } from 'next/headers';
 import bcrypt from 'bcryptjs';
+import { signToken } from '@/lib/auth';
 
 export async function POST(request: Request) {
     try {
@@ -44,9 +45,24 @@ export async function POST(request: Request) {
             }
         }
 
-        // 3. Set Session
+        // 4. Set Session (JWT)
+        const token = await signToken({
+            userId: user.id,
+            email: user.email,
+            isAdmin: user.isAdmin
+        });
+
         const cookieStore = await cookies();
-        cookieStore.set('user_id', user.id, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+        cookieStore.set('session_token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 7 * 24 * 60 * 60 // 7 days
+        });
+
+        // Clear old insecure cookie if present
+        cookieStore.delete('user_id');
 
         return NextResponse.json({ success: true, user });
     } catch (error) {

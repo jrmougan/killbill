@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
-import { cookies } from 'next/headers';
+import { getSession } from '@/lib/auth';
 
 export async function POST(request: Request) {
-    const cookieStore = await cookies();
-    const userId = cookieStore.get('user_id')?.value;
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const session = await getSession();
+    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const userId = session.userId as string;
 
     try {
         const formData = await request.formData();

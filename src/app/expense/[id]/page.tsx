@@ -8,12 +8,13 @@ import { cn } from "@/lib/utils";
 import { ReceiptItem } from "@/types";
 import { DeleteExpenseButton } from "@/components/expense/delete-button";
 import { EditExpenseButton } from "@/components/expense/edit-button";
+import { getSession } from "@/lib/auth";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
-    const cookieStore = await cookies();
-    const userId = cookieStore.get("user_id")?.value;
-    if (!userId) redirect("/login");
+    const session = await getSession();
+    if (!session?.userId) redirect("/login");
+    const userId = session.userId as string;
 
     const expense = await prisma.expense.findUnique({
         where: { id: id },

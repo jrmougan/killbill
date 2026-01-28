@@ -8,6 +8,7 @@ import { Plus, GripHorizontal, Heart } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
+import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { calculateBalances } from "@/lib/finance";
@@ -16,9 +17,9 @@ import { cn } from "@/lib/utils";
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-    const cookieStore = await cookies();
-    const userId = cookieStore.get("user_id")?.value;
-    if (!userId) redirect("/login");
+    const session = await getSession();
+    if (!session?.userId) redirect("/login");
+    const userId = session.userId as string;
 
     // Fetch User with couple and partner
     const user = await prisma.user.findUnique({

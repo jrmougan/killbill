@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
 
 export async function DELETE(
     request: Request,
@@ -8,12 +8,9 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params;
-        const cookieStore = await cookies();
-        const userId = cookieStore.get("user_id")?.value;
-
-        if (!userId) {
-            return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-        }
+        const session = await getSession();
+        if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const userId = session.userId as string;
 
         // Get expense and verify ownership
         const expense = await prisma.expense.findUnique({
@@ -49,12 +46,9 @@ export async function PATCH(
 ) {
     try {
         const { id } = await params;
-        const cookieStore = await cookies();
-        const userId = cookieStore.get("user_id")?.value;
-
-        if (!userId) {
-            return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-        }
+        const session = await getSession();
+        if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const userId = session.userId as string;
 
         const body = await request.json();
         const { description, amount, category, splitWithPartner, receiptItems } = body;
