@@ -29,9 +29,10 @@ export default async function SettlePage() {
     const { couple } = user;
     const members = couple.members;
 
-    // Fetch Expenses for couple
+    // Fetch Expenses for couple with splits
     const rawExpenses = await prisma.expense.findMany({
         where: { coupleId: couple.id },
+        include: { splits: true },
     });
 
     // Fetch Settlements for couple
@@ -42,7 +43,7 @@ export default async function SettlePage() {
     // Calculate My Debts (High Level)
     const myDebtsMap = getMyDebts(
         members,
-        rawExpenses.map(e => ({ paidById: e.paidById, amount: e.amount })),
+        rawExpenses.map(e => ({ paidById: e.paidById, amount: e.amount, splits: e.splits.map(s => ({ userId: s.userId, amount: s.amount })) })),
         settlements,
         userId
     );

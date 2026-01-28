@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { createWorker } from 'tesseract.js';
 import { ReceiptItem } from "@/types";
 import { parseOCRText } from "@/lib/ocr_parser";
+import { getAllCategories, getScannableCategories, getCategoryById } from "@/lib/categories";
 
 export default function NewExpensePage() {
     const router = useRouter();
@@ -175,67 +176,69 @@ export default function NewExpensePage() {
 
             <form onSubmit={handleSubmit} className="flex-1 space-y-8 mt-4">
 
-                {/* Receipt Upload/Preview Zone */}
-                <div className="space-y-4">
-                    {!receiptPreview ? (
-                        <div
-                            onClick={() => fileInputRef.current?.click()}
-                            className="w-full aspect-video rounded-2xl border-2 border-dashed border-white/10 bg-white/5 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/[0.08] transition-all group"
-                        >
-                            <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <Camera className="h-6 w-6 text-primary" />
-                            </div>
-                            <div className="text-center">
-                                <p className="font-semibold text-sm">Escanear Ticket</p>
-                                <p className="text-xs text-muted-foreground">La magia del OCR hará el resto</p>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="relative rounded-2xl overflow-hidden border border-white/10 aspect-video bg-black/40">
-                            <img
-                                src={receiptPreview}
-                                alt="Ticket preview"
-                                className="w-full h-full object-contain"
-                            />
-                            <Button
-                                type="button"
-                                variant="destructive"
-                                size="icon"
-                                className="absolute top-2 right-2 h-8 w-8 rounded-full"
-                                onClick={() => {
-                                    setReceiptFile(null);
-                                    setReceiptPreview(null);
-                                    setReceiptUrl(null);
-                                }}
+                {/* Receipt Upload/Preview Zone - Only for scannable categories */}
+                {getScannableCategories().includes(category) && (
+                    <div className="space-y-4">
+                        {!receiptPreview ? (
+                            <div
+                                onClick={() => fileInputRef.current?.click()}
+                                className="w-full aspect-video rounded-2xl border-2 border-dashed border-white/10 bg-white/5 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/[0.08] transition-all group"
                             >
-                                <X className="h-4 w-4" />
-                            </Button>
-
-                            {isOcrRunning && (
-                                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-4 animate-in fade-in duration-300">
-                                    <Loader2 className="h-10 w-10 text-primary animate-spin" />
-                                    <div className="text-center">
-                                        <p className="font-bold text-white">Leyendo ticket...</p>
-                                        <p className="text-xs text-primary">{ocrProgress}%</p>
-                                    </div>
-                                    <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-primary transition-all duration-300"
-                                            style={{ width: `${ocrProgress}%` }}
-                                        />
-                                    </div>
+                                <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <Camera className="h-6 w-6 text-primary" />
                                 </div>
-                            )}
-                        </div>
-                    )}
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        className="hidden"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                    />
-                </div>
+                                <div className="text-center">
+                                    <p className="font-semibold text-sm">Escanear Ticket</p>
+                                    <p className="text-xs text-muted-foreground">La magia del OCR hará el resto</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="relative rounded-2xl overflow-hidden border border-white/10 aspect-video bg-black/40">
+                                <img
+                                    src={receiptPreview}
+                                    alt="Ticket preview"
+                                    className="w-full h-full object-contain"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="destructive"
+                                    size="icon"
+                                    className="absolute top-2 right-2 h-8 w-8 rounded-full"
+                                    onClick={() => {
+                                        setReceiptFile(null);
+                                        setReceiptPreview(null);
+                                        setReceiptUrl(null);
+                                    }}
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+
+                                {isOcrRunning && (
+                                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-4 animate-in fade-in duration-300">
+                                        <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                                        <div className="text-center">
+                                            <p className="font-bold text-white">Leyendo ticket...</p>
+                                            <p className="text-xs text-primary">{ocrProgress}%</p>
+                                        </div>
+                                        <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full bg-primary transition-all duration-300"
+                                                style={{ width: `${ocrProgress}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            className="hidden"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                        />
+                    </div>
+                )}
 
                 <div className="space-y-2 text-center py-6">
                     <label className="text-sm text-muted-foreground uppercase tracking-widest font-bold">¿Cuánto ha sido?</label>
@@ -326,7 +329,7 @@ export default function NewExpensePage() {
                             className={`py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${splitWithPartner ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-white"}`}
                         >
                             <Heart className={cn("h-4 w-4", splitWithPartner && "fill-current")} />
-                            Los dos
+                            Común
                         </button>
                         <button
                             type="button"
@@ -358,16 +361,17 @@ export default function NewExpensePage() {
 
                     <div className="space-y-2">
                         <label className="text-sm font-medium ml-1">Categoría</label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {["food", "shopping", "rent", "utilities", "transport", "entertainment", "other"].map((cat) => (
+                        <div className="grid grid-cols-4 gap-2">
+                            {getAllCategories().map((cat) => (
                                 <button
-                                    key={cat}
+                                    key={cat.id}
                                     type="button"
-                                    onClick={() => setCategory(cat)}
-                                    className={`p-3 rounded-xl border border-white/5 text-sm font-medium capitalize transition-all ${category === cat ? "bg-primary text-white border-primary" : "bg-white/5 hover:bg-white/10"
+                                    onClick={() => setCategory(cat.id)}
+                                    className={`p-3 rounded-xl border border-white/5 text-center transition-all ${category === cat.id ? "bg-primary text-white border-primary scale-105" : "bg-white/5 hover:bg-white/10"
                                         }`}
                                 >
-                                    {cat}
+                                    <span className="text-xl block mb-1">{cat.emoji}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-tight">{cat.label}</span>
                                 </button>
                             ))}
                         </div>

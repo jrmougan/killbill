@@ -198,8 +198,8 @@ export default async function DashboardPage() {
                     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
                     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
 
-                    const thisMonthExpenses = rawExpenses.filter(e => new Date(e.date) >= startOfMonth);
-                    const lastMonthExpenses = rawExpenses.filter(e => {
+                    const thisMonthExpenses = allExpenses.filter(e => new Date(e.date) >= startOfMonth);
+                    const lastMonthExpenses = allExpenses.filter(e => {
                         const d = new Date(e.date);
                         return d >= startOfLastMonth && d <= endOfLastMonth;
                     });
@@ -223,27 +223,73 @@ export default async function DashboardPage() {
                         : null;
 
                     return (
-                        <div className="grid grid-cols-3 gap-2">
-                            <GlassCard className="p-4 text-center">
-                                <span className="text-2xl mb-1 block">💰</span>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider">Este mes</p>
-                                <p className="text-lg font-bold font-mono">{totalThisMonth.toFixed(0)}€</p>
-                            </GlassCard>
-                            <GlassCard className="p-4 text-center">
-                                <span className="text-2xl mb-1 block">{topCategory ? categoryEmojis[topCategory[0]] || "📊" : "📊"}</span>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider">Top</p>
-                                <p className="text-lg font-bold capitalize">{topCategory ? topCategory[0] : "-"}</p>
-                            </GlassCard>
-                            <GlassCard className="p-4 text-center">
-                                <span className="text-2xl mb-1 block">{percentChange && Number(percentChange) > 0 ? "📈" : "📉"}</span>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider">vs Anterior</p>
-                                <p className={cn(
-                                    "text-lg font-bold font-mono",
-                                    percentChange && Number(percentChange) > 0 ? "text-red-400" : "text-emerald-400"
-                                )}>
-                                    {percentChange ? `${Number(percentChange) > 0 ? "+" : ""}${percentChange}%` : "-"}
-                                </p>
-                            </GlassCard>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-3 gap-2">
+                                <GlassCard className="p-4 text-center">
+                                    <span className="text-2xl mb-1 block">💰</span>
+                                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Este mes</p>
+                                    <p className="text-lg font-bold font-mono">{totalThisMonth.toFixed(0)}€</p>
+                                </GlassCard>
+                                <GlassCard className="p-4 text-center">
+                                    <span className="text-2xl mb-1 block">{topCategory ? categoryEmojis[topCategory[0]] || "📊" : "📊"}</span>
+                                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Top</p>
+                                    <p className="text-lg font-bold capitalize">{topCategory ? topCategory[0] : "-"}</p>
+                                </GlassCard>
+                                <GlassCard className="p-4 text-center">
+                                    <span className="text-2xl mb-1 block">{percentChange && Number(percentChange) > 0 ? "📈" : "📉"}</span>
+                                    <p className="text-xs text-muted-foreground uppercase tracking-wider">vs Anterior</p>
+                                    <p className={cn(
+                                        "text-lg font-bold font-mono",
+                                        percentChange && Number(percentChange) > 0 ? "text-red-400" : "text-emerald-400"
+                                    )}>
+                                        {percentChange ? `${Number(percentChange) > 0 ? "+" : ""}${percentChange}%` : "-"}
+                                    </p>
+                                </GlassCard>
+                            </div>
+
+                            {/* Spending Breakdown Bar */}
+                            {totalThisMonth > 0 && (
+                                <GlassCard className="p-4 space-y-3">
+                                    <div className="flex h-3 w-full rounded-full overflow-hidden bg-white/5">
+                                        {Object.entries(categoryTotals)
+                                            .sort((a, b) => b[1] - a[1])
+                                            .map(([cat, amount], idx) => {
+                                                const percentage = (amount / totalThisMonth) * 100;
+                                                const colors = [
+                                                    "bg-primary", "bg-purple-500", "bg-emerald-500",
+                                                    "bg-orange-500", "bg-blue-500", "bg-pink-500", "bg-yellow-500"
+                                                ];
+                                                return (
+                                                    <div
+                                                        key={cat}
+                                                        className={cn("h-full", colors[idx % colors.length])}
+                                                        style={{ width: `${percentage}%` }}
+                                                        title={`${cat}: ${amount}€`}
+                                                    />
+                                                );
+                                            })}
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                        {Object.entries(categoryTotals)
+                                            .sort((a, b) => b[1] - a[1])
+                                            .slice(0, 4)
+                                            .map(([cat, amount], idx) => {
+                                                const colors = [
+                                                    "bg-primary", "bg-purple-500", "bg-emerald-500",
+                                                    "bg-orange-500", "bg-blue-500", "bg-pink-500", "bg-yellow-500"
+                                                ];
+                                                return (
+                                                    <div key={cat} className="flex items-center gap-1.5">
+                                                        <div className={cn("h-2 w-2 rounded-full", colors[idx % colors.length])} />
+                                                        <span className="text-[10px] uppercase font-bold text-muted-foreground">
+                                                            {cat} ({((amount / totalThisMonth) * 100).toFixed(0)}%)
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
+                                </GlassCard>
+                            )}
                         </div>
                     );
                 })()}
@@ -254,18 +300,30 @@ export default async function DashboardPage() {
             <section className="space-y-4">
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold">Recientes</h2>
+                    {expenses.length > 0 && (
+                        <Link href="/expenses/list" className="text-sm text-primary hover:underline">
+                            Ver todos →
+                        </Link>
+                    )}
                 </div>
 
                 <div className="space-y-3">
                     {expenses.length === 0 ? (
-                        <div className="text-center text-muted-foreground py-8 opacity-50">
-                            No hay gastos aún.
+                        <div className="text-center py-12 space-y-4">
+                            <div className="text-6xl animate-bounce">💸</div>
+                            <div className="space-y-1">
+                                <p className="font-bold text-lg">¡Sin gastos aún!</p>
+                                <p className="text-sm text-muted-foreground">
+                                    Pulsa el botón <span className="text-primary font-bold">+</span> para añadir vuestro primer gasto
+                                </p>
+                            </div>
                         </div>
                     ) : expenses.map((expense) => (
                         <ExpenseCard
                             key={expense.id}
                             expense={expense}
                             paidByUser={usersMap[expense.paidBy]}
+                            allUsers={usersMap}
                         />
                     ))}
                 </div>

@@ -1,8 +1,8 @@
 export interface User {
     id: string;
     name: string;
-    avatar?: string; // Emoji or URL
-    color: string; // Hex for avatar bg
+    avatar?: string | null;
+    color?: string;
 }
 
 export interface Split {
@@ -21,12 +21,12 @@ export interface Expense {
     id: string;
     description: string;
     amount: number;
-    paidBy: string; // UserId
-    date: string; // ISO date
-    category: "food" | "transport" | "utilities" | "entertainment" | "rent" | "shopping" | "other";
-    receiptUrl?: string;
+    paidBy: string;
+    date: string;
+    category: string;
+    receiptUrl?: string | null;
     receiptData?: ReceiptItem[];
-    splits: Split[]; // Who is this for?
+    splits: Split[];
 }
 
 export interface Balance {

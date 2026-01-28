@@ -2,36 +2,34 @@
 
 import { GlassCard } from "@/components/ui/glass-card";
 import { Expense, User } from "@/types";
-import { Coffee, Home, Lightbulb, TramFront, ShoppingBag, Receipt, ArrowRight } from "lucide-react";
+import { Receipt } from "lucide-react";
 import Link from "next/link";
+import { getCategoryById } from "@/lib/categories";
 
 interface ExpenseCardProps {
     expense: Expense;
-    paidByUser: User; // Who paid
-    forUser?: User; // If specific, or implied valid "other"
+    paidByUser: User;
+    allUsers?: Record<string, User>;
 }
 
-const CATEGORY_ICONS = {
-    food: Coffee,
-    rent: Home,
-    utilities: Lightbulb,
-    transport: TramFront,
-    entertainment: ShoppingBag, // Or Ticket
-    other: Receipt,
-};
+export function ExpenseCard({ expense, paidByUser, allUsers }: ExpenseCardProps) {
+    const category = getCategoryById(expense.category);
+    const Icon = category.icon || Receipt;
+    const colorClass = `${category.color} ${category.bgColor}`;
 
-const CATEGORY_COLORS = {
-    food: "text-orange-400 bg-orange-400/20",
-    rent: "text-blue-400 bg-blue-400/20",
-    utilities: "text-yellow-400 bg-yellow-400/20",
-    transport: "text-green-400 bg-green-400/20",
-    entertainment: "text-purple-400 bg-purple-400/20",
-    other: "text-gray-400 bg-gray-400/20",
-};
-
-export function ExpenseCard({ expense, paidByUser }: ExpenseCardProps) {
-    const Icon = CATEGORY_ICONS[expense.category] || Receipt;
-    const colorClass = CATEGORY_COLORS[expense.category] || CATEGORY_COLORS.other;
+    // Determine beneficiary info
+    let beneficiaryText = "Común";
+    if (expense.splits.length === 1 && allUsers) {
+        const beneficiaryId = expense.splits[0].userId;
+        const beneficiary = allUsers[beneficiaryId];
+        if (beneficiary) {
+            if (beneficiaryId !== paidByUser.id) {
+                beneficiaryText = `Favor para ${beneficiary.name.split(' ')[0]}`;
+            } else {
+                beneficiaryText = "Personal";
+            }
+        }
+    }
 
     return (
         <Link href={`/expense/${expense.id}`}>
@@ -45,9 +43,15 @@ export function ExpenseCard({ expense, paidByUser }: ExpenseCardProps) {
                         <h3 className="font-medium truncate text-base">{expense.description}</h3>
                         {expense.receiptUrl && <Receipt size={12} className="text-primary shrink-0" />}
                     </div>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <span className="font-medium text-foreground/80">{paidByUser.name}</span> pagó
-                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <span className="font-medium text-foreground/80">{paidByUser.name}</span> pagó
+                        </p>
+                        <span className="h-1 w-1 rounded-full bg-white/20"></span>
+                        <p className="text-[10px] font-bold text-primary/80 uppercase tracking-tighter">
+                            {beneficiaryText}
+                        </p>
+                    </div>
                 </div>
 
                 <div className="text-right">

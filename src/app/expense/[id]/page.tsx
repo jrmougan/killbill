@@ -6,6 +6,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ReceiptItem } from "@/types";
+import { DeleteExpenseButton } from "@/components/expense/delete-button";
+import { EditExpenseButton } from "@/components/expense/edit-button";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -21,6 +23,11 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                 include: {
                     user: true
                 }
+            },
+            couple: {
+                include: {
+                    members: true
+                }
             }
         }
     });
@@ -28,10 +35,12 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
     if (!expense) redirect("/dashboard");
 
     const isMe = userId === expense.paidById;
+    const partner = expense.couple.members.find(m => m.id !== expense.paidById);
+    const splitWithPartner = expense.splits.length === 2; // If 2 splits, it's 50/50
 
     return (
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto relative pb-24">
-            <header className="flex items-center gap-4 pt-2">
+            <header className="flex items-center gap-2 pt-2">
                 <Link href="/dashboard">
                     <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
                         <ArrowLeft className="h-5 w-5" />
@@ -41,6 +50,17 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     <h1 className="text-xl font-bold truncate">{expense.description}</h1>
                     <p className="text-xs text-muted-foreground">{new Date(expense.date).toLocaleDateString()}</p>
                 </div>
+                <EditExpenseButton
+                    expenseId={expense.id}
+                    initialData={{
+                        description: expense.description,
+                        amount: expense.amount,
+                        category: expense.category,
+                        splitWithPartner,
+                        partnerName: partner?.name,
+                    }}
+                />
+                <DeleteExpenseButton expenseId={expense.id} />
             </header>
 
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
