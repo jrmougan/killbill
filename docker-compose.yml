@@ -1,0 +1,24 @@
+services:
+  app:
+    image: ghcr.io/jrmougan/killbill:latest
+    container_name: killbill-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Database connection (Connects to external container in 'app_network')
+      - DATABASE_HOST=mysql-shared
+      - DATABASE_USER=killbill
+      - DATABASE_PASSWORD=${MYSQL_PASSWORD}
+      - DATABASE_NAME=killbill
+      - DATABASE_PORT=3306
+      # Prisma connection string
+      - DATABASE_URL=mysql://killbill:${MYSQL_PASSWORD}@mysql-shared:3306/killbill
+      # Security
+      - JWT_SECRET=${JWT_SECRET}
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    external: true

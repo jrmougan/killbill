@@ -33,61 +33,32 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
     console.log('🌱 Seeding database...');
 
-    // Create a couple for the test users
-    const couple = await prisma.couple.upsert({
-        where: { code: 'TEST-COUPLE-001' },
-        update: {},
-        create: {
-            name: 'Pareja de Prueba',
-            code: 'TEST-COUPLE-001',
-        },
-    });
-
-    console.log(`✅ Created couple: ${couple.name} (${couple.code})`);
-
-    // Hash password for test users
+    // Hash password
     const hashedPassword = await bcrypt.hash('password123', 10);
     const hashedPin = await bcrypt.hash('1234', 10);
 
-    // Create test user 1
-    const user1 = await prisma.user.upsert({
-        where: { email: 'alice@test.com' },
-        update: {},
+    // Create admin user
+    const admin = await prisma.user.upsert({
+        where: { email: 'admin@killbill.app' },
+        update: {
+            isAdmin: true,
+        },
         create: {
-            name: 'Alice García',
-            email: 'alice@test.com',
+            name: 'Admin',
+            email: 'admin@killbill.app',
             password: hashedPassword,
             pin: hashedPin,
-            avatar: '👩',
-            coupleId: couple.id,
+            avatar: '👑',
+            isAdmin: true,
         },
     });
 
-    console.log(`✅ Created user: ${user1.name} (${user1.email})`);
-
-    // Create test user 2
-    const user2 = await prisma.user.upsert({
-        where: { email: 'bob@test.com' },
-        update: {},
-        create: {
-            name: 'Bob Martínez',
-            email: 'bob@test.com',
-            password: hashedPassword,
-            pin: hashedPin,
-            avatar: '👨',
-            coupleId: couple.id,
-        },
-    });
-
-    console.log(`✅ Created user: ${user2.name} (${user2.email})`);
+    console.log(`✅ Created admin: ${admin.name} (${admin.email})`);
 
     console.log('\n📊 Seed Summary:');
-    console.log(`   - Couple: ${couple.name}`);
-    console.log(`   - Users: ${user1.name}, ${user2.name}`);
-    console.log('\n🔐 Test Credentials:');
-    console.log('   Email: alice@test.com / bob@test.com');
-    console.log('   Password: password123');
-    console.log('   PIN: 1234');
+    console.log(`   - Admin: ${admin.email}`);
+    console.log('\n🔐 Credentials:');
+    console.log('   Admin: admin@killbill.app / password123');
 }
 
 main()
