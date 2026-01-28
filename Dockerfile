@@ -17,6 +17,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Generate Prisma client
+ENV DATABASE_URL="mysql://dummy:dummy@localhost:3306/dummy"
 RUN npx prisma generate
 
 # Build the application
