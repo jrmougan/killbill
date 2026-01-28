@@ -1,8 +1,15 @@
 import type { NextConfig } from "next";
 
-// Trigger restart
 const nextConfig: NextConfig = {
-  /* config options here */
+  output: "standalone",
+
+  // Optimize for production
+  poweredByHeader: false,
+
+  // Handle Prisma in serverless/Docker
+  experimental: {
+    serverComponentsExternalPackages: ["@prisma/client"],
+  },
 };
 
 export default nextConfig;

@@ -9,11 +9,12 @@ import Link from "next/link";
 function RegisterForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const inviteCode = searchParams.get("code");
+    const urlCode = searchParams.get("code");
 
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [inviteCode, setInviteCode] = useState(urlCode || "");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
 
@@ -52,9 +53,7 @@ function RegisterForm() {
                     Kill Bill
                 </h1>
                 <p className="text-muted-foreground">
-                    {inviteCode
-                        ? "Has sido invitado a un grupo. Crea una cuenta para unirte."
-                        : "Crea tu cuenta para empezar."}
+                    Necesitas un código de invitación para registrarte.
                 </p>
             </div>
 
@@ -66,6 +65,14 @@ function RegisterForm() {
                 )}
 
                 <div className="space-y-4">
+                    <Input
+                        placeholder="Código de invitación"
+                        value={inviteCode}
+                        onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                        required
+                        className="text-lg h-12 font-mono text-center tracking-widest"
+                        maxLength={8}
+                    />
                     <Input
                         placeholder="Nombre"
                         value={name}
@@ -97,13 +104,13 @@ function RegisterForm() {
                     className="w-full h-12 text-lg shadow-xl shadow-primary/20"
                     isLoading={loading}
                 >
-                    {inviteCode ? "Unirse al Grupo" : "Registrarse"}
+                    Registrarse
                 </Button>
 
                 <div className="text-center text-sm text-muted-foreground mt-4">
                     ¿Ya tienes cuenta?{" "}
                     <Link
-                        href={`/login${inviteCode ? `?code=${inviteCode}` : ""}`}
+                        href="/login"
                         className="text-primary hover:underline"
                     >
                         Inicia sesión
