@@ -71,6 +71,18 @@ services:
       - app_network
 ```
 
+### 4. Initialize Database (First Run)
+Once the app is running in Portainer:
+1.  Open the container console (`>_` Exec Console).
+2.  Run migrations to create tables:
+    ```bash
+    npx prisma migrate deploy
+    ```
+3.  Seed the admin user:
+    ```bash
+    npx prisma db seed
+    ```
+
 ---
 
 ## 🔒 Security
