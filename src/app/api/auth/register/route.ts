@@ -18,21 +18,35 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Se requiere código de invitación' }, { status: 400 });
         }
 
-        // Validate invite code
-        const invite = await prisma.inviteCode.findUnique({
+        // Try to find as InviteCode first (admin-created)
+        let invite = await prisma.inviteCode.findUnique({
             where: { code: inviteCode },
         });
 
+        // If not an InviteCode, try as Couple code (partner invite)
+        let couple = null;
         if (!invite) {
-            return NextResponse.json({ error: 'Código de invitación inválido' }, { status: 400 });
-        }
+            couple = await prisma.couple.findUnique({
+                where: { code: inviteCode },
+                include: { members: true }
+            });
 
-        if (invite.usedById) {
-            return NextResponse.json({ error: 'Este código ya fue utilizado' }, { status: 400 });
-        }
+            if (!couple) {
+                return NextResponse.json({ error: 'Código de invitación inválido' }, { status: 400 });
+            }
 
-        if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
-            return NextResponse.json({ error: 'Este código ha expirado' }, { status: 400 });
+            if (couple.members.length >= 2) {
+                return NextResponse.json({ error: 'Esta pareja ya está completa' }, { status: 400 });
+            }
+        } else {
+            // Validate InviteCode
+            if (invite.usedById) {
+                return NextResponse.json({ error: 'Este código ya fue utilizado' }, { status: 400 });
+            }
+
+            if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
+                return NextResponse.json({ error: 'Este código ha expirado' }, { status: 400 });
+            }
         }
 
         // Check if user exists
@@ -47,24 +61,27 @@ export async function POST(request: Request) {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create user
+        // Create user (with coupleId if registering via couple invite)
         const user = await prisma.user.create({
             data: {
                 name,
                 email,
                 password: hashedPassword,
                 avatar: "👤",
+                coupleId: couple?.id || undefined,
             },
         });
 
-        // Mark invite as used
-        await prisma.inviteCode.update({
-            where: { id: invite.id },
-            data: {
-                usedById: user.id,
-                usedAt: new Date(),
-            },
-        });
+        // Mark InviteCode as used (if used)
+        if (invite) {
+            await prisma.inviteCode.update({
+                where: { id: invite.id },
+                data: {
+                    usedById: user.id,
+                    usedAt: new Date(),
+                },
+            });
+        }
 
         // Set Session (JWT)
         const token = await signToken({

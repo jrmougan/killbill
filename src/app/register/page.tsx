@@ -53,7 +53,9 @@ function RegisterForm() {
                     Kill Bill
                 </h1>
                 <p className="text-muted-foreground">
-                    Necesitas un código de invitación para registrarte.
+                    {urlCode
+                        ? "Te han invitado a compartir gastos. ¡Regístrate!"
+                        : "Necesitas un código de invitación para registrarte."}
                 </p>
             </div>
 

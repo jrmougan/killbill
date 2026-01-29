@@ -60,15 +60,17 @@ describe('ocr_parser', () => {
             FRUTOS DEL BOSQU 2,19 C
             TOFU AUCHAN BIO 2,75 B
             WEETABIX 4,61 B
+            >SPINACA MAXI 2,49 C
             € TARJETA 40,18
+            E CANBIO 0,00
             €* TOT 40,18
         `;
         const result = parseOCRText(text);
         expect(result.amount).toBe('40.18');
-        expect(result.items.length).toBe(4);
+        expect(result.items.length).toBe(5); // Should NOT include TARJETA or CANBIO
         expect(result.items[0].description).toBe('BOLSA 50X60CM');
         expect(result.items[0].total).toBe(0.12);
-        expect(result.items[1].description).toBe('FRUTOS DEL BOSQU');
-        expect(result.items[1].total).toBe(2.19);
+        expect(result.items[4].description).toBe('SPINACA MAXI'); // Should clean leading >
+        expect(result.items[4].total).toBe(2.49);
     });
 });
