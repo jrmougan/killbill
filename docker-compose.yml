@@ -3,11 +3,8 @@ services:
     image: ghcr.io/jrmougan/killbill:latest
     container_name: killbill-app
     restart: unless-stopped
-    # Ports commented out because Traefik handles the exposure
-    # ports:
-    #   - "3000:3000"
     environment:
-      # Database connection (Connects to external container in 'app_network')
+      # Database connection
       - DATABASE_HOST=mysql
       - DATABASE_USER=killbill
       - DATABASE_PASSWORD=${MYSQL_PASSWORD}
@@ -18,18 +15,18 @@ services:
       # Security
       - JWT_SECRET=${JWT_SECRET}
     networks:
-      - app_network
+      - mysql_network
+      - traefik
     labels:
       - "traefik.enable=true"
-      # IMPORTANT: Hostname configuration
       - "traefik.http.routers.killbill.rule=Host(`finanzas.mougan.es`)"
       - "traefik.http.routers.killbill.entrypoints=websecure"
       - "traefik.http.routers.killbill.tls.certresolver=myresolver"
-      # Container port
       - "traefik.http.services.killbill.loadbalancer.server.port=3000"
-      # Network (optional if only one, but good practice)
       - "traefik.docker.network=traefik"
 
 networks:
   mysql_network:
+    external: true
+  traefik:
     external: true
