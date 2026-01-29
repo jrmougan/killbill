@@ -31,5 +31,5 @@ services:
       - "traefik.docker.network=traefik"
 
 networks:
-  app_network:
+  mysql_network:
     external: true
