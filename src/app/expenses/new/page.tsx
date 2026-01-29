@@ -98,7 +98,7 @@ export default function NewExpensePage() {
     }, [receiptItems]);
 
     const addItem = () => {
-        setReceiptItems([...receiptItems, { description: "", quantity: 1, price: 0, total: 0 }]);
+        setReceiptItems([...receiptItems, { description: "", quantity: 1, price: 0, total: 0, assignedTo: null }]);
     };
 
     const updateItem = (index: number, field: keyof ReceiptItem, value: any) => {
@@ -116,6 +116,14 @@ export default function NewExpensePage() {
 
     const removeItem = (index: number) => {
         setReceiptItems(receiptItems.filter((_, i) => i !== index));
+    };
+
+    const toggleItemAssignment = (index: number) => {
+        const newItems = [...receiptItems];
+        const item = newItems[index];
+        // Toggle between null (shared) and partner's id
+        item.assignedTo = item.assignedTo ? null : partner?.id || null;
+        setReceiptItems(newItems);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -280,7 +288,7 @@ export default function NewExpensePage() {
                             ) : (
                                 <div className="divide-y divide-white/5">
                                     {receiptItems.map((item, idx) => (
-                                        <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 p-2 items-center hover:bg-white/5 transition-colors">
+                                        <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 p-2 items-center hover:bg-white/5 transition-colors">
                                             <input
                                                 className="bg-transparent text-sm w-full focus:outline-none font-medium truncate"
                                                 value={item.description}
@@ -303,9 +311,26 @@ export default function NewExpensePage() {
                                                     placeholder="0.00"
                                                 />
                                             </div>
-                                            <div className="font-bold text-sm w-16 text-right">
+                                            <div className="font-bold text-sm w-14 text-right">
                                                 {item.total.toFixed(2)}
                                             </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleItemAssignment(idx)}
+                                                className={cn(
+                                                    "text-xs px-2 py-1 rounded-md transition-all font-medium",
+                                                    item.assignedTo
+                                                        ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30"
+                                                        : "bg-white/5 text-muted-foreground hover:bg-white/10"
+                                                )}
+                                                title={item.assignedTo ? `Solo para ${partner?.name}` : "Gasto común"}
+                                            >
+                                                {item.assignedTo ? (
+                                                    <User className="h-3 w-3" />
+                                                ) : (
+                                                    <Heart className="h-3 w-3" />
+                                                )}
+                                            </button>
                                             <button
                                                 type="button"
                                                 onClick={() => removeItem(idx)}
@@ -318,6 +343,20 @@ export default function NewExpensePage() {
                                 </div>
                             )}
                         </div>
+
+                        {/* Summary of shared vs personal items */}
+                        {receiptItems.length > 0 && receiptItems.some(i => i.assignedTo) && (
+                            <div className="text-xs space-y-1 px-2 py-2 bg-white/5 rounded-lg animate-in fade-in">
+                                <div className="flex justify-between text-muted-foreground">
+                                    <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> Común (50/50):</span>
+                                    <span>{receiptItems.filter(i => !i.assignedTo).reduce((acc, i) => acc + i.total, 0).toFixed(2)}€</span>
+                                </div>
+                                <div className="flex justify-between text-pink-400">
+                                    <span className="flex items-center gap-1"><User className="h-3 w-3" /> Solo {partner?.name}:</span>
+                                    <span>{receiptItems.filter(i => i.assignedTo).reduce((acc, i) => acc + i.total, 0).toFixed(2)}€</span>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 

@@ -51,4 +51,24 @@ describe('ocr_parser', () => {
         expect(result.items.length).toBe(1);
         expect(result.items[0].description).toBe('PRODUCTO A');
     });
+
+    it('should parse Alcampo ticket format with .XX prices and TOT total', () => {
+        const text = `
+            ALCAMPO SEVILLA ESTE
+            FACTURA SIMPLIFICADA
+            BOLSA 50X60CM .12 A
+            FRUTOS DEL BOSQU 2,19 C
+            TOFU AUCHAN BIO 2,75 B
+            WEETABIX 4,61 B
+            € TARJETA 40,18
+            €* TOT 40,18
+        `;
+        const result = parseOCRText(text);
+        expect(result.amount).toBe('40.18');
+        expect(result.items.length).toBe(4);
+        expect(result.items[0].description).toBe('BOLSA 50X60CM');
+        expect(result.items[0].total).toBe(0.12);
+        expect(result.items[1].description).toBe('FRUTOS DEL BOSQU');
+        expect(result.items[1].total).toBe(2.19);
+    });
 });

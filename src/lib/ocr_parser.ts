@@ -12,21 +12,21 @@ export function parseOCRText(text: string): OCRParseResult {
     let foundDescription = "";
     const detectedItems: ReceiptItem[] = [];
 
-    // Regex for price at the end of the line:  ... 12.34 or ... 12,34 A
-    const priceRegex = /\s(\d+[.,]\d{2})(?:\s*[A-Z])?$/;
+    // Regex for price at the end of the line:  ... 12.34 or ... 12,34 A or .12 A (Alcampo format)
+    const priceRegex = /\s(\d*[.,]\d{2})(?:\s*[A-Z])?$/;
     // Regex for quantity: 2 x 1.50 or 2x1.50
     const qtyRegex = /(\d+(?:[.,]\d+)?)\s*[xX]\s*(\d+[.,]\d{2})/;
 
-    // Ignore common garbage lines
-    const ignoredKeywords = ['cif', 'nif', 'tel', 'calle', 'plaza', 'avda', 'factura', 'ticket', 'fecha', 'hora', 'total', 'entregado', 'cambio'];
+    // Ignore common garbage lines (addresses, headers, payment methods)
+    const ignoredKeywords = ['cif', 'nif', 'tel', 'calle', 'plaza', 'avda', 'factura', 'ticket', 'fecha', 'hora', 'total', 'entregado', 'cambio', 'tarjeta', 'efectivo', 'vendidos', 'num.', 'art.'];
 
     for (const line of lines) {
         const cleanLine = line.trim();
         const lowerLine = cleanLine.toLowerCase();
         if (cleanLine.length < 5) continue; // Too short
 
-        // Check for total
-        const amountMatch = cleanLine.match(/(?:total|importe|eur|€)\s*[:=]?\s*(\d+[.,]\d{2})/i);
+        // Check for total (includes TOT for Alcampo)
+        const amountMatch = cleanLine.match(/(?:total|tot|importe|eur|€)\s*[:=]?\s*(\d+[.,]\d{2})/i);
         if (amountMatch) {
             foundAmount = amountMatch[1].replace(',', '.');
             continue; // Is total line, not item
@@ -56,7 +56,8 @@ export function parseOCRText(text: string): OCRParseResult {
                     description: desc,
                     quantity: qty,
                     price: unitPrice,
-                    total: price
+                    total: price,
+                    assignedTo: null // Shared by default
                 });
             }
         }

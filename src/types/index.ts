@@ -15,6 +15,7 @@ export interface ReceiptItem {
     quantity: number;
     price: number;
     total: number;
+    assignedTo?: string | null; // userId if assigned to specific person, null for shared
 }
 
 export interface Expense {

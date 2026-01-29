@@ -1,58 +1,73 @@
-# Base image
+# 1. Base image
 FROM node:20-alpine AS base
+# Instalar libc6-compat es necesario para Prisma y Sharp en Alpine
 RUN apk add --no-cache libc6-compat openssl
 
-# Install dependencies only when needed
+# 2. Dependencies
 FROM base AS deps
 WORKDIR /app
 
-# Copy package files
+# Copiamos solo los archivos de dependencias primero para aprovechar la caché de Docker
 COPY package.json package-lock.json* ./
+
+# Usamos 'npm ci' que es más rápido y estricto que 'install'
 RUN npm ci
 
-# Rebuild the source code only when needed
+# 3. Builder
 FROM base AS builder
 WORKDIR /app
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Generate Prisma client
+# Definimos variables de entorno necesarias para el build
+# (Pon una URL dummy si tu build no requiere conexión real a la BD, 
+# pero Prisma generate la necesita para saber el provider)
 ENV DATABASE_URL="mysql://dummy:dummy@localhost:3306/dummy"
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Generamos el cliente de Prisma
 RUN npx prisma generate
 
-# Build the application
-ENV NEXT_TELEMETRY_DISABLED=1
+# Construimos la app
 RUN npm run build
 
-# Production image
+# 4. Runner (Production)
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Create non-root user
+# Crear usuario no-root (Seguridad)
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy built assets
+# --- OPTIMIZACIÓN CLAVE ---
+
+# 1. Copiamos la carpeta public (imágenes estáticas, favicon, etc.)
 COPY --from=builder /app/public ./public
+
+# 2. Copiamos SOLO la carpeta standalone. 
+# Next.js ya metió aquí dentro sus propias dependencias necesarias.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+
+# 3. Copiamos la carpeta static a la ubicación correcta dentro de .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy Prisma files for migrations
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/src/generated ./src/generated
-COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
+# 4. PRISMA: No copiamos node_modules. 
+# Solo copiamos el schema si lo necesitas para migraciones al arrancar (opcional)
+# y la carpeta de migraciones.
+COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
-# Copy full node_modules from builder for Prisma CLI
-COPY --from=builder /app/node_modules ./node_modules
+# Si usas Sharp para optimización de imágenes (RECOMENDADO), descomenta esto:
+# COPY --from=builder /app/node_modules/sharp ./node_modules/sharp
 
 USER nextjs
 
 EXPOSE 3000
-
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# Ejecutamos server.js (que está dentro de la carpeta standalone que copiamos a la raíz)
 CMD ["node", "server.js"]

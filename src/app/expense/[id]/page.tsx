@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Heart, Calculator } from "lucide-react";
+import { ArrowLeft, Heart, Calculator, User } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
@@ -123,7 +123,11 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         <div className="rounded-2xl border border-white/10 overflow-hidden bg-black/20">
                             <div className="divide-y divide-white/5">
                                 {(expense.receiptData as unknown as ReceiptItem[]).map((item, idx) => (
-                                    <div key={idx} className="grid grid-cols-[1fr_auto_auto] gap-2 p-3 items-center text-sm">
+                                    <div key={idx} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 p-3 items-center text-sm">
+                                        {/* Assignment indicator */}
+                                        <div className={`h-5 w-5 rounded-full flex items-center justify-center ${item.assignedTo ? 'bg-pink-500/20 text-pink-400' : 'bg-white/5 text-muted-foreground'}`}>
+                                            {item.assignedTo ? <User className="h-3 w-3" /> : <Heart className="h-3 w-3" />}
+                                        </div>
                                         <div className="font-medium truncate">{item.description}</div>
                                         <div className="text-right text-muted-foreground text-xs">
                                             {item.quantity > 1 && `${item.quantity} x ${item.price.toFixed(2)}`}
@@ -134,6 +138,19 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                     </div>
                                 ))}
                             </div>
+                            {/* Summary footer with shared vs personal breakdown */}
+                            {(expense.receiptData as unknown as ReceiptItem[]).some(i => i.assignedTo) && (
+                                <div className="bg-white/5 p-3 space-y-2 border-t border-white/5">
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                        <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> Común (50/50)</span>
+                                        <span>{(expense.receiptData as unknown as ReceiptItem[]).filter(i => !i.assignedTo).reduce((acc, i) => acc + i.total, 0).toFixed(2)}€</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs text-pink-400">
+                                        <span className="flex items-center gap-1"><User className="h-3 w-3" /> Solo {partner?.name}</span>
+                                        <span>{(expense.receiptData as unknown as ReceiptItem[]).filter(i => i.assignedTo).reduce((acc, i) => acc + i.total, 0).toFixed(2)}€</span>
+                                    </div>
+                                </div>
+                            )}
                             <div className="bg-white/5 p-3 flex justify-between items-center border-t border-white/5">
                                 <span className="font-bold text-sm text-muted-foreground">Total Detallado</span>
                                 <span className="font-mono font-bold">
