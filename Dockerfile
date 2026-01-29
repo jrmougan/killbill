@@ -45,8 +45,8 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
-# Install runtime dependencies for migrations and seeding
-RUN npm install prisma@7.3.0 tsx dotenv
+# Copy full node_modules from builder for Prisma CLI
+COPY --from=builder /app/node_modules ./node_modules
 
 USER nextjs
 
