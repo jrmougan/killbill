@@ -340,37 +340,37 @@ export default function NewExpensePage() {
                             ) : (
                                 <div className="divide-y divide-white/5">
                                     {receiptItems.map((item, idx) => (
-                                        <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 p-2 items-center hover:bg-white/5 transition-colors">
+                                        <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 p-2 items-center hover:bg-white/5 transition-colors border-b border-white/[0.02]">
                                             <input
-                                                className="bg-transparent text-sm w-full focus:outline-none font-medium truncate"
+                                                className="bg-transparent text-sm w-full focus:outline-none font-medium min-w-0 px-1"
                                                 value={item.description}
                                                 onChange={(e) => updateItem(idx, 'description', e.target.value)}
-                                                placeholder="Producto"
+                                                placeholder="Producto..."
                                             />
-                                            <div className="flex items-center gap-1">
+                                            <div className="flex items-center gap-1 flex-shrink-0">
                                                 <input
                                                     type="number"
-                                                    className="bg-transparent text-xs w-8 text-right focus:outline-none text-muted-foreground"
+                                                    className="bg-transparent text-[10px] w-6 text-right focus:outline-none text-muted-foreground"
                                                     value={item.quantity}
                                                     onChange={(e) => updateItem(idx, 'quantity', parseFloat(e.target.value) || 0)}
                                                 />
-                                                <span className="text-xs text-muted-foreground">x</span>
+                                                <span className="text-[10px] text-muted-foreground">x</span>
                                                 <input
                                                     type="number"
-                                                    className="bg-transparent text-xs w-12 text-right focus:outline-none text-muted-foreground"
+                                                    className="bg-transparent text-[10px] w-10 text-right focus:outline-none text-muted-foreground"
                                                     value={item.price}
                                                     onChange={(e) => updateItem(idx, 'price', parseFloat(e.target.value) || 0)}
                                                     placeholder="0.00"
                                                 />
                                             </div>
-                                            <div className="font-bold text-sm w-14 text-right">
+                                            <div className="font-mono font-bold text-[11px] w-14 text-right flex-shrink-0">
                                                 {item.total.toFixed(2)}
                                             </div>
                                             <button
                                                 type="button"
                                                 onClick={() => toggleItemAssignment(idx)}
                                                 className={cn(
-                                                    "text-xs px-2 py-1 rounded-md transition-all font-medium",
+                                                    "h-7 w-7 flex-shrink-0 flex items-center justify-center rounded-lg transition-all",
                                                     item.assignedTo
                                                         ? "bg-pink-500/20 text-pink-400 hover:bg-pink-500/30"
                                                         : "bg-white/5 text-muted-foreground hover:bg-white/10"
@@ -386,9 +386,9 @@ export default function NewExpensePage() {
                                             <button
                                                 type="button"
                                                 onClick={() => removeItem(idx)}
-                                                className="text-muted-foreground hover:text-red-400 p-1"
+                                                className="text-muted-foreground hover:text-red-400 p-1 flex-shrink-0"
                                             >
-                                                <Trash2 className="h-3 w-3" />
+                                                <Trash2 className="h-3.5 w-3.5" />
                                             </button>
                                         </div>
                                     ))}

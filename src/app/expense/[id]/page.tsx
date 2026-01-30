@@ -123,16 +123,21 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         <div className="rounded-2xl border border-white/10 overflow-hidden bg-black/20">
                             <div className="divide-y divide-white/5">
                                 {(expense.receiptData as unknown as ReceiptItem[]).map((item, idx) => (
-                                    <div key={idx} className="grid grid-cols-[auto_1fr_auto_auto] gap-2 p-3 items-center text-sm">
+                                    <div key={idx} className="grid grid-cols-[auto_1fr_auto_auto] gap-3 p-3 items-center text-sm">
                                         {/* Assignment indicator */}
-                                        <div className={`h-5 w-5 rounded-full flex items-center justify-center ${item.assignedTo ? 'bg-pink-500/20 text-pink-400' : 'bg-white/5 text-muted-foreground'}`}>
-                                            {item.assignedTo ? <User className="h-3 w-3" /> : <Heart className="h-3 w-3" />}
+                                        <div className={`h-6 w-6 rounded-full flex-shrink-0 flex items-center justify-center ${item.assignedTo ? 'bg-pink-500/20 text-pink-400' : 'bg-white/5 text-muted-foreground'}`}>
+                                            {item.assignedTo ? <User className="h-3.5 w-3.5" /> : <Heart className="h-3.5 w-3.5" />}
                                         </div>
-                                        <div className="font-medium truncate">{item.description}</div>
-                                        <div className="text-right text-muted-foreground text-xs">
-                                            {item.quantity > 1 && `${item.quantity} x ${item.price.toFixed(2)}`}
+                                        <div className="font-medium break-words leading-tight py-1">{item.description}</div>
+                                        <div className="text-right text-muted-foreground text-[10px] leading-tight min-w-[60px]">
+                                            {item.quantity > 1 && (
+                                                <div className="flex flex-col">
+                                                    <span>{item.quantity} x</span>
+                                                    <span>{item.price.toFixed(2)}€</span>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="font-bold text-right w-16">
+                                        <div className="font-mono font-bold text-right w-16 flex-shrink-0">
                                             {item.total.toFixed(2)}€
                                         </div>
                                     </div>
