@@ -47,7 +47,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                     <h1 className="text-xl font-bold truncate">{expense.description}</h1>
                     <p className="text-xs text-muted-foreground">{new Date(expense.date).toLocaleDateString()}</p>
                 </div>
@@ -67,7 +67,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="text-center py-6 bg-white/5 rounded-3xl border border-white/10">
                     <p className="text-sm text-muted-foreground uppercase tracking-widest font-bold mb-2">Importe Total</p>
-                    <h2 className="text-6xl font-mono font-bold tracking-tighter">
+                    <h2 className="text-5xl sm:text-6xl font-mono font-bold tracking-tighter">
                         {expense.amount.toFixed(2)}<span className="text-3xl ml-1 text-muted-foreground">€</span>
                     </h2>
                     <div className="mt-4 flex items-center justify-center gap-2">
@@ -91,7 +91,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         ) : (
                             <div className="divide-y divide-white/5">
                                 {expense.splits.map((split: any) => (
-                                    <div key={split.id} className="flex items-center justify-between p-4 bg-white/5">
+                                    <div key={split.id} className="flex items-center justify-between p-3 sm:p-4 bg-white/5">
                                         <div className="flex items-center gap-3">
                                             <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center text-xs overflow-hidden text-lg">
                                                 {split.user.avatar || "👤"}
