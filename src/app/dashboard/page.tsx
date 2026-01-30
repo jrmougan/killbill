@@ -12,7 +12,7 @@ import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { calculateBalances } from "@/lib/finance";
 import { cn } from "@/lib/utils";
-import { VisualBalance } from "@/components/ui/visual-balance";
+import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
 
 export const dynamic = 'force-dynamic';
 
@@ -191,7 +191,7 @@ export default async function DashboardPage() {
                                 </h2>
                             </div>
 
-                            <VisualBalance
+                            <VisualBalanceLazy
                                 balance={myBalance}
                                 user1={{ name: "Tú", avatar: user.avatar }}
                                 user2={{ name: partner.name, avatar: partner.avatar }}

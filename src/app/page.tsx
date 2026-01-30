@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { VisualBalance } from "@/components/ui/visual-balance";
+import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Scan, Scale, ShieldCheck, Heart, ArrowRight } from "lucide-react";
 
@@ -20,7 +20,7 @@ export default function Home() {
         {/* Demo Balance Visual */}
         <div className="w-full max-w-sm pointer-events-none relative group">
           <div className="absolute inset-0 bg-primary/20 blur-[60px] rounded-full scale-75 opacity-50 group-hover:opacity-100 transition-opacity" />
-          <VisualBalance
+          <VisualBalanceLazy
             balance={-35.50}
             user1={{ name: "Tú", avatar: "👤" }}
             user2={{ name: "Pareja", avatar: "💕" }}
