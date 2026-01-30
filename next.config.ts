@@ -7,9 +7,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
 
   // Handle Prisma in serverless/Docker
-  experimental: {
-    serverComponentsExternalPackages: ["@prisma/client"],
-  },
+  serverExternalPackages: ["@prisma/client"],
 };
 
 export default nextConfig;
