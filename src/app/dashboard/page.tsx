@@ -4,15 +4,15 @@ import { ExpenseCard } from "@/components/dashboard/expense-card";
 import { InviteCard } from "@/components/dashboard/invite-card";
 import { JoinGroupCard } from "@/components/dashboard/join-group-card";
 import { Expense } from "@/types";
-import { Plus, GripHorizontal, Heart } from "lucide-react";
+import { Plus, GripHorizontal, Heart, Settings } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { LogoutButton } from "@/components/auth/logout-button";
 import { calculateBalances } from "@/lib/finance";
 import { cn } from "@/lib/utils";
+import { VisualBalance } from "@/components/ui/visual-balance";
 
 export const dynamic = 'force-dynamic';
 
@@ -46,9 +46,13 @@ export default async function DashboardPage() {
                         <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
                             Hola, {user.name}
                         </h1>
-                        <p className="text-sm text-muted-foreground">¡Bienvenido a Kill Bill!</p>
+                        <p className="text-sm text-muted-foreground">¡Bienvenido a EQUIL!</p>
                     </div>
-                    <LogoutButton />
+                    <Link href="/settings">
+                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                            <Settings className="h-5 w-5 text-muted-foreground" />
+                        </Button>
+                    </Link>
                 </header>
 
                 <GlassCard className="text-center py-10 space-y-6">
@@ -147,7 +151,11 @@ export default async function DashboardPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <LogoutButton />
+                    <Link href="/settings">
+                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                            <Settings className="h-5 w-5 text-muted-foreground" />
+                        </Button>
+                    </Link>
                     <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[2px]">
                         <div className="h-full w-full rounded-full bg-black flex items-center justify-center font-bold text-xs overflow-hidden">
                             {user.avatar || "👤"}
@@ -158,33 +166,45 @@ export default async function DashboardPage() {
 
             <section className="grid grid-cols-1 gap-4">
                 <GlassCard className={cn(
-                    "p-6 flex flex-col items-center justify-center text-center border-b-4",
+                    "p-0 flex flex-col items-center justify-center text-center overflow-hidden border-b-4",
                     !partner ? "border-pink-500/50 bg-pink-500/5" :
-                        myBalance > 0 ? "border-emerald-500 bg-emerald-500/5" :
-                            myBalance < 0 ? "border-primary bg-primary/5" : "border-white/10 bg-white/5"
+                        myBalance > 0 ? "border-emerald-500 bg-emerald-500/5 shadow-[inset_0_0_50px_rgba(16,185,129,0.1)]" :
+                            myBalance < 0 ? "border-primary bg-primary/5 shadow-[inset_0_0_50px_rgba(236,72,153,0.1)]" : "border-white/10 bg-white/5"
                 )}>
                     {!partner ? (
-                        <>
+                        <div className="p-6">
                             <span className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground mb-1">Tu Balance</span>
                             <h2 className="text-3xl font-bold text-pink-400">Esperando...</h2>
                             <p className="text-sm text-muted-foreground mt-2">
                                 Invita a tu pareja para empezar a registrar gastos juntos
                             </p>
-                        </>
+                        </div>
                     ) : (
-                        <>
-                            <span className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground mb-1">Tu Balance</span>
-                            <h2 className={cn(
-                                "text-5xl font-mono font-bold",
-                                myBalance > 0 ? "text-emerald-400" : myBalance < 0 ? "text-primary" : "text-white"
-                            )}>
-                                {myBalance > 0 ? "+" : ""}{myBalance.toFixed(2)}€
-                            </h2>
-                            <p className="text-sm text-muted-foreground mt-2">
-                                {myBalance > 0 ? `Te deben ${myBalance.toFixed(2)}€` :
-                                    myBalance < 0 ? `Debes ${Math.abs(myBalance).toFixed(2)}€` : "Estás al día"}
-                            </p>
-                        </>
+                        <div className="w-full">
+                            <div className="pt-6 px-6">
+                                <span className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground">Tu Balance</span>
+                                <h2 className={cn(
+                                    "text-4xl font-mono font-bold mt-1",
+                                    myBalance > 0 ? "text-emerald-400" : myBalance < 0 ? "text-primary" : "text-white"
+                                )}>
+                                    {myBalance > 0 ? "+" : ""}{myBalance.toFixed(2)}€
+                                </h2>
+                            </div>
+
+                            <VisualBalance
+                                balance={myBalance}
+                                user1={{ name: "Tú", avatar: user.avatar }}
+                                user2={{ name: partner.name, avatar: partner.avatar }}
+                                className="py-4"
+                            />
+
+                            <div className="pb-6 px-6">
+                                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                    {myBalance > 0 ? `Te deben ${myBalance.toFixed(2)}€` :
+                                        myBalance < 0 ? `Debes ${Math.abs(myBalance).toFixed(2)}€` : "Estáis en equilibrio"}
+                                </p>
+                            </div>
+                        </div>
                     )}
                 </GlassCard>
             </section>

@@ -5,7 +5,12 @@ import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function LogoutButton() {
+interface LogoutButtonProps {
+    className?: string;
+    showText?: boolean;
+}
+
+export function LogoutButton({ className, showText = true }: LogoutButtonProps) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
 
@@ -24,8 +29,15 @@ export function LogoutButton() {
     };
 
     return (
-        <Button variant="ghost" size="icon" onClick={handleLogout} disabled={loading} className="text-muted-foreground hover:text-white">
-            <LogOut className="h-5 w-5" />
+        <Button
+            variant="ghost"
+            size={showText ? undefined : "icon"}
+            onClick={handleLogout}
+            disabled={loading}
+            className={className || "text-muted-foreground hover:text-white"}
+        >
+            <LogOut className="h-5 w-5 mr-2" />
+            {showText && "Cerrar Sesión"}
         </Button>
     );
 }

@@ -17,7 +17,7 @@ export function InviteCard({ code }: InviteCardProps) {
         const url = `${window.location.origin}/register?code=${code}`;
         const shareData = {
             title: 'Únete a mi grupo de gastos',
-            text: `¡Hola! Únete a mi grupo en Kill Bill para compartir gastos:`,
+            text: `¡Hola! Únete a mi grupo en EQUIL para compartir gastos:`,
             url: url,
         };
 

@@ -46,8 +46,8 @@ function LoginForm() {
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-8 max-w-md mx-auto">
             <div className="text-center space-y-2">
-                <h1 className="text-4xl font-bold tracking-tighter bg-gradient-to-br from-primary to-purple-400 bg-clip-text text-transparent">
-                    Kill Bill
+                <h1 className="text-4xl font-bold tracking-tighter bg-gradient-to-br from-primary to-purple-400 bg-clip-text text-transparent italic">
+                    EQUIL
                 </h1>
                 <p className="text-muted-foreground">
                     {inviteCode ? "Has sido invitado a un grupo. Inicia sesión para unirte." : "Entra para gestionar tus gastos."}

@@ -14,8 +14,16 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: "Kill Bill - Split Expenses",
-  description: "Divvy up expenses and settle debts seamlessly.",
+  title: "EQUIL - Finanzas en Pareja",
+  description: "Equilibrio y justicia en vuestra economía compartida.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "EQUIL",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({

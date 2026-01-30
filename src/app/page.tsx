@@ -1,16 +1,28 @@
-
 import Link from "next/link";
+import { VisualBalance } from "@/components/ui/visual-balance";
 
 export default function Home() {
   return (
-    <div className="flex flex-col items-center justify-center flex-1 p-6 space-y-10 z-10">
+    <div className="flex flex-col items-center justify-center flex-1 p-6 space-y-12 z-10 w-full overflow-hidden">
       <div className="text-center space-y-2">
-        <h1 className="text-4xl font-bold tracking-tighter bg-gradient-to-br from-white to-white/50 bg-clip-text text-transparent">
-          Kill Bill
+        <h1 className="text-5xl font-extrabold tracking-tighter bg-gradient-to-br from-white to-white/40 bg-clip-text text-transparent italic">
+          EQUIL
         </h1>
-        <p className="text-muted-foreground">
-          Divide gastos. Liquida con estilo.
+        <p className="text-muted-foreground text-lg">
+          Justicia y equilibrio en vuestros gastos.
         </p>
+      </div>
+
+      {/* Demo Balance Visual */}
+      <div className="w-full max-w-sm pointer-events-none">
+        <VisualBalance
+          balance={-35.50}
+          user1={{ name: "Tú", avatar: "👤" }}
+          user2={{ name: "Pareja", avatar: "💕" }}
+        />
+        <div className="text-center mt-[-20px]">
+          <p className="text-[10px] text-white/30 uppercase tracking-[0.3em] font-bold">Simulación de deuda</p>
+        </div>
       </div>
 
       <div className="grid gap-4 w-full">
