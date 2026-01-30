@@ -40,7 +40,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
     const splitWithPartner = expense.splits.length === 2; // If 2 splits, it's 50/50
 
     return (
-        <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto relative pb-24">
+        <div className="flex flex-col min-h-screen p-3 sm:p-4 space-y-6 max-w-md mx-auto relative pb-24 w-full overflow-x-hidden">
             <header className="flex items-center gap-2 pt-2">
                 <Link href="/dashboard">
                     <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
@@ -67,7 +67,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="text-center py-6 bg-white/5 rounded-3xl border border-white/10">
                     <p className="text-sm text-muted-foreground uppercase tracking-widest font-bold mb-2">Importe Total</p>
-                    <h2 className="text-5xl sm:text-6xl font-mono font-bold tracking-tighter">
+                    <h2 className="text-4xl sm:text-5xl md:text-6xl font-mono font-bold tracking-tighter">
                         {expense.amount.toFixed(2)}<span className="text-3xl ml-1 text-muted-foreground">€</span>
                     </h2>
                     <div className="mt-4 flex items-center justify-center gap-2">
@@ -91,13 +91,13 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         ) : (
                             <div className="divide-y divide-white/5">
                                 {expense.splits.map((split: any) => (
-                                    <div key={split.id} className="flex items-center justify-between p-3 sm:p-4 bg-white/5">
+                                    <div key={split.id} className="flex items-center justify-between px-3 py-3 sm:p-4 bg-white/5">
                                         <div className="flex items-center gap-3">
                                             <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center text-xs overflow-hidden text-lg">
                                                 {split.user.avatar || "👤"}
                                             </div>
                                             <div>
-                                                <p className="font-medium text-sm">{split.userId === userId ? "Ti" : split.user.name}</p>
+                                                <p className="font-medium text-xs sm:text-sm">{split.userId === userId ? "Ti" : split.user.name}</p>
                                                 {split.userId === expense.paidById && (
                                                     <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-tighter">Aportación</p>
                                                 )}
@@ -123,13 +123,13 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         <div className="rounded-2xl border border-white/10 overflow-hidden bg-black/20">
                             <div className="divide-y divide-white/5">
                                 {(expense.receiptData as unknown as ReceiptItem[]).map((item, idx) => (
-                                    <div key={idx} className="grid grid-cols-[auto_1fr_auto_auto] gap-3 p-3 items-center text-sm">
+                                    <div key={idx} className="grid grid-cols-[auto_1fr_auto_auto] gap-1.5 sm:gap-3 p-2.5 sm:p-3 items-center text-xs sm:text-sm">
                                         {/* Assignment indicator */}
                                         <div className={`h-6 w-6 rounded-full flex-shrink-0 flex items-center justify-center ${item.assignedTo ? 'bg-pink-500/20 text-pink-400' : 'bg-white/5 text-muted-foreground'}`}>
                                             {item.assignedTo ? <User className="h-3.5 w-3.5" /> : <Heart className="h-3.5 w-3.5" />}
                                         </div>
-                                        <div className="font-medium break-words leading-tight py-1">{item.description}</div>
-                                        <div className="text-right text-muted-foreground text-[10px] leading-tight min-w-[60px]">
+                                        <div className="font-medium break-words leading-tight py-1 min-w-0">{item.description}</div>
+                                        <div className="text-right text-muted-foreground text-[10px] leading-tight min-w-[45px] sm:min-w-[60px]">
                                             {item.quantity > 1 && (
                                                 <div className="flex flex-col">
                                                     <span>{item.quantity} x</span>
@@ -137,7 +137,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="font-mono font-bold text-right w-16 flex-shrink-0">
+                                        <div className="font-mono font-bold text-right w-fit min-w-[3.5rem] sm:w-16 flex-shrink-0 ml-1">
                                             {item.total.toFixed(2)}€
                                         </div>
                                     </div>

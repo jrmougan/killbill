@@ -181,8 +181,8 @@ export function EditExpenseButton({ expenseId, initialData }: EditExpenseButtonP
             className="text-muted-foreground hover:text-white"
             onClick={() => setShowModal(true)}
         >
-            <Pencil className="h-4 w-4 mr-2" />
-            Editar
+            <Pencil className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Editar</span>
         </Button>
     );
 }

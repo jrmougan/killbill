@@ -78,8 +78,8 @@ export function DeleteExpenseButton({ expenseId }: DeleteExpenseButtonProps) {
             className="text-destructive hover:text-destructive hover:bg-destructive/10"
             onClick={() => setShowConfirm(true)}
         >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Eliminar
+            <Trash2 className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Eliminar</span>
         </Button>
     );
 }
