@@ -5,8 +5,8 @@ import { SettingsClient } from "./settings-client";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Ajustes | Billo",
-    description: "Configura tu perfil y tu pareja en Billo.",
+    title: "Ajustes | EQUIL",
+    description: "Configura tu perfil y tu pareja en EQUIL.",
 };
 
 export default async function SettingsPage() {
