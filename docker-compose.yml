@@ -14,6 +14,7 @@ services:
       - DATABASE_URL=mysql://killbill:${MYSQL_PASSWORD}@mysql:3306/killbill
       # Security
       - JWT_SECRET=${JWT_SECRET}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     networks:
       - mysql_network
       - traefik
