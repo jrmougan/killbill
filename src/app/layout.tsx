@@ -35,9 +35,9 @@ export default function RootLayout({
     <html lang="es" className="dark">
       <body className={cn(inter.className, "antialiased min-h-screen")}>
         <main className="relative flex flex-col min-h-screen overflow-hidden sm:max-w-md sm:mx-auto sm:border-x sm:border-white/10 bg-background">
-          {/* Decorative background gradients */}
-          <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[100px] pointer-events-none" />
-          <div className="fixed bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[100px] pointer-events-none" />
+          {/* Decorative background gradients - optimized for performance */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_var(--color-primary)_0%,_transparent_40%)] opacity-20 pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,_#2563eb_0%,_transparent_40%)] opacity-10 pointer-events-none" />
 
           {children}
         </main>
