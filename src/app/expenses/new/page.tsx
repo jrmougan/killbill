@@ -7,9 +7,7 @@ import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { createWorker } from 'tesseract.js';
 import { ReceiptItem } from "@/types";
-import { parseOCRText } from "@/lib/ocr_parser";
 import { getAllCategories, getScannableCategories, getCategoryById } from "@/lib/categories";
 
 export default function NewExpensePage() {
@@ -32,6 +30,19 @@ export default function NewExpensePage() {
     const [ocrProgress, setOcrProgress] = useState(0);
     const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
     const [receiptItems, setReceiptItems] = useState<ReceiptItem[]>([]);
+
+    // Reset form when category changes
+    useEffect(() => {
+        setAmount("");
+        setDescription("");
+        setReceiptFile(null);
+        setReceiptPreview(null);
+        setReceiptUrl(null);
+        setReceiptItems([]);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
+    }, [category]);
 
     useEffect(() => {
         fetch("/api/couple")
@@ -60,31 +71,38 @@ export default function NewExpensePage() {
 
     const runOCR = async (file: File) => {
         setIsOcrRunning(true);
-        setOcrProgress(0);
+        setOcrProgress(10);
         try {
-            const worker = await createWorker('spa', 1, {
-                logger: m => {
-                    if (m.status === 'recognizing text') {
-                        setOcrProgress(Math.round(m.progress * 100));
-                    }
-                }
+            const formData = new FormData();
+            formData.append('image', file);
+
+            setOcrProgress(30);
+            const response = await fetch('/api/ocr', {
+                method: 'POST',
+                body: formData
             });
 
-            const { data: { text } } = await worker.recognize(file);
-            console.log("OCR Result:", text);
+            setOcrProgress(80);
+            const data = await response.json();
 
-            const { amount: foundAmount, description: foundDescription, items: detectedItems } = parseOCRText(text);
+            if (data.success) {
+                console.log("Gemini OCR Result:", data);
 
-            if (foundAmount) setAmount(foundAmount);
-            if (foundDescription) setDescription(foundDescription);
-            if (detectedItems.length > 0) {
-                setReceiptItems(detectedItems);
-                setCategory('shopping'); // Auto-switch to shopping
+                if (data.total) setAmount(data.total.toFixed(2));
+                if (data.store) setDescription(data.store);
+                if (data.items && data.items.length > 0) {
+                    setReceiptItems(data.items);
+                }
+            } else {
+                console.error("OCR Error:", data.error);
+                // Fallback message
+                alert("No se pudo procesar el ticket. Intenta con otra foto.");
             }
 
-            await worker.terminate();
+            setOcrProgress(100);
         } catch (err) {
             console.error("OCR Error:", err);
+            alert("Error al procesar la imagen");
         } finally {
             setIsOcrRunning(false);
         }
@@ -184,7 +202,45 @@ export default function NewExpensePage() {
 
             <form onSubmit={handleSubmit} className="flex-1 space-y-8 mt-4">
 
-                {/* Receipt Upload/Preview Zone - Only for scannable categories */}
+                {/* 1. Category Selection - Now at the Top */}
+                <div className="space-y-4">
+                    <label className="text-sm font-medium ml-1 flex items-center gap-2">
+                        Categoría
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                        {getAllCategories().map((cat) => (
+                            <button
+                                key={cat.id}
+                                type="button"
+                                onClick={() => setCategory(cat.id)}
+                                className={`p-3 rounded-xl border border-white/5 text-center transition-all ${category === cat.id ? "bg-primary text-white border-primary scale-105" : "bg-white/5 hover:bg-white/10"
+                                    }`}
+                            >
+                                <span className="text-xl block mb-1">{cat.emoji}</span>
+                                <span className="text-[10px] font-bold uppercase tracking-tight">{cat.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* 2. Amount Section */}
+                <div className="space-y-2 text-center py-2">
+                    <label className="text-sm text-muted-foreground uppercase tracking-widest font-bold">Importe</label>
+                    <div className="relative inline-block w-full max-w-[200px]">
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-muted-foreground">€</span>
+                        <input
+                            type="number"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full bg-transparent text-center text-5xl font-bold focus:outline-none placeholder:text-white/10 p-2 appearance-none"
+                            required
+                            step="0.01"
+                        />
+                    </div>
+                </div>
+
+                {/* 3. Receipt Upload/Preview Zone - Only for scannable categories */}
                 {getScannableCategories().includes(category) && (
                     <div className="space-y-4">
                         {!receiptPreview ? (
@@ -248,19 +304,15 @@ export default function NewExpensePage() {
                     </div>
                 )}
 
-                <div className="space-y-2 text-center py-6">
-                    <label className="text-sm text-muted-foreground uppercase tracking-widest font-bold">¿Cuánto ha sido?</label>
-                    <div className="relative inline-block w-full max-w-[200px]">
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-muted-foreground">€</span>
-                        <input
-                            type="number"
-                            value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            placeholder="0.00"
-                            className="w-full bg-transparent text-center text-5xl font-bold focus:outline-none placeholder:text-white/10 p-2 appearance-none"
-                            autoFocus
+                {/* 4. Details */}
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium ml-1">Concepto</label>
+                        <Input
+                            placeholder="Ej: Compra Mercadona"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
                             required
-                            step="0.01"
                         />
                     </div>
                 </div>
@@ -387,35 +439,7 @@ export default function NewExpensePage() {
                     )}
                 </div>
 
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium ml-1">Concepto</label>
-                        <Input
-                            placeholder="Ej: Cena romántica"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            required
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium ml-1">Categoría</label>
-                        <div className="grid grid-cols-4 gap-2">
-                            {getAllCategories().map((cat) => (
-                                <button
-                                    key={cat.id}
-                                    type="button"
-                                    onClick={() => setCategory(cat.id)}
-                                    className={`p-3 rounded-xl border border-white/5 text-center transition-all ${category === cat.id ? "bg-primary text-white border-primary scale-105" : "bg-white/5 hover:bg-white/10"
-                                        }`}
-                                >
-                                    <span className="text-xl block mb-1">{cat.emoji}</span>
-                                    <span className="text-[10px] font-bold uppercase tracking-tight">{cat.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
+                {/* 0. OLD Categories (Removed from here) */}
 
                 <div className="pt-4">
                     <Button
