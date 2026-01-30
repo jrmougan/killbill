@@ -159,20 +159,33 @@ export default async function DashboardPage() {
             <section className="grid grid-cols-1 gap-4">
                 <GlassCard className={cn(
                     "p-6 flex flex-col items-center justify-center text-center border-b-4",
-                    myBalance > 0 ? "border-emerald-500 bg-emerald-500/5" :
-                        myBalance < 0 ? "border-primary bg-primary/5" : "border-white/10 bg-white/5"
+                    !partner ? "border-pink-500/50 bg-pink-500/5" :
+                        myBalance > 0 ? "border-emerald-500 bg-emerald-500/5" :
+                            myBalance < 0 ? "border-primary bg-primary/5" : "border-white/10 bg-white/5"
                 )}>
-                    <span className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground mb-1">Tu Balance</span>
-                    <h2 className={cn(
-                        "text-5xl font-mono font-bold",
-                        myBalance > 0 ? "text-emerald-400" : myBalance < 0 ? "text-primary" : "text-white"
-                    )}>
-                        {myBalance > 0 ? "+" : ""}{myBalance.toFixed(2)}€
-                    </h2>
-                    <p className="text-sm text-muted-foreground mt-2">
-                        {myBalance > 0 ? `Te deben ${myBalance.toFixed(2)}€` :
-                            myBalance < 0 ? `Debes ${Math.abs(myBalance).toFixed(2)}€` : "Estás al día"}
-                    </p>
+                    {!partner ? (
+                        <>
+                            <span className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground mb-1">Tu Balance</span>
+                            <h2 className="text-3xl font-bold text-pink-400">Esperando...</h2>
+                            <p className="text-sm text-muted-foreground mt-2">
+                                Invita a tu pareja para empezar a registrar gastos juntos
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <span className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground mb-1">Tu Balance</span>
+                            <h2 className={cn(
+                                "text-5xl font-mono font-bold",
+                                myBalance > 0 ? "text-emerald-400" : myBalance < 0 ? "text-primary" : "text-white"
+                            )}>
+                                {myBalance > 0 ? "+" : ""}{myBalance.toFixed(2)}€
+                            </h2>
+                            <p className="text-sm text-muted-foreground mt-2">
+                                {myBalance > 0 ? `Te deben ${myBalance.toFixed(2)}€` :
+                                    myBalance < 0 ? `Debes ${Math.abs(myBalance).toFixed(2)}€` : "Estás al día"}
+                            </p>
+                        </>
+                    )}
                 </GlassCard>
             </section>
 
@@ -311,11 +324,14 @@ export default async function DashboardPage() {
                 <div className="space-y-3">
                     {expenses.length === 0 ? (
                         <div className="text-center py-12 space-y-4">
-                            <div className="text-6xl animate-bounce">💸</div>
+                            <div className="text-6xl animate-bounce">{partner ? "💸" : "💕"}</div>
                             <div className="space-y-1">
-                                <p className="font-bold text-lg">¡Sin gastos aún!</p>
+                                <p className="font-bold text-lg">{partner ? "¡Sin gastos aún!" : "¡Casi listos!"}</p>
                                 <p className="text-sm text-muted-foreground">
-                                    Pulsa el botón <span className="text-primary font-bold">+</span> para añadir vuestro primer gasto
+                                    {partner
+                                        ? <>Pulsa el botón <span className="text-primary font-bold">+</span> para añadir vuestro primer gasto</>
+                                        : "Comparte el enlace de arriba para que tu pareja se una"
+                                    }
                                 </p>
                             </div>
                         </div>
@@ -330,13 +346,21 @@ export default async function DashboardPage() {
                 </div>
             </section>
 
-            <div className="fixed bottom-6 right-6 z-50">
-                <Link href="/expenses/new">
-                    <Button size="icon" className="h-14 w-14 rounded-full shadow-2xl shadow-primary/50 bg-primary hover:bg-primary/90">
+            {partner ? (
+                <div className="fixed bottom-6 right-6 z-50">
+                    <Link href="/expenses/new">
+                        <Button size="icon" className="h-14 w-14 rounded-full shadow-2xl shadow-primary/50 bg-primary hover:bg-primary/90">
+                            <Plus className="h-6 w-6" />
+                        </Button>
+                    </Link>
+                </div>
+            ) : (
+                <div className="fixed bottom-6 right-6 z-50">
+                    <Button size="icon" className="h-14 w-14 rounded-full shadow-xl bg-white/10 cursor-not-allowed opacity-50" disabled>
                         <Plus className="h-6 w-6" />
                     </Button>
-                </Link>
-            </div>
+                </div>
+            )}
         </div>
     );
 }
