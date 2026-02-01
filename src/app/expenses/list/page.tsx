@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ExpensesListClient } from "./client";
 import { getSession } from "@/lib/auth";
+import { toEuros } from "@/lib/currency";
 
 export const dynamic = 'force-dynamic';
 
@@ -43,24 +44,24 @@ export default async function ExpensesListPage() {
         orderBy: { date: "desc" },
     });
 
-    // Merge and transform
+    // Merge and transform - convert cents to euros
     const items = [
         ...rawExpenses.map(e => ({
             id: e.id,
             type: "EXPENSE" as const,
             description: e.description,
-            amount: e.amount,
+            amount: toEuros(e.amount),
             date: e.date.toISOString(),
             category: e.category,
             paidBy: e.paidById,
             receiptUrl: e.receiptUrl,
-            splits: e.splits.map(s => ({ userId: s.userId, amount: s.amount })),
+            splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
         })),
         ...rawSettlements.map(s => ({
             id: s.id,
             type: "SETTLEMENT" as const,
             description: `Liquidación de deuda`,
-            amount: s.amount,
+            amount: toEuros(s.amount),
             date: s.date.toISOString(),
             category: "settlement",
             paidBy: s.fromUserId,

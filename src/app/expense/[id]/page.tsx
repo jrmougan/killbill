@@ -9,6 +9,7 @@ import { ReceiptItem } from "@/types";
 import { DeleteExpenseButton } from "@/components/expense/delete-button";
 import { EditExpenseButton } from "@/components/expense/edit-button";
 import { getSession } from "@/lib/auth";
+import { toEuros } from "@/lib/currency";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -55,7 +56,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     expenseId={expense.id}
                     initialData={{
                         description: expense.description,
-                        amount: expense.amount,
+                        amount: toEuros(expense.amount), // cents -> euros
                         category: expense.category,
                         splitWithPartner,
                         partnerName: partner?.name,
@@ -68,7 +69,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                 <div className="text-center py-6 bg-white/5 rounded-3xl border border-white/10">
                     <p className="text-sm text-muted-foreground uppercase tracking-widest font-bold mb-2">Importe Total</p>
                     <h2 className="text-4xl sm:text-5xl md:text-6xl font-mono font-bold tracking-tighter">
-                        {expense.amount.toFixed(2)}<span className="text-3xl ml-1 text-muted-foreground">€</span>
+                        {toEuros(expense.amount).toFixed(2)}<span className="text-3xl ml-1 text-muted-foreground">€</span>
                     </h2>
                     <div className="mt-4 flex items-center justify-center gap-2">
                         <div className="h-6 w-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
@@ -104,7 +105,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-mono font-bold">{split.amount.toFixed(2)}€</p>
+                                            <p className="font-mono font-bold">{toEuros(split.amount).toFixed(2)}€</p>
                                             <p className="text-[10px] text-muted-foreground uppercase">Cargo</p>
                                         </div>
                                     </div>

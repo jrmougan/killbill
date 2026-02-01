@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getMyDebts, getLastSettlementDate } from "@/lib/finance";
+import { toEuros } from "@/lib/currency";
 import { SettleClient } from "./client";
 import { getSession } from "@/lib/auth";
 
@@ -49,14 +50,14 @@ export default async function SettlePage() {
         userId
     );
 
-    // Format for client
-    const debts = Object.entries(myDebtsMap).map(([targetId, amount]) => {
+    // Format for client - convert cents to euros
+    const debts = Object.entries(myDebtsMap).map(([targetId, amountCents]) => {
         const targetUser = members.find(u => u.id === targetId);
         return {
             userId: targetId,
             name: targetUser?.name || "Unknown",
             avatar: targetUser?.avatar || "👤",
-            amount: amount
+            amount: toEuros(amountCents) // Convert to euros for display
         };
     });
 
@@ -70,17 +71,17 @@ export default async function SettlePage() {
         .filter(e => new Date(e.date) > lastSettlementDate && e.paidById !== userId)
         .map(e => {
             // Find my split or 50%
-            let myAmount = 0;
+            let myAmountCents = 0;
             if (e.splits.length > 0) {
-                myAmount = e.splits.find(s => s.userId === userId)?.amount || 0;
+                myAmountCents = e.splits.find(s => s.userId === userId)?.amount || 0;
             } else {
-                myAmount = e.amount / members.length;
+                myAmountCents = Math.round(e.amount / members.length);
             }
             return {
                 id: e.id,
                 description: e.description,
-                amount: e.amount,
-                myAmount,
+                amount: toEuros(e.amount), // Convert to euros
+                myAmount: toEuros(myAmountCents), // Convert to euros
                 date: e.date.toISOString(),
                 category: e.category,
                 paidBy: e.paidById

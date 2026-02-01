@@ -11,6 +11,7 @@ import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { calculateBalances, getLastSettlementDate } from "@/lib/finance";
+import { toEuros } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
 import { PendingSettlements } from "@/components/dashboard/pending-settlements";
@@ -121,8 +122,10 @@ export default async function DashboardPage() {
         userId
     );
 
-    let myBalance = balances[userId] || 0;
-    if (Math.abs(myBalance) < 0.005) myBalance = 0;
+    // Balance is in CENTS, convert to euros for display
+    let myBalanceCents = balances[userId] || 0;
+    if (Math.abs(myBalanceCents) < 1) myBalanceCents = 0; // Less than 1 cent = 0
+    const myBalance = toEuros(myBalanceCents);
 
     // Filter settlements pending for ME to confirm
     const myPendingSettlements = settlements
@@ -141,24 +144,24 @@ export default async function DashboardPage() {
     // Calculate last settlement date for filtering
     const lastSettlementDate = getLastSettlementDate(settlements);
 
-    // Combined recent items for display (unified view)
+    // Combined recent items for display (unified view) - convert cents to euros
     const combinedRecent = [
         ...allExpenses.map(e => ({
             id: e.id,
             type: "EXPENSE" as const,
             description: e.description,
-            amount: e.amount,
+            amount: toEuros(e.amount), // cents -> euros
             date: e.date.toISOString(),
             category: e.category,
             paidBy: e.paidById,
             receiptUrl: e.receiptUrl,
-            splits: e.splits.map(s => ({ userId: s.userId, amount: s.amount })),
+            splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
         })),
         ...settlements.map((s: any) => ({
             id: s.id,
             type: "SETTLEMENT" as const,
             description: `Liquidación`,
-            amount: s.amount,
+            amount: toEuros(s.amount), // cents -> euros
             date: s.date.toISOString(),
             category: "settlement",
             paidBy: s.fromUserId,

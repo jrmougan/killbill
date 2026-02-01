@@ -6,6 +6,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { Check, X, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { toEuros } from "@/lib/currency";
 
 interface PendingSettlement {
     id: string;
@@ -76,7 +77,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
                             </div>
                             <div className="text-right">
                                 <span className="text-2xl font-mono font-bold text-blue-400 leading-none block">
-                                    {s.amount.toFixed(2)}€
+                                    {toEuros(s.amount).toFixed(2)}€
                                 </span>
                             </div>
                         </div>
