@@ -245,17 +245,12 @@ export default async function DashboardPage() {
                 <PendingSettlements settlements={myPendingSettlements} />
             )}
 
-            <div className="grid grid-cols-2 gap-2">
+            {/* Dashboard Actions */}
+            <div className="flex gap-2">
                 <Link href="/settle" className="flex-1">
                     <Button className="w-full bg-white/5 hover:bg-white/10 text-white border-white/10" variant="ghost">
                         <Plus className="mr-2 h-4 w-4" />
-                        Liquidar
-                    </Button>
-                </Link>
-                <Link href="/settle/history" className="flex-1">
-                    <Button className="w-full bg-white/5 hover:bg-white/10 text-white border-white/10" variant="ghost">
-                        <GripHorizontal className="mr-2 h-4 w-4" />
-                        Historial
+                        Liquidar Deuda
                     </Button>
                 </Link>
             </div>
@@ -369,8 +364,8 @@ export default async function DashboardPage() {
 
             <section className="space-y-4">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold">Recientes</h2>
-                    {combinedRecent.length > 0 && (
+                    <h2 className="text-lg font-semibold">Recientes (Pendientes)</h2>
+                    {(allExpenses.length > 0 || settlements.length > 0) && (
                         <Link href="/expenses/list" className="text-sm text-primary hover:underline">
                             Ver todos →
                         </Link>
@@ -379,18 +374,31 @@ export default async function DashboardPage() {
 
                 <div className="space-y-3">
                     {combinedRecent.length === 0 ? (
-                        <div className="text-center py-12 space-y-4">
-                            <div className="text-6xl animate-bounce">{partner ? "💸" : "💕"}</div>
-                            <div className="space-y-1">
-                                <p className="font-bold text-lg">{partner ? "¡Sin movimientos aún!" : "¡Casi listos!"}</p>
-                                <p className="text-sm text-muted-foreground">
-                                    {partner
-                                        ? <>Pulsa el botón <span className="text-primary font-bold">+</span> para añadir vuestro primer gasto</>
-                                        : "Comparte el enlace de arriba para que tu pareja se una"
-                                    }
-                                </p>
+                        (allExpenses.length > 0 || settlements.length > 0) ? (
+                            <div className="text-center py-8 space-y-2 opacity-70">
+                                <div className="text-4xl">✨</div>
+                                <p className="font-bold text-sm">¡Todo al día!</p>
+                                <p className="text-xs text-muted-foreground">No tienes pagos pendientes.</p>
+                                <Link href="/expenses/list">
+                                    <Button variant="ghost" size="sm" className="text-xs h-auto p-0 text-primary hover:bg-transparent hover:underline">
+                                        Ver historial completo
+                                    </Button>
+                                </Link>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="text-center py-12 space-y-4">
+                                <div className="text-6xl animate-bounce">{partner ? "💸" : "💕"}</div>
+                                <div className="space-y-1">
+                                    <p className="font-bold text-lg">{partner ? "¡Sin movimientos aún!" : "¡Casi listos!"}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        {partner
+                                            ? <>Pulsa el botón <span className="text-primary font-bold">+</span> para añadir vuestro primer gasto</>
+                                            : "Comparte el enlace de arriba para que tu pareja se una"
+                                        }
+                                    </p>
+                                </div>
+                            </div>
+                        )
                     ) : (
                         combinedRecent.map((item) => {
                             if (item.type === "EXPENSE") {
