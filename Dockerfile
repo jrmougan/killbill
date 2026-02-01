@@ -59,6 +59,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Solo copiamos el schema si lo necesitas para migraciones al arrancar (opcional)
 # y la carpeta de migraciones.
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 
 # Si usas Sharp para optimización de imágenes (RECOMENDADO), descomenta esto:
 # COPY --from=builder /app/node_modules/sharp ./node_modules/sharp
