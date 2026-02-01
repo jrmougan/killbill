@@ -89,5 +89,15 @@ export default async function SettlePage() {
         .filter(e => e.myAmount > 0)
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    return <SettleClient debts={debts} expenses={unsettledExpenses} />;
+    const partner = members.find(m => m.id !== userId);
+
+    return <SettleClient
+        debts={debts}
+        expenses={unsettledExpenses}
+        partner={partner ? {
+            id: partner.id,
+            name: partner.name,
+            avatar: partner.avatar || "👤"
+        } : null}
+    />;
 }

@@ -28,9 +28,14 @@ interface SettleExpense {
 interface SettleClientProps {
     debts: Debtor[];
     expenses: SettleExpense[];
+    partner: {
+        id: string;
+        name: string;
+        avatar: string;
+    } | null;
 }
 
-export function SettleClient({ debts, expenses }: SettleClientProps) {
+export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
     const router = useRouter();
     const [step, setStep] = useState<1 | 2>(1);
 
@@ -75,8 +80,37 @@ export function SettleClient({ debts, expenses }: SettleClientProps) {
     };
 
     if (debts.length === 0) {
+        // Check if there are unsettled expenses to be archived
+        const hasUnsettledActivity = expenses.length > 0;
+
+        const handleArchive = async () => {
+            if (!partner) return;
+            if (!confirm("Esto marcará toda la actividad actual como 'Saldada' para limpiar la vista. ¿Continuar?")) return;
+
+            setIsSubmitting(true);
+            try {
+                // 0 amount settlement = Archive/Checkpoint
+                await fetch("/api/settle", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        toUserId: partner.id,
+                        amount: 0,
+                        method: "CASH"
+                    })
+                });
+                router.push("/dashboard");
+                router.refresh();
+            } catch (e) {
+                console.error(e);
+                alert("Error al archivar historial");
+            } finally {
+                setIsSubmitting(false);
+            }
+        };
+
         return (
-            <div className="flex flex-col min-h-screen p-6 justify-center text-center space-y-6">
+            <div className="flex flex-col min-h-screen p-6 justify-center text-center space-y-6 relative">
                 <header className="absolute top-4 left-4">
                     <Link href="/dashboard">
                         <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full">
@@ -84,12 +118,42 @@ export function SettleClient({ debts, expenses }: SettleClientProps) {
                         </Button>
                     </Link>
                 </header>
-                <div className="space-y-2">
-                    <h1 className="text-2xl font-bold">Todo en orden</h1>
-                    <p className="text-muted-foreground">No debes dinero a nadie.</p>
+
+                <div className="space-y-4">
+                    <div className="text-6xl animate-bounce">
+                        {hasUnsettledActivity ? "🧹" : "✨"}
+                    </div>
+                    <div className="space-y-2">
+                        <h1 className="text-2xl font-bold">Todo en orden</h1>
+                        <p className="text-muted-foreground">
+                            {hasUnsettledActivity
+                                ? "Cuentas saldadas, pero hay actividad reciente visible."
+                                : "No tienes deudas pendientes."}
+                        </p>
+                    </div>
                 </div>
+
+                {hasUnsettledActivity && (
+                    <div className="space-y-3 pt-4">
+                        <Button
+                            className="w-full h-12 bg-white/10 hover:bg-white/20 border border-white/10"
+                            variant="secondary"
+                            onClick={handleArchive}
+                            isLoading={isSubmitting}
+                        >
+                            <Check className="mr-2 h-4 w-4" />
+                            Archivar historial
+                        </Button>
+                        <p className="text-[10px] text-muted-foreground">
+                            Esto vaciará la lista de "Pendientes" en el inicio.
+                        </p>
+                    </div>
+                )}
+
                 <Link href="/dashboard">
-                    <Button className="w-full">Volver al Dashboard</Button>
+                    <Button className={cn("w-full", !hasUnsettledActivity && "mt-4")}>
+                        Volver al Dashboard
+                    </Button>
                 </Link>
             </div>
         )
