@@ -9,7 +9,7 @@ export async function PATCH(request: Request) {
 
     try {
         const body = await request.json();
-        const { name } = body;
+        const { name, avatar } = body;
 
         if (!name || name.trim().length === 0) {
             return NextResponse.json({ error: 'El nombre es obligatorio' }, { status: 400 });
@@ -17,7 +17,10 @@ export async function PATCH(request: Request) {
 
         const updatedUser = await prisma.user.update({
             where: { id: userId },
-            data: { name: name.trim() }
+            data: {
+                name: name.trim(),
+                avatar: avatar || undefined
+            }
         });
 
         return NextResponse.json({ success: true, user: updatedUser });

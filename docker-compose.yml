@@ -18,6 +18,8 @@ services:
     networks:
       - mysql_network
       - traefik
+    volumes:
+      - ./uploads:/app/public/uploads
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.killbill.rule=Host(`finanzas.mougan.es`)"

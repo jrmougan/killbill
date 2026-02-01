@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { AvatarPicker } from "@/components/ui/avatar-picker";
 
 interface UserData {
     id: string;
@@ -41,6 +42,7 @@ interface SettingsClientProps {
 export function SettingsClient({ user, couple }: SettingsClientProps) {
     const router = useRouter();
     const [name, setName] = useState(user.name);
+    const [avatar, setAvatar] = useState(user.avatar);
     const [isSaving, setIsSaving] = useState(false);
     const [isUnlinking, setIsUnlinking] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -55,7 +57,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
             const res = await fetch("/api/user/profile", {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name }),
+                body: JSON.stringify({ name, avatar }),
             });
             if (res.ok) {
                 setMessage({ text: "Perfil actualizado correctamente", type: 'success' });
@@ -121,6 +123,14 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
 
                     <GlassCard className="p-4 space-y-4">
                         <div className="space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground ml-1 mb-2 block text-center">Tu Avatar</label>
+                            <AvatarPicker
+                                currentAvatar={avatar}
+                                onAvatarChange={setAvatar}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
                             <label className="text-xs font-medium text-muted-foreground ml-1">Tu nombre</label>
                             <Input
                                 value={name}
@@ -146,7 +156,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                         <Button
                             className="w-full gap-2"
                             onClick={handleSaveProfile}
-                            disabled={isSaving || name === user.name}
+                            disabled={isSaving || (name === user.name && avatar === user.avatar)}
                             isLoading={isSaving}
                         >
                             <Save className="h-4 w-4" /> Guardar Cambios
