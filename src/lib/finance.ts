@@ -1,6 +1,6 @@
-export interface Balance {
-    userId: string;
-    amount: number; // Positive = They owe you. Negative = You owe them.
+// Helper to round to 2 decimals to avoid floating point errors
+function round(num: number): number {
+    return Math.round((num + Number.EPSILON) * 100) / 100;
 }
 
 export function calculateBalances(
@@ -16,7 +16,10 @@ export function calculateBalances(
     }, 0);
 
     const numUsers = users.length || 1;
-    const fairShare = totalSpent / numUsers;
+
+    // We don't really use fairShare directly for everyone if there are splits, 
+    // but useful for default reference.
+    // const fairShare = totalSpent / numUsers; 
 
     const balances: Record<string, number> = {};
 
@@ -42,19 +45,32 @@ export function calculateBalances(
             }
         });
 
-        balances[u.id] = paid - myShare;
+        balances[u.id] = round(paid - myShare);
     });
 
     // Apply settlements
     settlements.forEach(s => {
-        // If I paid someone (settlement from me to them), my balance increases (debt decreases or credit increases)
-        // If someone paid me (settlement from them to me), my balance decreases (credit decreases)
-        // Wait, 'balances' here represents the net position towards functionality.
-        // Let's stick to the logic: Net Position = (Amount Paid for Group) - (Fair Share) + (Settlements Given) - (Settlements Received)
-
-        if (balances[s.fromUserId] !== undefined) balances[s.fromUserId] += s.amount;
-        if (balances[s.toUserId] !== undefined) balances[s.toUserId] -= s.amount;
+        if (balances[s.fromUserId] !== undefined) balances[s.fromUserId] = round(balances[s.fromUserId] + s.amount);
+        if (balances[s.toUserId] !== undefined) balances[s.toUserId] = round(balances[s.toUserId] - s.amount);
     });
+
+    // Enforce Zero Sum (Fix for 0.01 rounding errors)
+    let sum = 0;
+    const userIds = Object.keys(balances);
+    userIds.forEach(id => sum += balances[id]);
+
+    // If sum is not 0 (e.g. 0.01), subtract it from the last user (or the one with largest balance)
+    // To be deterministic, we just adjust the first user? Or the current user?
+    // Let's adjust the user with the largest absolute balance to minimize relative error?
+    // Or just the first one for simplicity.
+    if (Math.abs(sum) > 0.005) {
+        // Round sum to remove tiny float noise
+        sum = round(sum);
+        if (userIds.length > 0) {
+            // Subtract the discrepancy from the first user
+            balances[userIds[0]] = round(balances[userIds[0]] - sum);
+        }
+    }
 
     return balances;
 }
