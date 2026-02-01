@@ -19,8 +19,7 @@ interface SettleExpense {
 
 interface EditSettleClientProps {
     settlementId: string;
-    expenses: SettleExpense[];
-    initialExpenseIds: string[];
+    initialAmount: number;
     initialMethod: "CASH" | "BIZUM";
     toUser: {
         id: string;
@@ -31,30 +30,15 @@ interface EditSettleClientProps {
 
 export function EditSettleClient({
     settlementId,
-    expenses,
-    initialExpenseIds,
+    initialAmount,
     initialMethod,
     toUser
 }: EditSettleClientProps) {
     const router = useRouter();
-    const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>(initialExpenseIds);
+    const [amount, setAmount] = useState<string>(initialAmount.toString());
     const [method, setMethod] = useState<"CASH" | "BIZUM">(initialMethod);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Filter expenses to only show those paid by the "toUser"
-    const debtorExpenses = expenses.filter(e => e.paidBy === toUser.id);
-
-    const amount = useMemo(() => {
-        return debtorExpenses
-            .filter(e => selectedExpenseIds.includes(e.id))
-            .reduce((sum, e) => sum + e.myAmount, 0);
-    }, [debtorExpenses, selectedExpenseIds]);
-
-    const toggleExpense = (id: string) => {
-        setSelectedExpenseIds(prev =>
-            prev.includes(id) ? prev.filter(eid => eid !== id) : [...prev, id]
-        );
-    };
 
     const handleSubmit = async () => {
         setIsSubmitting(true);
@@ -64,7 +48,7 @@ export function EditSettleClient({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     method,
-                    expenseIds: selectedExpenseIds
+                    amount: parseFloat(amount)
                 })
             });
             if (res.ok) {
@@ -103,51 +87,21 @@ export function EditSettleClient({
                     </div>
                 </div>
 
-                <div className="text-center py-6 space-y-2">
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Nuevo Total</p>
-                    <h2 className="text-5xl font-mono font-bold text-white">
-                        {amount.toFixed(2)}€
-                    </h2>
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 text-muted-foreground text-[10px] font-bold border border-white/10 uppercase tracking-widest">
-                        <Info className="h-3 w-3" /> Basado en {selectedExpenseIds.length} gastos
+                <div className="text-center py-6 space-y-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Importe</p>
+                    <div className="flex justify-center items-end gap-2">
+                        <input
+                            type="number"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            className="text-5xl font-mono font-bold text-white bg-transparent text-center w-48 outline-none border-b border-white/20 focus:border-primary transition-colors"
+                            placeholder="0.00"
+                            step="0.01"
+                        />
+                        <span className="text-3xl font-bold text-muted-foreground mb-2">€</span>
                     </div>
                 </div>
 
-                <div className="space-y-3">
-                    <p className="text-sm font-bold uppercase tracking-widest ml-1 text-muted-foreground">Gastos Seleccionados</p>
-                    <div className="space-y-2">
-                        {debtorExpenses.map((expense) => (
-                            <div
-                                key={expense.id}
-                                onClick={() => toggleExpense(expense.id)}
-                                className={cn(
-                                    "flex items-center justify-between p-4 rounded-xl border transition-all active:scale-[0.98]",
-                                    selectedExpenseIds.includes(expense.id)
-                                        ? "bg-primary/20 border-primary shadow-lg shadow-primary/10"
-                                        : "bg-white/5 border-white/5 opacity-60"
-                                )}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className={cn(
-                                        "h-5 w-5 rounded-md border flex items-center justify-center transition-colors",
-                                        selectedExpenseIds.includes(expense.id) ? "bg-primary border-primary" : "border-white/20"
-                                    )}>
-                                        {selectedExpenseIds.includes(expense.id) && <Check className="h-3.5 w-3.5 text-black font-bold" />}
-                                    </div>
-                                    <div className="text-left">
-                                        <p className="text-sm font-bold leading-none mb-1">{expense.description}</p>
-                                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                                            {new Date(expense.date).toLocaleDateString()}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-sm font-mono font-bold">{expense.myAmount.toFixed(2)}€</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
 
                 <div className="space-y-3">
                     <p className="text-sm font-bold uppercase tracking-widest ml-1 text-muted-foreground">Método de Pago</p>
@@ -182,7 +136,7 @@ export function EditSettleClient({
                         className="w-full h-14 text-lg font-bold shadow-2xl shadow-primary/30"
                         isLoading={isSubmitting}
                         onClick={handleSubmit}
-                        disabled={selectedExpenseIds.length === 0}
+                        disabled={!amount || parseFloat(amount) <= 0}
                     >
                         Guardar Cambios <Check className="ml-2" />
                     </Button>
