@@ -61,6 +61,11 @@ export function ExpenseCard({ expense, paidByUser, allUsers }: ExpenseCardProps)
                     <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
                         {new Date(expense.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
                     </span>
+                    {expense.status === "SETTLED" && (
+                        <span className="block text-[8px] uppercase font-bold px-1 py-0.5 rounded bg-blue-500/20 text-blue-300 mt-1">
+                            Liquidado
+                        </span>
+                    )}
                 </div>
             </GlassCard>
         </Link>

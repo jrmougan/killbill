@@ -13,6 +13,7 @@ import { redirect } from "next/navigation";
 import { calculateBalances } from "@/lib/finance";
 import { cn } from "@/lib/utils";
 import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
+import { PendingSettlements } from "@/components/dashboard/pending-settlements";
 
 export const dynamic = 'force-dynamic';
 
@@ -107,11 +108,6 @@ export default async function DashboardPage() {
         include: { splits: true },
     });
 
-    // Get only recent for display
-    const rawExpenses = allExpenses
-        .sort((a, b) => b.date.getTime() - a.date.getTime())
-        .slice(0, 20);
-
     // Fetch Settlements
     const settlements = await prisma.settlement.findMany({
         where: { coupleId: couple.id },
@@ -127,16 +123,52 @@ export default async function DashboardPage() {
 
     const myBalance = balances[userId] || 0;
 
-    const expenses: Expense[] = rawExpenses.map((e: any) => ({
-        id: e.id,
-        description: e.description,
-        amount: e.amount,
-        category: e.category as any,
-        date: e.date.toISOString(),
-        paidBy: e.paidById,
-        receiptUrl: e.receiptUrl,
-        splits: e.splits.map((s: any) => ({ userId: s.userId, amount: s.amount })),
-    }));
+    // Filter settlements pending for ME to confirm
+    const myPendingSettlements = settlements
+        .filter(s => s.toUserId === userId && s.status === "PENDING")
+        .map(s => ({
+            id: s.id,
+            amount: s.amount,
+            fromUser: {
+                name: members.find(m => m.id === s.fromUserId)?.name || "Alguien",
+                avatar: members.find(m => m.id === s.fromUserId)?.avatar || null
+            },
+            date: s.date.toISOString(),
+            method: s.method
+        }));
+
+    // Combined recent items for display (unified view)
+    const combinedRecent = [
+        ...allExpenses.map(e => ({
+            id: e.id,
+            type: "EXPENSE" as const,
+            description: e.description,
+            amount: e.amount,
+            date: e.date.toISOString(),
+            category: e.category,
+            paidBy: e.paidById,
+            receiptUrl: e.receiptUrl,
+            splits: e.splits.map(s => ({ userId: s.userId, amount: s.amount })),
+            status: e.status
+        })),
+        ...settlements.map((s: any) => ({
+            id: s.id,
+            type: "SETTLEMENT" as const,
+            description: `Liquidación`,
+            amount: s.amount,
+            date: s.date.toISOString(),
+            category: "settlement",
+            paidBy: s.fromUserId,
+            toUserId: s.toUserId,
+            method: s.method,
+            status: s.status
+        }))
+    ].filter(i => {
+        if (i.type === "EXPENSE") return i.status === "OPEN";
+        return i.status === "PENDING";
+    })
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 10);
 
     return (
         <div className="flex flex-col h-full min-h-screen p-4 pb-24 space-y-6 relative">
@@ -208,6 +240,10 @@ export default async function DashboardPage() {
                     )}
                 </GlassCard>
             </section>
+
+            {myPendingSettlements.length > 0 && (
+                <PendingSettlements settlements={myPendingSettlements} />
+            )}
 
             <div className="grid grid-cols-2 gap-2">
                 <Link href="/settle" className="flex-1">
@@ -334,7 +370,7 @@ export default async function DashboardPage() {
             <section className="space-y-4">
                 <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold">Recientes</h2>
-                    {expenses.length > 0 && (
+                    {combinedRecent.length > 0 && (
                         <Link href="/expenses/list" className="text-sm text-primary hover:underline">
                             Ver todos →
                         </Link>
@@ -342,11 +378,11 @@ export default async function DashboardPage() {
                 </div>
 
                 <div className="space-y-3">
-                    {expenses.length === 0 ? (
+                    {combinedRecent.length === 0 ? (
                         <div className="text-center py-12 space-y-4">
                             <div className="text-6xl animate-bounce">{partner ? "💸" : "💕"}</div>
                             <div className="space-y-1">
-                                <p className="font-bold text-lg">{partner ? "¡Sin gastos aún!" : "¡Casi listos!"}</p>
+                                <p className="font-bold text-lg">{partner ? "¡Sin movimientos aún!" : "¡Casi listos!"}</p>
                                 <p className="text-sm text-muted-foreground">
                                     {partner
                                         ? <>Pulsa el botón <span className="text-primary font-bold">+</span> para añadir vuestro primer gasto</>
@@ -355,14 +391,52 @@ export default async function DashboardPage() {
                                 </p>
                             </div>
                         </div>
-                    ) : expenses.map((expense) => (
-                        <ExpenseCard
-                            key={expense.id}
-                            expense={expense}
-                            paidByUser={usersMap[expense.paidBy]}
-                            allUsers={usersMap}
-                        />
-                    ))}
+                    ) : (
+                        combinedRecent.map((item) => {
+                            if (item.type === "EXPENSE") {
+                                return (
+                                    <ExpenseCard
+                                        key={item.id}
+                                        expense={item as any}
+                                        paidByUser={usersMap[item.paidBy]}
+                                        allUsers={usersMap}
+                                    />
+                                );
+                            } else {
+                                const fromUser = usersMap[item.paidBy];
+                                const toUser = item.toUserId ? usersMap[item.toUserId] : null;
+
+                                return (
+                                    <Link href={`/settle/${item.id}`} key={item.id}>
+                                        <GlassCard className="p-4 flex items-center justify-between border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 transition-all border-l-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center text-xl">
+                                                    🤝
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-sm">Liquidación</h3>
+                                                    <p className="text-xs text-muted-foreground line-clamp-1">
+                                                        {fromUser?.name} → {toUser?.name}
+                                                    </p>
+                                                    <p className="text-[10px] text-muted-foreground mt-1">
+                                                        {new Date(item.date).toLocaleDateString()} • {item.method}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-lg font-mono font-bold text-blue-400">
+                                                    {item.amount.toFixed(2)}€
+                                                </p>
+                                                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">
+                                                    {item.status}
+                                                </span>
+                                            </div>
+                                        </GlassCard>
+                                    </Link>
+                                );
+                            }
+                        })
+                    )}
                 </div>
             </section>
 
