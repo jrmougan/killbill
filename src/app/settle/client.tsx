@@ -37,8 +37,8 @@ export function SettleClient({ debts, expenses }: SettleClientProps) {
     // Step 1: User
     const [selectedUserId, setSelectedUserId] = useState<string | null>(debts.length > 0 ? debts[0].userId : null);
 
-    // Expense selection
-    const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([]);
+    // Expense selection - REMOVED for Running Balance model. We just pay the debt.
+    // const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([]);
 
     // Step 2: Payment
     const [amount, setAmount] = useState<string>("");
@@ -48,20 +48,7 @@ export function SettleClient({ debts, expenses }: SettleClientProps) {
     const selectedDebtor = debts.find(d => d.userId === selectedUserId);
     const debtorExpenses = expenses.filter(e => e.paidBy === selectedUserId);
 
-    const toggleExpense = (id: string, myAmount: number) => {
-        setSelectedExpenseIds(prev => {
-            const isSelected = prev.includes(id);
-            const next = isSelected ? prev.filter(eid => eid !== id) : [...prev, id];
-
-            // Update total amount
-            const newTotal = debtorExpenses
-                .filter((e: SettleExpense) => next.includes(e.id))
-                .reduce((sum: number, e: SettleExpense) => sum + e.myAmount, 0);
-
-            setAmount(newTotal > 0 ? newTotal.toFixed(2) : "");
-            return next;
-        });
-    };
+    // Toggle logic removed
 
     const handleSubmit = async () => {
         if (!selectedUserId || !amount) return;
@@ -74,7 +61,7 @@ export function SettleClient({ debts, expenses }: SettleClientProps) {
                     toUserId: selectedUserId,
                     amount: parseFloat(amount),
                     method,
-                    expenseIds: selectedExpenseIds
+                    // expenseIds: selectedExpenseIds // No specified expenses
                 })
             });
             router.push("/dashboard");
@@ -134,7 +121,7 @@ export function SettleClient({ debts, expenses }: SettleClientProps) {
                                 key={debt.userId}
                                 onClick={() => {
                                     setSelectedUserId(debt.userId);
-                                    setAmount(debt.amount.toFixed(2));
+                                    setAmount(debt.amount.toFixed(2)); // Default to full amount
                                 }}
                                 className={cn(
                                     "flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all",
@@ -159,26 +146,17 @@ export function SettleClient({ debts, expenses }: SettleClientProps) {
 
                     {selectedUserId && debtorExpenses.length > 0 && (
                         <div className="space-y-3 pt-4">
-                            <p className="text-sm font-medium text-muted-foreground px-2">Selecciona los gastos a liquidar:</p>
-                            <div className="space-y-2">
+                            <div className="flex items-center justify-between px-2">
+                                <p className="text-sm font-medium text-muted-foreground">Actividad reciente sin pagar:</p>
+                                <span className="text-[10px] uppercase bg-white/10 px-2 py-0.5 rounded text-muted-foreground">Contexto</span>
+                            </div>
+                            <div className="space-y-2 opacity-75 grayscale-[0.3]">
                                 {debtorExpenses.map((expense: SettleExpense) => (
                                     <div
                                         key={expense.id}
-                                        onClick={() => toggleExpense(expense.id, expense.myAmount)}
-                                        className={cn(
-                                            "flex items-center justify-between p-3 rounded-xl border transition-all active:scale-[0.98]",
-                                            selectedExpenseIds.includes(expense.id)
-                                                ? "bg-primary/10 border-primary/50"
-                                                : "bg-white/5 border-white/5"
-                                        )}
+                                        className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-white/5"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className={cn(
-                                                "h-5 w-5 rounded-md border flex items-center justify-center transition-colors",
-                                                selectedExpenseIds.includes(expense.id) ? "bg-primary border-primary" : "border-white/20"
-                                            )}>
-                                                {selectedExpenseIds.includes(expense.id) && <Check className="h-3.5 w-3.5 text-black font-bold" />}
-                                            </div>
                                             <div className="text-left">
                                                 <p className="text-sm font-bold leading-none mb-1">{expense.description}</p>
                                                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
@@ -193,6 +171,9 @@ export function SettleClient({ debts, expenses }: SettleClientProps) {
                                     </div>
                                 ))}
                             </div>
+                            <p className="text-[10px] text-center text-muted-foreground pt-2">
+                                Estos gastos son solo informativo. Al pagar, se reduce tu deuda total.
+                            </p>
                         </div>
                     )}
                 </div>

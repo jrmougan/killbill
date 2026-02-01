@@ -122,3 +122,15 @@ export function getMyDebts(
 
     return debts;
 }
+
+export function getLastSettlementDate(
+    settlements: { date: Date | string }[]
+): Date {
+    if (!settlements || settlements.length === 0) {
+        return new Date(0); // Beginning of time
+    }
+
+    // Sort by date desc
+    const sorted = [...settlements].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return new Date(sorted[0].date);
+}

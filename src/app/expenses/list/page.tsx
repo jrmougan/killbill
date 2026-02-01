@@ -55,7 +55,6 @@ export default async function ExpensesListPage() {
             paidBy: e.paidById,
             receiptUrl: e.receiptUrl,
             splits: e.splits.map(s => ({ userId: s.userId, amount: s.amount })),
-            status: e.status
         })),
         ...rawSettlements.map(s => ({
             id: s.id,

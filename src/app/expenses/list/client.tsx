@@ -17,7 +17,7 @@ interface UnifiedItem {
     date: string;
     category: string;
     paidBy: string;
-    status: string;
+    status?: string;
     toUserId?: string;
     method?: string;
     receiptUrl?: string | null;
@@ -34,7 +34,6 @@ export function ExpensesListClient({ items, usersMap }: ExpensesListClientProps)
         search: "",
         categories: [] as string[],
         dateRange: "all" as "all" | "week" | "month" | "year",
-        status: "pending" as "all" | "pending" | "settled",
     });
 
     const filteredItems = useMemo(() => {
@@ -74,18 +73,6 @@ export function ExpensesListClient({ items, usersMap }: ExpensesListClientProps)
             result = result.filter(e => new Date(e.date) >= startDate);
         }
 
-        // Status filter
-        if (filters.status === "pending") {
-            result = result.filter(i => {
-                if (i.type === "EXPENSE") return i.status === "OPEN";
-                return i.status === "PENDING";
-            });
-        } else if (filters.status === "settled") {
-            result = result.filter(i => {
-                if (i.type === "EXPENSE") return i.status === "SETTLED";
-                return i.status === "CONFIRMED";
-            });
-        }
 
         return result;
     }, [items, filters]);

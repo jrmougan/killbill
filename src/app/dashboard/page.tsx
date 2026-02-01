@@ -10,7 +10,7 @@ import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { calculateBalances } from "@/lib/finance";
+import { calculateBalances, getLastSettlementDate } from "@/lib/finance";
 import { cn } from "@/lib/utils";
 import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
 import { PendingSettlements } from "@/components/dashboard/pending-settlements";
@@ -121,7 +121,8 @@ export default async function DashboardPage() {
         userId
     );
 
-    const myBalance = balances[userId] || 0;
+    let myBalance = balances[userId] || 0;
+    if (Math.abs(myBalance) < 0.005) myBalance = 0;
 
     // Filter settlements pending for ME to confirm
     const myPendingSettlements = settlements
@@ -137,6 +138,9 @@ export default async function DashboardPage() {
             method: s.method
         }));
 
+    // Calculate last settlement date for filtering
+    const lastSettlementDate = getLastSettlementDate(settlements);
+
     // Combined recent items for display (unified view)
     const combinedRecent = [
         ...allExpenses.map(e => ({
@@ -149,7 +153,6 @@ export default async function DashboardPage() {
             paidBy: e.paidById,
             receiptUrl: e.receiptUrl,
             splits: e.splits.map(s => ({ userId: s.userId, amount: s.amount })),
-            status: e.status
         })),
         ...settlements.map((s: any) => ({
             id: s.id,
@@ -164,7 +167,7 @@ export default async function DashboardPage() {
             status: s.status
         }))
     ].filter(i => {
-        if (i.type === "EXPENSE") return i.status === "OPEN";
+        if (i.type === "EXPENSE") return new Date(i.date) > lastSettlementDate;
         return i.status === "PENDING";
     })
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())

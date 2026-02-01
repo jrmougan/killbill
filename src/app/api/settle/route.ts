@@ -28,18 +28,9 @@ export async function POST(request: Request) {
             },
         });
 
-        if (expenseIds && Array.isArray(expenseIds) && expenseIds.length > 0) {
-            await tx.expense.updateMany({
-                where: {
-                    id: { in: expenseIds },
-                    coupleId: coupleId // Security check
-                },
-                data: {
-                    settlementId: settlement.id,
-                    status: "SETTLED"
-                }
-            });
-        }
+
+        // No longer marking expenses as SETTLED.
+        // The balance is calculated dynamically and we just show items since the last settlement.
     });
 
     return NextResponse.json({ success: true });

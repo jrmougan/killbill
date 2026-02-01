@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getMyDebts } from "@/lib/finance";
+import { getMyDebts, getLastSettlementDate } from "@/lib/finance";
 import { SettleClient } from "./client";
 import { getSession } from "@/lib/auth";
 
@@ -60,9 +60,14 @@ export default async function SettlePage() {
         };
     });
 
+    // Find local cutoff date
+    // We want expenses NEWER than the last settlement
+    const lastSettlementDate = getLastSettlementDate(settlements);
+
     // Fetch unsettled expenses where I owe money
+    // Logic change: We show expenses since the last settlement, regardless of status (as status is deprecated)
     const unsettledExpenses = rawExpenses
-        .filter(e => e.status !== "SETTLED" && e.paidById !== userId)
+        .filter(e => new Date(e.date) > lastSettlementDate && e.paidById !== userId)
         .map(e => {
             // Find my split or 50%
             let myAmount = 0;
@@ -81,7 +86,8 @@ export default async function SettlePage() {
                 paidBy: e.paidById
             };
         })
-        .filter(e => e.myAmount > 0);
+        .filter(e => e.myAmount > 0)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return <SettleClient debts={debts} expenses={unsettledExpenses} />;
 }

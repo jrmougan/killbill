@@ -64,7 +64,6 @@ model Expense {
   amount      Float
   date        DateTime @default(now())
   category    String   @default("other")
-  status      String   @default("OPEN") // OPEN, PARTIAL, SETTLED
 
   receiptUrl  String?
   receiptData Json?
