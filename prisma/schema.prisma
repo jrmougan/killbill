@@ -61,7 +61,7 @@ model InviteCode {
 model Expense {
   id          String   @id @default(cuid())
   description String
-  amount      Float
+  amount      Int
   date        DateTime @default(now())
   category    String   @default("other")
 
@@ -85,7 +85,7 @@ model Expense {
 
 model Split {
   id     String @id @default(cuid())
-  amount Float
+  amount Int
 
   expenseId String
   expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
@@ -112,7 +112,7 @@ model Settlement {
   coupleId String
   couple   Couple @relation(fields: [coupleId], references: [id])
 
-  amount Float // Total amount of the settlement
+  amount Int // Total amount in CENTS
   status String @default("PENDING") // PENDING, CONFIRMED, REJECTED
   method String @default("CASH") // CASH, BIZUM, TRANSFER, etc.
 
