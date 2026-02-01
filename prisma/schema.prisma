@@ -76,6 +76,9 @@ model Expense {
   couple   Couple @relation(fields: [coupleId], references: [id])
 
   splits Split[]
+  
+  settlementId String?
+  settlement   Settlement? @relation(fields: [settlementId], references: [id])
 
   @@index([coupleId])
   @@index([paidById])
@@ -113,6 +116,8 @@ model Settlement {
   amount Float // Total amount of the settlement
   status String @default("PENDING") // PENDING, CONFIRMED, REJECTED
   method String @default("CASH") // CASH, BIZUM, TRANSFER, etc.
+
+  expenses Expense[]
 
   @@index([coupleId])
   @@index([fromUserId])
