@@ -62,6 +62,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
 WORKDIR /prisma-tools
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 # Instalamos dependencias de Prisma (CLI y configuración)
 RUN npm init -y && npm install prisma tsx @prisma/client
 
