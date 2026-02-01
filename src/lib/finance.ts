@@ -1,8 +1,8 @@
-// Helper to round to 2 decimals to avoid floating point errors
-function round(num: number): number {
-    return Math.round((num + Number.EPSILON) * 100) / 100;
-}
-
+/**
+ * Calculate balances for all users in CENTS (integer arithmetic).
+ * Positive = User is owed money.
+ * Negative = User owes money.
+ */
 export function calculateBalances(
     users: { id: string }[],
     expenses: { paidById: string; amount: number; splits?: { userId: string, amount: number }[] }[],
@@ -10,23 +10,17 @@ export function calculateBalances(
     currentUserId: string
 ): Record<string, number> {
     const paidByUser: Record<string, number> = {};
-    const totalSpent = expenses.reduce((acc, expense) => {
+    expenses.forEach(expense => {
         paidByUser[expense.paidById] = (paidByUser[expense.paidById] || 0) + expense.amount;
-        return acc + expense.amount;
-    }, 0);
+    });
 
     const numUsers = users.length || 1;
-
-    // We don't really use fairShare directly for everyone if there are splits, 
-    // but useful for default reference.
-    // const fairShare = totalSpent / numUsers; 
-
     const balances: Record<string, number> = {};
 
     // Initialize for all users
     users.forEach(u => balances[u.id] = 0);
 
-    // Calculate net expense position (paid - share)
+    // Calculate net expense position (paid - share) in CENTS
     users.forEach(u => {
         const paid = paidByUser[u.id] || 0;
 
@@ -40,37 +34,19 @@ export function calculateBalances(
                     myShare += mySplit.amount;
                 }
             } else {
-                // Shared equally
-                myShare += e.amount / numUsers;
+                // Shared equally - integer division
+                myShare += Math.round(e.amount / numUsers);
             }
         });
 
-        balances[u.id] = round(paid - myShare);
+        balances[u.id] = paid - myShare;
     });
 
-    // Apply settlements
+    // Apply settlements (also in cents)
     settlements.forEach(s => {
-        if (balances[s.fromUserId] !== undefined) balances[s.fromUserId] = round(balances[s.fromUserId] + s.amount);
-        if (balances[s.toUserId] !== undefined) balances[s.toUserId] = round(balances[s.toUserId] - s.amount);
+        if (balances[s.fromUserId] !== undefined) balances[s.fromUserId] += s.amount;
+        if (balances[s.toUserId] !== undefined) balances[s.toUserId] -= s.amount;
     });
-
-    // Enforce Zero Sum (Fix for 0.01 rounding errors)
-    let sum = 0;
-    const userIds = Object.keys(balances);
-    userIds.forEach(id => sum += balances[id]);
-
-    // If sum is not 0 (e.g. 0.01), subtract it from the last user (or the one with largest balance)
-    // To be deterministic, we just adjust the first user? Or the current user?
-    // Let's adjust the user with the largest absolute balance to minimize relative error?
-    // Or just the first one for simplicity.
-    if (Math.abs(sum) > 0.005) {
-        // Round sum to remove tiny float noise
-        sum = round(sum);
-        if (userIds.length > 0) {
-            // Subtract the discrepancy from the first user
-            balances[userIds[0]] = round(balances[userIds[0]] - sum);
-        }
-    }
 
     return balances;
 }
@@ -97,11 +73,11 @@ export function getMyDebts(
     const balances = calculateBalances(users, expenses, settlements, currentUserId);
 
     const debtors = Object.entries(balances)
-        .filter(([_, amount]) => amount < -0.01)
+        .filter(([_, amount]) => amount < -1) // Less than -1 cent
         .sort((a, b) => a[1] - b[1]); // Most debt first (most negative)
 
     const creditors = Object.entries(balances)
-        .filter(([_, amount]) => amount > 0.01)
+        .filter(([_, amount]) => amount > 1) // More than 1 cent
         .sort((a, b) => b[1] - a[1]); // Most credit first
 
     const debts: Record<string, number> = {}; // myUserId -> targetUserId : amount (How much *I* owe *Target*)
@@ -132,8 +108,8 @@ export function getMyDebts(
         debtor[1] += amount;
         creditor[1] -= amount;
 
-        if (Math.abs(debtor[1]) < 0.01) i++;
-        if (creditor[1] < 0.01) j++;
+        if (Math.abs(debtor[1]) < 1) i++;
+        if (creditor[1] < 1) j++;
     }
 
     return debts;
