@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { toCents } from '@/lib/currency';
 
 export async function POST(request: Request) {
     const session = await getSession();
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     await prisma.$transaction(async (tx) => {
         const settlement = await tx.settlement.create({
             data: {
-                amount,
+                amount: toCents(amount),
                 fromUserId: userId,
                 toUserId: (toUserId as string) || userId,
                 coupleId: coupleId,

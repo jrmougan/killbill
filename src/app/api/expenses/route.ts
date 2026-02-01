@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { toCents } from '@/lib/currency';
 
 export async function GET(request: Request) {
     const session = await getSession();
@@ -45,9 +46,12 @@ export async function POST(request: Request) {
 
     if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
+    // Convert euros to cents
+    const amountCents = toCents(amount);
+
     const expenseData: any = {
         description,
-        amount,
+        amount: amountCents,
         category,
         paidById: userId,
         coupleId: user.coupleId,
@@ -60,7 +64,7 @@ export async function POST(request: Request) {
             create: [
                 {
                     userId: beneficiaryId,
-                    amount: amount
+                    amount: amountCents
                 }
             ]
         };
@@ -72,11 +76,11 @@ export async function POST(request: Request) {
         });
 
         if (coupleMembers.length > 0) {
-            const splitAmount = amount / coupleMembers.length;
+            const splitAmountCents = Math.round(amountCents / coupleMembers.length);
             expenseData.splits = {
                 create: coupleMembers.map((m: any) => ({
                     userId: m.id,
-                    amount: splitAmount
+                    amount: splitAmountCents
                 }))
             };
         }

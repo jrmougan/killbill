@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { toCents } from "@/lib/currency";
 
 export async function DELETE(
     request: Request,
@@ -73,11 +74,12 @@ export async function PATCH(
         const partner = members.find(m => m.id !== expense.paidById);
 
         // Update expense
+        const amountCents = amount ? toCents(parseFloat(amount)) : expense.amount;
         const updatedExpense = await prisma.expense.update({
             where: { id },
             data: {
                 description: description ?? expense.description,
-                amount: amount ? parseFloat(amount) : expense.amount,
+                amount: amountCents,
                 category: category ?? expense.category,
                 receiptData: receiptItems ?? expense.receiptData,
             }
@@ -91,14 +93,14 @@ export async function PATCH(
             });
 
             // Create new splits
-            const newAmount = amount ? parseFloat(amount) : expense.amount;
             if (splitWithPartner) {
                 // 50/50 split
+                const splitAmountCents = Math.round(amountCents / 2);
                 await prisma.split.createMany({
                     data: members.map(m => ({
                         expenseId: id,
                         userId: m.id,
-                        amount: newAmount / 2
+                        amount: splitAmountCents
                     }))
                 });
             } else {
@@ -107,7 +109,7 @@ export async function PATCH(
                     data: {
                         expenseId: id,
                         userId: partner.id,
-                        amount: newAmount
+                        amount: amountCents
                     }
                 });
             }
