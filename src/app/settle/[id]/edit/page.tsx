@@ -46,7 +46,7 @@ export default async function EditSettlePage({ params }: EditSettlePageProps) {
 
     // Fetch Expenses for couple with splits
     const rawExpenses = await prisma.expense.findMany({
-        where: { coupleId: user.coupleId },
+        where: { coupleId: user.coupleId as string },
         include: { splits: true },
     });
 
