@@ -55,11 +55,14 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 # 3. Copiamos la carpeta static a la ubicación correcta dentro de .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# 4. PRISMA: No copiamos node_modules. 
-# Solo copiamos el schema si lo necesitas para migraciones al arrancar (opcional)
-# y la carpeta de migraciones.
+# 4. PRISMA: Copiamos lo necesario para poder ejecutar migraciones
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
+# Copiamos prisma y tsx para poder ejecutar migraciones desde el contenedor
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/tsx ./node_modules/tsx
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/esbuild ./node_modules/esbuild
 
 # Si usas Sharp para optimización de imágenes (RECOMENDADO), descomenta esto:
 # COPY --from=builder /app/node_modules/sharp ./node_modules/sharp
