@@ -60,5 +60,28 @@ export default async function SettlePage() {
         };
     });
 
-    return <SettleClient debts={debts} />;
+    // Fetch unsettled expenses where I owe money
+    const unsettledExpenses = rawExpenses
+        .filter(e => e.status !== "SETTLED" && e.paidById !== userId)
+        .map(e => {
+            // Find my split or 50%
+            let myAmount = 0;
+            if (e.splits.length > 0) {
+                myAmount = e.splits.find(s => s.userId === userId)?.amount || 0;
+            } else {
+                myAmount = e.amount / members.length;
+            }
+            return {
+                id: e.id,
+                description: e.description,
+                amount: e.amount,
+                myAmount,
+                date: e.date.toISOString(),
+                category: e.category,
+                paidBy: e.paidById
+            };
+        })
+        .filter(e => e.myAmount > 0);
+
+    return <SettleClient debts={debts} expenses={unsettledExpenses} />;
 }

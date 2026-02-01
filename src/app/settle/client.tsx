@@ -15,16 +15,30 @@ interface Debtor {
     amount: number;
 }
 
-interface SettleClientProps {
-    debts: Debtor[];
+interface SettleExpense {
+    id: string;
+    description: string;
+    amount: number;
+    myAmount: number;
+    date: string;
+    category: string;
+    paidBy: string;
 }
 
-export function SettleClient({ debts }: SettleClientProps) {
+interface SettleClientProps {
+    debts: Debtor[];
+    expenses: SettleExpense[];
+}
+
+export function SettleClient({ debts, expenses }: SettleClientProps) {
     const router = useRouter();
     const [step, setStep] = useState<1 | 2>(1);
 
     // Step 1: User
     const [selectedUserId, setSelectedUserId] = useState<string | null>(debts.length > 0 ? debts[0].userId : null);
+
+    // Expense selection
+    const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([]);
 
     // Step 2: Payment
     const [amount, setAmount] = useState<string>("");
@@ -32,6 +46,22 @@ export function SettleClient({ debts }: SettleClientProps) {
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const selectedDebtor = debts.find(d => d.userId === selectedUserId);
+    const debtorExpenses = expenses.filter(e => e.paidBy === selectedUserId);
+
+    const toggleExpense = (id: string, myAmount: number) => {
+        setSelectedExpenseIds(prev => {
+            const isSelected = prev.includes(id);
+            const next = isSelected ? prev.filter(eid => eid !== id) : [...prev, id];
+
+            // Update total amount
+            const newTotal = debtorExpenses
+                .filter((e: SettleExpense) => next.includes(e.id))
+                .reduce((sum: number, e: SettleExpense) => sum + e.myAmount, 0);
+
+            setAmount(newTotal > 0 ? newTotal.toFixed(2) : "");
+            return next;
+        });
+    };
 
     const handleSubmit = async () => {
         if (!selectedUserId || !amount) return;
@@ -43,7 +73,8 @@ export function SettleClient({ debts }: SettleClientProps) {
                 body: JSON.stringify({
                     toUserId: selectedUserId,
                     amount: parseFloat(amount),
-                    method
+                    method,
+                    expenseIds: selectedExpenseIds
                 })
             });
             router.push("/dashboard");
@@ -125,6 +156,45 @@ export function SettleClient({ debts }: SettleClientProps) {
                             </div>
                         ))}
                     </div>
+
+                    {selectedUserId && debtorExpenses.length > 0 && (
+                        <div className="space-y-3 pt-4">
+                            <p className="text-sm font-medium text-muted-foreground px-2">Selecciona los gastos a liquidar:</p>
+                            <div className="space-y-2">
+                                {debtorExpenses.map((expense: SettleExpense) => (
+                                    <div
+                                        key={expense.id}
+                                        onClick={() => toggleExpense(expense.id, expense.myAmount)}
+                                        className={cn(
+                                            "flex items-center justify-between p-3 rounded-xl border transition-all active:scale-[0.98]",
+                                            selectedExpenseIds.includes(expense.id)
+                                                ? "bg-primary/10 border-primary/50"
+                                                : "bg-white/5 border-white/5"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={cn(
+                                                "h-5 w-5 rounded-md border flex items-center justify-center transition-colors",
+                                                selectedExpenseIds.includes(expense.id) ? "bg-primary border-primary" : "border-white/20"
+                                            )}>
+                                                {selectedExpenseIds.includes(expense.id) && <Check className="h-3.5 w-3.5 text-black font-bold" />}
+                                            </div>
+                                            <div className="text-left">
+                                                <p className="text-sm font-bold leading-none mb-1">{expense.description}</p>
+                                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                    {new Date(expense.date).toLocaleDateString()} • {expense.category}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-sm font-mono font-bold">{expense.myAmount.toFixed(2)}€</p>
+                                            <p className="text-[10px] text-muted-foreground">de {expense.amount.toFixed(2)}€</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 

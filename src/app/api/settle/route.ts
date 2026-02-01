@@ -8,22 +8,38 @@ export async function POST(request: Request) {
     const userId = session.userId as string;
 
     const body = await request.json();
-    const { amount, toUserId, method } = body;
+    const { amount, toUserId, method, expenseIds } = body;
 
     const user = await prisma.user.findUnique({
         where: { id: userId },
     });
 
     if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+    const coupleId = user.coupleId as string;
 
-    await prisma.settlement.create({
-        data: {
-            amount,
-            fromUserId: userId,
-            toUserId: toUserId || userId,
-            coupleId: user.coupleId,
-            method: method || "CASH" // CASH, BIZUM, etc.
-        },
+    await prisma.$transaction(async (tx) => {
+        const settlement = await tx.settlement.create({
+            data: {
+                amount,
+                fromUserId: userId,
+                toUserId: (toUserId as string) || userId,
+                coupleId: coupleId,
+                method: method || "CASH" // CASH, BIZUM, etc.
+            },
+        });
+
+        if (expenseIds && Array.isArray(expenseIds) && expenseIds.length > 0) {
+            await tx.expense.updateMany({
+                where: {
+                    id: { in: expenseIds },
+                    coupleId: coupleId // Security check
+                },
+                data: {
+                    settlementId: settlement.id,
+                    status: "SETTLED"
+                }
+            });
+        }
     });
 
     return NextResponse.json({ success: true });
