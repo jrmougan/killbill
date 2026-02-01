@@ -168,7 +168,7 @@ export default async function DashboardPage() {
         }))
     ].filter(i => {
         if (i.type === "EXPENSE") return new Date(i.date) > lastSettlementDate;
-        return i.status === "PENDING";
+        return i.type === "SETTLEMENT" && i.status === "PENDING";
     })
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 10);

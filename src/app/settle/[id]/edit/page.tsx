@@ -56,7 +56,7 @@ export default async function EditSettlePage({ params }: EditSettlePageProps) {
     const relevantExpenses = rawExpenses
         .filter(e => {
             if (e.settlementId === id) return true;
-            return e.status === "OPEN" && e.paidById !== userId;
+            return e.settlementId === null && e.paidById !== userId;
         })
         .map(e => {
             let myAmount = 0;

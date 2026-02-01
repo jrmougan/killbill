@@ -31,7 +31,7 @@ export async function PATCH(
             // 1. Unlink current expenses
             await tx.expense.updateMany({
                 where: { settlementId: id },
-                data: { settlementId: null, status: "OPEN" }
+                data: { settlementId: null }
             });
 
             let newAmount = 0;
@@ -43,7 +43,7 @@ export async function PATCH(
                         id: { in: expenseIds },
                         coupleId: settlement.coupleId
                     },
-                    data: { settlementId: id, status: "SETTLED" }
+                    data: { settlementId: id }
                 });
 
                 // 3. Recalculate amount
