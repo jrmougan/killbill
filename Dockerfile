@@ -58,8 +58,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # 4. PRISMA: Copiamos schema y config, e instalamos prisma para migraciones
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
-# Instalamos prisma CLI para poder ejecutar migraciones
-RUN npm install -g prisma tsx
+# Inicializamos npm e instalamos prisma localmente para que resuelva los módulos
+RUN npm init -y && npm install prisma tsx
 
 # Si usas Sharp para optimización de imágenes (RECOMENDADO), descomenta esto:
 # COPY --from=builder /app/node_modules/sharp ./node_modules/sharp
