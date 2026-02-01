@@ -13,6 +13,7 @@ interface ExpenseFiltersProps {
         search: string;
         categories: string[];
         dateRange: "all" | "week" | "month" | "year";
+        status: "all" | "pending" | "settled";
     }) => void;
 }
 
@@ -20,13 +21,14 @@ export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
     const [search, setSearch] = useState("");
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [dateRange, setDateRange] = useState<"all" | "week" | "month" | "year">("all");
+    const [status, setStatus] = useState<"all" | "pending" | "settled">("pending");
     const [showFilters, setShowFilters] = useState(false);
 
     const categories = getAllCategories();
 
     const handleSearchChange = (value: string) => {
         setSearch(value);
-        onFiltersChange({ search: value, categories: selectedCategories, dateRange });
+        onFiltersChange({ search: value, categories: selectedCategories, dateRange, status });
     };
 
     const toggleCategory = (catId: string) => {
@@ -34,22 +36,28 @@ export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
             ? selectedCategories.filter(c => c !== catId)
             : [...selectedCategories, catId];
         setSelectedCategories(newCategories);
-        onFiltersChange({ search, categories: newCategories, dateRange });
+        onFiltersChange({ search, categories: newCategories, dateRange, status });
     };
 
     const handleDateRangeChange = (range: "all" | "week" | "month" | "year") => {
         setDateRange(range);
-        onFiltersChange({ search, categories: selectedCategories, dateRange: range });
+        onFiltersChange({ search, categories: selectedCategories, dateRange: range, status });
+    };
+
+    const handleStatusChange = (newStatus: "all" | "pending" | "settled") => {
+        setStatus(newStatus);
+        onFiltersChange({ search, categories: selectedCategories, dateRange, status: newStatus });
     };
 
     const clearFilters = () => {
         setSearch("");
         setSelectedCategories([]);
         setDateRange("all");
-        onFiltersChange({ search: "", categories: [], dateRange: "all" });
+        setStatus("all");
+        onFiltersChange({ search: "", categories: [], dateRange: "all", status: "all" });
     };
 
-    const hasActiveFilters = search || selectedCategories.length > 0 || dateRange !== "all";
+    const hasActiveFilters = search || selectedCategories.length > 0 || dateRange !== "all" || status !== "all";
 
     return (
         <div className="space-y-3">
@@ -155,6 +163,32 @@ export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
                                     )}
                                 >
                                     {range.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    {/* Status */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            Estado
+                        </label>
+                        <div className="flex gap-2">
+                            {[
+                                { id: "all", label: "Todos" },
+                                { id: "pending", label: "Pendientes" },
+                                { id: "settled", label: "Liquidados" },
+                            ].map(s => (
+                                <button
+                                    key={s.id}
+                                    onClick={() => handleStatusChange(s.id as any)}
+                                    className={cn(
+                                        "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                                        status === s.id
+                                            ? "bg-primary text-white"
+                                            : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-white"
+                                    )}
+                                >
+                                    {s.label}
                                 </button>
                             ))}
                         </div>

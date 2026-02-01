@@ -28,6 +28,7 @@ export interface Expense {
     receiptUrl?: string | null;
     receiptData?: ReceiptItem[];
     splits: Split[];
+    status?: string;
 }
 
 export interface Balance {
