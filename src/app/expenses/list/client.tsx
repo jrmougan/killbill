@@ -160,13 +160,13 @@ export function ExpensesListClient({ items, usersMap }: ExpensesListClientProps)
                             return (
                                 <Link href={`/settle/${item.id}`} key={item.id}>
                                     <GlassCard className="p-4 flex items-center justify-between border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 transition-all border-l-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center text-xl">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center text-xl shrink-0">
                                                 🤝
                                             </div>
-                                            <div>
-                                                <h3 className="font-bold text-sm">Liquidación</h3>
-                                                <p className="text-xs text-muted-foreground">
+                                            <div className="min-w-0">
+                                                <h3 className="font-bold text-sm truncate">Liquidación</h3>
+                                                <p className="text-xs text-muted-foreground truncate">
                                                     {fromUser?.name} ha pagado a {toUser?.name}
                                                 </p>
                                                 <p className="text-[10px] text-muted-foreground mt-1">

@@ -33,7 +33,7 @@ export function ExpenseCard({ expense, paidByUser, allUsers }: ExpenseCardProps)
 
     return (
         <Link href={`/expense/${expense.id}`}>
-            <GlassCard className="flex items-center gap-4 hover:scale-[1.02] active:scale-95 cursor-pointer border-white/5">
+            <GlassCard className="flex items-center gap-4 hover:scale-[1.02] active:scale-95 cursor-pointer border-white/5 min-w-0">
                 <div className={`p-3 rounded-xl ${colorClass}`}>
                     <Icon size={20} />
                 </div>
