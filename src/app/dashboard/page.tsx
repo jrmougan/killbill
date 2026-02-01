@@ -233,7 +233,7 @@ export default async function DashboardPage() {
                             <div className="pb-6 px-6">
                                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                     {myBalance > 0 ? `Te deben ${myBalance.toFixed(2)}€` :
-                                        myBalance < 0 ? `Debes ${Math.abs(myBalance).toFixed(2)}€` : "Estáis en equilibrio"}
+                                        myBalance < 0 ? `Debes ${Math.abs(myBalance).toFixed(2)}€` : "En equilibrio"}
                                 </p>
                             </div>
                         </div>
