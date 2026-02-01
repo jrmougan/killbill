@@ -55,11 +55,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 # 3. Copiamos la carpeta static a la ubicación correcta dentro de .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# 4. PRISMA: Copiamos schema y config, e instalamos prisma para migraciones
+# 4. PRISMA: Copiamos schema, config y el cliente generado
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
-# Inicializamos npm e instalamos prisma localmente para que resuelva los módulos
+COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
+
+# Instalamos prisma CLI en directorio separado para no interferir con standalone
+WORKDIR /prisma-tools
 RUN npm init -y && npm install prisma tsx
+WORKDIR /app
 
 # Si usas Sharp para optimización de imágenes (RECOMENDADO), descomenta esto:
 # COPY --from=builder /app/node_modules/sharp ./node_modules/sharp
