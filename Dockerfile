@@ -64,7 +64,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
 # Instalamos dependencias de Prisma (CLI y configuración)
-RUN npm init -y && npm install prisma tsx @prisma/client
+RUN npm init -y && npm install prisma tsx @prisma/client mysql2
 
 # Volvemos al directorio de la app
 WORKDIR /app
