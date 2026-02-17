@@ -94,13 +94,14 @@ export async function PATCH(
 
             // Create new splits
             if (splitWithPartner) {
-                // 50/50 split
-                const splitAmountCents = Math.round(amountCents / 2);
+                // 50/50 split with floor+remainder to avoid over-counting
+                const baseAmount = Math.floor(amountCents / 2);
+                const remainder = amountCents - (baseAmount * 2);
                 await prisma.split.createMany({
-                    data: members.map(m => ({
+                    data: members.map((m: any, i: number) => ({
                         expenseId: id,
                         userId: m.id,
-                        amount: splitAmountCents
+                        amount: baseAmount + (i < remainder ? 1 : 0)
                     }))
                 });
             } else {

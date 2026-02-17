@@ -35,7 +35,7 @@ export function calculateBalances(
                 }
             } else {
                 // Shared equally - integer division
-                myShare += Math.round(e.amount / numUsers);
+                myShare += Math.floor(e.amount / numUsers);
             }
         });
 

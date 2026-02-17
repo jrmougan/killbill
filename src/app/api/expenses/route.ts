@@ -76,11 +76,12 @@ export async function POST(request: Request) {
         });
 
         if (coupleMembers.length > 0) {
-            const splitAmountCents = Math.round(amountCents / coupleMembers.length);
+            const baseAmount = Math.floor(amountCents / coupleMembers.length);
+            const remainder = amountCents - (baseAmount * coupleMembers.length);
             expenseData.splits = {
-                create: coupleMembers.map((m: any) => ({
+                create: coupleMembers.map((m: any, i: number) => ({
                     userId: m.id,
-                    amount: splitAmountCents
+                    amount: baseAmount + (i < remainder ? 1 : 0)
                 }))
             };
         }
