@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { toCents } from '@/lib/currency';
+import { calculateSplitAmounts } from '@/lib/splits';
 
 export async function GET(request: Request) {
     const session = await getSession();
@@ -69,19 +70,18 @@ export async function POST(request: Request) {
             ]
         };
     } else {
-        // Split among couple members (max 2)
+        // Split among couple members, accounting for exclusive items
         const coupleMembers = await prisma.user.findMany({
             where: { coupleId: user.coupleId },
             select: { id: true }
         });
 
         if (coupleMembers.length > 0) {
-            const baseAmount = Math.floor(amountCents / coupleMembers.length);
-            const remainder = amountCents - (baseAmount * coupleMembers.length);
+            const splits = calculateSplitAmounts(amountCents, receiptData, coupleMembers);
             expenseData.splits = {
-                create: coupleMembers.map((m: any, i: number) => ({
-                    userId: m.id,
-                    amount: baseAmount + (i < remainder ? 1 : 0)
+                create: splits.map(s => ({
+                    userId: s.userId,
+                    amount: s.amount,
                 }))
             };
         }

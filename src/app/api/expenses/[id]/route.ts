@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { toCents } from "@/lib/currency";
+import { calculateSplitAmounts } from "@/lib/splits";
 
 export async function DELETE(
     request: Request,
@@ -85,23 +86,29 @@ export async function PATCH(
             }
         });
 
-        // If split changed, update splits
-        if (splitWithPartner !== undefined && partner) {
+        // Recalculate splits if split mode changed OR if receiptItems changed
+        const shouldRecalcSplits = splitWithPartner !== undefined || receiptItems !== undefined;
+        if (shouldRecalcSplits && partner) {
+            // Determine current split mode
+            const currentSplits = await prisma.split.findMany({ where: { expenseId: id } });
+            const isSplitWithPartner = splitWithPartner !== undefined
+                ? splitWithPartner
+                : currentSplits.length === 2; // 2 splits = 50/50
+
             // Delete existing splits
             await prisma.split.deleteMany({
                 where: { expenseId: id }
             });
 
             // Create new splits
-            if (splitWithPartner) {
-                // 50/50 split with floor+remainder to avoid over-counting
-                const baseAmount = Math.floor(amountCents / 2);
-                const remainder = amountCents - (baseAmount * 2);
+            if (isSplitWithPartner) {
+                const currentReceiptData = receiptItems ?? (expense.receiptData as any[] | null);
+                const splits = calculateSplitAmounts(amountCents, currentReceiptData, members);
                 await prisma.split.createMany({
-                    data: members.map((m: any, i: number) => ({
+                    data: splits.map(s => ({
                         expenseId: id,
-                        userId: m.id,
-                        amount: baseAmount + (i < remainder ? 1 : 0)
+                        userId: s.userId,
+                        amount: s.amount,
                     }))
                 });
             } else {
