@@ -1,76 +1,69 @@
 /**
  * Fix script: Recalculate splits for ALL expenses that have exclusive items (assignedTo)
- * in their receiptData but whose splits are still a naive 50/50.
+ * Uses mysql2 directly (no Prisma adapter needed).
  * 
- * Run locally:  npx tsx scripts/fix-exclusive-splits.ts
- * Run in Docker: cd /prisma-tools && npx tsx scripts/fix-exclusive-splits.ts
+ * Run in Docker: cd /prisma-tools && npm install mysql2 && npx tsx scripts/fix-exclusive-splits.ts
  */
 
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
-import { PrismaClient } from '../src/generated/prisma/client.js';
-
-const adapter = new PrismaMariaDb({
-    host: process.env.DATABASE_HOST || 'localhost',
-    user: process.env.DATABASE_USER || 'root',
-    password: process.env.DATABASE_PASSWORD || 'toor',
-    database: process.env.DATABASE_NAME || 'killbill',
-    port: Number(process.env.DATABASE_PORT) || 3306,
-    connectionLimit: 5,
-});
-
-const prisma = new PrismaClient({ adapter });
+import mysql from 'mysql2/promise';
 
 function toCents(euros: number): number {
     return Math.round(euros * 100);
 }
 
-interface ReceiptItem {
-    total: number;
-    assignedTo?: string | null;
-}
-
 async function main() {
-    console.log('🔍 Finding all expenses with receiptData...\n');
-
-    // Get all expenses that have receiptData (JSON field is not null)
-    const expenses = await prisma.expense.findMany({
-        where: {
-            receiptData: { not: undefined },
-        },
-        include: {
-            splits: true,
-            couple: {
-                include: {
-                    members: { select: { id: true, name: true } }
-                }
-            }
-        }
+    const conn = await mysql.createConnection({
+        host: process.env.DATABASE_HOST || 'localhost',
+        user: process.env.DATABASE_USER || 'root',
+        password: process.env.DATABASE_PASSWORD || 'toor',
+        database: process.env.DATABASE_NAME || 'killbill',
+        port: Number(process.env.DATABASE_PORT) || 3306,
     });
 
+    console.log('🔍 Finding all expenses with exclusive receipt items...\n');
+
+    // Get all expenses with receiptData
+    const [expenses] = await conn.query(`
+        SELECT e.id, e.description, e.amount, e.receiptData, e.paidById,
+               c.id as coupleId
+        FROM Expense e
+        JOIN \`Couple\` c ON e.coupleId = c.id
+        WHERE e.receiptData IS NOT NULL
+    `) as any[];
+
     let fixedCount = 0;
-    let skippedCount = 0;
 
     for (const expense of expenses) {
-        const receiptData = expense.receiptData as unknown as ReceiptItem[] | null;
-        if (!receiptData || !Array.isArray(receiptData) || receiptData.length === 0) {
+        let receiptData: any[];
+        try {
+            receiptData = typeof expense.receiptData === 'string'
+                ? JSON.parse(expense.receiptData)
+                : expense.receiptData;
+        } catch { continue; }
+
+        if (!Array.isArray(receiptData) || receiptData.length === 0) continue;
+
+        // Check for exclusive items
+        const hasExclusive = receiptData.some((item: any) => item.assignedTo);
+        if (!hasExclusive) continue;
+
+        // Get splits for this expense
+        const [splits] = await conn.query(
+            `SELECT s.id, s.userId, s.amount FROM Split s WHERE s.expenseId = ?`,
+            [expense.id]
+        ) as any[];
+
+        // Only fix 50/50 splits (2 splits)
+        if (splits.length !== 2) {
+            console.log(`  ⚠️  Skipping "${expense.description}" - ${splits.length} splits`);
             continue;
         }
 
-        // Check if this expense has any exclusive items
-        const hasExclusive = receiptData.some(item => item.assignedTo);
-        if (!hasExclusive) {
-            skippedCount++;
-            continue;
-        }
-
-        // Only process 50/50 splits (2 splits = shared expense)
-        if (expense.splits.length !== 2) {
-            console.log(`  ⚠️  Skipping "${expense.description}" - has ${expense.splits.length} splits (not 50/50)`);
-            skippedCount++;
-            continue;
-        }
-
-        const members = expense.couple.members;
+        // Get member names
+        const [members] = await conn.query(
+            `SELECT id, name FROM User WHERE coupleId = ?`,
+            [expense.coupleId]
+        ) as any[];
 
         // Calculate correct splits
         let commonCents = 0;
@@ -88,21 +81,21 @@ async function main() {
         const commonBase = Math.floor(commonCents / 2);
         const commonRemainder = commonCents - commonBase * 2;
 
-        const correctSplits = members.map((m, i) => ({
+        const correctSplits = members.map((m: any, i: number) => ({
             userId: m.id,
             name: m.name,
             amount: commonBase + (i < commonRemainder ? 1 : 0) + (exclusiveByUser[m.id] || 0),
         }));
 
-        // Adjust for rounding discrepancy
-        const splitsSum = correctSplits.reduce((a, s) => a + s.amount, 0);
+        // Adjust for rounding
+        const splitsSum = correctSplits.reduce((a: number, s: any) => a + s.amount, 0);
         const diff = expense.amount - splitsSum;
         if (diff !== 0) correctSplits[0].amount += diff;
 
-        // Check if splits actually need updating
+        // Check if update needed
         let needsUpdate = false;
-        for (const split of expense.splits) {
-            const correct = correctSplits.find(s => s.userId === split.userId);
+        for (const split of splits) {
+            const correct = correctSplits.find((s: any) => s.userId === split.userId);
             if (correct && split.amount !== correct.amount) {
                 needsUpdate = true;
                 break;
@@ -110,36 +103,24 @@ async function main() {
         }
 
         if (!needsUpdate) {
-            console.log(`  ✅ "${expense.description}" - splits already correct`);
-            skippedCount++;
+            console.log(`  ✅ "${expense.description}" - already correct`);
             continue;
         }
 
-        // Log and fix
+        // Fix splits
         console.log(`\n  🔧 Fixing "${expense.description}" (${expense.amount / 100}€):`);
-        console.log(`     Common: ${commonCents / 100}€ | Exclusive: ${JSON.stringify(
-            Object.fromEntries(Object.entries(exclusiveByUser).map(([k, v]) => {
-                const name = members.find(m => m.id === k)?.name || k;
-                return [name, v / 100 + '€'];
-            }))
-        )}`);
-
-        for (const split of expense.splits) {
-            const correct = correctSplits.find(s => s.userId === split.userId);
+        for (const split of splits) {
+            const correct = correctSplits.find((s: any) => s.userId === split.userId);
             if (correct && split.amount !== correct.amount) {
                 console.log(`     ${correct.name}: ${split.amount / 100}€ → ${correct.amount / 100}€`);
-                await prisma.split.update({
-                    where: { id: split.id },
-                    data: { amount: correct.amount },
-                });
+                await conn.query(`UPDATE Split SET amount = ? WHERE id = ?`, [correct.amount, split.id]);
             }
         }
         fixedCount++;
     }
 
-    console.log(`\n📊 Summary: Fixed ${fixedCount} expenses, skipped ${skippedCount}\n`);
+    console.log(`\n📊 Fixed ${fixedCount} expenses.\n`);
+    await conn.end();
 }
 
-main()
-    .catch(e => { console.error('❌ Error:', e); process.exit(1); })
-    .finally(() => prisma.$disconnect());
+main().catch(e => { console.error('❌ Error:', e); process.exit(1); });
