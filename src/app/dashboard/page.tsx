@@ -275,11 +275,11 @@ export default async function DashboardPage() {
                         return d >= startOfLastMonth && d <= endOfLastMonth;
                     });
 
-                    const totalThisMonth = thisMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
-                    const totalLastMonth = lastMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
+                    const totalThisMonth = toEuros(thisMonthExpenses.reduce((sum, e) => sum + e.amount, 0));
+                    const totalLastMonth = toEuros(lastMonthExpenses.reduce((sum, e) => sum + e.amount, 0));
 
                     const categoryTotals = thisMonthExpenses.reduce<Record<string, number>>((acc, e) => {
-                        acc[e.category] = (acc[e.category] || 0) + e.amount;
+                        acc[e.category] = (acc[e.category] || 0) + toEuros(e.amount);
                         return acc;
                     }, {});
                     const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];
@@ -299,7 +299,7 @@ export default async function DashboardPage() {
                                 <GlassCard className="p-4 text-center">
                                     <span className="text-2xl mb-1 block">💰</span>
                                     <p className="text-xs text-muted-foreground uppercase tracking-wider">Este mes</p>
-                                    <p className="text-lg font-bold font-mono">{totalThisMonth.toFixed(0)}€</p>
+                                    <p className="text-lg font-bold font-mono">{totalThisMonth.toFixed(2)}€</p>
                                 </GlassCard>
                                 <GlassCard className="p-4 text-center">
                                     <span className="text-2xl mb-1 block">{topCategory ? categoryEmojis[topCategory[0]] || "📊" : "📊"}</span>
