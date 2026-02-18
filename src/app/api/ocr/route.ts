@@ -52,25 +52,17 @@ export async function POST(request: Request) {
                     contents: [{
                         parts: [
                             {
-                                text: `Analiza este ticket de supermercado español y extrae la información en JSON.
-                                
-IMPORTANTE:
-- Extrae TODOS los productos con sus precios
-- El precio de cada producto es el número que aparece al final de cada línea
-- Ignora líneas de IVA, subtotales parciales, métodos de pago (TARJETA, EFECTIVO, CAMBIO)
-- El total es la cantidad final pagada (busca "TOTAL", "TOT", o el número más grande al final)
-- Los precios en España usan coma como separador decimal (ej: 2,50€)
+                                text: `Analiza este ticket de compra y extrae los productos en JSON.
 
-Responde SOLO con JSON válido, sin markdown ni explicaciones:
-{
-    "store": "nombre de la tienda si aparece",
-    "items": [
-        {"description": "NOMBRE DEL PRODUCTO", "quantity": 1, "price": 2.50, "total": 2.50}
-    ],
-    "total": 45.99
-}
+REGLAS:
+- Extrae TODOS los productos con precio
+- Usa descripciones CORTAS (max 20 caracteres, sin marcas largas)
+- Ignora IVA, subtotales, métodos de pago
+- El total es la cantidad final pagada
+- Precios con punto decimal (ej: 2.50, no 2,50)
 
-Si hay cantidades tipo "2 x 1,50", cantidad=2, price=1.50, total=3.00`
+Formato JSON:
+{"store":"TIENDA","items":[{"description":"PRODUCTO","quantity":1,"price":2.50,"total":2.50}],"total":45.99}`
                             },
                             {
                                 inline_data: {
@@ -82,7 +74,8 @@ Si hay cantidades tipo "2 x 1,50", cantidad=2, price=1.50, total=3.00`
                     }],
                     generationConfig: {
                         temperature: 0.1,
-                        maxOutputTokens: 2048,
+                        maxOutputTokens: 8192,
+                        responseMimeType: 'application/json',
                     }
                 })
             }
@@ -103,43 +96,64 @@ Si hay cantidades tipo "2 x 1,50", cantidad=2, price=1.50, total=3.00`
 
         // Parse JSON from response (handle potential markdown wrapper)
         let jsonStr = textContent.trim();
-        if (jsonStr.startsWith('```json')) {
-            jsonStr = jsonStr.slice(7);
-        }
-        if (jsonStr.startsWith('```')) {
-            jsonStr = jsonStr.slice(3);
-        }
-        if (jsonStr.endsWith('```')) {
-            jsonStr = jsonStr.slice(0, -3);
-        }
+        if (jsonStr.startsWith('```json')) jsonStr = jsonStr.slice(7);
+        if (jsonStr.startsWith('```')) jsonStr = jsonStr.slice(3);
+        if (jsonStr.endsWith('```')) jsonStr = jsonStr.slice(0, -3);
         jsonStr = jsonStr.trim();
 
-        try {
-            const parsed: OCRResponse = JSON.parse(jsonStr);
-
-            // Ensure items have assignedTo field
-            const items: ReceiptItem[] = (parsed.items || []).map(item => ({
-                description: item.description || '',
-                quantity: item.quantity || 1,
-                price: item.price || 0,
-                total: item.total || item.price || 0,
-                assignedTo: null
-            }));
-
-            return NextResponse.json({
-                success: true,
-                store: parsed.store || '',
-                items,
-                total: parsed.total || 0
-            });
-
-        } catch (parseError) {
-            console.error('JSON parse error:', parseError, 'Raw:', jsonStr);
-            return NextResponse.json({
-                error: 'Failed to parse receipt data',
-                raw: textContent
-            }, { status: 500 });
+        // Try to repair truncated JSON
+        function tryParseJSON(str: string): OCRResponse | null {
+            try {
+                return JSON.parse(str);
+            } catch {
+                return null;
+            }
         }
+
+        let parsed = tryParseJSON(jsonStr);
+
+        // If parse failed, try to repair truncated JSON
+        if (!parsed) {
+            console.warn('OCR: JSON truncated, attempting repair...');
+            let repaired = jsonStr;
+
+            // Remove trailing incomplete item (after last complete object)
+            const lastCompleteItem = repaired.lastIndexOf('},');
+            const lastCompleteItem2 = repaired.lastIndexOf('}]');
+            const cutPoint = Math.max(lastCompleteItem, lastCompleteItem2);
+
+            if (cutPoint > 0 && lastCompleteItem > lastCompleteItem2) {
+                // Cut after last complete item in array, close the structure
+                repaired = repaired.substring(0, cutPoint + 1) + '],"total":0}';
+                parsed = tryParseJSON(repaired);
+            }
+
+            if (!parsed) {
+                console.error('JSON repair failed. Raw:', jsonStr);
+                return NextResponse.json({
+                    error: 'El ticket es demasiado largo. Intenta con una foto más nítida.',
+                    raw: textContent
+                }, { status: 500 });
+            }
+
+            console.log('OCR: JSON repair succeeded, recovered', parsed.items?.length || 0, 'items');
+        }
+
+        // Ensure items have assignedTo field
+        const items: ReceiptItem[] = (parsed.items || []).map(item => ({
+            description: item.description || '',
+            quantity: item.quantity || 1,
+            price: item.price || 0,
+            total: item.total || item.price || 0,
+            assignedTo: null
+        }));
+
+        return NextResponse.json({
+            success: true,
+            store: parsed.store || '',
+            items,
+            total: parsed.total || 0
+        });
 
     } catch (error) {
         console.error('OCR Error:', error);
