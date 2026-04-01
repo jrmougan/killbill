@@ -218,7 +218,7 @@ export function AnalyticsClient({
                                 </Pie>
                                 <Tooltip
                                     contentStyle={chartTooltipStyle}
-                                    formatter={(value: number) => [`${value.toFixed(2)}€`, ""]}
+                                    formatter={(value) => [`${Number(value).toFixed(2)}€`, ""]}
                                 />
                             </PieChart>
                         </ResponsiveContainer>
