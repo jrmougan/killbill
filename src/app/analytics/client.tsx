@@ -283,7 +283,7 @@ export function AnalyticsClient({
                             />
                             <Tooltip
                                 contentStyle={chartTooltipStyle}
-                                formatter={(value: number) => [`${value.toFixed(2)}€`, "Balance"]}
+                                formatter={(value) => [`${Number(value).toFixed(2)}€`, "Balance"]}
                             />
                             <Line
                                 type="monotone"
