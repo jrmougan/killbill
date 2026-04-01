@@ -16,6 +16,8 @@ model Couple {
   members     User[]
   expenses    Expense[]
   settlements Settlement[]
+  tags        Tag[]
+  budgets     Budget[]
 }
 
 model User {
@@ -68,6 +70,11 @@ model Expense {
   receiptUrl  String?
   receiptData Json?
 
+  notes               String?
+  isRecurring         Boolean   @default(false)
+  recurringInterval   String?   // "monthly" | "weekly" | "yearly"
+  nextRecurringDate   DateTime?
+
   paidById String
   paidBy   User   @relation("Payer", fields: [paidById], references: [id])
 
@@ -75,7 +82,8 @@ model Expense {
   couple   Couple @relation(fields: [coupleId], references: [id])
 
   splits Split[]
-  
+  tags   ExpenseTag[]
+
   settlementId String?
   settlement   Settlement? @relation(fields: [settlementId], references: [id])
 
@@ -121,4 +129,37 @@ model Settlement {
   @@index([coupleId])
   @@index([fromUserId])
   @@index([toUserId])
+}
+
+model Tag {
+  id       String @id @default(cuid())
+  name     String
+  color    String @default("#8b5cf6")
+  coupleId String
+  couple   Couple @relation(fields: [coupleId], references: [id])
+  expenses ExpenseTag[]
+
+  @@unique([name, coupleId])
+  @@index([coupleId])
+}
+
+model ExpenseTag {
+  expenseId String
+  tagId     String
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([expenseId, tagId])
+}
+
+model Budget {
+  id       String   @id @default(cuid())
+  category String
+  amount   Int      // limite en centavos
+  month    DateTime // primer dia del mes al que aplica
+  coupleId String
+  couple   Couple   @relation(fields: [coupleId], references: [id])
+
+  @@unique([category, month, coupleId])
+  @@index([coupleId])
 }

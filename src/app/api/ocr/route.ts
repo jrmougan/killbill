@@ -14,6 +14,7 @@ interface ReceiptItem {
 
 interface OCRResponse {
     store?: string;
+    category?: string;
     items: ReceiptItem[];
     total: number;
     raw_text?: string;
@@ -60,9 +61,17 @@ REGLAS:
 - Ignora IVA, subtotales, métodos de pago
 - El total es la cantidad final pagada
 - Precios con punto decimal (ej: 2.50, no 2,50)
+- Elige la categoría más apropiada para el ticket completo:
+  "shopping" = supermercado, ropa, electrodomésticos, bazar
+  "food" = restaurante, bar, cafetería, comida preparada, delivery
+  "health" = farmacia, parafarmacia, médico
+  "transport" = gasolinera, parking, peaje, tren, bus
+  "entertainment" = cine, teatro, museo, parque
+  "utilities" = factura luz, gas, agua, internet
+  "other" = cualquier otra cosa
 
 Formato JSON:
-{"store":"TIENDA","items":[{"description":"PRODUCTO","quantity":1,"price":2.50,"total":2.50}],"total":45.99}`
+{"store":"TIENDA","category":"shopping","items":[{"description":"PRODUCTO","quantity":1,"price":2.50,"total":2.50}],"total":45.99}`
                             },
                             {
                                 inline_data: {
@@ -151,6 +160,7 @@ Formato JSON:
         return NextResponse.json({
             success: true,
             store: parsed.store || '',
+            category: parsed.category || '',
             items,
             total: parsed.total || 0
         });

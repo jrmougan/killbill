@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -32,15 +33,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className="dark">
+    <html lang="es">
       <body className={cn(inter.className, "antialiased min-h-screen")}>
-        <main className="relative flex flex-col min-h-screen overflow-hidden sm:max-w-md sm:mx-auto sm:border-x sm:border-white/10 bg-background">
-          {/* Decorative background gradients - optimized for performance */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_var(--color-primary)_0%,_transparent_40%)] opacity-20 pointer-events-none" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,_#2563eb_0%,_transparent_40%)] opacity-10 pointer-events-none" />
+        <ThemeProvider>
+          <main className="relative flex flex-col min-h-screen overflow-hidden sm:max-w-md sm:mx-auto sm:border-x sm:border-white/10 bg-background">
+            {/* Decorative background gradients - optimized for performance */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_var(--color-primary)_0%,_transparent_40%)] opacity-20 pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,_#2563eb_0%,_transparent_40%)] opacity-10 pointer-events-none" />
 
-          {children}
-        </main>
+            {children}
+          </main>
+        </ThemeProvider>
       </body>
     </html>
   );

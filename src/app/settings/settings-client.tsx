@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,11 +14,18 @@ import {
     Save,
     Copy,
     Check,
-    ShieldAlert
+    ShieldAlert,
+    Sun,
+    Moon,
+    Palette,
+    Upload,
+    PieChart,
+    Tag,
 } from "lucide-react";
 import Link from "next/link";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
+import { useTheme } from "@/components/theme-provider";
 
 interface UserData {
     id: string;
@@ -39,10 +46,21 @@ interface SettingsClientProps {
     couple: CoupleData | null;
 }
 
+function isAvatarUrl(value: string): boolean {
+    return value.startsWith("/") || value.startsWith("http");
+}
+
 export function SettingsClient({ user, couple }: SettingsClientProps) {
     const router = useRouter();
+    const { theme, toggleTheme } = useTheme();
     const [name, setName] = useState(user.name);
     const [avatar, setAvatar] = useState(user.avatar);
+    const [avatarTab, setAvatarTab] = useState<"emoji" | "foto">(
+        isAvatarUrl(user.avatar) ? "foto" : "emoji"
+    );
+    const [isUploading, setIsUploading] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [isUnlinking, setIsUnlinking] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -102,6 +120,32 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
         }
     };
 
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setIsUploading(true);
+        setUploadError(null);
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            const uploadRes = await fetch("/api/upload", {
+                method: "POST",
+                body: formData,
+            });
+            if (!uploadRes.ok) {
+                setUploadError("Error al subir la imagen");
+                return;
+            }
+            const { url } = await uploadRes.json();
+            setAvatar(url);
+        } catch {
+            setUploadError("Error de conexión");
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
+
     return (
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto relative pb-10">
             <header className="flex items-center gap-4 pt-2">
@@ -122,12 +166,78 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                     </div>
 
                     <GlassCard className="p-4 space-y-4">
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                             <label className="text-xs font-medium text-muted-foreground ml-1 mb-2 block text-center">Tu Avatar</label>
-                            <AvatarPicker
-                                currentAvatar={avatar}
-                                onAvatarChange={setAvatar}
-                            />
+
+                            {/* Tab selector */}
+                            <div className="flex rounded-xl overflow-hidden border border-white/10 bg-white/5">
+                                <button
+                                    type="button"
+                                    onClick={() => setAvatarTab("emoji")}
+                                    className={`flex-1 py-2 text-xs font-semibold transition-colors ${
+                                        avatarTab === "emoji"
+                                            ? "bg-primary text-primary-foreground"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                >
+                                    Emoji
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setAvatarTab("foto")}
+                                    className={`flex-1 py-2 text-xs font-semibold transition-colors ${
+                                        avatarTab === "foto"
+                                            ? "bg-primary text-primary-foreground"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    }`}
+                                >
+                                    Foto
+                                </button>
+                            </div>
+
+                            {avatarTab === "emoji" && (
+                                <AvatarPicker
+                                    currentAvatar={isAvatarUrl(avatar) ? "" : avatar}
+                                    onAvatarChange={setAvatar}
+                                />
+                            )}
+
+                            {avatarTab === "foto" && (
+                                <div className="flex flex-col items-center gap-3">
+                                    {isAvatarUrl(avatar) ? (
+                                        <img
+                                            src={avatar}
+                                            alt="Tu foto de perfil"
+                                            className="h-20 w-20 rounded-full object-cover border-2 border-primary/40"
+                                        />
+                                    ) : (
+                                        <div className="h-20 w-20 rounded-full bg-white/10 border-2 border-dashed border-white/20 flex items-center justify-center text-muted-foreground">
+                                            <Upload className="h-6 w-6" />
+                                        </div>
+                                    )}
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        onChange={handleFileChange}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        className="gap-2 bg-white/5 border border-white/10 hover:bg-white/10"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={isUploading}
+                                        isLoading={isUploading}
+                                    >
+                                        <Upload className="h-4 w-4" />
+                                        {isUploading ? "Subiendo..." : "Subir foto"}
+                                    </Button>
+                                    {uploadError && (
+                                        <p className="text-xs text-red-400 text-center">{uploadError}</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         <div className="space-y-2">
@@ -164,6 +274,48 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                     </GlassCard>
                 </section>
 
+                {/* Appearance Section */}
+                <section className="space-y-4">
+                    <div className="flex items-center gap-2 px-1">
+                        <Palette className="h-5 w-5 text-primary" />
+                        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Apariencia</h2>
+                    </div>
+
+                    <GlassCard className="p-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                {theme === "dark" ? (
+                                    <Moon className="h-5 w-5 text-muted-foreground" />
+                                ) : (
+                                    <Sun className="h-5 w-5 text-amber-500" />
+                                )}
+                                <div>
+                                    <p className="text-sm font-medium">
+                                        {theme === "dark" ? "Modo oscuro" : "Modo claro"}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {theme === "dark" ? "Cambia al tema claro" : "Cambia al tema oscuro"}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={toggleTheme}
+                                aria-label="Cambiar tema"
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                                    theme === "light" ? "bg-primary" : "bg-white/20"
+                                }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                                        theme === "light" ? "translate-x-6" : "translate-x-1"
+                                    }`}
+                                />
+                            </button>
+                        </div>
+                    </GlassCard>
+                </section>
+
                 {/* Couple Section */}
                 {couple && (
                     <section className="space-y-4">
@@ -178,8 +330,16 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                                     <p className="text-sm font-bold">{partner ? partner.name : "Esperando..."}</p>
                                     <p className="text-xs text-muted-foreground">{partner ? "Vinculado como pareja" : "Comparte tu código"}</p>
                                 </div>
-                                <div className="h-10 w-10 rounded-full bg-pink-500/20 flex items-center justify-center text-xl">
-                                    {partner?.avatar || "💕"}
+                                <div className="h-10 w-10 rounded-full bg-pink-500/20 flex items-center justify-center text-xl overflow-hidden">
+                                    {partner?.avatar && isAvatarUrl(partner.avatar) ? (
+                                        <img
+                                            src={partner.avatar}
+                                            alt={partner.name}
+                                            className="h-full w-full object-cover"
+                                        />
+                                    ) : (
+                                        partner?.avatar || "💕"
+                                    )}
                                 </div>
                             </div>
 
@@ -193,6 +353,27 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                                 </Button>
                             </div>
                         </GlassCard>
+                    </section>
+                )}
+
+                {/* Tools Section */}
+                {couple && (
+                    <section className="space-y-4">
+                        <div className="flex items-center gap-2 px-1">
+                            <PieChart className="h-5 w-5 text-primary" />
+                            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Herramientas</h2>
+                        </div>
+
+                        <div className="space-y-3">
+                            <Link href="/budget" className="flex items-center gap-3 w-full h-14 px-4 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                                <PieChart className="h-5 w-5 text-muted-foreground" />
+                                <span className="font-medium text-sm">Presupuestos</span>
+                            </Link>
+                            <Link href="/tags" className="flex items-center gap-3 w-full h-14 px-4 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                                <Tag className="h-5 w-5 text-muted-foreground" />
+                                <span className="font-medium text-sm">Etiquetas</span>
+                            </Link>
+                        </div>
                     </section>
                 )}
 

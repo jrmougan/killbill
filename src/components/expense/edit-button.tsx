@@ -2,11 +2,13 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Pencil, X, Check, Heart, User } from "lucide-react";
+import { Pencil, X, Check, Heart, User, RefreshCw, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { getAllCategories } from "@/lib/categories";
+
+type RecurringInterval = "weekly" | "monthly" | "yearly";
 
 interface EditExpenseButtonProps {
     expenseId: string;
@@ -16,6 +18,9 @@ interface EditExpenseButtonProps {
         category: string;
         splitWithPartner: boolean;
         partnerName?: string;
+        notes?: string;
+        isRecurring?: boolean;
+        recurringInterval?: RecurringInterval;
     };
 }
 
@@ -28,6 +33,9 @@ export function EditExpenseButton({ expenseId, initialData }: EditExpenseButtonP
     const [amount, setAmount] = useState(initialData.amount.toString());
     const [category, setCategory] = useState(initialData.category);
     const [splitWithPartner, setSplitWithPartner] = useState(initialData.splitWithPartner);
+    const [notes, setNotes] = useState(initialData.notes ?? "");
+    const [isRecurring, setIsRecurring] = useState(initialData.isRecurring ?? false);
+    const [recurringInterval, setRecurringInterval] = useState<RecurringInterval>(initialData.recurringInterval ?? "monthly");
 
     const handleSave = async () => {
         setLoading(true);
@@ -40,6 +48,9 @@ export function EditExpenseButton({ expenseId, initialData }: EditExpenseButtonP
                     amount,
                     category,
                     splitWithPartner,
+                    notes: notes.trim() || null,
+                    isRecurring,
+                    recurringInterval: isRecurring ? recurringInterval : undefined,
                 }),
             });
 
@@ -145,9 +156,74 @@ export function EditExpenseButton({ expenseId, initialData }: EditExpenseButtonP
                                     )}
                                 >
                                     <User className="h-3.5 w-3.5" />
-                                    Favor
+                                    Solo {initialData.partnerName || "pareja"}
                                 </button>
                             </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-primary" />
+                                Notas
+                                <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
+                            </label>
+                            <textarea
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value.slice(0, 500))}
+                                placeholder="Añade una nota opcional..."
+                                rows={2}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary/50 resize-none placeholder:text-muted-foreground/50 transition-colors"
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsRecurring((p) => !p)}
+                                className="w-full flex items-center justify-between text-sm font-medium p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <RefreshCw className="h-4 w-4 text-primary" />
+                                    Recurrente
+                                    {isRecurring && (
+                                        <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold capitalize">
+                                            {{ weekly: "Semanal", monthly: "Mensual", yearly: "Anual" }[recurringInterval]}
+                                        </span>
+                                    )}
+                                </span>
+                                <div className={cn(
+                                    "relative h-5 w-9 rounded-full transition-colors",
+                                    isRecurring ? "bg-primary" : "bg-white/10"
+                                )}>
+                                    <span className={cn(
+                                        "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
+                                        isRecurring && "translate-x-4"
+                                    )} />
+                                </div>
+                            </button>
+
+                            {isRecurring && (
+                                <div className="grid grid-cols-3 gap-2 animate-in fade-in duration-200">
+                                    {(["weekly", "monthly", "yearly"] as RecurringInterval[]).map((interval) => {
+                                        const labels = { weekly: "Semanal", monthly: "Mensual", yearly: "Anual" };
+                                        return (
+                                            <button
+                                                key={interval}
+                                                type="button"
+                                                onClick={() => setRecurringInterval(interval)}
+                                                className={cn(
+                                                    "py-2 rounded-xl border text-center transition-all text-xs font-medium",
+                                                    recurringInterval === interval
+                                                        ? "bg-primary/20 border-primary text-primary"
+                                                        : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10"
+                                                )}
+                                            >
+                                                {labels[interval]}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
 

@@ -4,7 +4,7 @@ import { ExpenseCard } from "@/components/dashboard/expense-card";
 import { InviteCard } from "@/components/dashboard/invite-card";
 import { JoinGroupCard } from "@/components/dashboard/join-group-card";
 import { Expense } from "@/types";
-import { Plus, GripHorizontal, Heart, Settings } from "lucide-react";
+import { Plus, GripHorizontal, Heart, Settings, BarChart2 } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
@@ -195,6 +195,11 @@ export default async function DashboardPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Link href="/analytics">
+                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                            <BarChart2 className="h-5 w-5 text-muted-foreground" />
+                        </Button>
+                    </Link>
                     <Link href="/settings">
                         <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
                             <Settings className="h-5 w-5 text-muted-foreground" />

@@ -13,16 +13,6 @@ export interface Category {
 }
 
 export const CATEGORIES: Record<string, Category> = {
-    food: {
-        id: "food",
-        emoji: "🍕",
-        label: "Comida",
-        labelEn: "food",
-        color: "text-orange-400",
-        bgColor: "bg-orange-400/20",
-        icon: Coffee,
-        scannable: true,
-    },
     shopping: {
         id: "shopping",
         emoji: "🛍️",
@@ -31,6 +21,16 @@ export const CATEGORIES: Record<string, Category> = {
         color: "text-pink-400",
         bgColor: "bg-pink-400/20",
         icon: ShoppingBag,
+        scannable: true,
+    },
+    food: {
+        id: "food",
+        emoji: "🍕",
+        label: "Comida",
+        labelEn: "food",
+        color: "text-orange-400",
+        bgColor: "bg-orange-400/20",
+        icon: Coffee,
         scannable: true,
     },
     rent: {

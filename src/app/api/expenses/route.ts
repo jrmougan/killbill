@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     const userId = session.userId as string;
 
     const body = await request.json();
-    const { description, amount, category, beneficiaryId, receiptUrl, receiptData } = body;
+    const { description, amount, category, beneficiaryId, customSplits, receiptUrl, receiptData, notes, isRecurring, recurringInterval } = body;
 
     const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -50,6 +50,21 @@ export async function POST(request: Request) {
     // Convert euros to cents
     const amountCents = toCents(amount);
 
+    // Calculate nextRecurringDate if recurring
+    let nextRecurringDate: Date | undefined = undefined;
+    if (isRecurring && recurringInterval) {
+        const base = new Date();
+        if (recurringInterval === 'weekly') {
+            nextRecurringDate = new Date(base.getTime() + 7 * 24 * 60 * 60 * 1000);
+        } else if (recurringInterval === 'monthly') {
+            nextRecurringDate = new Date(base);
+            nextRecurringDate.setMonth(nextRecurringDate.getMonth() + 1);
+        } else if (recurringInterval === 'yearly') {
+            nextRecurringDate = new Date(base);
+            nextRecurringDate.setFullYear(nextRecurringDate.getFullYear() + 1);
+        }
+    }
+
     const expenseData: any = {
         description,
         amount: amountCents,
@@ -58,9 +73,20 @@ export async function POST(request: Request) {
         coupleId: user.coupleId,
         receiptUrl: receiptUrl || null,
         receiptData: receiptData || undefined, // Prisma Json handling
+        notes: notes || null,
+        isRecurring: isRecurring ?? false,
+        recurringInterval: recurringInterval || null,
+        nextRecurringDate: nextRecurringDate || null,
     };
 
-    if (beneficiaryId) {
+    if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
+        expenseData.splits = {
+            create: customSplits.map((s: { userId: string; amount: number }) => ({
+                userId: s.userId,
+                amount: s.amount,
+            })),
+        };
+    } else if (beneficiaryId) {
         expenseData.splits = {
             create: [
                 {

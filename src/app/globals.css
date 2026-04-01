@@ -67,6 +67,37 @@
   --radius: 0.75rem;
 }
 
+/* Light mode overrides */
+html.light {
+  --background: 0 0% 97%;
+  --foreground: 240 10% 10%;
+
+  --card: 0 0% 97%;
+  --card-foreground: 240 10% 10%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 10%;
+
+  --primary: 263.4 70% 50.4%;
+  --primary-foreground: 210 40% 98%;
+
+  --secondary: 240 5% 90%;
+  --secondary-foreground: 240 10% 10%;
+
+  --muted: 240 5% 90%;
+  --muted-foreground: 240 5% 45%;
+
+  --accent: 263.4 70% 50.4%;
+  --accent-foreground: 0 0% 98%;
+
+  --destructive: 0 62.8% 45%;
+  --destructive-foreground: 0 0% 98%;
+
+  --border: 240 5% 82%;
+  --input: 240 5% 82%;
+  --ring: 263.4 70% 50.4%;
+}
+
 /* Global styles */
 body {
   background-color: var(--color-background);
@@ -81,4 +112,13 @@ body {
 
 @utility glass-card {
   @apply bg-white/5 backdrop-blur-md border border-white/10 shadow-xl;
+}
+
+html.light .glass {
+  border-color: rgb(0 0 0 / 0.08);
+}
+
+html.light .glass-card {
+  background-color: rgb(0 0 0 / 0.04);
+  border-color: rgb(0 0 0 / 0.08);
 }
