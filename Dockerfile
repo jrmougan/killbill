@@ -27,7 +27,7 @@ ENV DATABASE_URL="mysql://dummy:dummy@localhost:3306/dummy"
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Generamos el cliente de Prisma
-RUN npx prisma generate
+RUN ./node_modules/.bin/prisma generate
 
 # Construimos la app
 RUN npm run build

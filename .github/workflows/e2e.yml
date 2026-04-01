@@ -62,16 +62,16 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: Run database migrations
-        run: npx prisma migrate deploy
+        run: ./node_modules/.bin/prisma migrate deploy
 
       - name: Generate Prisma client
-        run: npx prisma generate
+        run: ./node_modules/.bin/prisma generate
 
       - name: Build app
         run: npm run build
 
       - name: Seed admin user
-        run: npx prisma db seed
+        run: ./node_modules/.bin/prisma db seed
 
       - name: Copy static assets for standalone server
         run: |
