@@ -73,6 +73,11 @@ jobs:
       - name: Seed admin user
         run: npx prisma db seed
 
+      - name: Copy static assets for standalone server
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+
       - name: Run E2E tests
         run: npm run test:e2e
 
