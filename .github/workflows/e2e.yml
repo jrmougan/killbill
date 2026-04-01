@@ -36,6 +36,7 @@ jobs:
       DATABASE_PORT: "3306"
       JWT_SECRET: e2e_test_jwt_secret_not_for_production
       NODE_ENV: test
+      TEST_ROUTES_ENABLED: 'true'
       GEMINI_API_KEY: fake_key_not_needed_for_e2e
 
     steps:

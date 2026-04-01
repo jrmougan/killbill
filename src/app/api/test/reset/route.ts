@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
 export async function POST() {
-  if (process.env.NODE_ENV !== 'test') {
+  if (process.env.TEST_ROUTES_ENABLED !== 'true') {
     return new NextResponse(null, { status: 404 });
   }
 

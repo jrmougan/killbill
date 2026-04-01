@@ -12,7 +12,7 @@ function randomCode() {
 }
 
 export async function POST(request: Request) {
-  if (process.env.NODE_ENV !== 'test') {
+  if (process.env.TEST_ROUTES_ENABLED !== 'true') {
     return new NextResponse(null, { status: 404 });
   }
 
