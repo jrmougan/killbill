@@ -56,13 +56,14 @@ function LoginForm() {
 
             <form onSubmit={handleLogin} className="w-full space-y-4">
                 {error && (
-                    <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
+                    <div data-testid="login-error" className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
                         {error}
                     </div>
                 )}
 
                 <div className="space-y-4">
                     <Input
+                        data-testid="login-email"
                         type="email"
                         placeholder="Email"
                         value={email}
@@ -72,6 +73,7 @@ function LoginForm() {
                         className="text-lg h-12"
                     />
                     <Input
+                        data-testid="login-password"
                         type="password"
                         placeholder="Contraseña"
                         value={password}
@@ -82,6 +84,7 @@ function LoginForm() {
                 </div>
 
                 <Button
+                    data-testid="login-submit"
                     type="submit"
                     size="lg"
                     className="w-full h-12 text-lg shadow-xl shadow-primary/20"

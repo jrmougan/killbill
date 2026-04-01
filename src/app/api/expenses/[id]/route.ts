@@ -86,8 +86,8 @@ export async function PATCH(
             }
         });
 
-        // Recalculate splits if split mode changed OR if receiptItems changed
-        const shouldRecalcSplits = splitWithPartner !== undefined || receiptItems !== undefined;
+        // Recalculate splits if split mode changed, amount changed, or receiptItems changed
+        const shouldRecalcSplits = splitWithPartner !== undefined || amount !== undefined || receiptItems !== undefined;
         if (shouldRecalcSplits && partner) {
             // Determine current split mode
             const currentSplits = await prisma.split.findMany({ where: { expenseId: id } });

@@ -168,6 +168,7 @@ export default function NewExpensePage() {
 
             const res = await fetch("/api/expenses", {
                 method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     amount: parseFloat(amount),
                     description,
@@ -229,6 +230,7 @@ export default function NewExpensePage() {
                     <div className="relative inline-block w-full max-w-[200px]">
                         <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-muted-foreground">€</span>
                         <input
+                            data-testid="expense-amount"
                             type="number"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
@@ -309,6 +311,7 @@ export default function NewExpensePage() {
                     <div className="space-y-2">
                         <label className="text-sm font-medium ml-1">Concepto</label>
                         <Input
+                            data-testid="expense-description"
                             placeholder="Ej: Compra Mercadona"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
@@ -443,6 +446,7 @@ export default function NewExpensePage() {
 
                 <div className="pt-4">
                     <Button
+                        data-testid="expense-submit"
                         type="submit"
                         size="lg"
                         className="w-full text-base h-16 shadow-xl shadow-primary/20 font-bold"

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
 import { ArrowLeft, Check, Calendar, CreditCard, User } from "lucide-react";
 import Link from "next/link";
+import { toEuros } from "@/lib/currency";
 
 interface SettlementDetailPageProps {
     params: { id: string };
@@ -58,7 +59,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                 <div className="text-center space-y-2">
                     <p className="text-xs font-bold uppercase tracking-widest text-blue-400">Total Liquidado</p>
                     <h2 className="text-5xl font-mono font-bold text-white">
-                        {settlement.amount.toFixed(2)}€
+                        {toEuros(settlement.amount).toFixed(2)}€
                     </h2>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-bold border border-blue-500/30">
                         <Check className="h-3 w-3" /> {settlement.status}
@@ -110,12 +111,12 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                         </p>
                     ) : (
                         settlement.expenses.map((expense) => {
-                            let myShare = 0;
+                            let myShareCents = 0;
                             if (expense.splits.length > 0) {
-                                myShare = expense.splits.find(s => s.userId === settlement.fromUserId)?.amount || 0;
+                                myShareCents = expense.splits.find(s => s.userId === settlement.fromUserId)?.amount || 0;
                             } else {
                                 // Assume 50/50 if no splits (legacy or simple)
-                                myShare = expense.amount / 2;
+                                myShareCents = Math.floor(expense.amount / 2);
                             }
 
                             return (
@@ -134,8 +135,8 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-mono font-bold">{myShare.toFixed(2)}€</p>
-                                        <p className="text-[10px] text-muted-foreground italic">de {expense.amount.toFixed(2)}€</p>
+                                        <p className="text-sm font-mono font-bold">{toEuros(myShareCents).toFixed(2)}€</p>
+                                        <p className="text-[10px] text-muted-foreground italic">de {toEuros(expense.amount).toFixed(2)}€</p>
                                     </div>
                                 </GlassCard>
                             );

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { randomBytes } from 'crypto';
 
 export async function GET(request: Request) {
     const session = await getSession();
@@ -31,8 +32,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { name } = body;
 
-    // Generate random code for invite
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    // Generate cryptographically random code for invite
+    const code = randomBytes(3).toString('hex').toUpperCase();
 
     const couple = await prisma.couple.create({
         data: {

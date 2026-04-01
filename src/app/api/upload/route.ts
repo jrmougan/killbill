@@ -16,11 +16,22 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
         }
 
+        const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+        if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+            return NextResponse.json({ error: 'Invalid file type. Only JPEG, PNG, WEBP and HEIC images are allowed.' }, { status: 400 });
+        }
+
+        const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+        if (file.size > MAX_SIZE_BYTES) {
+            return NextResponse.json({ error: 'File too large. Maximum size is 10 MB.' }, { status: 400 });
+        }
+
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
 
-        // Create a unique filename
-        const filename = `${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
+        // Use only the extension from the MIME type to avoid path traversal via file.name
+        const ext = file.type.split('/')[1].replace('jpeg', 'jpg');
+        const filename = `${Date.now()}-${userId}.${ext}`;
         const path = join(process.cwd(), 'public/uploads', filename);
 
         await writeFile(path, buffer);

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { toCents } from '@/lib/currency';
 
 export async function PATCH(
     request: Request,
@@ -33,7 +34,7 @@ export async function PATCH(
             where: { id },
             data: {
                 method: method || settlement.method,
-                amount: body.amount !== undefined ? parseFloat(body.amount) : settlement.amount,
+                amount: body.amount !== undefined ? toCents(parseFloat(body.amount)) : settlement.amount,
                 status: "PENDING" // Reset to pending if edited, requiring confirmation again
             }
         });

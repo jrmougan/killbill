@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/glass-card";
+import { toEuros } from "@/lib/currency";
 
 interface Settlement {
     id: string;
@@ -116,7 +117,7 @@ export function SettlementHistoryClient({ settlements, currentUserId }: Settleme
                                         </div>
                                     </div>
                                     <div className="text-right space-y-1">
-                                        <span className="font-mono font-bold text-xl block leading-none">{s.amount.toFixed(2)}€</span>
+                                        <span className="font-mono font-bold text-xl block leading-none">{toEuros(s.amount).toFixed(2)}€</span>
                                         <span className={cn(
                                             "text-[10px] font-bold px-2 py-0.5 rounded-full inline-block uppercase tracking-wider",
                                             statusInfo.color

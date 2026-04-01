@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { redirect, notFound } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getMyDebts } from "@/lib/finance";
+import { toEuros } from "@/lib/currency";
 import { EditSettleClient } from "./client";
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +36,7 @@ export default async function EditSettlePage({ params }: EditSettlePageProps) {
     return (
         <EditSettleClient
             settlementId={id}
-            initialAmount={settlement.amount}
+            initialAmount={toEuros(settlement.amount)}
             initialMethod={settlement.method as any}
             toUser={{
                 id: settlement.toUserId,

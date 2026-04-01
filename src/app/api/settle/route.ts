@@ -9,7 +9,10 @@ export async function POST(request: Request) {
     const userId = session.userId as string;
 
     const body = await request.json();
-    const { amount, toUserId, method, expenseIds } = body;
+    const { amount, toUserId, method } = body;
+
+    if (!toUserId) return NextResponse.json({ error: 'toUserId is required' }, { status: 400 });
+    if (toUserId === userId) return NextResponse.json({ error: 'Cannot settle with yourself' }, { status: 400 });
 
     const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -19,19 +22,15 @@ export async function POST(request: Request) {
     const coupleId = user.coupleId as string;
 
     await prisma.$transaction(async (tx) => {
-        const settlement = await tx.settlement.create({
+        await tx.settlement.create({
             data: {
                 amount: toCents(amount),
                 fromUserId: userId,
-                toUserId: (toUserId as string) || userId,
+                toUserId: toUserId as string,
                 coupleId: coupleId,
-                method: method || "CASH" // CASH, BIZUM, etc.
+                method: method || "CASH"
             },
         });
-
-
-        // No longer marking expenses as SETTLED.
-        // The balance is calculated dynamically and we just show items since the last settlement.
     });
 
     return NextResponse.json({ success: true });

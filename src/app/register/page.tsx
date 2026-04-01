@@ -61,13 +61,14 @@ function RegisterForm() {
 
             <form onSubmit={handleRegister} className="w-full space-y-4">
                 {error && (
-                    <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
+                    <div data-testid="register-error" className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
                         {error}
                     </div>
                 )}
 
                 <div className="space-y-4">
                     <Input
+                        data-testid="register-invite-code"
                         placeholder="Código de invitación"
                         value={inviteCode}
                         onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
@@ -76,6 +77,7 @@ function RegisterForm() {
                         maxLength={8}
                     />
                     <Input
+                        data-testid="register-name"
                         placeholder="Nombre"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
@@ -83,6 +85,7 @@ function RegisterForm() {
                         className="text-lg h-12"
                     />
                     <Input
+                        data-testid="register-email"
                         type="email"
                         placeholder="Email"
                         value={email}
@@ -91,6 +94,7 @@ function RegisterForm() {
                         className="text-lg h-12"
                     />
                     <Input
+                        data-testid="register-password"
                         type="password"
                         placeholder="Contraseña"
                         value={password}
@@ -101,6 +105,7 @@ function RegisterForm() {
                 </div>
 
                 <Button
+                    data-testid="register-submit"
                     type="submit"
                     size="lg"
                     className="w-full h-12 text-lg shadow-xl shadow-primary/20"

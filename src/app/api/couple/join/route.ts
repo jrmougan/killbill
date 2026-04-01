@@ -10,6 +10,15 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { code } = body;
 
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { coupleId: true }
+    });
+
+    if (user?.coupleId) {
+        return NextResponse.json({ error: 'Ya perteneces a una pareja' }, { status: 400 });
+    }
+
     const couple = await prisma.couple.findUnique({
         where: { code: code.toUpperCase() },
         include: { members: true }

@@ -15,6 +15,7 @@ import { toEuros } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
 import { PendingSettlements } from "@/components/dashboard/pending-settlements";
+import { randomBytes } from "crypto";
 
 export const dynamic = 'force-dynamic';
 
@@ -69,7 +70,7 @@ export default async function DashboardPage() {
                     <div className="grid grid-cols-1 gap-4 px-4">
                         <form action={async () => {
                             'use server';
-                            const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+                            const code = randomBytes(3).toString('hex').toUpperCase();
                             await prisma.couple.create({
                                 data: {
                                     name: "Nuestra Pareja",
@@ -114,11 +115,15 @@ export default async function DashboardPage() {
         where: { coupleId: couple.id },
     });
 
+    // Only confirmed and pending settlements count towards the balance.
+    // Rejected settlements are ignored so they don't incorrectly reduce debt.
+    const effectiveSettlements = settlements.filter(s => s.status !== "REJECTED");
+
     // Calculate Balances using ALL expenses
     const balances = calculateBalances(
         members,
         allExpenses.map(e => ({ paidById: e.paidById, amount: e.amount, splits: e.splits })),
-        settlements,
+        effectiveSettlements,
         userId
     );
 
@@ -141,8 +146,9 @@ export default async function DashboardPage() {
             method: s.method
         }));
 
-    // Calculate last settlement date for filtering
-    const lastSettlementDate = getLastSettlementDate(settlements);
+    // Calculate last settlement date for filtering (only confirmed settlements mark a clean slate)
+    const confirmedSettlements = settlements.filter(s => s.status === "CONFIRMED");
+    const lastSettlementDate = getLastSettlementDate(confirmedSettlements);
 
     // Combined recent items for display (unified view) - convert cents to euros
     const combinedRecent = [
@@ -221,10 +227,13 @@ export default async function DashboardPage() {
                         <div className="w-full">
                             <div className="pt-6 px-6">
                                 <span className="text-xs uppercase font-bold tracking-[0.2em] text-muted-foreground">Tu Balance</span>
-                                <h2 className={cn(
-                                    "text-4xl font-mono font-bold mt-1",
-                                    myBalance > 0 ? "text-emerald-400" : myBalance < 0 ? "text-primary" : "text-white"
-                                )}>
+                                <h2
+                                    data-testid="balance-amount"
+                                    className={cn(
+                                        "text-4xl font-mono font-bold mt-1",
+                                        myBalance > 0 ? "text-emerald-400" : myBalance < 0 ? "text-primary" : "text-white"
+                                    )}
+                                >
                                     {myBalance > 0 ? "+" : ""}{myBalance.toFixed(2)}€
                                 </h2>
                             </div>

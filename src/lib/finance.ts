@@ -84,7 +84,7 @@ export function getMyDebts(
 
     // We want to find specifically what *currentUserId* owes.
     // If currentUserId is not in debtors, they don't owe anything.
-    if (balances[currentUserId] >= 0) return {};
+    if (balances[currentUserId] > -1) return {}; // Less than 1 cent owed = settled
 
     // Standard algo to resolve debts
     let i = 0; // debtor index

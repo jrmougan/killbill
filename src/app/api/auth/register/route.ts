@@ -102,7 +102,10 @@ export async function POST(request: Request) {
         // Clear old insecure cookie if present
         cookieStore.delete('user_id');
 
-        return NextResponse.json({ success: true, user });
+        return NextResponse.json({
+            success: true,
+            user: { id: user.id, name: user.name, email: user.email, avatar: user.avatar, isAdmin: user.isAdmin }
+        });
 
     } catch (error) {
         console.error("Registration Error:", error);

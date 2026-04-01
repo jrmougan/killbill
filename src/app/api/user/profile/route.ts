@@ -20,7 +20,8 @@ export async function PATCH(request: Request) {
             data: {
                 name: name.trim(),
                 avatar: avatar || undefined
-            }
+            },
+            select: { id: true, name: true, email: true, avatar: true, isAdmin: true }
         });
 
         return NextResponse.json({ success: true, user: updatedUser });

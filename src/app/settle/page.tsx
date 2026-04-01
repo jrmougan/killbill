@@ -42,11 +42,15 @@ export default async function SettlePage() {
         where: { coupleId: couple.id },
     });
 
+    // Only confirmed and pending settlements count towards debt calculation.
+    // Rejected settlements are ignored so they don't incorrectly reduce debt.
+    const effectiveSettlements = settlements.filter(s => s.status !== "REJECTED");
+
     // Calculate My Debts (High Level)
     const myDebtsMap = getMyDebts(
         members,
         rawExpenses.map(e => ({ paidById: e.paidById, amount: e.amount, splits: e.splits.map(s => ({ userId: s.userId, amount: s.amount })) })),
-        settlements,
+        effectiveSettlements,
         userId
     );
 
@@ -61,9 +65,10 @@ export default async function SettlePage() {
         };
     });
 
-    // Find local cutoff date
-    // We want expenses NEWER than the last settlement
-    const lastSettlementDate = getLastSettlementDate(settlements);
+    // Find local cutoff date: only confirmed settlements mark a settled checkpoint.
+    // Pending/rejected settlements do not advance the cutoff date.
+    const confirmedSettlements = settlements.filter(s => s.status === "CONFIRMED");
+    const lastSettlementDate = getLastSettlementDate(confirmedSettlements);
 
     // Fetch unsettled expenses where I owe money
     // Logic change: We show expenses since the last settlement, regardless of status (as status is deprecated)
@@ -75,7 +80,7 @@ export default async function SettlePage() {
             if (e.splits.length > 0) {
                 myAmountCents = e.splits.find(s => s.userId === userId)?.amount || 0;
             } else {
-                myAmountCents = Math.round(e.amount / members.length);
+                myAmountCents = Math.floor(e.amount / members.length);
             }
             return {
                 id: e.id,

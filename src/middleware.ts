@@ -6,7 +6,7 @@ export async function middleware(request: NextRequest) {
 
     // Define protected paths
     // /setup should NOT be protected as it handles its own logic
-    const protectedPaths = ['/dashboard', '/admin', '/api/admin']
+    const protectedPaths = ['/dashboard', '/admin', '/api/admin', '/expenses', '/settle', '/settings']
     const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
 
     if (isProtected) {
@@ -30,6 +30,9 @@ export const config = {
     matcher: [
         '/dashboard/:path*',
         '/admin/:path*',
-        '/api/admin/:path*'
+        '/api/admin/:path*',
+        '/expenses/:path*',
+        '/settle/:path*',
+        '/settings/:path*',
     ],
 }

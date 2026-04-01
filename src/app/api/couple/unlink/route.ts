@@ -17,26 +17,28 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No estás en ninguna pareja' }, { status: 400 });
         }
 
-        // Unlink user
-        await prisma.user.update({
-            where: { id: userId },
-            data: { coupleId: null }
-        });
+        const coupleId = user.coupleId;
 
-        // Optional: If the couple is now empty, delete it?
-        // Let's check how many members are left
-        const remainingMembers = await prisma.user.count({
-            where: { coupleId: user.coupleId }
-        });
+        await prisma.$transaction(async (tx) => {
+            // Unlink user inside transaction
+            await tx.user.update({
+                where: { id: userId },
+                data: { coupleId: null }
+            });
 
-        if (remainingMembers === 0) {
-            // Delete expenses, settlements, and couple to avoid trash
-            // Order is important due to relations
-            await prisma.split.deleteMany({ where: { expense: { coupleId: user.coupleId } } });
-            await prisma.expense.deleteMany({ where: { coupleId: user.coupleId } });
-            await prisma.settlement.deleteMany({ where: { coupleId: user.coupleId } });
-            await prisma.couple.delete({ where: { id: user.coupleId } });
-        }
+            // Count remaining members within the same transaction to avoid race condition
+            const remainingMembers = await tx.user.count({
+                where: { coupleId }
+            });
+
+            if (remainingMembers === 0) {
+                // Delete in dependency order before removing the couple
+                await tx.split.deleteMany({ where: { expense: { coupleId } } });
+                await tx.expense.deleteMany({ where: { coupleId } });
+                await tx.settlement.deleteMany({ where: { coupleId } });
+                await tx.couple.delete({ where: { id: coupleId } });
+            }
+        });
 
         return NextResponse.json({ success: true });
     } catch (error) {
