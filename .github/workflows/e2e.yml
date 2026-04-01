@@ -69,6 +69,9 @@ jobs:
       - name: Build app
         run: npm run build
 
+      - name: Seed admin user
+        run: npx prisma db seed
+
       - name: Run E2E tests
         run: npm run test:e2e
 
