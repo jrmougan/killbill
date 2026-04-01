@@ -40,6 +40,9 @@ jobs:
             type=raw,value=latest
             type=sha,prefix=
 
+      - name: Generate Prisma client
+        run: npx prisma generate
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
