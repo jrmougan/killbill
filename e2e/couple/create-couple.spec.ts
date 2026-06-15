@@ -39,10 +39,11 @@ test.describe('Couple - Create', () => {
     // After creating couple, should redirect back to dashboard with couple view
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
 
-    // The onboarding button should no longer be visible
-    // Instead, we should see couple-related content (e.g. balance or partner info)
-    await page.waitForTimeout(500);
+    // The onboarding button should no longer be visible.
+    // The post-creation re-render (server roundtrip to create the couple, then a
+    // dashboard re-render) can be slow under CI load, so wait it out with a generous
+    // timeout instead of a fixed sleep + short window, which flaked intermittently.
     const onboardingBtn = page.getByRole('button', { name: /Crear Pareja/i });
-    await expect(onboardingBtn).not.toBeVisible({ timeout: 5000 });
+    await expect(onboardingBtn).not.toBeVisible({ timeout: 15000 });
   });
 });
