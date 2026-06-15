@@ -24,6 +24,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Name, email, and password required' }, { status: 400 });
         }
 
+        if (typeof password !== 'string' || password.length < 8) {
+            return NextResponse.json({ error: 'La contraseña debe tener al menos 8 caracteres' }, { status: 400 });
+        }
+
         // Require invite code for registration
         if (!inviteCode) {
             return NextResponse.json({ error: 'Se requiere código de invitación' }, { status: 400 });

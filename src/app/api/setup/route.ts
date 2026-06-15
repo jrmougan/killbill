@@ -25,6 +25,13 @@ export async function POST(request: Request) {
             );
         }
 
+        if (typeof password !== "string" || password.length < 8) {
+            return NextResponse.json(
+                { error: "La contraseña debe tener al menos 8 caracteres" },
+                { status: 400 }
+            );
+        }
+
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 

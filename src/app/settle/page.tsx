@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { getMyDebts, getLastSettlementDate } from "@/lib/finance";
+import { calculateSplitAmounts } from "@/lib/splits";
 import { toEuros } from "@/lib/currency";
 import { SettleClient } from "./client";
 import { getSession } from "@/lib/auth";
@@ -79,7 +80,11 @@ export default async function SettlePage() {
             if (e.splits.length > 0) {
                 myAmountCents = e.splits.find(s => s.userId === userId)?.amount || 0;
             } else {
-                myAmountCents = Math.floor(e.amount / members.length);
+                // No Split rows: derive my share using the canonical remainder
+                // allocation (leftover cent goes to the first member) so the
+                // displayed share matches calculateBalances on odd-cent expenses.
+                const computedSplits = calculateSplitAmounts(e.amount, null, members);
+                myAmountCents = computedSplits.find(s => s.userId === userId)?.amount || 0;
             }
             return {
                 id: e.id,

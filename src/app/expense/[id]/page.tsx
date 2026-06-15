@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Heart, Calculator, User, Pencil } from "lucide-react";
+import { ArrowLeft, Heart, Calculator, User, Pencil, Tag } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
@@ -27,6 +27,11 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
             couple: {
                 include: {
                     members: true
+                }
+            },
+            tags: {
+                include: {
+                    tag: true
                 }
             }
         }
@@ -117,6 +122,30 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         )}
                     </div>
                 </div>
+
+                {expense.tags.length > 0 && (
+                    <div className="space-y-4">
+                        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1 flex items-center gap-2">
+                            <Tag className="h-4 w-4 text-primary" />
+                            Etiquetas
+                        </h3>
+                        <div className="flex flex-wrap gap-2">
+                            {expense.tags.map(({ tag }) => (
+                                <span
+                                    key={tag.id}
+                                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border"
+                                    style={{
+                                        backgroundColor: `${tag.color}20`,
+                                        borderColor: `${tag.color}66`,
+                                        color: tag.color,
+                                    }}
+                                >
+                                    {tag.name}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {expense.receiptData && (expense.receiptData as unknown as ReceiptItem[]).length > 0 && (
                     <div className="space-y-4">

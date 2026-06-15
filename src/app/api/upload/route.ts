@@ -15,6 +15,24 @@ const ALLOWED_TYPES: Record<string, string> = {
 
 const MAX_SIZE_BYTES = 8 * 1024 * 1024; // 8 MB
 
+// Validate the actual file bytes (magic numbers) rather than trusting the
+// client-supplied MIME type / extension. Accepts JPEG, PNG, WEBP and GIF.
+function isAllowedImage(buffer: Buffer): boolean {
+    if (buffer.length < 12) return false;
+    // JPEG: FF D8 FF
+    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return true;
+    // PNG: 89 50 4E 47
+    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return true;
+    // GIF: 47 49 46 38 ("GIF8")
+    if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38) return true;
+    // WEBP: "RIFF" .... "WEBP"
+    if (
+        buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+        buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+    ) return true;
+    return false;
+}
+
 export async function POST(request: Request) {
     const session = await getSession();
     if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -38,6 +56,11 @@ export async function POST(request: Request) {
 
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
+
+        // Validate the actual bytes, not just the client-supplied MIME/extension.
+        if (!isAllowedImage(buffer)) {
+            return NextResponse.json({ error: 'Invalid image file' }, { status: 400 });
+        }
 
         // Unpredictable filename with a whitelisted extension. It does NOT embed
         // the user id, so the public URL leaks no information about the uploader.
