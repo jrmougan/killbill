@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { toCents } from '@/lib/currency';
+import { CATEGORIES } from '@/lib/categories';
+
+const VALID_CATEGORIES = Object.keys(CATEGORIES);
 
 export async function GET() {
     const session = await getSession();
@@ -61,6 +64,10 @@ export async function POST(request: Request) {
 
         if (!category || amount === undefined) {
             return NextResponse.json({ error: 'category and amount are required' }, { status: 400 });
+        }
+
+        if (!VALID_CATEGORIES.includes(category)) {
+            return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
         }
 
         // Parse month (YYYY-MM) or default to current month

@@ -183,9 +183,9 @@ model ExpenseTag {
 }
 
 model Budget {
-  id       String   @id @default(cuid())
-  category String
-  amount   Int      // limite en centavos
+  id       String          @id @default(cuid())
+  category ExpenseCategory
+  amount   Int             // limite en centavos
   month    DateTime // primer dia del mes al que aplica
   coupleId String
   couple   Couple   @relation(fields: [coupleId], references: [id], onDelete: Cascade)
