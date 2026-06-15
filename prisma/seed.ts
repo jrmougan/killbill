@@ -34,18 +34,33 @@ async function main() {
     console.log('🌱 Seeding database...');
 
     // Hash password
-    const hashedPassword = await bcrypt.hash('password123', 10);
-    const hashedPin = await bcrypt.hash('1234', 10);
+    // Admin credentials are overridable via env so non-local environments don't
+    // ship the well-known dev defaults. Defaults are kept for local DX.
+    const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@killbill.app';
+    const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'password123';
+    const adminPin = process.env.SEED_ADMIN_PIN ?? '1234';
+    const usingDefaultPassword = !process.env.SEED_ADMIN_PASSWORD;
+
+    if (usingDefaultPassword) {
+        console.warn(
+            '⚠️  Seeding admin with the DEFAULT dev password. Set SEED_ADMIN_PASSWORD ' +
+            '(and optionally SEED_ADMIN_EMAIL / SEED_ADMIN_PIN) before seeding any ' +
+            'shared or production environment.'
+        );
+    }
+
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+    const hashedPin = await bcrypt.hash(adminPin, 10);
 
     // Create admin user
     const admin = await prisma.user.upsert({
-        where: { email: 'admin@killbill.app' },
+        where: { email: adminEmail },
         update: {
             isAdmin: true,
         },
         create: {
             name: 'Admin',
-            email: 'admin@killbill.app',
+            email: adminEmail,
             password: hashedPassword,
             pin: hashedPin,
             avatar: '👑',
@@ -57,8 +72,12 @@ async function main() {
 
     console.log('\n📊 Seed Summary:');
     console.log(`   - Admin: ${admin.email}`);
-    console.log('\n🔐 Credentials:');
-    console.log('   Admin: admin@killbill.app / password123');
+    if (usingDefaultPassword) {
+        // Only echo the password when it's the public dev default; never print a
+        // custom/secret one to logs.
+        console.log('\n🔐 Credentials (dev default):');
+        console.log(`   Admin: ${adminEmail} / password123`);
+    }
 }
 
 main()
