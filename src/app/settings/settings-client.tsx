@@ -19,6 +19,7 @@ import {
     Palette,
     PieChart,
     Tag,
+    Download,
 } from "lucide-react";
 import Link from "next/link";
 import { LogoutButton } from "@/components/auth/logout-button";
@@ -269,6 +270,10 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                                 <Tag className="h-5 w-5 text-muted-foreground" />
                                 <span className="font-medium text-sm">Etiquetas</span>
                             </Link>
+                            <a href="/api/export" download className="flex items-center gap-3 w-full h-14 px-4 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                                <Download className="h-5 w-5 text-muted-foreground" />
+                                <span className="font-medium text-sm">Exportar gastos (CSV)</span>
+                            </a>
                         </div>
                     </section>
                 )}

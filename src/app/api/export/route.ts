@@ -3,16 +3,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { toEuros } from '@/lib/currency';
 import { Prisma } from '@/generated/prisma/client';
-
-function escapeCsvField(value: string | null | undefined): string {
-    if (value === null || value === undefined) return '';
-    const str = String(value);
-    // Wrap in quotes if the field contains commas, quotes, or newlines
-    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
-}
+import { escapeCsvField } from '@/lib/csv';
 
 export async function GET(request: Request) {
     const session = await getSession();
