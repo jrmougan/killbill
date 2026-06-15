@@ -1,8 +1,9 @@
 name: Unit Tests & Lint
 
 on:
-  push:
-    branches: [main]
+  # Runs on PRs (gate) and is called by deploy.yml on push to main (workflow_call).
+  # No standalone push trigger: on main the deploy pipeline runs it via needs:[test]
+  # so it isn't executed twice per push.
   pull_request:
     branches: [main]
   workflow_call: # Allows deploy.yml to gate on this workflow
