@@ -16,8 +16,9 @@ npm start            # Run production server
 npm run lint         # ESLint with Next.js + TypeScript rules
 
 # Testing
-npm test             # Run all Vitest tests
+npm test             # Run all Vitest tests (watch mode — use `npx vitest run` for one pass)
 npx vitest run src/lib/finance.test.ts   # Run a single test file
+npm run test:e2e     # Run Playwright end-to-end tests (e2e/)
 
 # Database
 npx prisma migrate dev    # Run migrations + regenerate client
@@ -44,7 +45,7 @@ Kill Bill is a couples/group expense-splitting app. Full-stack Next.js with App 
 - `src/app/` — Pages and API routes (App Router)
 - `src/components/` — React components grouped by feature (`dashboard/`, `expense/`, `expenses/`, `ui/`)
 - `src/lib/` — Core logic: `finance.ts` (balance/settlement math), `splits.ts` (split distributions), `ocr_parser.ts` (Gemini Vision OCR), `auth.ts` (session/cookie management), `jwt.ts` (sign/verify), `db.ts` (Prisma singleton)
-- `src/middleware.ts` — Edge middleware protecting `/dashboard`, `/admin`, and `/api/admin` routes
+- `src/proxy.ts` — Edge middleware protecting `/dashboard`, `/admin`, and `/api/admin` routes (Next.js 16 renamed `middleware.ts` → `proxy.ts`)
 - `prisma/` — Schema, migrations, seed script, and fix scripts
 - `src/generated/prisma/` — Generated Prisma client (do not edit manually)
 
@@ -52,7 +53,7 @@ Kill Bill is a couples/group expense-splitting app. Full-stack Next.js with App 
 
 All monetary amounts are stored in **cents** (integers). Convert to euros only for display using `src/lib/currency.ts`.
 
-Six Prisma models: `Couple` → `User[]`, `Expense[]`, `Settlement[]`. An `Expense` has `Split[]` records (one per user). `InviteCode` controls registration.
+Nine Prisma models: `Couple` → `User[]`, `Expense[]`, `Settlement[]`. An `Expense` has `Split[]` records (one per user) and links to `Tag[]` through `ExpenseTag`. `InviteCode` controls registration, and `Budget` tracks per-category spending limits. `Expense.category`/`recurringInterval` and `Settlement.status`/`method` are Prisma enums (not free-form strings).
 
 ### Auth flow
 
@@ -70,8 +71,8 @@ Receipt image uploaded → stored via `/api/upload` → path sent to `/api/ocr` 
 
 ### Deployment
 
-GitHub Actions (`.github/workflows/deploy.yml`) builds a Docker image on push to `main` → pushes to GHCR → SSH into VPS → pulls image → runs `prisma migrate deploy` → restarts container via Docker Compose + Traefik.
+GitHub Actions (`.github/workflows/deploy.yml`) on push to `main`: runs the e2e + unit/lint gates, builds a Docker image, pushes it to GHCR (`ghcr.io/jrmougan/killbill`), then triggers a **Coolify** webhook that pulls the new image and redeploys (Coolify runs `prisma migrate deploy` on release). The container runs behind **Traefik** (host `finanzas.mougan.es`) and joins two external Docker networks: `mysql_network` (shared MariaDB) and `traefik`. The production environment must set `JWT_SECRET` and `GEMINI_API_KEY` (auth fails loudly without `JWT_SECRET`).
 
 ## Testing
 
-Tests live alongside the code in `src/lib/` (`.test.ts` files). Tests use Vitest with jsdom. The `finance.ts` and `splits.ts` files are the most critical to keep tested — they contain the core financial math.
+Unit tests live alongside the code in `src/lib/` (`.test.ts` files), using Vitest with jsdom. The `finance.ts` and `splits.ts` files are the most critical to keep tested — they contain the core financial math. End-to-end tests live in `e2e/` (Playwright) and run in CI against a MariaDB service; both unit tests and lint are blocking gates for the deploy. Test-only API routes (`/api/test/*`) and the login rate limiter are gated on `TEST_ROUTES_ENABLED=true`.
