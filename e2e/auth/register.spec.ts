@@ -3,7 +3,6 @@ import { seedScenario, resetDb } from '../fixtures/db.fixture';
 
 test.describe('Auth - Register', () => {
   let inviteCode: string;
-  let _adminEmail: string;
   let apiContext: Awaited<ReturnType<typeof playwrightRequest.newContext>>;
 
   test.beforeAll(async ({ playwright }) => {
@@ -12,7 +11,6 @@ test.describe('Auth - Register', () => {
     });
     const data = await seedScenario(apiContext, 'admin-with-invite');
     inviteCode = data.inviteCode;
-    adminEmail = data.admin.email;
   });
 
   test.afterAll(async () => {

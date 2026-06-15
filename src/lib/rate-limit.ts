@@ -24,6 +24,15 @@ export type RateLimitResult = {
  * @param windowMs Window length in milliseconds.
  */
 export function rateLimit(key: string, limit: number, windowMs: number): RateLimitResult {
+    // Never rate-limit when test routes are enabled: the e2e suite performs many
+    // logins from the same (proxy-less) client, which would otherwise all share
+    // one bucket and trip the limit. Rate limiting is a production protection.
+    // TEST_ROUTES_ENABLED is the same reliable signal the test-only API routes
+    // use (NODE_ENV is forced by Next at build/dev and is not trustworthy here).
+    if (process.env.TEST_ROUTES_ENABLED === 'true') {
+        return { allowed: true, retryAfterSeconds: 0 };
+    }
+
     const now = Date.now();
     const entry = store.get(key);
 
