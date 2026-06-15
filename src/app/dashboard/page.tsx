@@ -10,6 +10,7 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { calculateBalances, getLastSettlementDate } from "@/lib/finance";
+import { materializeDueRecurringExpenses } from "@/lib/recurring";
 import { toEuros, formatEuros } from "@/lib/currency";
 import { getCategoryById } from "@/lib/categories";
 import { getSettlementStatusLabel, getSettlementMethodLabel } from "@/lib/settlement-labels";
@@ -105,6 +106,14 @@ export default async function DashboardPage() {
     const members = couple.members;
     const partner = members.find(m => m.id !== userId);
     const usersMap = members.reduce<Record<string, User>>((acc, u) => ({ ...acc, [u.id]: u }), {});
+
+    // Lazily materialize any due recurring expenses so they show up automatically.
+    // A failure here must never block the dashboard render.
+    try {
+        await materializeDueRecurringExpenses(couple.id);
+    } catch (err) {
+        console.error("Failed to materialize recurring expenses", err);
+    }
 
     // Fetch ALL Expenses for balance calculation
     const allExpenses = await prisma.expense.findMany({
