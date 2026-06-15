@@ -101,17 +101,24 @@ export async function POST(request: Request) {
             }
         }
 
+        // Normalize free-form input to the DB enum vocabularies so an out-of-vocabulary
+        // value (e.g. a category guessed by OCR/Gemini) cannot trigger a DB enum error.
+        const VALID_CATEGORIES = ['shopping', 'food', 'rent', 'utilities', 'transport', 'entertainment', 'health', 'other'];
+        const VALID_INTERVALS = ['weekly', 'monthly', 'yearly'];
+        const normalizedCategory = VALID_CATEGORIES.includes(category) ? category : 'other';
+        const normalizedInterval = VALID_INTERVALS.includes(recurringInterval) ? recurringInterval : null;
+
         const expenseData: any = {
             description,
             amount: amountCents,
-            category,
+            category: normalizedCategory,
             paidById: userId,
             coupleId: user.coupleId,
             receiptUrl: receiptUrl || null,
             receiptData: receiptData || undefined, // Prisma Json handling
             notes: notes || null,
             isRecurring: isRecurring ?? false,
-            recurringInterval: recurringInterval || null,
+            recurringInterval: normalizedInterval,
             nextRecurringDate: nextRecurringDate || null,
         };
 

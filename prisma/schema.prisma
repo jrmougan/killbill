@@ -7,6 +7,35 @@ datasource db {
   provider = "mysql"
 }
 
+enum ExpenseCategory {
+  shopping
+  food
+  rent
+  utilities
+  transport
+  entertainment
+  health
+  other
+}
+
+enum RecurringInterval {
+  weekly
+  monthly
+  yearly
+}
+
+enum SettlementStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+enum SettlementMethod {
+  CASH
+  BIZUM
+  TRANSFER
+}
+
 model Couple {
   id        String    @id @default(cuid())
   name      String?
@@ -65,14 +94,14 @@ model Expense {
   description String
   amount      Int
   date        DateTime @default(now())
-  category    String   @default("other")
+  category    ExpenseCategory @default(other)
 
   receiptUrl  String?
   receiptData Json?
 
   notes               String?
   isRecurring         Boolean   @default(false)
-  recurringInterval   String?   // "monthly" | "weekly" | "yearly"
+  recurringInterval   RecurringInterval?
   nextRecurringDate   DateTime?
 
   paidById String
@@ -122,8 +151,8 @@ model Settlement {
   couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
 
   amount Int // Total amount in CENTS
-  status String @default("PENDING") // PENDING, CONFIRMED, REJECTED
-  method String @default("CASH") // CASH, BIZUM, TRANSFER, etc.
+  status SettlementStatus @default(PENDING)
+  method SettlementMethod @default(CASH)
 
   expenses Expense[]
 
