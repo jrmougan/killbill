@@ -36,8 +36,14 @@ export default function SetupPage() {
 
     const handleSetup = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
         setError("");
+
+        if (password.length < 8) {
+            setError("La contraseña debe tener al menos 8 caracteres");
+            return;
+        }
+
+        setLoading(true);
 
         try {
             const res = await fetch("/api/setup", {
@@ -128,6 +134,7 @@ export default function SetupPage() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
+                        autoComplete="email"
                         className="text-lg h-12"
                     />
                     <Input
@@ -136,6 +143,7 @@ export default function SetupPage() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
+                        autoComplete="new-password"
                         className="text-lg h-12"
                     />
                 </div>

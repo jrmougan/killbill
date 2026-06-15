@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { ReceiptItem } from "@/types";
 import { DeleteExpenseButton } from "@/components/expense/delete-button";
 import { getSession } from "@/lib/auth";
-import { toEuros } from "@/lib/currency";
+import { formatCurrency, formatEuros } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -47,7 +47,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                 </Link>
                 <div className="flex-1 min-w-0">
                     <h1 className="text-xl font-bold truncate">{expense.description}</h1>
-                    <p className="text-xs text-muted-foreground">{new Date(expense.date).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(expense.date).toLocaleDateString("es-ES")}</p>
                 </div>
                 <Link href={`/expense/${expense.id}/edit`}>
                     <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-white">
@@ -62,7 +62,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                 <div className="text-center py-6 bg-white/5 rounded-3xl border border-white/10">
                     <p className="text-sm text-muted-foreground uppercase tracking-widest font-bold mb-2">Importe Total</p>
                     <h2 className="text-4xl sm:text-5xl md:text-6xl font-mono font-bold tracking-tighter">
-                        {toEuros(expense.amount).toFixed(2)}<span className="text-3xl ml-1 text-muted-foreground">€</span>
+                        {formatCurrency(expense.amount)}
                     </h2>
                     <div className="mt-4 flex items-center justify-center gap-2">
                         <div className="h-6 w-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
@@ -103,13 +103,13 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                             <div>
                                                 <p className="font-medium text-xs sm:text-sm">{split.userId === userId ? "Ti" : split.user.name}</p>
                                                 {split.userId === expense.paidById && (
-                                                    <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-tighter">Aportación</p>
+                                                    <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-tighter">Pagó</p>
                                                 )}
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-mono font-bold">{toEuros(split.amount).toFixed(2)}€</p>
-                                            <p className="text-[10px] text-muted-foreground uppercase">Cargo</p>
+                                            <p className="font-mono font-bold">{formatCurrency(split.amount)}</p>
+                                            <p className="text-[10px] text-muted-foreground uppercase">{split.userId === expense.paidById ? "Su parte" : "Cargo"}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -137,12 +137,12 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                             {item.quantity > 1 && (
                                                 <div className="flex flex-col">
                                                     <span>{item.quantity} x</span>
-                                                    <span>{item.price.toFixed(2)}€</span>
+                                                    <span>{formatEuros(item.price)}</span>
                                                 </div>
                                             )}
                                         </div>
                                         <div className="font-mono font-bold text-right w-fit min-w-[3.5rem] sm:w-16 flex-shrink-0 ml-1">
-                                            {item.total.toFixed(2)}€
+                                            {formatEuros(item.total)}
                                         </div>
                                     </div>
                                 ))}
@@ -152,18 +152,18 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                 <div className="bg-white/5 p-3 space-y-2 border-t border-white/5">
                                     <div className="flex justify-between text-xs text-muted-foreground">
                                         <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> Común (50/50)</span>
-                                        <span>{(expense.receiptData as unknown as ReceiptItem[]).filter(i => !i.assignedTo).reduce((acc, i) => acc + i.total, 0).toFixed(2)}€</span>
+                                        <span>{formatEuros((expense.receiptData as unknown as ReceiptItem[]).filter(i => !i.assignedTo).reduce((acc, i) => acc + i.total, 0))}</span>
                                     </div>
                                     <div className="flex justify-between text-xs text-pink-400">
                                         <span className="flex items-center gap-1"><User className="h-3 w-3" /> Solo {partner?.name}</span>
-                                        <span>{(expense.receiptData as unknown as ReceiptItem[]).filter(i => i.assignedTo).reduce((acc, i) => acc + i.total, 0).toFixed(2)}€</span>
+                                        <span>{formatEuros((expense.receiptData as unknown as ReceiptItem[]).filter(i => i.assignedTo).reduce((acc, i) => acc + i.total, 0))}</span>
                                     </div>
                                 </div>
                             )}
                             <div className="bg-white/5 p-3 flex justify-between items-center border-t border-white/5">
                                 <span className="font-bold text-sm text-muted-foreground">Total Detallado</span>
                                 <span className="font-mono font-bold">
-                                    {(expense.receiptData as unknown as ReceiptItem[]).reduce((acc, i) => acc + i.total, 0).toFixed(2)}€
+                                    {formatEuros((expense.receiptData as unknown as ReceiptItem[]).reduce((acc, i) => acc + i.total, 0))}
                                 </span>
                             </div>
                         </div>

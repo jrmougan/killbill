@@ -59,7 +59,7 @@ export default async function ExpensesListPage() {
         ...rawSettlements.map(s => ({
             id: s.id,
             type: "SETTLEMENT" as const,
-            description: `Liquidación de deuda`,
+            description: "Liquidación de deuda",
             amount: toEuros(s.amount),
             date: s.date.toISOString(),
             category: "settlement",

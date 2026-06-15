@@ -30,3 +30,15 @@ export function formatCurrency(cents: number, locale: string = 'es-ES'): string 
         currency: 'EUR',
     }).format(toEuros(cents));
 }
+
+/**
+ * Formats an amount that is already in euros as a localized EUR currency string.
+ * Use for values that have already been converted out of cents (e.g. chart data).
+ * Example: 10.5 → "10,50 €"
+ */
+export function formatEuros(euros: number, locale: string = 'es-ES'): string {
+    return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: 'EUR',
+    }).format(euros);
+}

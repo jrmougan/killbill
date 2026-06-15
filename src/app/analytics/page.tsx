@@ -102,7 +102,7 @@ export default async function AnalyticsPage() {
         .sort((a, b) => b.amount - a.amount);
 
     // 3. Balance evolution — one point per expense/settlement, sorted by date
-    const effectiveSettlements = allSettlements.filter(s => s.status !== "REJECTED");
+    const effectiveSettlements = allSettlements.filter(s => s.status === "CONFIRMED");
 
     const eventDates = [
         ...allExpenses.map(e => new Date(e.date)),

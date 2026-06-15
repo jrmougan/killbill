@@ -10,7 +10,9 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { calculateBalances, getLastSettlementDate } from "@/lib/finance";
-import { toEuros } from "@/lib/currency";
+import { toEuros, formatEuros } from "@/lib/currency";
+import { getCategoryById } from "@/lib/categories";
+import { getSettlementStatusLabel, getSettlementMethodLabel } from "@/lib/settlement-labels";
 import { cn } from "@/lib/utils";
 import { isAvatarUrl } from "@/lib/avatar";
 import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
@@ -115,9 +117,9 @@ export default async function DashboardPage() {
         where: { coupleId: couple.id },
     });
 
-    // Only confirmed and pending settlements count towards the balance.
-    // Rejected settlements are ignored so they don't incorrectly reduce debt.
-    const effectiveSettlements = settlements.filter(s => s.status !== "REJECTED");
+    // Only confirmed settlements count towards the balance.
+    // Pending settlements must not reduce debt before the receiver confirms.
+    const effectiveSettlements = settlements.filter(s => s.status === "CONFIRMED");
 
     // Calculate Balances using ALL expenses
     const balances = calculateBalances(
@@ -222,8 +224,8 @@ export default async function DashboardPage() {
                 <GlassCard className={cn(
                     "p-0 flex flex-col items-center justify-center text-center overflow-hidden border-b-4",
                     !partner ? "border-pink-500/50 bg-pink-500/5" :
-                        myBalance > 0 ? "border-emerald-500 bg-emerald-500/5 shadow-[inset_0_0_50px_rgba(16,185,129,0.1)]" :
-                            myBalance < 0 ? "border-primary bg-primary/5 shadow-[inset_0_0_50px_rgba(236,72,153,0.1)]" : "border-white/10 bg-white/5"
+                        myBalanceCents > 0 ? "border-emerald-500 bg-emerald-500/5 shadow-[inset_0_0_50px_rgba(16,185,129,0.1)]" :
+                            myBalanceCents < 0 ? "border-primary bg-primary/5 shadow-[inset_0_0_50px_rgba(236,72,153,0.1)]" : "border-white/10 bg-white/5"
                 )}>
                     {!partner ? (
                         <div className="p-6">
@@ -241,10 +243,10 @@ export default async function DashboardPage() {
                                     data-testid="balance-amount"
                                     className={cn(
                                         "text-4xl font-mono font-bold mt-1",
-                                        myBalance > 0 ? "text-emerald-400" : myBalance < 0 ? "text-primary" : "text-white"
+                                        myBalanceCents > 0 ? "text-emerald-400" : myBalanceCents < 0 ? "text-primary" : "text-white"
                                     )}
                                 >
-                                    {myBalance > 0 ? "+" : ""}{myBalance.toFixed(2)}€
+                                    {myBalanceCents > 0 ? "+" : ""}{formatEuros(myBalance)}
                                 </h2>
                             </div>
 
@@ -257,8 +259,8 @@ export default async function DashboardPage() {
 
                             <div className="pb-6 px-6">
                                 <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                                    {myBalance > 0 ? `Te deben ${myBalance.toFixed(2)}€` :
-                                        myBalance < 0 ? `Debes ${Math.abs(myBalance).toFixed(2)}€` : "En equilibrio"}
+                                    {myBalanceCents > 0 ? `Te deben ${formatEuros(myBalance)}` :
+                                        myBalanceCents < 0 ? `Debes ${formatEuros(Math.abs(myBalance))}` : "En equilibrio"}
                                 </p>
                             </div>
                         </div>
@@ -303,11 +305,6 @@ export default async function DashboardPage() {
                     }, {});
                     const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];
 
-                    const categoryEmojis: Record<string, string> = {
-                        food: "🍕", transport: "🚗", entertainment: "🎬", shopping: "🛍️",
-                        bills: "📄", health: "💊", travel: "✈️", other: "📦"
-                    };
-
                     const percentChange = totalLastMonth > 0
                         ? ((totalThisMonth - totalLastMonth) / totalLastMonth * 100).toFixed(0)
                         : null;
@@ -318,12 +315,12 @@ export default async function DashboardPage() {
                                 <GlassCard className="p-4 text-center">
                                     <span className="text-2xl mb-1 block">💰</span>
                                     <p className="text-xs text-muted-foreground uppercase tracking-wider">Este mes</p>
-                                    <p className="text-lg font-bold font-mono">{totalThisMonth.toFixed(2)}€</p>
+                                    <p className="text-lg font-bold font-mono">{formatEuros(totalThisMonth)}</p>
                                 </GlassCard>
                                 <GlassCard className="p-4 text-center">
-                                    <span className="text-2xl mb-1 block">{topCategory ? categoryEmojis[topCategory[0]] || "📊" : "📊"}</span>
+                                    <span className="text-2xl mb-1 block">{topCategory ? getCategoryById(topCategory[0]).emoji : "📊"}</span>
                                     <p className="text-xs text-muted-foreground uppercase tracking-wider">Top</p>
-                                    <p className="text-lg font-bold capitalize">{topCategory ? topCategory[0] : "-"}</p>
+                                    <p className="text-lg font-bold">{topCategory ? getCategoryById(topCategory[0]).label : "-"}</p>
                                 </GlassCard>
                                 <GlassCard className="p-4 text-center">
                                     <span className="text-2xl mb-1 block">{percentChange && Number(percentChange) > 0 ? "📈" : "📉"}</span>
@@ -354,7 +351,7 @@ export default async function DashboardPage() {
                                                         key={cat}
                                                         className={cn("h-full", colors[idx % colors.length])}
                                                         style={{ width: `${percentage}%` }}
-                                                        title={`${cat}: ${amount}€`}
+                                                        title={`${getCategoryById(cat).label}: ${formatEuros(amount)}`}
                                                     />
                                                 );
                                             })}
@@ -372,7 +369,7 @@ export default async function DashboardPage() {
                                                     <div key={cat} className="flex items-center gap-1.5">
                                                         <div className={cn("h-2 w-2 rounded-full", colors[idx % colors.length])} />
                                                         <span className="text-[10px] uppercase font-bold text-muted-foreground">
-                                                            {cat} ({((amount / totalThisMonth) * 100).toFixed(0)}%)
+                                                            {getCategoryById(cat).label} ({((amount / totalThisMonth) * 100).toFixed(0)}%)
                                                         </span>
                                                     </div>
                                                 );
@@ -452,16 +449,16 @@ export default async function DashboardPage() {
                                                         {fromUser?.name} → {toUser?.name}
                                                     </p>
                                                     <p className="text-[10px] text-muted-foreground mt-1">
-                                                        {new Date(item.date).toLocaleDateString()} • {item.method}
+                                                        {new Date(item.date).toLocaleDateString("es-ES")} • {getSettlementMethodLabel(item.method)}
                                                     </p>
                                                 </div>
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-lg font-mono font-bold text-blue-400">
-                                                    {item.amount.toFixed(2)}€
+                                                    {formatEuros(item.amount)}
                                                 </p>
                                                 <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">
-                                                    {item.status}
+                                                    {getSettlementStatusLabel(item.status)}
                                                 </span>
                                             </div>
                                         </GlassCard>

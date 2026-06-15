@@ -20,8 +20,14 @@ function RegisterForm() {
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
         setError("");
+
+        if (password.length < 8) {
+            setError("La contraseña debe tener al menos 8 caracteres");
+            return;
+        }
+
+        setLoading(true);
 
         try {
             const res = await fetch("/api/auth/register", {
@@ -91,6 +97,7 @@ function RegisterForm() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
+                        autoComplete="email"
                         className="text-lg h-12"
                     />
                     <Input
@@ -100,6 +107,7 @@ function RegisterForm() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
+                        autoComplete="new-password"
                         className="text-lg h-12"
                     />
                 </div>

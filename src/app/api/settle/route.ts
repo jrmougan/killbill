@@ -16,8 +16,14 @@ export async function POST(request: Request) {
         if (toUserId === userId) return NextResponse.json({ error: 'Cannot settle with yourself' }, { status: 400 });
 
         const numericAmount = Number(amount);
-        if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+        // amount === 0 is allowed: it records a "checkpoint" settlement used to
+        // archive/clear the pending list when there are no outstanding debts.
+        if (!Number.isFinite(numericAmount) || numericAmount < 0) {
             return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
+        }
+
+        if (method !== undefined && !['CASH', 'BIZUM', 'TRANSFER'].includes(method)) {
+            return NextResponse.json({ error: 'Invalid method' }, { status: 400 });
         }
 
         const user = await prisma.user.findUnique({

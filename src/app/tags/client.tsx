@@ -30,6 +30,17 @@ const PRESET_COLORS = [
     "#84cc16",
 ];
 
+const COLOR_NAMES: Record<string, string> = {
+    "#8b5cf6": "Violeta",
+    "#06b6d4": "Cian",
+    "#10b981": "Verde",
+    "#f59e0b": "Ámbar",
+    "#ef4444": "Rojo",
+    "#ec4899": "Rosa",
+    "#3b82f6": "Azul",
+    "#84cc16": "Lima",
+};
+
 export function TagsClient({ initialTags }: TagsClientProps) {
     const router = useRouter();
     const [tags, setTags] = useState<Tag[]>(initialTags);
@@ -37,11 +48,13 @@ export function TagsClient({ initialTags }: TagsClientProps) {
     const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const handleCreate = async () => {
+        if (saving || !newName.trim()) return;
         const trimmed = newName.trim();
-        if (!trimmed) return;
         setSaving(true);
+        setError(null);
         try {
             const res = await fetch("/api/tags", {
                 method: "POST",
@@ -54,21 +67,30 @@ export function TagsClient({ initialTags }: TagsClientProps) {
                 setNewName("");
                 setNewColor(PRESET_COLORS[0]);
                 router.refresh();
+            } else {
+                setError("No se pudo crear la etiqueta. Inténtalo de nuevo.");
             }
+        } catch {
+            setError("No se pudo crear la etiqueta. Inténtalo de nuevo.");
         } finally {
             setSaving(false);
         }
     };
 
     const handleDelete = async (tag: Tag) => {
-        if (!confirm(`¿Eliminar tag '${tag.name}'? Se eliminará de todos los gastos.`)) return;
+        if (!confirm(`¿Eliminar etiqueta '${tag.name}'? Se eliminará de todos los gastos.`)) return;
         setDeleting(tag.id);
+        setError(null);
         try {
             const res = await fetch(`/api/tags/${tag.id}`, { method: "DELETE" });
             if (res.ok) {
                 setTags((prev) => prev.filter((t) => t.id !== tag.id));
                 router.refresh();
+            } else {
+                setError("No se pudo eliminar la etiqueta. Inténtalo de nuevo.");
             }
+        } catch {
+            setError("No se pudo eliminar la etiqueta. Inténtalo de nuevo.");
         } finally {
             setDeleting(null);
         }
@@ -86,13 +108,15 @@ export function TagsClient({ initialTags }: TagsClientProps) {
             </header>
 
             <GlassCard className="p-4 space-y-4">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Nuevo tag</h2>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Nueva etiqueta</h2>
 
                 <Input
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
-                    placeholder="Nombre del tag"
-                    onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+                    placeholder="Nombre de la etiqueta"
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && !saving) handleCreate();
+                    }}
                 />
 
                 <div className="space-y-2">
@@ -108,7 +132,7 @@ export function TagsClient({ initialTags }: TagsClientProps) {
                                     backgroundColor: color,
                                     borderColor: newColor === color ? "white" : "transparent",
                                 }}
-                                aria-label={color}
+                                aria-label={COLOR_NAMES[color] ?? color}
                             >
                                 {newColor === color && <Check className="h-4 w-4 text-white drop-shadow" />}
                             </button>
@@ -122,8 +146,10 @@ export function TagsClient({ initialTags }: TagsClientProps) {
                     disabled={saving || !newName.trim()}
                     isLoading={saving}
                 >
-                    <Plus className="h-4 w-4" /> Crear tag
+                    <Plus className="h-4 w-4" /> Crear etiqueta
                 </Button>
+
+                {error && <p className="text-sm text-red-400">{error}</p>}
             </GlassCard>
 
             {tags.length === 0 ? (

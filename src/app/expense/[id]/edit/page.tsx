@@ -40,6 +40,11 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
 
     if (expense.splits.length === 1) {
         initialSplitMode = "solo";
+        // A single split owned by the current user is a fully-mine expense (100%).
+        const onlySplit = expense.splits[0];
+        if (onlySplit.userId === userId && expense.amount > 0) {
+            initialMyPercent = 100;
+        }
     } else if (expense.splits.length === 2) {
         const [s1, s2] = expense.splits;
         const isEqual = Math.abs(s1.amount - s2.amount) <= 1;
@@ -48,8 +53,11 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
         } else {
             initialSplitMode = "custom";
             const mySplit = expense.splits.find((s) => s.userId === userId);
-            if (mySplit) {
+            const partnerSplit = expense.splits.find((s) => s.userId !== userId);
+            if (mySplit && expense.amount > 0) {
                 initialMyPercent = Math.round((mySplit.amount / expense.amount) * 100);
+            } else if (partnerSplit && expense.amount > 0) {
+                initialMyPercent = 100 - Math.round((partnerSplit.amount / expense.amount) * 100);
             }
         }
     }

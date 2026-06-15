@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = 'gemini-flash-latest';
@@ -29,6 +30,17 @@ export async function POST(request: Request) {
     const session = await getSession();
     if (!session?.userId) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Rate limit the paid Gemini OCR call: 10 requests / 5 minutes, keyed per
+    // authenticated user (falls back to client IP if userId is somehow absent).
+    const rateKey = session.userId ? `ocr:user:${session.userId}` : `ocr:ip:${getClientIp(request)}`;
+    const limit = rateLimit(rateKey, 10, 5 * 60 * 1000);
+    if (!limit.allowed) {
+        return NextResponse.json(
+            { error: 'Demasiadas solicitudes. Inténtalo de nuevo más tarde.' },
+            { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+        );
     }
 
     if (!GEMINI_API_KEY) {

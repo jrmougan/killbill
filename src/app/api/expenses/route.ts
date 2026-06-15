@@ -81,11 +81,24 @@ export async function POST(request: Request) {
 
         if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
+        // Validate description is a non-empty string (missing/empty previously 500'd at the DB layer).
+        if (typeof description !== 'string' || description.trim().length === 0) {
+            return NextResponse.json({ error: 'Invalid description' }, { status: 400 });
+        }
+
         // Convert euros to cents
         const amountCents = toCents(amount);
         if (!Number.isFinite(amountCents) || amountCents <= 0) {
             return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
         }
+
+        // Load couple members up-front so we can validate any client-supplied
+        // userId/beneficiaryId actually belongs to the caller's couple (prevents IDOR).
+        const coupleMembers = await prisma.user.findMany({
+            where: { coupleId: user.coupleId },
+            select: { id: true }
+        });
+        const memberIds = new Set(coupleMembers.map(m => m.id));
 
         // Calculate nextRecurringDate if recurring
         let nextRecurringDate: Date | undefined = undefined;
@@ -124,6 +137,12 @@ export async function POST(request: Request) {
         };
 
         if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
+            if (customSplits.some((s: { amount: number }) => (s?.amount ?? 0) < 0)) {
+                return NextResponse.json({ error: 'Split amounts must not be negative' }, { status: 400 });
+            }
+            if (customSplits.some((s: { userId: string }) => !memberIds.has(s?.userId))) {
+                return NextResponse.json({ error: 'Split user is not a member of your couple' }, { status: 400 });
+            }
             const splitsTotal = customSplits.reduce(
                 (sum: number, s: { amount: number }) => sum + (s?.amount ?? 0),
                 0
@@ -138,6 +157,9 @@ export async function POST(request: Request) {
                 })),
             };
         } else if (beneficiaryId) {
+            if (!memberIds.has(beneficiaryId)) {
+                return NextResponse.json({ error: 'Beneficiary is not a member of your couple' }, { status: 400 });
+            }
             expenseData.splits = {
                 create: [
                     {
@@ -148,11 +170,6 @@ export async function POST(request: Request) {
             };
         } else {
             // Split among couple members, accounting for exclusive items
-            const coupleMembers = await prisma.user.findMany({
-                where: { coupleId: user.coupleId },
-                select: { id: true }
-            });
-
             if (coupleMembers.length > 0) {
                 const splits = calculateSplitAmounts(amountCents, receiptData, coupleMembers);
                 expenseData.splits = {

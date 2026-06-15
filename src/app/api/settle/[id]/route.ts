@@ -27,6 +27,14 @@ export async function PATCH(
         return NextResponse.json({ error: 'Only the creator can edit' }, { status: 403 });
     }
 
+    if (settlement.status !== 'PENDING') {
+        return NextResponse.json({ error: 'Only pending settlements can be edited' }, { status: 409 });
+    }
+
+    if (method !== undefined && !['CASH', 'BIZUM', 'TRANSFER'].includes(method)) {
+        return NextResponse.json({ error: 'Invalid method' }, { status: 400 });
+    }
+
     let nextAmount = settlement.amount;
     if (body.amount !== undefined) {
         const numericAmount = parseFloat(body.amount);

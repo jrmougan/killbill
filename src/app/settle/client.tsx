@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { isAvatarUrl } from "@/lib/avatar";
+import { formatEuros } from "@/lib/currency";
 
 interface Debtor {
     userId: string;
@@ -50,6 +51,7 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
     const [amount, setAmount] = useState<string>("");
     const [method, setMethod] = useState<"CASH" | "BIZUM">("BIZUM");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const selectedDebtor = debts.find(d => d.userId === selectedUserId);
     const debtorExpenses = expenses.filter(e => e.paidBy === selectedUserId);
@@ -89,9 +91,10 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
             if (!confirm("Esto marcará toda la actividad actual como 'Saldada' para limpiar la vista. ¿Continuar?")) return;
 
             setIsSubmitting(true);
+            setError(null);
             try {
                 // 0 amount settlement = Archive/Checkpoint
-                await fetch("/api/settle", {
+                const res = await fetch("/api/settle", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -100,11 +103,15 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                         method: "CASH"
                     })
                 });
+                if (!res.ok) {
+                    setError("No se pudo archivar el historial");
+                    return;
+                }
                 router.push("/dashboard");
                 router.refresh();
             } catch (e) {
                 console.error(e);
-                alert("Error al archivar historial");
+                setError("No se pudo archivar el historial");
             } finally {
                 setIsSubmitting(false);
             }
@@ -148,6 +155,9 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                         <p className="text-[10px] text-muted-foreground">
                             Esto vaciará la lista de &quot;Pendientes&quot; en el inicio.
                         </p>
+                        {error && (
+                            <p className="text-xs text-red-400">{error}</p>
+                        )}
                     </div>
                 )}
 
@@ -184,9 +194,18 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                         {debts.map(debt => (
                             <div
                                 key={debt.userId}
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => {
                                     setSelectedUserId(debt.userId);
                                     setAmount(debt.amount.toFixed(2)); // Default to full amount
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        setSelectedUserId(debt.userId);
+                                        setAmount(debt.amount.toFixed(2)); // Default to full amount
+                                    }
                                 }}
                                 className={cn(
                                     "flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all",
@@ -206,7 +225,7 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                                     </div>
                                     <div className="text-left">
                                         <p className="font-bold">{debt.name}</p>
-                                        <p className="text-xs text-muted-foreground">Debes {debt.amount.toFixed(2)}€</p>
+                                        <p className="text-xs text-muted-foreground">Debes {formatEuros(debt.amount)}</p>
                                     </div>
                                 </div>
                                 {selectedUserId === debt.userId && <Check className="text-primary h-5 w-5" />}
@@ -235,8 +254,8 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-sm font-mono font-bold">{expense.myAmount.toFixed(2)}€</p>
-                                            <p className="text-[10px] text-muted-foreground">de {expense.amount.toFixed(2)}€</p>
+                                            <p className="text-sm font-mono font-bold">{formatEuros(expense.myAmount)}</p>
+                                            <p className="text-[10px] text-muted-foreground">de {formatEuros(expense.amount)}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -282,7 +301,7 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                             />
                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-muted-foreground">€</span>
                         </div>
-                        <p className="text-xs text-right text-muted-foreground">Deuda total: {selectedDebtor.amount.toFixed(2)}€</p>
+                        <p className="text-xs text-right text-muted-foreground">Deuda total: {formatEuros(selectedDebtor.amount)}</p>
                     </div>
 
                     <div className="space-y-2">

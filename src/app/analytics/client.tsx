@@ -17,6 +17,7 @@ import {
 } from "recharts";
 import Link from "next/link";
 import { ArrowLeft, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { formatEuros } from "@/lib/currency";
 
 // Category hex colors aligned with CATEGORIES in src/lib/categories.ts
 const CATEGORY_COLORS: Record<string, string> = {
@@ -146,17 +147,22 @@ export function AnalyticsClient({
             <section className="grid grid-cols-2 gap-3">
                 <StatCard
                     label="Este mes"
-                    value={`${stats.totalThisMonth.toFixed(2)}€`}
-                    sub={`${stats.expensesThisMonthCount} gastos`}
+                    value={formatEuros(stats.totalThisMonth)}
+                    sub={`${stats.expensesThisMonthCount} ${stats.expensesThisMonthCount === 1 ? "gasto" : "gastos"}`}
                 />
                 <StatCard
                     label="Media mensual"
-                    value={`${stats.avgMonthly.toFixed(2)}€`}
+                    value={formatEuros(stats.avgMonthly)}
                     sub="últimos 6 meses"
                 />
                 <StatCard
-                    label="Gastos este mes"
-                    value={String(stats.expensesThisMonthCount)}
+                    label="Gasto medio por gasto"
+                    value={formatEuros(
+                        stats.expensesThisMonthCount > 0
+                            ? stats.totalThisMonth / stats.expensesThisMonthCount
+                            : 0
+                    )}
+                    sub="este mes"
                 />
                 <StatCard
                     label="Categoría top"
@@ -167,7 +173,7 @@ export function AnalyticsClient({
             {/* Monthly bar chart */}
             <section className={glassCard}>
                 <h2 className="text-sm font-semibold text-white/70 mb-4">Gasto mensual</h2>
-                <ResponsiveContainer width="100%" height={200}>
+                <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={monthlySpending} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                         <XAxis
@@ -181,8 +187,14 @@ export function AnalyticsClient({
                             axisLine={false}
                             tickLine={false}
                         />
-                        <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: "rgba(255,255,255,0.04)" }} />
+                        <Tooltip
+                            contentStyle={chartTooltipStyle}
+                            cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                            formatter={(v) => formatEuros(Number(v))}
+                        />
                         <Legend
+                            verticalAlign="top"
+                            height={24}
                             wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}
                             formatter={(value) => value === "total" ? "Total pareja" : "Mi parte"}
                         />
@@ -218,7 +230,7 @@ export function AnalyticsClient({
                                 </Pie>
                                 <Tooltip
                                     contentStyle={chartTooltipStyle}
-                                    formatter={(value) => [`${Number(value).toFixed(2)}€`, ""]}
+                                    formatter={(v) => [formatEuros(Number(v)), ""]}
                                 />
                             </PieChart>
                         </ResponsiveContainer>
@@ -234,7 +246,7 @@ export function AnalyticsClient({
                                         />
                                         <span className="text-white/70">{item.label}</span>
                                     </span>
-                                    <span className="font-mono text-white/80">{item.amount.toFixed(2)}€</span>
+                                    <span className="font-mono text-white/80">{formatEuros(item.amount)}</span>
                                 </li>
                             ))}
                         </ul>
@@ -261,8 +273,7 @@ export function AnalyticsClient({
                         ) : (
                             <Minus className="h-3.5 w-3.5" />
                         )}
-                        {lastBalance > 0 ? "+" : ""}
-                        {lastBalance.toFixed(2)}€
+                        {`${lastBalance > 0 ? "+" : ""}${formatEuros(lastBalance)}`}
                     </span>
                 </div>
                 {balanceEvolution.length > 1 ? (
@@ -283,7 +294,7 @@ export function AnalyticsClient({
                             />
                             <Tooltip
                                 contentStyle={chartTooltipStyle}
-                                formatter={(value) => [`${Number(value).toFixed(2)}€`, "Balance"]}
+                                formatter={(v) => [formatEuros(Number(v)), "Balance"]}
                             />
                             <Line
                                 type="monotone"
@@ -323,7 +334,7 @@ export function AnalyticsClient({
                                 </p>
                             </div>
                             <span className="text-base font-mono font-bold text-white flex-shrink-0">
-                                {expense.amount.toFixed(2)}€
+                                {formatEuros(expense.amount)}
                             </span>
                         </div>
                     ))
@@ -346,7 +357,7 @@ export function AnalyticsClient({
                                             <span className="text-white/80 truncate font-medium">{item.name}</span>
                                         </span>
                                         <span className="font-mono font-bold text-white flex-shrink-0 ml-2">
-                                            {item.total.toFixed(2)}€
+                                            {formatEuros(item.total)}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -357,7 +368,7 @@ export function AnalyticsClient({
                                             />
                                         </div>
                                         <span className="text-[10px] text-white/30 flex-shrink-0 w-20 text-right">
-                                            {item.count}× · {item.avgPrice.toFixed(2)}€/u
+                                            {item.count}× · {formatEuros(item.avgPrice)}/u
                                         </span>
                                     </div>
                                 </div>

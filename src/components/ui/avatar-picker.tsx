@@ -112,12 +112,12 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
                             <Input
                                 value={customEmoji}
                                 onChange={(e) => {
-                                    setCustomEmoji(e.target.value);
-                                    if (e.target.value) onAvatarChange(e.target.value);
+                                    const v = e.target.value;
+                                    setCustomEmoji(v);
+                                    if (/\p{Extended_Pictographic}/u.test(v)) onAvatarChange(v);
                                 }}
                                 className="h-8 bg-transparent border-white/10 text-center"
                                 placeholder="🚀"
-                                maxLength={2}
                             />
                         </div>
                     </div>
