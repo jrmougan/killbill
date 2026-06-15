@@ -21,7 +21,7 @@ export function calculateBalances(
     users.forEach(u => balances[u.id] = 0);
 
     // Calculate net expense position (paid - share) in CENTS
-    users.forEach(u => {
+    users.forEach((u, userIndex) => {
         const paid = paidByUser[u.id] || 0;
 
         // Calculate fair share based on splits
@@ -34,8 +34,13 @@ export function calculateBalances(
                     myShare += mySplit.amount;
                 }
             } else {
-                // Shared equally - integer division
-                myShare += Math.floor(e.amount / numUsers);
+                // Shared equally - integer division, with remainder cent(s)
+                // allocated deterministically to the first user(s) (same
+                // convention as calculateSplitAmounts in splits.ts) so that
+                // the per-user shares always sum exactly to e.amount.
+                const baseAmount = Math.floor(e.amount / numUsers);
+                const remainder = e.amount - (baseAmount * numUsers);
+                myShare += baseAmount + (userIndex < remainder ? 1 : 0);
             }
         });
 

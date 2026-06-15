@@ -276,16 +276,18 @@ export default function NewExpensePage() {
             };
 
             if (hasItemAssignments && userId && partner) {
+                const myCents = Math.round(itemSplitMyAmount * 100);
                 bodyPayload.customSplits = [
-                    { userId, amount: Math.round(itemSplitMyAmount * 100) },
-                    { userId: partner.id, amount: Math.round(itemSplitPartnerAmount * 100) },
+                    { userId, amount: myCents },
+                    { userId: partner.id, amount: amountCents - myCents },
                 ];
             } else if (splitMode === "solo" && partner) {
                 bodyPayload.beneficiaryId = partner.id;
             } else if (splitMode === "custom" && userId && partner) {
+                const myCents = Math.round((amountCents * myPercent) / 100);
                 bodyPayload.customSplits = [
-                    { userId, amount: Math.round((amountCents * myPercent) / 100) },
-                    { userId: partner.id, amount: Math.round((amountCents * partnerPercent) / 100) },
+                    { userId, amount: myCents },
+                    { userId: partner.id, amount: amountCents - myCents },
                 ];
             }
 

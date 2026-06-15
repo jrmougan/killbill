@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { isAvatarUrl } from "@/lib/avatar";
 
 interface Debtor {
     userId: string;
@@ -195,7 +196,11 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                                 <div className="flex items-center gap-3">
                                     <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[2px]">
                                         <div className="h-full w-full rounded-full bg-black flex items-center justify-center font-bold text-xs overflow-hidden">
-                                            {debt.avatar}
+                                            {isAvatarUrl(debt.avatar) ? (
+                                                <img src={debt.avatar} alt={debt.name} className="h-full w-full object-cover" />
+                                            ) : (
+                                                debt.avatar || "👤"
+                                            )}
                                         </div>
                                     </div>
                                     <div className="text-left">
@@ -250,7 +255,11 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                     <div className="p-4 rounded-xl bg-card border border-white/10 flex items-center gap-4">
                         <div className="h-12 w-12 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[2px]">
                             <div className="h-full w-full rounded-full bg-black flex items-center justify-center font-bold text-sm overflow-hidden">
-                                {selectedDebtor.avatar}
+                                {isAvatarUrl(selectedDebtor.avatar) ? (
+                                    <img src={selectedDebtor.avatar} alt={selectedDebtor.name} className="h-full w-full object-cover" />
+                                ) : (
+                                    selectedDebtor.avatar || "👤"
+                                )}
                             </div>
                         </div>
                         <div>

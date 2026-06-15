@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import { isAvatarUrl } from "@/lib/avatar";
 
 interface VisualBalanceProps {
     balance: number; // Positive means user 1 is owed, negative means user 1 owes
@@ -37,7 +38,11 @@ export function VisualBalance({ balance, user1, user2, className }: VisualBalanc
                             animate={{ rotate: -tilt }} // Counter-rotate to keep face upright
                         >
                             <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-2xl overflow-hidden border-2 border-black">
-                                {user1.avatar || "👤"}
+                                {isAvatarUrl(user1.avatar) ? (
+                                    <img src={user1.avatar!} alt={user1.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    user1.avatar || "👤"
+                                )}
                             </div>
                         </motion.div>
                         <span className="text-[10px] font-bold uppercase tracking-tighter mt-2 text-primary">{user1.name}</span>
@@ -50,7 +55,11 @@ export function VisualBalance({ balance, user1, user2, className }: VisualBalanc
                             animate={{ rotate: -tilt }}
                         >
                             <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-2xl overflow-hidden border-2 border-black">
-                                {user2.avatar || "👤"}
+                                {isAvatarUrl(user2.avatar) ? (
+                                    <img src={user2.avatar!} alt={user2.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    user2.avatar || "👤"
+                                )}
                             </div>
                         </motion.div>
                         <span className="text-[10px] font-bold uppercase tracking-tighter mt-2 text-emerald-400">{user2.name}</span>

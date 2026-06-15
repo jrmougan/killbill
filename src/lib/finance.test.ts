@@ -44,6 +44,46 @@ describe('finance utilities', () => {
             expect(balances['user2']).toBe(-70);
         });
 
+        it('should not lose cents on odd-amount equal split (3 people / 100 cents)', () => {
+            const threeUsers = [
+                { id: 'user1', name: 'Alice' },
+                { id: 'user2', name: 'Bob' },
+                { id: 'user3', name: 'Carol' }
+            ];
+            const expenses = [
+                { id: 'exp1', paidById: 'user1', amount: 100 }
+            ];
+            const settlements: any[] = [];
+            const balances = calculateBalances(threeUsers, expenses, settlements, 'user1');
+
+            // 100 / 3 = 34 + 33 + 33 (remainder cent to first user).
+            // Alice paid 100, share 34 -> +66
+            // Bob share 33 -> -33
+            // Carol share 33 -> -33
+            expect(balances['user1']).toBe(66);
+            expect(balances['user2']).toBe(-33);
+            expect(balances['user3']).toBe(-33);
+
+            // Balances must reconcile to zero (no lost/created cent).
+            const sum = balances['user1'] + balances['user2'] + balances['user3'];
+            expect(sum).toBe(0);
+        });
+
+        it('should not lose a cent on odd 2-way equal split', () => {
+            const expenses = [
+                { id: 'exp1', paidById: 'user1', amount: 101 }
+            ];
+            const settlements: any[] = [];
+            const balances = calculateBalances(users, expenses, settlements, 'user1');
+
+            // 101 / 2 = 51 + 50 (remainder cent to first user).
+            // Alice paid 101, share 51 -> +50
+            // Bob share 50 -> -50
+            expect(balances['user1']).toBe(50);
+            expect(balances['user2']).toBe(-50);
+            expect(balances['user1'] + balances['user2']).toBe(0);
+        });
+
         it('should account for settlements', () => {
             const expenses = [
                 { id: 'exp1', paidById: 'user1', amount: 100 }

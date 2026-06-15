@@ -3,9 +3,20 @@ import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { cookies } from 'next/headers';
 import { signToken } from '@/lib/auth';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
     try {
+        // Rate limit by client IP: 20 attempts / 5 minutes (looser than login).
+        const ip = getClientIp(request);
+        const limit = rateLimit(`register:${ip}`, 20, 5 * 60 * 1000);
+        if (!limit.allowed) {
+            return NextResponse.json(
+                { error: 'Demasiados intentos. Inténtalo de nuevo más tarde.' },
+                { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+            );
+        }
+
         const body = await request.json();
         const { name, email, password, inviteCode } = body;
 

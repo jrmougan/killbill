@@ -13,6 +13,7 @@ import { redirect } from "next/navigation";
 import { calculateBalances, getLastSettlementDate } from "@/lib/finance";
 import { toEuros } from "@/lib/currency";
 import { cn } from "@/lib/utils";
+import { isAvatarUrl } from "@/lib/avatar";
 import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
 import { PendingSettlements } from "@/components/dashboard/pending-settlements";
 import { randomBytes } from "crypto";
@@ -207,7 +208,11 @@ export default async function DashboardPage() {
                     </Link>
                     <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[2px]">
                         <div className="h-full w-full rounded-full bg-black flex items-center justify-center font-bold text-xs overflow-hidden">
-                            {user.avatar || "👤"}
+                            {isAvatarUrl(user.avatar) ? (
+                                <img src={user.avatar!} alt={user.name} className="h-full w-full object-cover" />
+                            ) : (
+                                user.avatar || "👤"
+                            )}
                         </div>
                     </div>
                 </div>

@@ -26,6 +26,7 @@ import Link from "next/link";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
 import { useTheme } from "@/components/theme-provider";
+import { isAvatarUrl } from "@/lib/avatar";
 
 interface UserData {
     id: string;
@@ -44,10 +45,6 @@ interface CoupleData {
 interface SettingsClientProps {
     user: UserData;
     couple: CoupleData | null;
-}
-
-function isAvatarUrl(value: string): boolean {
-    return value.startsWith("/") || value.startsWith("http");
 }
 
 export function SettingsClient({ user, couple }: SettingsClientProps) {

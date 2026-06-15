@@ -9,6 +9,7 @@ import { ReceiptItem } from "@/types";
 import { DeleteExpenseButton } from "@/components/expense/delete-button";
 import { getSession } from "@/lib/auth";
 import { toEuros } from "@/lib/currency";
+import { isAvatarUrl } from "@/lib/avatar";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -67,7 +68,11 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     </h2>
                     <div className="mt-4 flex items-center justify-center gap-2">
                         <div className="h-6 w-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
-                            {expense.paidBy.avatar || "👤"}
+                            {isAvatarUrl(expense.paidBy.avatar) ? (
+                                <img src={expense.paidBy.avatar} alt={expense.paidBy.name} className="h-full w-full object-cover" />
+                            ) : (
+                                expense.paidBy.avatar || "👤"
+                            )}
                         </div>
                         <p className="text-sm font-medium">Pagado por <span className="text-primary">{isMe ? "Ti" : expense.paidBy.name}</span></p>
                     </div>
@@ -89,7 +94,11 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                     <div key={split.id} className="flex items-center justify-between px-3 py-3 sm:p-4 bg-white/5">
                                         <div className="flex items-center gap-3">
                                             <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center text-xs overflow-hidden text-lg">
-                                                {split.user.avatar || "👤"}
+                                                {isAvatarUrl(split.user.avatar) ? (
+                                                    <img src={split.user.avatar} alt={split.user.name} className="h-full w-full object-cover" />
+                                                ) : (
+                                                    split.user.avatar || "👤"
+                                                )}
                                             </div>
                                             <div>
                                                 <p className="font-medium text-xs sm:text-sm">{split.userId === userId ? "Ti" : split.user.name}</p>

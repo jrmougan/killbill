@@ -7,6 +7,7 @@ import { Check, X, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { toEuros } from "@/lib/currency";
+import { isAvatarUrl } from "@/lib/avatar";
 
 interface PendingSettlement {
     id: string;
@@ -63,8 +64,12 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
                     <GlassCard key={s.id} className="p-4 border-blue-500/30 bg-blue-500/10 shadow-lg shadow-blue-500/5">
                         <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center text-xl">
-                                    {s.fromUser.avatar || "👤"}
+                                <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center text-xl overflow-hidden">
+                                    {isAvatarUrl(s.fromUser.avatar) ? (
+                                        <img src={s.fromUser.avatar!} alt={s.fromUser.name} className="h-full w-full object-cover" />
+                                    ) : (
+                                        s.fromUser.avatar || "👤"
+                                    )}
                                 </div>
                                 <div>
                                     <p className="font-bold text-sm">

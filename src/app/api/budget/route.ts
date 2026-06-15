@@ -72,7 +72,15 @@ export async function POST(request: Request) {
         monthDate = new Date(now.getFullYear(), now.getMonth(), 1);
     }
 
-    const amountCents = toCents(Number(amount));
+    const amountNum = Number(amount);
+    if (!Number.isFinite(amountNum)) {
+        return NextResponse.json({ error: 'amount must be a valid number' }, { status: 400 });
+    }
+
+    const amountCents = toCents(amountNum);
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+        return NextResponse.json({ error: 'amount must be greater than 0' }, { status: 400 });
+    }
 
     const budget = await prisma.budget.upsert({
         where: {

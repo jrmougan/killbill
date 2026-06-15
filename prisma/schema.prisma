@@ -101,6 +101,7 @@ model Split {
   userId String
   user   User   @relation(fields: [userId], references: [id])
 
+  @@unique([expenseId, userId])
   @@index([expenseId])
   @@index([userId])
 }

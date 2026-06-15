@@ -49,6 +49,9 @@ export async function POST(request: Request) {
 
     // Convert euros to cents
     const amountCents = toCents(amount);
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+        return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
+    }
 
     // Calculate nextRecurringDate if recurring
     let nextRecurringDate: Date | undefined = undefined;
@@ -80,6 +83,13 @@ export async function POST(request: Request) {
     };
 
     if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
+        const splitsTotal = customSplits.reduce(
+            (sum: number, s: { amount: number }) => sum + (s?.amount ?? 0),
+            0
+        );
+        if (splitsTotal !== amountCents) {
+            return NextResponse.json({ error: 'Splits must sum to the total amount' }, { status: 400 });
+        }
         expenseData.splits = {
             create: customSplits.map((s: { userId: string; amount: number }) => ({
                 userId: s.userId,

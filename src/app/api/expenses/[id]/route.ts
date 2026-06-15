@@ -76,6 +76,20 @@ export async function PATCH(
 
         // Update expense
         const amountCents = amount ? toCents(parseFloat(amount)) : expense.amount;
+        if (amount !== undefined && (!Number.isFinite(amountCents) || amountCents <= 0)) {
+            return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
+        }
+
+        // Validate that client-supplied splits sum exactly to the expense amount.
+        if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
+            const splitsTotal = customSplits.reduce(
+                (sum: number, s: { amount: number }) => sum + (s?.amount ?? 0),
+                0
+            );
+            if (splitsTotal !== amountCents) {
+                return NextResponse.json({ error: 'Splits must sum to the total amount' }, { status: 400 });
+            }
+        }
 
         // Recalculate nextRecurringDate if recurring settings changed
         const resolvedIsRecurring = isRecurring ?? (expense as any).isRecurring;

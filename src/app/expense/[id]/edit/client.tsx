@@ -264,16 +264,18 @@ export function EditExpenseClient({
             };
 
             if (hasItemAssignments && partner) {
+                const myCents = Math.round(itemSplitMyAmount * 100);
                 bodyPayload.customSplits = [
-                    { userId, amount: Math.round(itemSplitMyAmount * 100) },
-                    { userId: partner.id, amount: Math.round(itemSplitPartnerAmount * 100) },
+                    { userId, amount: myCents },
+                    { userId: partner.id, amount: amountCents - myCents },
                 ];
             } else if (splitMode === "solo" && partner) {
                 bodyPayload.splitWithPartner = false;
             } else if (splitMode === "custom" && partner) {
+                const myCents = Math.round((amountCents * myPercent) / 100);
                 bodyPayload.customSplits = [
-                    { userId, amount: Math.round((amountCents * myPercent) / 100) },
-                    { userId: partner.id, amount: Math.round((amountCents * partnerPercent) / 100) },
+                    { userId, amount: myCents },
+                    { userId: partner.id, amount: amountCents - myCents },
                 ];
             } else {
                 bodyPayload.splitWithPartner = true;

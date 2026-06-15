@@ -27,6 +27,15 @@ export async function PATCH(
         return NextResponse.json({ error: 'Only the creator can edit' }, { status: 403 });
     }
 
+    let nextAmount = settlement.amount;
+    if (body.amount !== undefined) {
+        const numericAmount = parseFloat(body.amount);
+        if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+            return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
+        }
+        nextAmount = toCents(numericAmount);
+    }
+
     try {
         // Simply update the settlement details
         // We no longer link expenses explicitly in the Running Balance model.
@@ -34,7 +43,7 @@ export async function PATCH(
             where: { id },
             data: {
                 method: method || settlement.method,
-                amount: body.amount !== undefined ? toCents(parseFloat(body.amount)) : settlement.amount,
+                amount: nextAmount,
                 status: "PENDING" // Reset to pending if edited, requiring confirmation again
             }
         });
