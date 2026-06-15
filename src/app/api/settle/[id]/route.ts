@@ -14,7 +14,7 @@ export async function PATCH(
     const userId = session.userId as string;
 
     const body = await request.json();
-    const { method, expenseIds } = body;
+    const { method } = body;
 
     const settlement = await prisma.settlement.findUnique({
         where: { id },

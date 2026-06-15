@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 
 // Resolved lazily so a missing secret fails loudly at sign/verify time
 // (not at module import / build time) — never fall back to a hardcoded value.
@@ -10,7 +10,7 @@ function getKey() {
     return new TextEncoder().encode(secret);
 }
 
-export async function signToken(payload: any) {
+export async function signToken(payload: JWTPayload) {
     return await new SignJWT(payload)
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt()
@@ -24,7 +24,7 @@ export async function verifyToken(token: string) {
             algorithms: ['HS256'],
         });
         return payload;
-    } catch (error) {
+    } catch (_error) {
         return null;
     }
 }

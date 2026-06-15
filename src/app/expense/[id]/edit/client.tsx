@@ -173,7 +173,7 @@ export function EditExpenseClient({
         setReceiptItems([...receiptItems, withUid({ description: "", quantity: 1, price: 0, total: 0, assignedTo: null })]);
     };
 
-    const updateItem = (index: number, field: keyof ReceiptItem, value: any) => {
+    const updateItem = (index: number, field: keyof ReceiptItem, value: string | number | null) => {
         const newItems = [...receiptItems];
         const item = { ...newItems[index], [field]: value };
         if (field === "quantity" || field === "price") {
@@ -352,6 +352,7 @@ export function EditExpenseClient({
                         </div>
                     ) : (
                         <div className="relative rounded-2xl overflow-hidden border border-white/10 aspect-video bg-black/40">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- user-uploaded receipt image of unknown dimensions; next/image would change layout/runtime */}
                             <img src={receiptPreview} alt="Ticket" className="w-full h-full object-contain" />
                             <Button
                                 type="button"

@@ -146,7 +146,7 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                             Archivar historial
                         </Button>
                         <p className="text-[10px] text-muted-foreground">
-                            Esto vaciará la lista de "Pendientes" en el inicio.
+                            Esto vaciará la lista de &quot;Pendientes&quot; en el inicio.
                         </p>
                     </div>
                 )}
@@ -197,6 +197,7 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                                     <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[2px]">
                                         <div className="h-full w-full rounded-full bg-black flex items-center justify-center font-bold text-xs overflow-hidden">
                                             {isAvatarUrl(debt.avatar) ? (
+                                                // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                                 <img src={debt.avatar} alt={debt.name} className="h-full w-full object-cover" />
                                             ) : (
                                                 debt.avatar || "👤"
@@ -256,6 +257,7 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                         <div className="h-12 w-12 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[2px]">
                             <div className="h-full w-full rounded-full bg-black flex items-center justify-center font-bold text-sm overflow-hidden">
                                 {isAvatarUrl(selectedDebtor.avatar) ? (
+                                    // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                     <img src={selectedDebtor.avatar} alt={selectedDebtor.name} className="h-full w-full object-cover" />
                                 ) : (
                                     selectedDebtor.avatar || "👤"

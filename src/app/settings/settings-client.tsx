@@ -9,7 +9,6 @@ import {
     ArrowLeft,
     User,
     Heart,
-    LogOut,
     Trash2,
     Save,
     Copy,
@@ -81,7 +80,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                 const data = await res.json();
                 setMessage({ text: data.error || "Error al actualizar", type: 'error' });
             }
-        } catch (err) {
+        } catch (_err) {
             setMessage({ text: "Error de conexión", type: 'error' });
         } finally {
             setIsSaving(false);
@@ -102,7 +101,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
             } else {
                 alert("Error al desvincular");
             }
-        } catch (err) {
+        } catch (_err) {
             alert("Error de conexión");
         } finally {
             setIsUnlinking(false);
@@ -202,6 +201,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                             {avatarTab === "foto" && (
                                 <div className="flex flex-col items-center gap-3">
                                     {isAvatarUrl(avatar) ? (
+                                        // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                         <img
                                             src={avatar}
                                             alt="Tu foto de perfil"
@@ -329,6 +329,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                                 </div>
                                 <div className="h-10 w-10 rounded-full bg-pink-500/20 flex items-center justify-center text-xl overflow-hidden">
                                     {partner?.avatar && isAvatarUrl(partner.avatar) ? (
+                                        // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                         <img
                                             src={partner.avatar}
                                             alt={partner.name}

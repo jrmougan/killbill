@@ -12,7 +12,7 @@ describe('finance utilities', () => {
             const expenses = [
                 { id: 'exp1', paidById: 'user1', amount: 100 }
             ];
-            const settlements: any[] = [];
+            const settlements: { fromUserId: string; toUserId: string; amount: number }[] = [];
             const balances = calculateBalances(users, expenses, settlements, 'user1');
 
             // Alice paid 100. Share is 50 each.
@@ -34,7 +34,7 @@ describe('finance utilities', () => {
                     ]
                 }
             ];
-            const settlements: any[] = [];
+            const settlements: { fromUserId: string; toUserId: string; amount: number }[] = [];
             const balances = calculateBalances(users, expenses, settlements, 'user1');
 
             // Alice paid 100. Share is 30 for Alice, 70 for Bob.
@@ -53,7 +53,7 @@ describe('finance utilities', () => {
             const expenses = [
                 { id: 'exp1', paidById: 'user1', amount: 100 }
             ];
-            const settlements: any[] = [];
+            const settlements: { fromUserId: string; toUserId: string; amount: number }[] = [];
             const balances = calculateBalances(threeUsers, expenses, settlements, 'user1');
 
             // 100 / 3 = 34 + 33 + 33 (remainder cent to first user).
@@ -73,7 +73,7 @@ describe('finance utilities', () => {
             const expenses = [
                 { id: 'exp1', paidById: 'user1', amount: 101 }
             ];
-            const settlements: any[] = [];
+            const settlements: { fromUserId: string; toUserId: string; amount: number }[] = [];
             const balances = calculateBalances(users, expenses, settlements, 'user1');
 
             // 101 / 2 = 51 + 50 (remainder cent to first user).
@@ -114,7 +114,7 @@ describe('finance utilities', () => {
             const expenses = [
                 { id: 'exp1', paidById: 'user2', amount: 100 }
             ];
-            const settlements: any[] = [];
+            const settlements: { fromUserId: string; toUserId: string; amount: number }[] = [];
             const debts = getMyDebts(users, expenses, settlements, 'user1');
 
             // Alice (user1) owes Bob (user2) 50€
@@ -125,7 +125,7 @@ describe('finance utilities', () => {
             const expenses = [
                 { id: 'exp1', paidById: 'user1', amount: 100 }
             ];
-            const settlements: any[] = [];
+            const settlements: { fromUserId: string; toUserId: string; amount: number }[] = [];
             const debts = getMyDebts(users, expenses, settlements, 'user1');
 
             expect(debts).toEqual({});
@@ -145,7 +145,7 @@ describe('finance utilities', () => {
                 { id: 'exp1', paidById: 'user2', amount: 90 },
                 { id: 'exp2', paidById: 'user3', amount: 60 }
             ];
-            const settlements: any[] = [];
+            const settlements: { fromUserId: string; toUserId: string; amount: number }[] = [];
             const debts = getMyDebts(threeUsers, expenses, settlements, 'user1');
 
             // Alice owes 50 total, matched to the two creditors (40 to Bob, 10 to Carol).
@@ -167,7 +167,7 @@ describe('finance utilities', () => {
             const expenses = [
                 { id: 'exp1', paidById: 'user4', amount: 400 }
             ];
-            const settlements: any[] = [];
+            const settlements: { fromUserId: string; toUserId: string; amount: number }[] = [];
             const debts = getMyDebts(fourUsers, expenses, settlements, 'user2');
 
             // Bob (a debtor) owes 100 to the sole creditor Dave.
@@ -188,7 +188,7 @@ describe('finance utilities', () => {
             const expenses = [
                 { id: 'exp1', paidById: 'user1', amount: 90 }
             ];
-            const settlements: any[] = [];
+            const settlements: { fromUserId: string; toUserId: string; amount: number }[] = [];
             const debts = getMyDebts(threeUsers, expenses, settlements, 'user1');
 
             expect(debts).toEqual({});

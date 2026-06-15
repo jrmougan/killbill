@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { toCents } from '@/lib/currency';
 import { calculateSplitAmounts } from '@/lib/splits';
+import { Prisma } from '@/generated/prisma/client';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
         const page = hasMore ? expenses.slice(0, limit) : expenses;
         const nextCursor = hasMore ? page[page.length - 1]?.id ?? null : null;
 
-        const mappedExpenses = page.map((e: any) => ({
+        const mappedExpenses = page.map((e) => ({
             ...e,
             payer_name: e.paidBy.name
         }));
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
         const normalizedCategory = VALID_CATEGORIES.includes(category) ? category : 'other';
         const normalizedInterval = VALID_INTERVALS.includes(recurringInterval) ? recurringInterval : null;
 
-        const expenseData: any = {
+        const expenseData: Prisma.ExpenseUncheckedCreateInput = {
             description,
             amount: amountCents,
             category: normalizedCategory,

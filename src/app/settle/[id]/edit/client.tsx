@@ -1,21 +1,11 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, Wallet, Info } from "lucide-react";
+import { ArrowLeft, Check, Wallet } from "lucide-react";
 import Link from "next/link";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-
-interface SettleExpense {
-    id: string;
-    description: string;
-    amount: number;
-    myAmount: number;
-    date: string;
-    category: string;
-    paidBy: string;
-}
 
 interface EditSettleClientProps {
     settlementId: string;

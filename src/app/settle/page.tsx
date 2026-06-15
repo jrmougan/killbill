@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/db";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getMyDebts, getLastSettlementDate } from "@/lib/finance";
 import { toEuros } from "@/lib/currency";

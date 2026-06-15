@@ -39,6 +39,7 @@ export function VisualBalance({ balance, user1, user2, className }: VisualBalanc
                         >
                             <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-2xl overflow-hidden border-2 border-black">
                                 {isAvatarUrl(user1.avatar) ? (
+                                    // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                     <img src={user1.avatar!} alt={user1.name} className="w-full h-full object-cover" />
                                 ) : (
                                     user1.avatar || "👤"
@@ -56,6 +57,7 @@ export function VisualBalance({ balance, user1, user2, className }: VisualBalanc
                         >
                             <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-2xl overflow-hidden border-2 border-black">
                                 {isAvatarUrl(user2.avatar) ? (
+                                    // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                     <img src={user2.avatar!} alt={user2.name} className="w-full h-full object-cover" />
                                 ) : (
                                     user2.avatar || "👤"

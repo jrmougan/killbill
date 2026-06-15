@@ -7,7 +7,7 @@ export function calculateBalances(
     users: { id: string }[],
     expenses: { paidById: string; amount: number; splits?: { userId: string, amount: number }[] }[],
     settlements: { fromUserId: string; toUserId: string; amount: number }[],
-    currentUserId: string
+    _currentUserId: string
 ): Record<string, number> {
     const paidByUser: Record<string, number> = {};
     expenses.forEach(expense => {

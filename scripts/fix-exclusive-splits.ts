@@ -5,10 +5,41 @@
  * Run in Docker: cd /prisma-tools && npm install mysql2 && npx tsx scripts/fix-exclusive-splits.ts
  */
 
-import mysql from 'mysql2/promise';
+import mysql, { type RowDataPacket } from 'mysql2/promise';
 
 function toCents(euros: number): number {
     return Math.round(euros * 100);
+}
+
+interface ReceiptItemRow {
+    total: number;
+    assignedTo?: string | null;
+}
+
+interface ExpenseRow extends RowDataPacket {
+    id: string;
+    description: string;
+    amount: number;
+    receiptData: string | ReceiptItemRow[] | null;
+    paidById: string;
+    coupleId: string;
+}
+
+interface SplitRow extends RowDataPacket {
+    id: string;
+    userId: string;
+    amount: number;
+}
+
+interface MemberRow extends RowDataPacket {
+    id: string;
+    name: string;
+}
+
+interface CorrectSplit {
+    userId: string;
+    name: string;
+    amount: number;
 }
 
 async function main() {
@@ -23,18 +54,18 @@ async function main() {
     console.log('🔍 Finding all expenses with exclusive receipt items...\n');
 
     // Get all expenses with receiptData
-    const [expenses] = await conn.query(`
+    const [expenses] = await conn.query<ExpenseRow[]>(`
         SELECT e.id, e.description, e.amount, e.receiptData, e.paidById,
                c.id as coupleId
         FROM Expense e
         JOIN \`Couple\` c ON e.coupleId = c.id
         WHERE e.receiptData IS NOT NULL
-    `) as any[];
+    `);
 
     let fixedCount = 0;
 
     for (const expense of expenses) {
-        let receiptData: any[];
+        let receiptData: ReceiptItemRow[];
         try {
             receiptData = typeof expense.receiptData === 'string'
                 ? JSON.parse(expense.receiptData)
@@ -44,14 +75,14 @@ async function main() {
         if (!Array.isArray(receiptData) || receiptData.length === 0) continue;
 
         // Check for exclusive items
-        const hasExclusive = receiptData.some((item: any) => item.assignedTo);
+        const hasExclusive = receiptData.some((item) => item.assignedTo);
         if (!hasExclusive) continue;
 
         // Get splits for this expense
-        const [splits] = await conn.query(
+        const [splits] = await conn.query<SplitRow[]>(
             `SELECT s.id, s.userId, s.amount FROM Split s WHERE s.expenseId = ?`,
             [expense.id]
-        ) as any[];
+        );
 
         // Only fix 50/50 splits (2 splits)
         if (splits.length !== 2) {
@@ -60,10 +91,10 @@ async function main() {
         }
 
         // Get member names
-        const [members] = await conn.query(
+        const [members] = await conn.query<MemberRow[]>(
             `SELECT id, name FROM User WHERE coupleId = ?`,
             [expense.coupleId]
-        ) as any[];
+        );
 
         // Calculate correct splits
         let commonCents = 0;
@@ -81,21 +112,21 @@ async function main() {
         const commonBase = Math.floor(commonCents / 2);
         const commonRemainder = commonCents - commonBase * 2;
 
-        const correctSplits = members.map((m: any, i: number) => ({
+        const correctSplits: CorrectSplit[] = members.map((m, i) => ({
             userId: m.id,
             name: m.name,
             amount: commonBase + (i < commonRemainder ? 1 : 0) + (exclusiveByUser[m.id] || 0),
         }));
 
         // Adjust for rounding
-        const splitsSum = correctSplits.reduce((a: number, s: any) => a + s.amount, 0);
+        const splitsSum = correctSplits.reduce((a, s) => a + s.amount, 0);
         const diff = expense.amount - splitsSum;
         if (diff !== 0) correctSplits[0].amount += diff;
 
         // Check if update needed
         let needsUpdate = false;
         for (const split of splits) {
-            const correct = correctSplits.find((s: any) => s.userId === split.userId);
+            const correct = correctSplits.find((s) => s.userId === split.userId);
             if (correct && split.amount !== correct.amount) {
                 needsUpdate = true;
                 break;
@@ -110,7 +141,7 @@ async function main() {
         // Fix splits
         console.log(`\n  🔧 Fixing "${expense.description}" (${expense.amount / 100}€):`);
         for (const split of splits) {
-            const correct = correctSplits.find((s: any) => s.userId === split.userId);
+            const correct = correctSplits.find((s) => s.userId === split.userId);
             if (correct && split.amount !== correct.amount) {
                 console.log(`     ${correct.name}: ${split.amount / 100}€ → ${correct.amount / 100}€`);
                 await conn.query(`UPDATE Split SET amount = ? WHERE id = ?`, [correct.amount, split.id]);

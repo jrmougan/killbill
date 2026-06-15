@@ -53,7 +53,7 @@ export function parseOCRText(text: string): OCRParseResult {
         // 1. Check if it ends with a price
         const priceMatch = cleanLine.match(priceRegex);
         if (priceMatch && !ignoredKeywords.some(k => lowerLine.includes(k))) {
-            let price = parseFloat(priceMatch[1].replace(',', '.'));
+            const price = parseFloat(priceMatch[1].replace(',', '.'));
             let desc = cleanLine.replace(priceMatch[0], '').trim();
             let qty = 1;
             let unitPrice = price;

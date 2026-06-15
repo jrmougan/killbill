@@ -3,9 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
-import { Check, X, Clock } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { toEuros } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 
@@ -66,6 +65,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
                             <div className="flex items-center gap-3">
                                 <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center text-xl overflow-hidden">
                                     {isAvatarUrl(s.fromUser.avatar) ? (
+                                        // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                         <img src={s.fromUser.avatar!} alt={s.fromUser.name} className="h-full w-full object-cover" />
                                     ) : (
                                         s.fromUser.avatar || "👤"

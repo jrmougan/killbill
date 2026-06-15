@@ -29,8 +29,6 @@ jobs:
       - name: Run unit tests
         run: npx vitest run
 
-      # Non-blocking for now: there is pre-existing lint debt (~83 problems).
-      # Surfaces lint output without failing the pipeline; flip to blocking once green.
+      # Lint is clean (0 problems) and now gates the pipeline to keep it that way.
       - name: Lint
         run: npm run lint
-        continue-on-error: true

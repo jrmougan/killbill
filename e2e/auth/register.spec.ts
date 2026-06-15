@@ -3,7 +3,7 @@ import { seedScenario, resetDb } from '../fixtures/db.fixture';
 
 test.describe('Auth - Register', () => {
   let inviteCode: string;
-  let adminEmail: string;
+  let _adminEmail: string;
   let apiContext: Awaited<ReturnType<typeof playwrightRequest.newContext>>;
 
   test.beforeAll(async ({ playwright }) => {

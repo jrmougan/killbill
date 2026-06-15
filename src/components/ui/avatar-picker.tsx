@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, X, Image as ImageIcon, Smile } from "lucide-react";
+import { Upload, Image as ImageIcon, Smile } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AvatarPickerProps {

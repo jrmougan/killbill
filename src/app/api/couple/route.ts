@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { randomBytes } from 'crypto';
 
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
     const session = await getSession();
     if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const userId = session.userId as string;

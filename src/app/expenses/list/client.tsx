@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
-import { ArrowLeft, Plus, Receipt } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { ExpenseFilters } from "@/components/expenses/filters";
 import { ExpenseCard } from "@/components/dashboard/expense-card";
@@ -135,7 +135,7 @@ export function ExpensesListClient({ items, usersMap }: ExpensesListClientProps)
                             return (
                                 <ExpenseCard
                                     key={item.id}
-                                    expense={item as any}
+                                    expense={item as unknown as Expense}
                                     paidByUser={usersMap[item.paidBy]}
                                     allUsers={usersMap}
                                 />

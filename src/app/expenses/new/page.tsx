@@ -182,7 +182,7 @@ export default function NewExpensePage() {
         setReceiptItems([...receiptItems, withUid({ description: "", quantity: 1, price: 0, total: 0, assignedTo: null })]);
     };
 
-    const updateItem = (index: number, field: keyof ReceiptItem, value: any) => {
+    const updateItem = (index: number, field: keyof ReceiptItem, value: string | number | null) => {
         const newItems = [...receiptItems];
         const item = { ...newItems[index], [field]: value };
 
@@ -360,6 +360,7 @@ export default function NewExpensePage() {
                         </div>
                     ) : (
                         <div className="relative rounded-2xl overflow-hidden border border-white/10 aspect-video bg-black/40">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- user-uploaded receipt image of unknown dimensions; next/image would change layout/runtime */}
                             <img
                                 src={receiptPreview}
                                 alt="Ticket preview"

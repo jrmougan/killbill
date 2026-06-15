@@ -146,7 +146,7 @@ export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
                             ].map(range => (
                                 <button
                                     key={range.id}
-                                    onClick={() => handleDateRangeChange(range.id as any)}
+                                    onClick={() => handleDateRangeChange(range.id as "all" | "week" | "month" | "year")}
                                     className={cn(
                                         "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
                                         dateRange === range.id

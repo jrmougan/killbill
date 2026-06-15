@@ -2,9 +2,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Heart, Calculator, User, Pencil } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { ReceiptItem } from "@/types";
 import { DeleteExpenseButton } from "@/components/expense/delete-button";
 import { getSession } from "@/lib/auth";
@@ -69,6 +67,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     <div className="mt-4 flex items-center justify-center gap-2">
                         <div className="h-6 w-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
                             {isAvatarUrl(expense.paidBy.avatar) ? (
+                                // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                 <img src={expense.paidBy.avatar} alt={expense.paidBy.name} className="h-full w-full object-cover" />
                             ) : (
                                 expense.paidBy.avatar || "👤"
@@ -90,11 +89,12 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                             </div>
                         ) : (
                             <div className="divide-y divide-white/5">
-                                {expense.splits.map((split: any) => (
+                                {expense.splits.map((split) => (
                                     <div key={split.id} className="flex items-center justify-between px-3 py-3 sm:p-4 bg-white/5">
                                         <div className="flex items-center gap-3">
                                             <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center text-xs overflow-hidden text-lg">
                                                 {isAvatarUrl(split.user.avatar) ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                                     <img src={split.user.avatar} alt={split.user.name} className="h-full w-full object-cover" />
                                                 ) : (
                                                     split.user.avatar || "👤"
@@ -118,7 +118,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     </div>
                 </div>
 
-                {expense.receiptData && (expense.receiptData as any).length > 0 && (
+                {expense.receiptData && (expense.receiptData as unknown as ReceiptItem[]).length > 0 && (
                     <div className="space-y-4">
                         <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1 flex items-center gap-2">
                             <Calculator className="h-4 w-4 text-primary" />
@@ -174,6 +174,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     <div className="space-y-4">
                         <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1">Ticket de Compra</h3>
                         <div className="rounded-2xl border border-white/10 overflow-hidden bg-white/5">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- user-uploaded receipt image of unknown dimensions; next/image would change layout/runtime */}
                             <img
                                 src={expense.receiptUrl}
                                 alt="Ticket"

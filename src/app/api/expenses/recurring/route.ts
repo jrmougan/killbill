@@ -39,17 +39,17 @@ export async function POST() {
     let created = 0;
 
     for (const expense of dueExpenses) {
-        const interval = (expense as any).recurringInterval as string;
+        const interval = expense.recurringInterval;
         if (!interval) continue;
 
-        const newNextDate = nextDate((expense as any).nextRecurringDate as Date, interval);
+        const newNextDate = nextDate(expense.nextRecurringDate as Date, interval);
 
         // Create the new instance and advance the source date atomically, and guard
         // against concurrent invocations double-creating: the update is conditional on
         // nextRecurringDate still being the value we read, so only one runner wins.
         const result = await prisma.$transaction(async (tx) => {
             const advanced = await tx.expense.updateMany({
-                where: { id: expense.id, nextRecurringDate: (expense as any).nextRecurringDate as Date },
+                where: { id: expense.id, nextRecurringDate: expense.nextRecurringDate as Date },
                 data: { nextRecurringDate: newNextDate },
             });
 
@@ -63,7 +63,7 @@ export async function POST() {
                     category: expense.category,
                     paidById: expense.paidById,
                     coupleId: expense.coupleId,
-                    notes: (expense as any).notes ?? null,
+                    notes: expense.notes ?? null,
                     isRecurring: false, // new instance is not itself recurring
                     splits: expense.splits.length > 0
                         ? {

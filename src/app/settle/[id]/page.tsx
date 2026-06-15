@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
-import { ArrowLeft, Check, Calendar, CreditCard, User } from "lucide-react";
+import { ArrowLeft, Check, Calendar, CreditCard } from "lucide-react";
 import Link from "next/link";
 import { toEuros } from "@/lib/currency";
 

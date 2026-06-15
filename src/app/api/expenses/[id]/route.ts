@@ -2,7 +2,8 @@ import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { toCents } from "@/lib/currency";
-import { calculateSplitAmounts } from "@/lib/splits";
+import { calculateSplitAmounts, type ReceiptItemForSplit } from "@/lib/splits";
+import { Prisma } from "@/generated/prisma/client";
 
 export async function DELETE(
     request: Request,
@@ -92,8 +93,8 @@ export async function PATCH(
         }
 
         // Recalculate nextRecurringDate if recurring settings changed
-        const resolvedIsRecurring = isRecurring ?? (expense as any).isRecurring;
-        const resolvedInterval = recurringInterval !== undefined ? recurringInterval : (expense as any).recurringInterval;
+        const resolvedIsRecurring = isRecurring ?? expense.isRecurring;
+        const resolvedInterval = recurringInterval !== undefined ? recurringInterval : expense.recurringInterval;
         let nextRecurringDate: Date | null | undefined = undefined;
         if (isRecurring !== undefined || recurringInterval !== undefined) {
             if (resolvedIsRecurring && resolvedInterval) {
@@ -112,7 +113,7 @@ export async function PATCH(
             }
         }
 
-        const updateData: any = {
+        const updateData: Prisma.ExpenseUncheckedUpdateInput = {
             description: description ?? expense.description,
             amount: amountCents,
             category: category ?? expense.category,
@@ -156,7 +157,7 @@ export async function PATCH(
                         }))
                     });
                 } else if (isSplitWithPartner) {
-                    const currentReceiptData = receiptItems ?? (expense.receiptData as any[] | null);
+                    const currentReceiptData = (receiptItems ?? expense.receiptData) as ReceiptItemForSplit[] | null;
                     const splits = calculateSplitAmounts(amountCents, currentReceiptData, members);
                     await tx.split.createMany({
                         data: splits.map(s => ({ expenseId: id, userId: s.userId, amount: s.amount }))

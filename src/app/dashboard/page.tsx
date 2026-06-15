@@ -1,13 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
 import { ExpenseCard } from "@/components/dashboard/expense-card";
+import { User, Expense } from "@/types";
 import { InviteCard } from "@/components/dashboard/invite-card";
 import { JoinGroupCard } from "@/components/dashboard/join-group-card";
-import { Expense } from "@/types";
-import { Plus, GripHorizontal, Heart, Settings, BarChart2 } from "lucide-react";
+import { Plus, Heart, Settings, BarChart2 } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { calculateBalances, getLastSettlementDate } from "@/lib/finance";
@@ -103,7 +102,7 @@ export default async function DashboardPage() {
     const couple = user.couple;
     const members = couple.members;
     const partner = members.find(m => m.id !== userId);
-    const usersMap = members.reduce<Record<string, any>>((acc, u) => ({ ...acc, [u.id]: u }), {});
+    const usersMap = members.reduce<Record<string, User>>((acc, u) => ({ ...acc, [u.id]: u }), {});
 
     // Fetch ALL Expenses for balance calculation
     const allExpenses = await prisma.expense.findMany({
@@ -164,7 +163,7 @@ export default async function DashboardPage() {
             receiptUrl: e.receiptUrl,
             splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
         })),
-        ...settlements.map((s: any) => ({
+        ...settlements.map((s) => ({
             id: s.id,
             type: "SETTLEMENT" as const,
             description: `Liquidación`,
@@ -209,6 +208,7 @@ export default async function DashboardPage() {
                     <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[2px]">
                         <div className="h-full w-full rounded-full bg-black flex items-center justify-center font-bold text-xs overflow-hidden">
                             {isAvatarUrl(user.avatar) ? (
+                                // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                 <img src={user.avatar!} alt={user.name} className="h-full w-full object-cover" />
                             ) : (
                                 user.avatar || "👤"
@@ -430,7 +430,7 @@ export default async function DashboardPage() {
                                 return (
                                     <ExpenseCard
                                         key={item.id}
-                                        expense={item as any}
+                                        expense={item as Expense}
                                         paidByUser={usersMap[item.paidBy]}
                                         allUsers={usersMap}
                                     />

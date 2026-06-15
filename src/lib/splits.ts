@@ -1,6 +1,6 @@
 import { toCents } from './currency';
 
-interface ReceiptItemForSplit {
+export interface ReceiptItemForSplit {
     total: number;        // in euros (float)
     assignedTo?: string | null;
 }

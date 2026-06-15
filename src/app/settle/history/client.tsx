@@ -17,12 +17,12 @@ interface Settlement {
     method: string;
     fromUserId: string;
     toUserId: string;
-    fromUser: { name: string; avatar: string };
-    toUser: { name: string; avatar: string };
+    fromUser: { name: string; avatar: string | null };
+    toUser: { name: string; avatar: string | null };
 }
 
 interface SettlementHistoryClientProps {
-    settlements: any[]; // using any for quick prop mapping, but interface defined above
+    settlements: Settlement[];
     currentUserId: string;
 }
 

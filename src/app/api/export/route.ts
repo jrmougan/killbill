@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { toEuros } from '@/lib/currency';
+import { Prisma } from '@/generated/prisma/client';
 
 function escapeCsvField(value: string | null | undefined): string {
     if (value === null || value === undefined) return '';
@@ -25,15 +26,16 @@ export async function GET(request: Request) {
     const from = searchParams.get('from');
     const to = searchParams.get('to');
 
-    const where: any = { coupleId: user.coupleId };
+    const where: Prisma.ExpenseWhereInput = { coupleId: user.coupleId };
     if (from || to) {
-        where.date = {};
-        if (from) where.date.gte = new Date(from);
+        const dateFilter: Prisma.DateTimeFilter = {};
+        if (from) dateFilter.gte = new Date(from);
         if (to) {
             const toDate = new Date(to);
             toDate.setDate(toDate.getDate() + 1); // inclusive end date
-            where.date.lt = toDate;
+            dateFilter.lt = toDate;
         }
+        where.date = dateFilter;
     }
 
     const expenses = await prisma.expense.findMany({
@@ -50,7 +52,7 @@ export async function GET(request: Request) {
 
     const header = ['fecha', 'descripcion', 'importe', 'categoria', 'pagado_por', 'mi_parte', 'notas'].join(',');
 
-    const rows = expenses.map((e: any) => {
+    const rows = expenses.map((e) => {
         const fecha = e.date.toISOString().split('T')[0];
         const importe = toEuros(e.amount).toFixed(2);
         const miParte = e.splits.length > 0 ? toEuros(e.splits[0].amount).toFixed(2) : '';

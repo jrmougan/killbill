@@ -30,7 +30,7 @@ export async function POST(request: Request) {
         }
 
         // Try to find as InviteCode first (admin-created)
-        let invite = await prisma.inviteCode.findUnique({
+        const invite = await prisma.inviteCode.findUnique({
             where: { code: inviteCode },
         });
 
