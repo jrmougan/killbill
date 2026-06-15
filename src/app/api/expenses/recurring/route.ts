@@ -42,35 +42,44 @@ export async function POST() {
         const interval = (expense as any).recurringInterval as string;
         if (!interval) continue;
 
-        // Create new expense with same data, new date = today
-        await prisma.expense.create({
-            data: {
-                description: expense.description,
-                amount: expense.amount,
-                category: expense.category,
-                paidById: expense.paidById,
-                coupleId: expense.coupleId,
-                notes: (expense as any).notes ?? null,
-                isRecurring: false, // new instance is not itself recurring
-                splits: expense.splits.length > 0
-                    ? {
-                          create: expense.splits.map((s) => ({
-                              userId: s.userId,
-                              amount: s.amount,
-                          })),
-                      }
-                    : undefined,
-            },
-        });
-
-        // Advance nextRecurringDate on the original expense
         const newNextDate = nextDate((expense as any).nextRecurringDate as Date, interval);
-        await prisma.expense.update({
-            where: { id: expense.id },
-            data: { nextRecurringDate: newNextDate },
+
+        // Create the new instance and advance the source date atomically, and guard
+        // against concurrent invocations double-creating: the update is conditional on
+        // nextRecurringDate still being the value we read, so only one runner wins.
+        const result = await prisma.$transaction(async (tx) => {
+            const advanced = await tx.expense.updateMany({
+                where: { id: expense.id, nextRecurringDate: (expense as any).nextRecurringDate as Date },
+                data: { nextRecurringDate: newNextDate },
+            });
+
+            // Another concurrent run already advanced this expense — skip to avoid a duplicate.
+            if (advanced.count === 0) return false;
+
+            await tx.expense.create({
+                data: {
+                    description: expense.description,
+                    amount: expense.amount,
+                    category: expense.category,
+                    paidById: expense.paidById,
+                    coupleId: expense.coupleId,
+                    notes: (expense as any).notes ?? null,
+                    isRecurring: false, // new instance is not itself recurring
+                    splits: expense.splits.length > 0
+                        ? {
+                              create: expense.splits.map((s) => ({
+                                  userId: s.userId,
+                                  amount: s.amount,
+                              })),
+                          }
+                        : undefined,
+                },
+            });
+
+            return true;
         });
 
-        created++;
+        if (result) created++;
     }
 
     return NextResponse.json({ created });

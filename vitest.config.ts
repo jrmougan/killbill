@@ -8,6 +8,10 @@ export default defineConfig({
         environment: 'jsdom',
         globals: true,
         setupFiles: './vitest.setup.ts',
+        // Vitest runs unit tests only; the e2e/ folder holds Playwright specs
+        // which must not be collected here (they use Playwright's own runner).
+        include: ['src/**/*.{test,spec}.{ts,tsx}'],
+        exclude: ['node_modules', 'dist', '.next', 'e2e/**'],
     },
     resolve: {
         alias: {

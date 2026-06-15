@@ -109,43 +109,53 @@ export async function PATCH(
         if (recurringInterval !== undefined) updateData.recurringInterval = recurringInterval;
         if (nextRecurringDate !== undefined) updateData.nextRecurringDate = nextRecurringDate;
 
-        const updatedExpense = await prisma.expense.update({
-            where: { id },
-            data: updateData,
-        });
-
         // Recalculate splits if split mode changed, amount changed, receiptItems changed, or customSplits provided
         const shouldRecalcSplits = splitWithPartner !== undefined || amount !== undefined || receiptItems !== undefined || customSplits !== undefined;
-        if (shouldRecalcSplits && partner) {
-            await prisma.split.deleteMany({ where: { expenseId: id } });
 
-            if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
-                await prisma.split.createMany({
-                    data: customSplits.map((s: { userId: string; amount: number }) => ({
-                        expenseId: id,
-                        userId: s.userId,
-                        amount: s.amount,
-                    }))
-                });
-            } else {
-                const currentSplits = await prisma.split.findMany({ where: { expenseId: id } });
-                const isSplitWithPartner = splitWithPartner !== undefined
-                    ? splitWithPartner
-                    : currentSplits.length === 2;
+        // Determine the existing split mode BEFORE deleting anything — otherwise the
+        // count is always 0 and an amount-only edit silently collapses a 50/50 split.
+        let isSplitWithPartner = false;
+        if (shouldRecalcSplits && partner && !(customSplits && Array.isArray(customSplits) && customSplits.length > 0)) {
+            const existingSplits = await prisma.split.findMany({ where: { expenseId: id } });
+            isSplitWithPartner = splitWithPartner !== undefined
+                ? splitWithPartner
+                : existingSplits.length === 2;
+        }
 
-                if (isSplitWithPartner) {
+        // Update the expense and rewrite its splits atomically so a failure mid-way
+        // can never leave the expense updated with stale/orphaned splits.
+        const updatedExpense = await prisma.$transaction(async (tx) => {
+            const updated = await tx.expense.update({
+                where: { id },
+                data: updateData,
+            });
+
+            if (shouldRecalcSplits && partner) {
+                await tx.split.deleteMany({ where: { expenseId: id } });
+
+                if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
+                    await tx.split.createMany({
+                        data: customSplits.map((s: { userId: string; amount: number }) => ({
+                            expenseId: id,
+                            userId: s.userId,
+                            amount: s.amount,
+                        }))
+                    });
+                } else if (isSplitWithPartner) {
                     const currentReceiptData = receiptItems ?? (expense.receiptData as any[] | null);
                     const splits = calculateSplitAmounts(amountCents, currentReceiptData, members);
-                    await prisma.split.createMany({
+                    await tx.split.createMany({
                         data: splits.map(s => ({ expenseId: id, userId: s.userId, amount: s.amount }))
                     });
                 } else {
-                    await prisma.split.create({
+                    await tx.split.create({
                         data: { expenseId: id, userId: partner.id, amount: amountCents }
                     });
                 }
             }
-        }
+
+            return updated;
+        });
 
         return NextResponse.json({ success: true, expense: updatedExpense });
     } catch (error) {
