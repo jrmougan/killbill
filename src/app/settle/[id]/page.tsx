@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
 import { ArrowLeft, Check, Calendar, CreditCard } from "lucide-react";
 import Link from "next/link";
-import { toEuros } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
+import { getCategoryById } from "@/lib/categories";
+import { getSettlementStatusLabel, getSettlementMethodLabel } from "@/lib/settlement-labels";
 
 interface SettlementDetailPageProps {
     params: { id: string };
@@ -59,10 +61,10 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                 <div className="text-center space-y-2">
                     <p className="text-xs font-bold uppercase tracking-widest text-blue-400">Total Liquidado</p>
                     <h2 className="text-5xl font-mono font-bold text-white">
-                        {toEuros(settlement.amount).toFixed(2)}€
+                        {formatCurrency(settlement.amount)}
                     </h2>
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-bold border border-blue-500/30">
-                        <Check className="h-3 w-3" /> {settlement.status}
+                        <Check className="h-3 w-3" /> {getSettlementStatusLabel(settlement.status)}
                     </span>
                 </div>
 
@@ -94,7 +96,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                         <CreditCard className="h-4 w-4" />
-                        <span className="text-xs">{settlement.method}</span>
+                        <span className="text-xs">{getSettlementMethodLabel(settlement.method)}</span>
                     </div>
                 </div>
             </GlassCard>
@@ -123,9 +125,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                                 <GlassCard key={expense.id} className="p-4 flex items-center justify-between border-white/5 bg-white/5">
                                     <div className="flex items-center gap-3">
                                         <div className="h-8 w-8 rounded-lg bg-white/5 flex items-center justify-center text-sm">
-                                            {expense.category === 'food' ? '🍕' :
-                                                expense.category === 'transport' ? '🚗' :
-                                                    expense.category === 'entertainment' ? '🎬' : '📦'}
+                                            {getCategoryById(expense.category).emoji}
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold">{expense.description}</p>
@@ -135,8 +135,8 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-mono font-bold">{toEuros(myShareCents).toFixed(2)}€</p>
-                                        <p className="text-[10px] text-muted-foreground italic">de {toEuros(expense.amount).toFixed(2)}€</p>
+                                        <p className="text-sm font-mono font-bold">{formatCurrency(myShareCents)}</p>
+                                        <p className="text-[10px] text-muted-foreground italic">de {formatCurrency(expense.amount)}</p>
                                     </div>
                                 </GlassCard>
                             );

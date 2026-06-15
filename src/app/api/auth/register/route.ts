@@ -76,7 +76,22 @@ export async function POST(request: Request) {
         // The invite-code consume is conditional (updateMany where still unused)
         // so that concurrent signups can't both consume the same single-use code.
         const inviteId = invite?.id;
+        const coupleId = couple?.id;
         const user = await prisma.$transaction(async (tx) => {
+            // Re-check the couple member cap inside the transaction so the
+            // count check and the user creation are atomic. Without this,
+            // concurrent signups against the same couple code could both pass
+            // the pre-transaction check and push the couple past 2 members.
+            if (coupleId) {
+                const memberCount = await tx.user.count({
+                    where: { coupleId },
+                });
+
+                if (memberCount >= 2) {
+                    throw new Error('COUPLE_FULL');
+                }
+            }
+
             // Create user (with coupleId if registering via couple invite)
             const created = await tx.user.create({
                 data: {
@@ -134,6 +149,9 @@ export async function POST(request: Request) {
     } catch (error) {
         if (error instanceof Error && error.message === 'INVITE_ALREADY_USED') {
             return NextResponse.json({ error: 'Este código ya fue utilizado' }, { status: 400 });
+        }
+        if (error instanceof Error && error.message === 'COUPLE_FULL') {
+            return NextResponse.json({ error: 'Esta pareja ya está completa' }, { status: 400 });
         }
         console.error("Registration Error:", error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

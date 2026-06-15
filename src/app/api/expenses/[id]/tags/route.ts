@@ -59,9 +59,13 @@ export async function DELETE(
     const { tagId } = body;
     if (!tagId) return NextResponse.json({ error: 'tagId is required' }, { status: 400 });
 
-    await prisma.expenseTag.delete({
-        where: { expenseId_tagId: { expenseId, tagId } },
+    // Idempotent delete: a missing expenseTag must not 500.
+    const { count } = await prisma.expenseTag.deleteMany({
+        where: { expenseId, tagId },
     });
+    if (count === 0) {
+        return NextResponse.json({ error: 'Tag not found on expense' }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
 }

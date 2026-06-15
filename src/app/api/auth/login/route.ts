@@ -21,7 +21,7 @@ export async function POST(request: Request) {
         const { email, password, inviteCode } = body;
 
         if (!email || !password) {
-            return NextResponse.json({ error: 'Email and password required' }, { status: 400 });
+            return NextResponse.json({ error: 'Email y contraseña obligatorios' }, { status: 400 });
         }
 
         // 1. Find User
@@ -30,14 +30,14 @@ export async function POST(request: Request) {
         });
 
         if (!user || !user.password) {
-            return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
+            return NextResponse.json({ error: 'Credenciales incorrectas' }, { status: 401 });
         }
 
         // 2. Verify Password
         const isValid = await bcrypt.compare(password, user.password);
 
         if (!isValid) {
-            return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
+            return NextResponse.json({ error: 'Credenciales incorrectas' }, { status: 401 });
         }
 
         // 3. Handle Couple Invite (explicit + safe).

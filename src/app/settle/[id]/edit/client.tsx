@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 interface EditSettleClientProps {
     settlementId: string;
     initialAmount: number;
-    initialMethod: "CASH" | "BIZUM";
+    initialMethod: "CASH" | "BIZUM" | "TRANSFER";
     toUser: {
         id: string;
         name: string;
@@ -26,7 +26,7 @@ export function EditSettleClient({
 }: EditSettleClientProps) {
     const router = useRouter();
     const [amount, setAmount] = useState<string>(initialAmount.toString());
-    const [method, setMethod] = useState<"CASH" | "BIZUM">(initialMethod);
+    const [method, setMethod] = useState<"CASH" | "BIZUM" | "TRANSFER">(initialMethod);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
 
@@ -100,7 +100,7 @@ export function EditSettleClient({
                             onClick={() => setMethod("BIZUM")}
                             className={cn(
                                 "p-4 rounded-xl border flex flex-col items-center gap-2 transition-all",
-                                method === "BIZUM" ? "bg-primary/20 border-primary" : "bg-white/5 border-white/5"
+                                method === "BIZUM" || method === "TRANSFER" ? "bg-primary/20 border-primary" : "bg-white/5 border-white/5"
                             )}
                         >
                             <Wallet className="h-6 w-6 text-emerald-400" />

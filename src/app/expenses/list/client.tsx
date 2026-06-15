@@ -8,6 +8,8 @@ import Link from "next/link";
 import { ExpenseFilters } from "@/components/expenses/filters";
 import { ExpenseCard } from "@/components/dashboard/expense-card";
 import { User, Expense } from "@/types";
+import { formatEuros } from "@/lib/currency";
+import { getSettlementMethodLabel, getSettlementStatusLabel } from "@/lib/settlement-labels";
 
 interface UnifiedItem {
     id: string;
@@ -157,16 +159,16 @@ export function ExpensesListClient({ items, usersMap }: ExpensesListClientProps)
                                                     {fromUser?.name} ha pagado a {toUser?.name}
                                                 </p>
                                                 <p className="text-[10px] text-muted-foreground mt-1">
-                                                    {new Date(item.date).toLocaleDateString()} • {item.method}
+                                                    {new Date(item.date).toLocaleDateString()} • {item.method ? getSettlementMethodLabel(item.method) : ""}
                                                 </p>
                                             </div>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-lg font-mono font-bold text-blue-400">
-                                                {item.amount.toFixed(2)}€
+                                                {formatEuros(item.amount)}
                                             </p>
                                             <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">
-                                                {item.status}
+                                                {item.status ? getSettlementStatusLabel(item.status) : ""}
                                             </span>
                                         </div>
                                     </GlassCard>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,6 @@ import {
     Sun,
     Moon,
     Palette,
-    Upload,
     PieChart,
     Tag,
 } from "lucide-react";
@@ -51,12 +50,6 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
     const { theme, toggleTheme } = useTheme();
     const [name, setName] = useState(user.name);
     const [avatar, setAvatar] = useState(user.avatar);
-    const [avatarTab, setAvatarTab] = useState<"emoji" | "foto">(
-        isAvatarUrl(user.avatar) ? "foto" : "emoji"
-    );
-    const [isUploading, setIsUploading] = useState(false);
-    const [uploadError, setUploadError] = useState<string | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [isUnlinking, setIsUnlinking] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -116,32 +109,6 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
         }
     };
 
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setIsUploading(true);
-        setUploadError(null);
-        try {
-            const formData = new FormData();
-            formData.append("file", file);
-            const uploadRes = await fetch("/api/upload", {
-                method: "POST",
-                body: formData,
-            });
-            if (!uploadRes.ok) {
-                setUploadError("Error al subir la imagen");
-                return;
-            }
-            const { url } = await uploadRes.json();
-            setAvatar(url);
-        } catch {
-            setUploadError("Error de conexión");
-        } finally {
-            setIsUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = "";
-        }
-    };
-
     return (
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto relative pb-10">
             <header className="flex items-center gap-4 pt-2">
@@ -165,76 +132,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                         <div className="space-y-3">
                             <label className="text-xs font-medium text-muted-foreground ml-1 mb-2 block text-center">Tu Avatar</label>
 
-                            {/* Tab selector */}
-                            <div className="flex rounded-xl overflow-hidden border border-white/10 bg-white/5">
-                                <button
-                                    type="button"
-                                    onClick={() => setAvatarTab("emoji")}
-                                    className={`flex-1 py-2 text-xs font-semibold transition-colors ${
-                                        avatarTab === "emoji"
-                                            ? "bg-primary text-primary-foreground"
-                                            : "text-muted-foreground hover:text-foreground"
-                                    }`}
-                                >
-                                    Emoji
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setAvatarTab("foto")}
-                                    className={`flex-1 py-2 text-xs font-semibold transition-colors ${
-                                        avatarTab === "foto"
-                                            ? "bg-primary text-primary-foreground"
-                                            : "text-muted-foreground hover:text-foreground"
-                                    }`}
-                                >
-                                    Foto
-                                </button>
-                            </div>
-
-                            {avatarTab === "emoji" && (
-                                <AvatarPicker
-                                    currentAvatar={isAvatarUrl(avatar) ? "" : avatar}
-                                    onAvatarChange={setAvatar}
-                                />
-                            )}
-
-                            {avatarTab === "foto" && (
-                                <div className="flex flex-col items-center gap-3">
-                                    {isAvatarUrl(avatar) ? (
-                                        // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
-                                        <img
-                                            src={avatar}
-                                            alt="Tu foto de perfil"
-                                            className="h-20 w-20 rounded-full object-cover border-2 border-primary/40"
-                                        />
-                                    ) : (
-                                        <div className="h-20 w-20 rounded-full bg-white/10 border-2 border-dashed border-white/20 flex items-center justify-center text-muted-foreground">
-                                            <Upload className="h-6 w-6" />
-                                        </div>
-                                    )}
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        onChange={handleFileChange}
-                                    />
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        className="gap-2 bg-white/5 border border-white/10 hover:bg-white/10"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        disabled={isUploading}
-                                        isLoading={isUploading}
-                                    >
-                                        <Upload className="h-4 w-4" />
-                                        {isUploading ? "Subiendo..." : "Subir foto"}
-                                    </Button>
-                                    {uploadError && (
-                                        <p className="text-xs text-red-400 text-center">{uploadError}</p>
-                                    )}
-                                </div>
-                            )}
+                            <AvatarPicker currentAvatar={avatar} onAvatarChange={setAvatar} />
                         </div>
 
                         <div className="space-y-2">

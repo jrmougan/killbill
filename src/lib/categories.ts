@@ -9,7 +9,6 @@ export interface Category {
     color: string;
     bgColor: string;
     icon: LucideIcon;
-    scannable: boolean; // Whether OCR scanning makes sense for this category
 }
 
 export const CATEGORIES: Record<string, Category> = {
@@ -21,7 +20,6 @@ export const CATEGORIES: Record<string, Category> = {
         color: "text-pink-400",
         bgColor: "bg-pink-400/20",
         icon: ShoppingBag,
-        scannable: true,
     },
     food: {
         id: "food",
@@ -31,7 +29,6 @@ export const CATEGORIES: Record<string, Category> = {
         color: "text-orange-400",
         bgColor: "bg-orange-400/20",
         icon: Coffee,
-        scannable: true,
     },
     rent: {
         id: "rent",
@@ -41,7 +38,6 @@ export const CATEGORIES: Record<string, Category> = {
         color: "text-blue-400",
         bgColor: "bg-blue-400/20",
         icon: Home,
-        scannable: false,
     },
     utilities: {
         id: "utilities",
@@ -51,7 +47,6 @@ export const CATEGORIES: Record<string, Category> = {
         color: "text-yellow-400",
         bgColor: "bg-yellow-400/20",
         icon: Lightbulb,
-        scannable: false,
     },
     transport: {
         id: "transport",
@@ -61,7 +56,6 @@ export const CATEGORIES: Record<string, Category> = {
         color: "text-green-400",
         bgColor: "bg-green-400/20",
         icon: TramFront,
-        scannable: false,
     },
     entertainment: {
         id: "entertainment",
@@ -71,7 +65,6 @@ export const CATEGORIES: Record<string, Category> = {
         color: "text-purple-400",
         bgColor: "bg-purple-400/20",
         icon: Clapperboard,
-        scannable: false,
     },
     health: {
         id: "health",
@@ -81,7 +74,6 @@ export const CATEGORIES: Record<string, Category> = {
         color: "text-red-400",
         bgColor: "bg-red-400/20",
         icon: Heart,
-        scannable: true,
     },
     other: {
         id: "other",
@@ -91,7 +83,6 @@ export const CATEGORIES: Record<string, Category> = {
         color: "text-gray-400",
         bgColor: "bg-gray-400/20",
         icon: Receipt,
-        scannable: true,
     },
 };
 
@@ -100,17 +91,6 @@ export const getCategoryById = (id: string): Category => {
     return CATEGORIES[id] || CATEGORIES.other;
 };
 
-export const getScannableCategories = (): string[] => {
-    return Object.values(CATEGORIES)
-        .filter(cat => cat.scannable)
-        .map(cat => cat.id);
-};
-
 export const getAllCategories = (): Category[] => {
     return Object.values(CATEGORIES);
-};
-
-export const getCategoryColor = (id: string): string => {
-    const cat = getCategoryById(id);
-    return `${cat.color} ${cat.bgColor}`;
 };

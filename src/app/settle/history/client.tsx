@@ -7,7 +7,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { GlassCard } from "@/components/ui/glass-card";
-import { toEuros } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
+import { getSettlementStatusLabel } from "@/lib/settlement-labels";
 
 interface Settlement {
     id: string;
@@ -53,14 +54,15 @@ export function SettlementHistoryClient({ settlements, currentUserId }: Settleme
     };
 
     const getStatusInfo = (status: string) => {
+        const label = getSettlementStatusLabel(status);
         switch (status) {
             case "CONFIRMED":
-                return { label: "Confirmado", color: "bg-emerald-500/20 text-emerald-400" };
+                return { label, color: "bg-emerald-500/20 text-emerald-400" };
             case "REJECTED":
-                return { label: "Rechazado", color: "bg-red-500/20 text-red-400" };
+                return { label, color: "bg-red-500/20 text-red-400" };
             case "PENDING":
             default:
-                return { label: "Pendiente", color: "bg-yellow-500/20 text-yellow-400" };
+                return { label, color: "bg-yellow-500/20 text-yellow-400" };
         }
     };
 
@@ -117,7 +119,7 @@ export function SettlementHistoryClient({ settlements, currentUserId }: Settleme
                                         </div>
                                     </div>
                                     <div className="text-right space-y-1">
-                                        <span className="font-mono font-bold text-xl block leading-none">{toEuros(s.amount).toFixed(2)}€</span>
+                                        <span className="font-mono font-bold text-xl block leading-none">{formatCurrency(s.amount)}</span>
                                         <span className={cn(
                                             "text-[10px] font-bold px-2 py-0.5 rounded-full inline-block uppercase tracking-wider",
                                             statusInfo.color

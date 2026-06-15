@@ -74,6 +74,22 @@ export async function PATCH(
 
         const members = expense.couple.members;
         const partner = members.find(m => m.id !== expense.paidById);
+        const memberIds = new Set(members.map(m => m.id));
+
+        // Validate description (when provided) is a non-empty string; an empty one previously 500'd at the DB layer.
+        if (description !== undefined && (typeof description !== 'string' || description.trim().length === 0)) {
+            return NextResponse.json({ error: 'Invalid description' }, { status: 400 });
+        }
+
+        // Normalize/validate enum inputs so out-of-vocabulary values cannot trigger a DB enum 500.
+        const VALID_CATEGORIES = ['shopping', 'food', 'rent', 'utilities', 'transport', 'entertainment', 'health', 'other'];
+        const VALID_INTERVALS = ['weekly', 'monthly', 'yearly'];
+        if (category !== undefined && category !== null && !VALID_CATEGORIES.includes(category)) {
+            return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+        }
+        if (recurringInterval !== undefined && recurringInterval !== null && !VALID_INTERVALS.includes(recurringInterval)) {
+            return NextResponse.json({ error: 'Invalid recurring interval' }, { status: 400 });
+        }
 
         // Update expense
         const amountCents = amount ? toCents(parseFloat(amount)) : expense.amount;
@@ -83,6 +99,12 @@ export async function PATCH(
 
         // Validate that client-supplied splits sum exactly to the expense amount.
         if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
+            if (customSplits.some((s: { amount: number }) => (s?.amount ?? 0) < 0)) {
+                return NextResponse.json({ error: 'Split amounts must not be negative' }, { status: 400 });
+            }
+            if (customSplits.some((s: { userId: string }) => !memberIds.has(s?.userId))) {
+                return NextResponse.json({ error: 'Split user is not a member of your couple' }, { status: 400 });
+            }
             const splitsTotal = customSplits.reduce(
                 (sum: number, s: { amount: number }) => sum + (s?.amount ?? 0),
                 0

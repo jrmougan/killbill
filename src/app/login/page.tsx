@@ -24,6 +24,7 @@ function LoginForm() {
         try {
             const res = await fetch("/api/auth/login", {
                 method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password, inviteCode }),
             });
 
@@ -70,6 +71,7 @@ function LoginForm() {
                         onChange={(e) => setEmail(e.target.value)}
                         required
                         autoFocus
+                        autoComplete="email"
                         className="text-lg h-12"
                     />
                     <Input
@@ -79,6 +81,7 @@ function LoginForm() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
+                        autoComplete="current-password"
                         className="text-lg h-12"
                     />
                 </div>

@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ReceiptItem } from "@/types";
 import { getAllCategories } from "@/lib/categories";
+import { formatEuros } from "@/lib/currency";
 
 type SplitMode = "shared" | "solo" | "custom";
 type RecurringInterval = "weekly" | "monthly" | "yearly";
@@ -510,11 +511,11 @@ export function EditExpenseClient({
                         <div className="text-xs px-2 py-2 bg-white/5 rounded-lg space-y-1">
                             <div className="flex justify-between font-semibold">
                                 <span className="text-blue-300">Tu parte:</span>
-                                <span className="text-blue-300">{itemSplitMyAmount.toFixed(2)}€</span>
+                                <span className="text-blue-300">{formatEuros(itemSplitMyAmount)}</span>
                             </div>
                             <div className="flex justify-between font-semibold">
                                 <span className="text-pink-300">{partner?.name ?? "Pareja"}:</span>
-                                <span className="text-pink-300">{itemSplitPartnerAmount.toFixed(2)}€</span>
+                                <span className="text-pink-300">{formatEuros(itemSplitPartnerAmount)}</span>
                             </div>
                         </div>
                     )}
@@ -571,7 +572,7 @@ export function EditExpenseClient({
                             </div>
                             {amountNum > 0 && (
                                 <div className="text-xs text-center text-muted-foreground">
-                                    Yo: <strong className="text-white">{myAmount}€</strong> — {partner?.name ?? "Pareja"}: <strong className="text-white">{partnerAmount}€</strong>
+                                    Yo: <strong className="text-white">{formatEuros(Number(myAmount))}</strong> — {partner?.name ?? "Pareja"}: <strong className="text-white">{formatEuros(Number(partnerAmount))}</strong>
                                 </div>
                             )}
                             {myPercent + partnerPercent !== 100 && (

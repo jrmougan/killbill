@@ -8,6 +8,7 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CATEGORIES, getAllCategories } from "@/lib/categories";
+import { formatEuros } from "@/lib/currency";
 
 interface BudgetEntry {
     budget: {
@@ -51,6 +52,7 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
     const [addingCategory, setAddingCategory] = useState<string | null>(null);
     const [addValue, setAddValue] = useState("");
     const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const budgetedCategories = new Set(budgetData.map((b) => b.budget.category));
     const unbudgetedCategories = getAllCategories().filter(
@@ -58,8 +60,12 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
     );
 
     const handleSaveEdit = async (entry: BudgetEntry) => {
-        const amount = parseFloat(editValue);
-        if (isNaN(amount) || amount < 0) return;
+        const amount = parseFloat(editValue.replace(",", "."));
+        if (isNaN(amount) || amount < 0) {
+            setError("Introduce un importe válido");
+            return;
+        }
+        setError(null);
         setSaving(true);
         try {
             await fetch("/api/budget", {
@@ -76,8 +82,12 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
     };
 
     const handleAddBudget = async (categoryId: string) => {
-        const amount = parseFloat(addValue);
-        if (isNaN(amount) || amount < 0) return;
+        const amount = parseFloat(addValue.replace(",", "."));
+        if (isNaN(amount) || amount < 0) {
+            setError("Introduce un importe válido");
+            return;
+        }
+        setError(null);
         setSaving(true);
         try {
             await fetch("/api/budget", {
@@ -103,7 +113,7 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                 </Link>
                 <div>
                     <h1 className="text-xl font-bold">Presupuestos</h1>
-                    <p className="text-xs text-muted-foreground capitalize">{monthLabel}</p>
+                    <p className="text-xs text-muted-foreground">{monthLabel}</p>
                 </div>
             </header>
 
@@ -140,34 +150,37 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                                     </div>
 
                                     {isEditing ? (
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                value={editValue}
-                                                onChange={(e) => setEditValue(e.target.value)}
-                                                className="w-24 h-8 text-sm"
-                                                placeholder="0.00"
-                                                autoFocus
-                                            />
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                className="h-8 w-8 text-emerald-400 hover:text-emerald-300"
-                                                onClick={() => handleSaveEdit(entry)}
-                                                disabled={saving}
-                                            >
-                                                <Check className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                className="h-8 w-8 text-muted-foreground hover:text-white"
-                                                onClick={() => { setEditingId(null); setEditValue(""); }}
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </Button>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={editValue}
+                                                    onChange={(e) => setEditValue(e.target.value)}
+                                                    className="w-24 h-8 text-sm"
+                                                    placeholder="0.00"
+                                                    autoFocus
+                                                />
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8 text-emerald-400 hover:text-emerald-300"
+                                                    onClick={() => handleSaveEdit(entry)}
+                                                    disabled={saving}
+                                                >
+                                                    <Check className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-white"
+                                                    onClick={() => { setEditingId(null); setEditValue(""); setError(null); }}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            {error && <p className="text-xs text-red-400">{error}</p>}
                                         </div>
                                     ) : (
                                         <Button
@@ -177,6 +190,7 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                                             onClick={() => {
                                                 setEditingId(entry.budget.id);
                                                 setEditValue(entry.budget.amount.toString());
+                                                setError(null);
                                             }}
                                         >
                                             <Pencil className="h-4 w-4" />
@@ -188,10 +202,10 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
 
                                 <div className="flex justify-between text-xs">
                                     <span className="text-muted-foreground">
-                                        Gastado: <span className="font-mono font-semibold text-foreground">{entry.spent.toFixed(2)}€</span>
+                                        Gastado: <span className="font-mono font-semibold text-foreground">{formatEuros(entry.spent)}</span>
                                     </span>
                                     <span className="text-muted-foreground">
-                                        Límite: <span className="font-mono font-semibold text-foreground">{entry.budget.amount.toFixed(2)}€</span>
+                                        Límite: <span className="font-mono font-semibold text-foreground">{formatEuros(entry.budget.amount)}</span>
                                     </span>
                                 </div>
                             </GlassCard>
@@ -221,34 +235,37 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                                     </div>
 
                                     {isAdding ? (
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                value={addValue}
-                                                onChange={(e) => setAddValue(e.target.value)}
-                                                className="w-24 h-8 text-sm"
-                                                placeholder="0.00"
-                                                autoFocus
-                                            />
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                className="h-8 w-8 text-emerald-400 hover:text-emerald-300"
-                                                onClick={() => handleAddBudget(cat.id)}
-                                                disabled={saving}
-                                            >
-                                                <Check className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                className="h-8 w-8 text-muted-foreground hover:text-white"
-                                                onClick={() => { setAddingCategory(null); setAddValue(""); }}
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </Button>
+                                        <div className="flex flex-col items-end gap-1">
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={addValue}
+                                                    onChange={(e) => setAddValue(e.target.value)}
+                                                    className="w-24 h-8 text-sm"
+                                                    placeholder="0.00"
+                                                    autoFocus
+                                                />
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8 text-emerald-400 hover:text-emerald-300"
+                                                    onClick={() => handleAddBudget(cat.id)}
+                                                    disabled={saving}
+                                                >
+                                                    <Check className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-white"
+                                                    onClick={() => { setAddingCategory(null); setAddValue(""); setError(null); }}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            {error && <p className="text-xs text-red-400">{error}</p>}
                                         </div>
                                     ) : (
                                         <Button
@@ -258,6 +275,7 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                                             onClick={() => {
                                                 setAddingCategory(cat.id);
                                                 setAddValue("");
+                                                setError(null);
                                             }}
                                         >
                                             <Plus className="h-4 w-4" />

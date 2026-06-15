@@ -41,9 +41,9 @@ export default async function SettlePage() {
         where: { coupleId: couple.id },
     });
 
-    // Only confirmed and pending settlements count towards debt calculation.
-    // Rejected settlements are ignored so they don't incorrectly reduce debt.
-    const effectiveSettlements = settlements.filter(s => s.status !== "REJECTED");
+    // Only confirmed settlements count towards debt calculation.
+    // Pending settlements must not reduce debt before the receiver confirms.
+    const effectiveSettlements = settlements.filter(s => s.status === "CONFIRMED");
 
     // Calculate My Debts (High Level)
     const myDebtsMap = getMyDebts(

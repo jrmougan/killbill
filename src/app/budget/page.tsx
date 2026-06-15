@@ -58,7 +58,8 @@ export default async function BudgetPage() {
         };
     });
 
-    const monthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+    const rawMonthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+    const monthLabel = rawMonthLabel.charAt(0).toUpperCase() + rawMonthLabel.slice(1);
 
     return <BudgetClient budgetData={budgetData} monthLabel={monthLabel} />;
 }

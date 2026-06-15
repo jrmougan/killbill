@@ -36,7 +36,7 @@ export default async function EditSettlePage({ params }: EditSettlePageProps) {
         <EditSettleClient
             settlementId={id}
             initialAmount={toEuros(settlement.amount)}
-            initialMethod={settlement.method as "CASH" | "BIZUM"}
+            initialMethod={settlement.method as "CASH" | "BIZUM" | "TRANSFER"}
             toUser={{
                 id: settlement.toUserId,
                 name: settlement.toUser.name,

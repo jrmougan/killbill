@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ReceiptItem } from "@/types";
 import { getAllCategories } from "@/lib/categories";
+import { formatEuros } from "@/lib/currency";
 
 type SplitMode = "shared" | "solo" | "custom";
 type RecurringInterval = "weekly" | "monthly" | "yearly";
@@ -81,8 +82,10 @@ export default function NewExpensePage() {
     const partner = members.find((m) => m.id !== userId);
     const partnerPercent = 100 - myPercent;
     const amountNum = parseFloat(amount) || 0;
-    const myAmount = ((amountNum * myPercent) / 100).toFixed(2);
-    const partnerAmount = ((amountNum * partnerPercent) / 100).toFixed(2);
+    const previewAmountCents = Math.round(amountNum * 100);
+    const previewMyCents = Math.round((previewAmountCents * myPercent) / 100);
+    const myAmount = previewMyCents / 100;
+    const partnerAmount = (previewAmountCents - previewMyCents) / 100;
 
     const hasItemAssignments = receiptItems.length > 0;
     const itemSplitMyAmount = receiptItems.reduce((acc, item) => {
@@ -579,11 +582,11 @@ export default function NewExpensePage() {
                             <div className="text-xs px-2 py-2 bg-white/5 rounded-lg animate-in fade-in space-y-1">
                                 <div className="flex justify-between font-semibold">
                                     <span className="text-blue-300">Tu parte:</span>
-                                    <span className="text-blue-300">{itemSplitMyAmount.toFixed(2)}€</span>
+                                    <span className="text-blue-300">{formatEuros(itemSplitMyAmount)}</span>
                                 </div>
                                 <div className="flex justify-between font-semibold">
                                     <span className="text-pink-300">Pareja:</span>
-                                    <span className="text-pink-300">{itemSplitPartnerAmount.toFixed(2)}€</span>
+                                    <span className="text-pink-300">{formatEuros(itemSplitPartnerAmount)}</span>
                                 </div>
                             </div>
                         )}
@@ -599,8 +602,8 @@ export default function NewExpensePage() {
                                     </summary>
                                     <div className="mt-1.5 text-xs text-muted-foreground space-y-0.5 pl-4">
                                         <p>Total items: <span className="text-foreground">{receiptItems.length} productos</span></p>
-                                        <p>Precio medio: <span className="text-foreground">{avgPrice.toFixed(2)}€</span></p>
-                                        <p>Más caro: <span className="text-foreground">{mostExpensive.description} ({mostExpensive.total.toFixed(2)}€)</span></p>
+                                        <p>Precio medio: <span className="text-foreground">{formatEuros(avgPrice)}</span></p>
+                                        <p>Más caro: <span className="text-foreground">{mostExpensive.description} ({formatEuros(mostExpensive.total)})</span></p>
                                     </div>
                                 </details>
                             );
@@ -691,7 +694,7 @@ export default function NewExpensePage() {
 
                             {amountNum > 0 && (
                                 <div className="text-xs text-center text-muted-foreground animate-in fade-in">
-                                    Yo: <strong className="text-white">{myAmount}€</strong> — {partner?.name || "Pareja"}: <strong className="text-white">{partnerAmount}€</strong>
+                                    Yo: <strong className="text-white">{formatEuros(myAmount)}</strong> — {partner?.name || "Pareja"}: <strong className="text-white">{formatEuros(partnerAmount)}</strong>
                                 </div>
                             )}
 
