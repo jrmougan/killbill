@@ -97,4 +97,22 @@ describe('calculateSplitAmounts', () => {
         const total = splits.reduce((acc, s) => acc + s.amount, 0);
         expect(total).toBe(1000);
     });
+
+    it('should split N-way (3 members) with the remainder going to the first member(s)', () => {
+        const members = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+        const splits = calculateSplitAmounts(100, null, members);
+        // 100 / 3 = 33 each, 1 leftover cent to the first member
+        expect(splits).toEqual([
+            { userId: 'a', amount: 34 },
+            { userId: 'b', amount: 33 },
+            { userId: 'c', amount: 33 },
+        ]);
+        expect(splits.reduce((acc, s) => acc + s.amount, 0)).toBe(100);
+    });
+
+    it('should split N-way (3 members) evenly when divisible', () => {
+        const members = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+        const splits = calculateSplitAmounts(99, null, members);
+        expect(splits.map((s) => s.amount)).toEqual([33, 33, 33]);
+    });
 });

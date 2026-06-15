@@ -121,6 +121,21 @@ describe('finance utilities', () => {
             expect(debts['user2']).toBe(50);
         });
 
+        it('treats a 1-cent imbalance as settled (rounding dead-band)', () => {
+            // user2 paid 1 cent; the leftover cent makes user1's share 1c and user2's 0c,
+            // so user1's net balance is exactly -1 cent. The dead-band must treat this as settled.
+            const expenses = [{ id: 'tiny', paidById: 'user2', amount: 1 }];
+            const debts = getMyDebts(users, expenses, [], 'user1');
+            expect(debts).toEqual({});
+        });
+
+        it('reports a debt of exactly 2 cents (just outside the dead-band)', () => {
+            // user2 paid 4 cents, split 2/2 → user1 owes 2 cents.
+            const expenses = [{ id: 'small', paidById: 'user2', amount: 4 }];
+            const debts = getMyDebts(users, expenses, [], 'user1');
+            expect(debts).toEqual({ user2: 2 });
+        });
+
         it('should return empty object if I am owed money', () => {
             const expenses = [
                 { id: 'exp1', paidById: 'user1', amount: 100 }
