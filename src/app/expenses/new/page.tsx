@@ -13,6 +13,14 @@ import { getAllCategories } from "@/lib/categories";
 type SplitMode = "shared" | "solo" | "custom";
 type RecurringInterval = "weekly" | "monthly" | "yearly";
 
+// ReceiptItem with a stable client-side id used as the React key for editable rows
+type EditableReceiptItem = ReceiptItem & { _uid: string };
+
+let receiptItemUidCounter = 0;
+const nextReceiptItemUid = () => `item-${++receiptItemUidCounter}`;
+
+const withUid = (item: ReceiptItem): EditableReceiptItem => ({ ...item, _uid: nextReceiptItemUid() });
+
 interface Tag {
     id: string;
     name: string;
@@ -68,7 +76,7 @@ export default function NewExpensePage() {
     const [isOcrRunning, setIsOcrRunning] = useState(false);
     const [ocrProgress, setOcrProgress] = useState(0);
     const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
-    const [receiptItems, setReceiptItems] = useState<ReceiptItem[]>([]);
+    const [receiptItems, setReceiptItems] = useState<EditableReceiptItem[]>([]);
 
     const partner = members.find((m) => m.id !== userId);
     const partnerPercent = 100 - myPercent;
@@ -147,7 +155,7 @@ export default function NewExpensePage() {
                     setCategory(data.category);
                 }
                 if (data.items && data.items.length > 0) {
-                    setReceiptItems(data.items);
+                    setReceiptItems(data.items.map((item: ReceiptItem) => withUid(item)));
                 }
             } else {
                 console.error("OCR Error:", data.error);
@@ -171,7 +179,7 @@ export default function NewExpensePage() {
     }, [receiptItems]);
 
     const addItem = () => {
-        setReceiptItems([...receiptItems, { description: "", quantity: 1, price: 0, total: 0, assignedTo: null }]);
+        setReceiptItems([...receiptItems, withUid({ description: "", quantity: 1, price: 0, total: 0, assignedTo: null })]);
     };
 
     const updateItem = (index: number, field: keyof ReceiptItem, value: any) => {
@@ -269,7 +277,11 @@ export default function NewExpensePage() {
                 description,
                 category,
                 receiptUrl: uploadedUrl,
-                receiptData: receiptItems.length > 0 ? receiptItems : undefined,
+                receiptData: receiptItems.length > 0
+                    ? receiptItems.map(({ description, quantity, price, total, assignedTo }) => ({
+                        description, quantity, price, total, assignedTo,
+                    }))
+                    : undefined,
                 notes: notes.trim() || undefined,
                 isRecurring,
                 recurringInterval: isRecurring ? recurringInterval : undefined,
@@ -480,7 +492,7 @@ export default function NewExpensePage() {
                                 <div className="divide-y divide-white/5">
                                     {receiptItems.map((item, idx) => (
                                         <div
-                                            key={idx}
+                                            key={item._uid}
                                             className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 p-2 items-center hover:bg-white/5 transition-colors border-b border-white/[0.02]"
                                         >
                                             <input

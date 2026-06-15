@@ -40,18 +40,29 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
         }
 
-        // 3. Handle Couple Invite
-        if (inviteCode) {
+        // 3. Handle Couple Invite (explicit + safe).
+        // Only join a couple via inviteCode when the user has no couple yet,
+        // the code is valid, and the couple still has room. Done atomically so
+        // two concurrent joins can't overfill the couple. Otherwise ignore it.
+        if (inviteCode && !user.coupleId) {
             const couple = await prisma.couple.findUnique({
                 where: { code: inviteCode },
                 include: { members: true }
             });
 
             if (couple && couple.members.length < 2) {
-                // Set coupleId
-                await prisma.user.update({
-                    where: { id: user.id },
-                    data: { coupleId: couple.id },
+                await prisma.$transaction(async (tx) => {
+                    // Re-check membership counts inside the transaction.
+                    const memberCount = await tx.user.count({
+                        where: { coupleId: couple.id }
+                    });
+                    if (memberCount >= 2) return;
+
+                    // Only set coupleId if the user still has none.
+                    await tx.user.updateMany({
+                        where: { id: user.id, coupleId: null },
+                        data: { coupleId: couple.id },
+                    });
                 });
             }
         }

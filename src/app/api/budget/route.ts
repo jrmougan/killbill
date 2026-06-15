@@ -48,58 +48,63 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const userId = session.userId as string;
+    try {
+        const session = await getSession();
+        if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
-    const body = await request.json();
-    const { category, amount, month } = body;
+        const body = await request.json();
+        const { category, amount, month } = body;
 
-    if (!category || amount === undefined) {
-        return NextResponse.json({ error: 'category and amount are required' }, { status: 400 });
-    }
+        if (!category || amount === undefined) {
+            return NextResponse.json({ error: 'category and amount are required' }, { status: 400 });
+        }
 
-    // Parse month (YYYY-MM) or default to current month
-    let monthDate: Date;
-    if (month) {
-        const [year, mon] = month.split('-').map(Number);
-        monthDate = new Date(year, mon - 1, 1);
-    } else {
-        const now = new Date();
-        monthDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    }
+        // Parse month (YYYY-MM) or default to current month
+        let monthDate: Date;
+        if (month) {
+            const [year, mon] = month.split('-').map(Number);
+            monthDate = new Date(year, mon - 1, 1);
+        } else {
+            const now = new Date();
+            monthDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        }
 
-    const amountNum = Number(amount);
-    if (!Number.isFinite(amountNum)) {
-        return NextResponse.json({ error: 'amount must be a valid number' }, { status: 400 });
-    }
+        const amountNum = Number(amount);
+        if (!Number.isFinite(amountNum)) {
+            return NextResponse.json({ error: 'amount must be a valid number' }, { status: 400 });
+        }
 
-    const amountCents = toCents(amountNum);
-    if (!Number.isFinite(amountCents) || amountCents <= 0) {
-        return NextResponse.json({ error: 'amount must be greater than 0' }, { status: 400 });
-    }
+        const amountCents = toCents(amountNum);
+        if (!Number.isFinite(amountCents) || amountCents <= 0) {
+            return NextResponse.json({ error: 'amount must be greater than 0' }, { status: 400 });
+        }
 
-    const budget = await prisma.budget.upsert({
-        where: {
-            category_month_coupleId: {
+        const budget = await prisma.budget.upsert({
+            where: {
+                category_month_coupleId: {
+                    category,
+                    month: monthDate,
+                    coupleId: user.coupleId,
+                },
+            },
+            create: {
                 category,
+                amount: amountCents,
                 month: monthDate,
                 coupleId: user.coupleId,
             },
-        },
-        create: {
-            category,
-            amount: amountCents,
-            month: monthDate,
-            coupleId: user.coupleId,
-        },
-        update: {
-            amount: amountCents,
-        },
-    });
+            update: {
+                amount: amountCents,
+            },
+        });
 
-    return NextResponse.json({ budget }, { status: 201 });
+        return NextResponse.json({ budget }, { status: 201 });
+    } catch (error) {
+        console.error('Error al guardar el presupuesto:', error);
+        return NextResponse.json({ error: 'Error al guardar el presupuesto' }, { status: 500 });
+    }
 }

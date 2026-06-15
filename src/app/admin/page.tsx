@@ -33,9 +33,7 @@ export default function AdminPage() {
 
             if (!res.ok) {
                 if (res.status === 403) {
-                    // Check if debug info is available
-                    const debugInfo = data.debug ? JSON.stringify(data.debug, null, 2) : "";
-                    setError("No tienes permisos de administrador. " + debugInfo);
+                    setError("No tienes permisos de administrador.");
                 } else {
                     setError(data.error || "Error al cargar invitaciones");
                 }

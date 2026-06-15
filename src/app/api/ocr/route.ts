@@ -4,6 +4,11 @@ import { getSession } from '@/lib/auth';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_MODEL = 'gemini-flash-latest';
 
+// Whitelist of accepted content types forwarded to Gemini.
+const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+
+const MAX_SIZE_BYTES = 8 * 1024 * 1024; // 8 MB
+
 interface ReceiptItem {
     description: string;
     quantity: number;
@@ -36,6 +41,14 @@ export async function POST(request: Request) {
 
         if (!file) {
             return NextResponse.json({ error: 'No image provided' }, { status: 400 });
+        }
+
+        if (!ALLOWED_TYPES.includes(file.type)) {
+            return NextResponse.json({ error: 'Invalid file type. Only PNG, JPEG and WEBP images are allowed.' }, { status: 400 });
+        }
+
+        if (file.size > MAX_SIZE_BYTES) {
+            return NextResponse.json({ error: 'File too large. Maximum size is 8 MB.' }, { status: 413 });
         }
 
         // Convert file to base64

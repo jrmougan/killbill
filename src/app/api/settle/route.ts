@@ -4,45 +4,50 @@ import { getSession } from '@/lib/auth';
 import { toCents } from '@/lib/currency';
 
 export async function POST(request: Request) {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const userId = session.userId as string;
+    try {
+        const session = await getSession();
+        if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const userId = session.userId as string;
 
-    const body = await request.json();
-    const { amount, toUserId, method } = body;
+        const body = await request.json();
+        const { amount, toUserId, method } = body;
 
-    if (!toUserId) return NextResponse.json({ error: 'toUserId is required' }, { status: 400 });
-    if (toUserId === userId) return NextResponse.json({ error: 'Cannot settle with yourself' }, { status: 400 });
+        if (!toUserId) return NextResponse.json({ error: 'toUserId is required' }, { status: 400 });
+        if (toUserId === userId) return NextResponse.json({ error: 'Cannot settle with yourself' }, { status: 400 });
 
-    const numericAmount = Number(amount);
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-        return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
-    }
+        const numericAmount = Number(amount);
+        if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+            return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
+        }
 
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: { couple: { include: { members: true } } }
-    });
-
-    if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
-    const coupleId = user.coupleId as string;
-
-    const isMember = user.couple?.members.some((m) => m.id === toUserId) ?? false;
-    if (!isMember) {
-        return NextResponse.json({ error: 'toUserId is not a member of your couple' }, { status: 403 });
-    }
-
-    await prisma.$transaction(async (tx) => {
-        await tx.settlement.create({
-            data: {
-                amount: toCents(numericAmount),
-                fromUserId: userId,
-                toUserId: toUserId as string,
-                coupleId: coupleId,
-                method: method || "CASH"
-            },
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+            include: { couple: { include: { members: true } } }
         });
-    });
 
-    return NextResponse.json({ success: true });
+        if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+        const coupleId = user.coupleId as string;
+
+        const isMember = user.couple?.members.some((m) => m.id === toUserId) ?? false;
+        if (!isMember) {
+            return NextResponse.json({ error: 'toUserId is not a member of your couple' }, { status: 403 });
+        }
+
+        await prisma.$transaction(async (tx) => {
+            await tx.settlement.create({
+                data: {
+                    amount: toCents(numericAmount),
+                    fromUserId: userId,
+                    toUserId: toUserId as string,
+                    coupleId: coupleId,
+                    method: method || "CASH"
+                },
+            });
+        });
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error('Error al registrar el pago:', error);
+        return NextResponse.json({ error: 'Error al registrar el pago' }, { status: 500 });
+    }
 }

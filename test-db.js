@@ -1,9 +1,13 @@
 const { PrismaClient } = require('@prisma/client');
 
+const databaseUrl =
+    process.env.DATABASE_URL ||
+    `mysql://${process.env.DATABASE_USER || 'killbill'}:${process.env.DATABASE_PASSWORD || 'change_me_password'}@${process.env.DATABASE_HOST || '127.0.0.1'}:3306/${process.env.DATABASE_NAME || 'killbill'}`;
+
 const prisma = new PrismaClient({
     datasources: {
         db: {
-            url: "mysql://root:toor@127.0.0.1:3306/killbill"
+            url: databaseUrl
         }
     }
 });

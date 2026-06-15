@@ -16,6 +16,14 @@ import { getAllCategories } from "@/lib/categories";
 type SplitMode = "shared" | "solo" | "custom";
 type RecurringInterval = "weekly" | "monthly" | "yearly";
 
+// ReceiptItem with a stable client-side id used as the React key for editable rows
+type EditableReceiptItem = ReceiptItem & { _uid: string };
+
+let receiptItemUidCounter = 0;
+const nextReceiptItemUid = () => `item-${++receiptItemUidCounter}`;
+
+const withUid = (item: ReceiptItem): EditableReceiptItem => ({ ...item, _uid: nextReceiptItemUid() });
+
 interface TagItem {
     id: string;
     name: string;
@@ -74,7 +82,9 @@ export function EditExpenseClient({
     const [myPercent, setMyPercent] = useState(initialMyPercent);
 
     // Items breakdown
-    const [receiptItems, setReceiptItems] = useState<ReceiptItem[]>(initialReceiptItems);
+    const [receiptItems, setReceiptItems] = useState<EditableReceiptItem[]>(() =>
+        initialReceiptItems.map((item) => withUid(item))
+    );
 
     // Receipt image
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -147,7 +157,7 @@ export function EditExpenseClient({
                 if (data.total) setAmount(data.total.toFixed(2));
                 if (data.store) setDescription(data.store);
                 if (data.category) setCategory(data.category);
-                if (data.items && data.items.length > 0) setReceiptItems(data.items);
+                if (data.items && data.items.length > 0) setReceiptItems(data.items.map((item: ReceiptItem) => withUid(item)));
             } else {
                 alert("No se pudo procesar el ticket. Intenta con otra foto.");
             }
@@ -160,7 +170,7 @@ export function EditExpenseClient({
     };
 
     const addItem = () => {
-        setReceiptItems([...receiptItems, { description: "", quantity: 1, price: 0, total: 0, assignedTo: null }]);
+        setReceiptItems([...receiptItems, withUid({ description: "", quantity: 1, price: 0, total: 0, assignedTo: null })]);
     };
 
     const updateItem = (index: number, field: keyof ReceiptItem, value: any) => {
@@ -257,7 +267,11 @@ export function EditExpenseClient({
                 description,
                 amount: amountNum,
                 category,
-                receiptItems: receiptItems.length > 0 ? receiptItems : undefined,
+                receiptItems: receiptItems.length > 0
+                    ? receiptItems.map(({ description, quantity, price, total, assignedTo }) => ({
+                        description, quantity, price, total, assignedTo,
+                    }))
+                    : undefined,
                 notes: notes.trim() || null,
                 isRecurring,
                 recurringInterval: isRecurring ? recurringInterval : undefined,
@@ -441,7 +455,7 @@ export function EditExpenseClient({
                             <div className="divide-y divide-white/5">
                                 {receiptItems.map((item, idx) => (
                                     <div
-                                        key={idx}
+                                        key={item._uid}
                                         className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 p-2 items-center hover:bg-white/5 transition-colors"
                                     >
                                         <input

@@ -19,25 +19,30 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const userId = session.userId as string;
+    try {
+        const session = await getSession();
+        if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
-    const body = await request.json();
-    const { name, color } = body;
+        const body = await request.json();
+        const { name, color } = body;
 
-    if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
+        if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
 
-    const tag = await prisma.tag.create({
-        data: {
-            name,
-            color: color || '#8b5cf6',
-            coupleId: user.coupleId,
-        },
-    });
+        const tag = await prisma.tag.create({
+            data: {
+                name,
+                color: color || '#8b5cf6',
+                coupleId: user.coupleId,
+            },
+        });
 
-    return NextResponse.json({ tag }, { status: 201 });
+        return NextResponse.json({ tag }, { status: 201 });
+    } catch (error) {
+        console.error('Error al crear la etiqueta:', error);
+        return NextResponse.json({ error: 'Error al crear la etiqueta' }, { status: 500 });
+    }
 }

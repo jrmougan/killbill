@@ -38,6 +38,20 @@ export async function PATCH(
         return NextResponse.json({ error: 'Only the receiver can update status' }, { status: 403 });
     }
 
+    // Enforce valid status transitions. Only a PENDING settlement may be acted
+    // upon (CONFIRMED or REJECTED). Reverting a resolved settlement back to
+    // PENDING, or any other transition, is not allowed.
+    const allowedTransitions: Record<string, string[]> = {
+        PENDING: ["CONFIRMED", "REJECTED"],
+    };
+
+    if (!allowedTransitions[settlement.status]?.includes(status)) {
+        return NextResponse.json(
+            { error: `Invalid status transition from ${settlement.status} to ${status}` },
+            { status: 400 }
+        );
+    }
+
     try {
         const updated = await prisma.settlement.update({
             where: { id },

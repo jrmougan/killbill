@@ -72,27 +72,40 @@ export async function POST(request: Request) {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create user (with coupleId if registering via couple invite)
-        const user = await prisma.user.create({
-            data: {
-                name,
-                email,
-                password: hashedPassword,
-                avatar: "👤",
-                coupleId: couple?.id || undefined,
-            },
-        });
-
-        // Mark InviteCode as used (if used)
-        if (invite) {
-            await prisma.inviteCode.update({
-                where: { id: invite.id },
+        // Create user + consume invite atomically.
+        // The invite-code consume is conditional (updateMany where still unused)
+        // so that concurrent signups can't both consume the same single-use code.
+        const inviteId = invite?.id;
+        const user = await prisma.$transaction(async (tx) => {
+            // Create user (with coupleId if registering via couple invite)
+            const created = await tx.user.create({
                 data: {
-                    usedById: user.id,
-                    usedAt: new Date(),
+                    name,
+                    email,
+                    password: hashedPassword,
+                    avatar: "👤",
+                    coupleId: couple?.id || undefined,
                 },
             });
-        }
+
+            // Mark InviteCode as used (only if still unused — single winner)
+            if (inviteId) {
+                const consumed = await tx.inviteCode.updateMany({
+                    where: { id: inviteId, usedById: null },
+                    data: {
+                        usedById: created.id,
+                        usedAt: new Date(),
+                    },
+                });
+
+                if (consumed.count === 0) {
+                    // Lost the race: another signup already consumed this code.
+                    throw new Error('INVITE_ALREADY_USED');
+                }
+            }
+
+            return created;
+        });
 
         // Set Session (JWT)
         const token = await signToken({
@@ -119,6 +132,9 @@ export async function POST(request: Request) {
         });
 
     } catch (error) {
+        if (error instanceof Error && error.message === 'INVITE_ALREADY_USED') {
+            return NextResponse.json({ error: 'Este código ya fue utilizado' }, { status: 400 });
+        }
         console.error("Registration Error:", error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }

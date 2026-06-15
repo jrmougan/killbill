@@ -76,10 +76,10 @@ model Expense {
   nextRecurringDate   DateTime?
 
   paidById String
-  paidBy   User   @relation("Payer", fields: [paidById], references: [id])
+  paidBy   User   @relation("Payer", fields: [paidById], references: [id], onDelete: Cascade)
 
   coupleId String
-  couple   Couple @relation(fields: [coupleId], references: [id])
+  couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
 
   splits Split[]
   tags   ExpenseTag[]
@@ -99,7 +99,7 @@ model Split {
   expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
 
   userId String
-  user   User   @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([expenseId, userId])
   @@index([expenseId])
@@ -112,14 +112,14 @@ model Settlement {
 
   // Who is settling their debt (The Debtor)
   fromUserId String
-  fromUser   User   @relation("SettlementPayer", fields: [fromUserId], references: [id])
+  fromUser   User   @relation("SettlementPayer", fields: [fromUserId], references: [id], onDelete: Cascade)
 
   // Who is receiving the settlement (The Creditor)
   toUserId String
-  toUser   User   @relation("SettlementReceiver", fields: [toUserId], references: [id])
+  toUser   User   @relation("SettlementReceiver", fields: [toUserId], references: [id], onDelete: Cascade)
 
   coupleId String
-  couple   Couple @relation(fields: [coupleId], references: [id])
+  couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
 
   amount Int // Total amount in CENTS
   status String @default("PENDING") // PENDING, CONFIRMED, REJECTED
@@ -137,7 +137,7 @@ model Tag {
   name     String
   color    String @default("#8b5cf6")
   coupleId String
-  couple   Couple @relation(fields: [coupleId], references: [id])
+  couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
   expenses ExpenseTag[]
 
   @@unique([name, coupleId])
@@ -159,7 +159,7 @@ model Budget {
   amount   Int      // limite en centavos
   month    DateTime // primer dia del mes al que aplica
   coupleId String
-  couple   Couple   @relation(fields: [coupleId], references: [id])
+  couple   Couple   @relation(fields: [coupleId], references: [id], onDelete: Cascade)
 
   @@unique([category, month, coupleId])
   @@index([coupleId])

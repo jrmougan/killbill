@@ -29,6 +29,16 @@ export async function POST(request: Request) {
     if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const userId = session.userId as string;
 
+    // Reject if the caller already belongs to a couple.
+    const existing = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { coupleId: true }
+    });
+
+    if (existing?.coupleId) {
+        return NextResponse.json({ error: 'Ya perteneces a una pareja' }, { status: 400 });
+    }
+
     const body = await request.json();
     const { name } = body;
 
