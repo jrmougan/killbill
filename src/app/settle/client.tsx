@@ -192,23 +192,15 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                     <p className="text-muted-foreground px-2">¿A quién quieres pagar?</p>
                     <div className="space-y-2">
                         {debts.map(debt => (
-                            <div
+                            <button
                                 key={debt.userId}
-                                role="button"
-                                tabIndex={0}
+                                type="button"
                                 onClick={() => {
                                     setSelectedUserId(debt.userId);
                                     setAmount(debt.amount.toFixed(2)); // Default to full amount
                                 }}
-                                onKeyDown={(e) => {
-                                    if (e.key === "Enter" || e.key === " ") {
-                                        e.preventDefault();
-                                        setSelectedUserId(debt.userId);
-                                        setAmount(debt.amount.toFixed(2)); // Default to full amount
-                                    }
-                                }}
                                 className={cn(
-                                    "flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all",
+                                    "w-full flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all text-left",
                                     selectedUserId === debt.userId ? "bg-primary/20 border-primary" : "bg-card border-white/10"
                                 )}
                             >
@@ -229,7 +221,7 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                                     </div>
                                 </div>
                                 {selectedUserId === debt.userId && <Check className="text-primary h-5 w-5" />}
-                            </div>
+                            </button>
                         ))}
                     </div>
 
@@ -290,9 +282,10 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground ml-1">Importe</label>
+                        <label htmlFor="settle-amount" className="text-sm font-medium text-muted-foreground ml-1">Importe</label>
                         <div className="relative">
                             <Input
+                                id="settle-amount"
                                 type="number"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
@@ -305,9 +298,11 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-medium text-muted-foreground ml-1">Método</label>
+                        <label htmlFor="settle-method-bizum" className="text-sm font-medium text-muted-foreground ml-1">Método</label>
                         <div className="grid grid-cols-2 gap-3">
                             <button
+                                id="settle-method-bizum"
+                                type="button"
                                 onClick={() => setMethod("BIZUM")}
                                 className={cn(
                                     "p-4 rounded-xl border flex flex-col items-center gap-2 transition-all",
@@ -318,6 +313,7 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                                 <span className="font-bold">Bizum / Transfer</span>
                             </button>
                             <button
+                                type="button"
                                 onClick={() => setMethod("CASH")}
                                 className={cn(
                                     "p-4 rounded-xl border flex flex-col items-center gap-2 transition-all",

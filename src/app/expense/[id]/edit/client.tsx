@@ -339,7 +339,8 @@ export function EditExpenseClient({
                 {/* 1. Receipt preview / re-scan */}
                 <div className="space-y-4">
                     {!receiptPreview ? (
-                        <div
+                        <button
+                            type="button"
                             onClick={() => fileInputRef.current?.click()}
                             className="w-full aspect-video rounded-2xl border-2 border-dashed border-white/10 bg-white/5 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/[0.08] transition-all group"
                         >
@@ -350,7 +351,7 @@ export function EditExpenseClient({
                                 <p className="font-semibold text-sm">Añadir / Re-escanear Ticket</p>
                                 <p className="text-xs text-muted-foreground">El OCR actualizará el desglose automáticamente</p>
                             </div>
-                        </div>
+                        </button>
                     ) : (
                         <div className="relative rounded-2xl overflow-hidden border border-white/10 aspect-video bg-black/40">
                             {/* oxlint-disable-next-line nextjs/no-img-element -- user-uploaded receipt image of unknown dimensions; next/image would change layout/runtime */}
@@ -388,7 +389,7 @@ export function EditExpenseClient({
 
                 {/* 2. Category */}
                 <div className="space-y-4">
-                    <label className="text-sm font-medium ml-1">Categoría</label>
+                    <span className="block text-sm font-medium ml-1">Categoría</span>
                     <div className="grid grid-cols-4 gap-2">
                         {getAllCategories().map((cat) => (
                             <button
@@ -410,10 +411,11 @@ export function EditExpenseClient({
 
                 {/* 3. Amount */}
                 <div className="space-y-2 text-center py-2">
-                    <label className="text-sm text-muted-foreground uppercase tracking-widest font-bold">Importe</label>
+                    <label htmlFor="expense-amount" className="text-sm text-muted-foreground uppercase tracking-widest font-bold">Importe</label>
                     <div className="relative inline-block w-full max-w-[200px]">
                         <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-muted-foreground">€</span>
                         <input
+                            id="expense-amount"
                             type="number"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
@@ -427,8 +429,9 @@ export function EditExpenseClient({
 
                 {/* 4. Description */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium ml-1">Concepto</label>
+                    <label htmlFor="expense-description" className="text-sm font-medium ml-1">Concepto</label>
                     <Input
+                        id="expense-description"
                         placeholder="Ej: Compra Mercadona"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
@@ -547,9 +550,10 @@ export function EditExpenseClient({
                         <div className="space-y-3 animate-in fade-in duration-300 bg-white/5 rounded-xl p-4">
                             <div className="flex items-center gap-3">
                                 <div className="flex-1 space-y-1">
-                                    <label className="text-xs text-muted-foreground">Yo</label>
+                                    <label htmlFor="split-my-percent" className="text-xs text-muted-foreground">Yo</label>
                                     <div className="flex items-center gap-2">
                                         <input
+                                            id="split-my-percent"
                                             type="number" min={0} max={100} value={myPercent}
                                             onChange={(e) => setMyPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                                             className="w-16 bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-primary/50"
@@ -559,9 +563,10 @@ export function EditExpenseClient({
                                 </div>
                                 <div className="text-muted-foreground text-sm font-bold pt-4">/</div>
                                 <div className="flex-1 space-y-1">
-                                    <label className="text-xs text-muted-foreground">{partner?.name ?? "Pareja"}</label>
+                                    <label htmlFor="split-partner-percent" className="text-xs text-muted-foreground">{partner?.name ?? "Pareja"}</label>
                                     <div className="flex items-center gap-2">
                                         <input
+                                            id="split-partner-percent"
                                             type="number" min={0} max={100} value={partnerPercent}
                                             onChange={(e) => setMyPercent(100 - Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
                                             className="w-16 bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-primary/50"
@@ -584,13 +589,14 @@ export function EditExpenseClient({
 
                 {/* 7. Notes */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium ml-1 flex items-center gap-2">
+                    <label htmlFor="expense-notes" className="text-sm font-medium ml-1 flex items-center gap-2">
                         <FileText className="h-4 w-4 text-primary" />
                         Notas
                         <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
                     </label>
                     <div className="relative">
                         <textarea
+                            id="expense-notes"
                             value={notes}
                             onChange={(e) => setNotes(e.target.value.slice(0, 500))}
                             placeholder="Añade una nota opcional..."
@@ -651,6 +657,7 @@ export function EditExpenseClient({
                                     <div className="flex items-center gap-2 flex-wrap">
                                         {TAG_PRESET_COLORS.map((color) => (
                                             <button key={color} type="button" onClick={() => setNewTagColor(color)}
+                                                aria-label={`Color ${color}`}
                                                 className={cn("h-6 w-6 rounded-full border-2 transition-transform", newTagColor === color ? "border-white scale-110" : "border-transparent")}
                                                 style={{ backgroundColor: color }} />
                                         ))}
@@ -695,6 +702,9 @@ export function EditExpenseClient({
                                 <button
                                     type="button"
                                     onClick={() => setIsRecurring((p) => !p)}
+                                    role="switch"
+                                    aria-checked={isRecurring}
+                                    aria-label="Activar gasto recurrente"
                                     className={cn("relative h-6 w-11 rounded-full transition-colors", isRecurring ? "bg-primary" : "bg-white/10")}
                                 >
                                     <span className={cn("absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", isRecurring && "translate-x-5")} />

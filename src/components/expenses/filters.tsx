@@ -110,9 +110,9 @@ export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
                 <GlassCard className="p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
                     {/* Categories */}
                     <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        <span className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
                             Categorías
-                        </label>
+                        </span>
                         <div className="flex flex-wrap gap-2">
                             {categories.map(cat => (
                                 <button
@@ -134,9 +134,9 @@ export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
 
                     {/* Date Range */}
                     <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        <span className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
                             Período
-                        </label>
+                        </span>
                         <div className="flex gap-2">
                             {[
                                 { id: "all", label: "Todo" },
