@@ -613,8 +613,8 @@ export default function NewExpensePage() {
                         </div>
 
                         {/* Who paid */}
-                        <div className="space-y-2">
-                            <label className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">¿Quién pagó?</label>
+                        <fieldset className="space-y-2 border-0 p-0 m-0">
+                            <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">¿Quién pagó?</legend>
                             <div className="flex gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5">
                                 {([["me", "Yo"], ["partner", partnerName]] as const).map(([key, label]) => (
                                     <button
@@ -632,11 +632,11 @@ export default function NewExpensePage() {
                                     </button>
                                 ))}
                             </div>
-                        </div>
+                        </fieldset>
 
                         {/* How to split */}
-                        <div className="space-y-2">
-                            <label className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">¿Cómo se divide?</label>
+                        <fieldset className="space-y-2 border-0 p-0 m-0">
+                            <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">¿Cómo se divide?</legend>
                             <div className="flex flex-col gap-2">
                                 {splitOptions.map((o) => {
                                     const sel = split === o.key;
@@ -648,6 +648,7 @@ export default function NewExpensePage() {
                                             disabled={disabled}
                                             onClick={() => setSplit(o.key)}
                                             aria-pressed={sel}
+                                            aria-label={o.label}
                                             className={cn(
                                                 "flex items-center justify-between w-full px-4 py-3 rounded-xl border transition-all active:scale-[0.99] disabled:opacity-40",
                                                 sel ? "bg-primary/10 border-primary" : "bg-white/5 border-white/5 hover:bg-white/10"
@@ -710,7 +711,7 @@ export default function NewExpensePage() {
                                     )}
                                 </div>
                             )}
-                        </div>
+                        </fieldset>
 
                         {/* Advanced (collapsible): notes, tags, recurring, item breakdown */}
                         <div className="space-y-2">
@@ -930,7 +931,7 @@ export default function NewExpensePage() {
                     </button>
 
                     {scanState === "scanning" && (
-                        <div role="status" aria-live="polite" className="flex flex-col items-center">
+                        <output aria-live="polite" className="flex flex-col items-center">
                             <div className="relative w-[200px] h-[260px] rounded-xl overflow-hidden bg-black/40 border border-white/10 shadow-2xl">
                                 {receiptPreview ? (
                                     // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded receipt of unknown dimensions
@@ -944,7 +945,7 @@ export default function NewExpensePage() {
                                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
                                 <span className="text-sm font-medium">Analizando recibo… {ocrProgress}%</span>
                             </div>
-                        </div>
+                        </output>
                     )}
 
                     {scanState === "done" && pendingOcr && (

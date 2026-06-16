@@ -44,6 +44,7 @@ function LoginForm() {
                         type="email"
                         placeholder="Email"
                         required
+                        // oxlint-disable-next-line jsx-a11y/no-autofocus -- focuses primary email field on login form load (intentional UX)
                         autoFocus
                         autoComplete="email"
                         className="text-lg h-12"

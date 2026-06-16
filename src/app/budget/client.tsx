@@ -160,6 +160,7 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                                                     onChange={(e) => setEditValue(e.target.value)}
                                                     className="w-24 h-8 text-sm"
                                                     placeholder="0.00"
+                                                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- focus the inline edit input the user just opened so they can type immediately
                                                     autoFocus
                                                 />
                                                 <Button
@@ -245,6 +246,7 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                                                     onChange={(e) => setAddValue(e.target.value)}
                                                     className="w-24 h-8 text-sm"
                                                     placeholder="0.00"
+                                                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- focus the inline add-budget input the user just opened so they can type immediately
                                                     autoFocus
                                                 />
                                                 <Button

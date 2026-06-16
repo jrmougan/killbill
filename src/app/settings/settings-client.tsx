@@ -130,23 +130,25 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                     </div>
 
                     <GlassCard className="p-4 space-y-4">
-                        <div className="space-y-3">
-                            <label className="text-xs font-medium text-muted-foreground ml-1 mb-2 block text-center">Tu Avatar</label>
+                        <fieldset className="space-y-3 border-0 p-0 m-0 min-w-0">
+                            <legend className="text-xs font-medium text-muted-foreground ml-1 mb-2 block text-center w-full p-0">Tu Avatar</legend>
 
                             <AvatarPicker currentAvatar={avatar} onAvatarChange={setAvatar} />
-                        </div>
+                        </fieldset>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-muted-foreground ml-1">Tu nombre</label>
+                            <label htmlFor="settings-name" className="text-xs font-medium text-muted-foreground ml-1">Tu nombre</label>
                             <Input
+                                id="settings-name"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 placeholder="Tu nombre"
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-medium text-muted-foreground ml-1">Email</label>
+                            <label htmlFor="settings-email" className="text-xs font-medium text-muted-foreground ml-1">Email</label>
                             <Input
+                                id="settings-email"
                                 value={user.email}
                                 disabled
                                 className="bg-white/5 opacity-50"
