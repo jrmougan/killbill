@@ -57,7 +57,7 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
                     <div className="h-24 w-24 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[3px] shadow-xl">
                         <div className="h-full w-full rounded-full bg-black flex items-center justify-center overflow-hidden relative">
                             {isInternalImage ? (
-                                // eslint-disable-next-line @next/next/no-img-element
+                                // oxlint-disable-next-line nextjs/no-img-element
                                 <img src={currentAvatar} alt="Avatar" className="h-full w-full object-cover" />
                             ) : (
                                 <span className="text-5xl select-none">{currentAvatar}</span>

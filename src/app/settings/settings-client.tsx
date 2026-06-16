@@ -228,7 +228,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                                 </div>
                                 <div className="h-10 w-10 rounded-full bg-pink-500/20 flex items-center justify-center text-xl overflow-hidden">
                                     {partner?.avatar && isAvatarUrl(partner.avatar) ? (
-                                        // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
+                                        // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                         <img
                                             src={partner.avatar}
                                             alt={partner.name}

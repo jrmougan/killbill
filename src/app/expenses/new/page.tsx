@@ -933,7 +933,7 @@ export default function NewExpensePage() {
                         <div role="status" aria-live="polite" className="flex flex-col items-center">
                             <div className="relative w-[200px] h-[260px] rounded-xl overflow-hidden bg-black/40 border border-white/10 shadow-2xl">
                                 {receiptPreview ? (
-                                    // eslint-disable-next-line @next/next/no-img-element -- user-uploaded receipt of unknown dimensions
+                                    // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded receipt of unknown dimensions
                                     <img src={receiptPreview} alt="Ticket en escaneo" className="w-full h-full object-cover opacity-80" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center"><Camera className="h-10 w-10 text-muted-foreground" /></div>
