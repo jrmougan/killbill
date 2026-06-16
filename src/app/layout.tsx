@@ -42,10 +42,7 @@ export default function RootLayout({
       <body className={cn(inter.className, "antialiased min-h-screen")}>
         <ThemeProvider>
           <main className="relative flex flex-col min-h-screen overflow-hidden sm:max-w-md sm:mx-auto sm:border-x sm:border-white/10 bg-background">
-            {/* Decorative background gradients - optimized for performance */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_var(--color-primary)_0%,_transparent_40%)] opacity-20 pointer-events-none" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,_#2563eb_0%,_transparent_40%)] opacity-10 pointer-events-none" />
-
+            {/* Flat minimalist background (EQUIL - Flujo de Gastos redesign): no decorative glows */}
             {children}
           </main>
         </ThemeProvider>

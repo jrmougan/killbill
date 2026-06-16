@@ -1,8 +1,6 @@
 "use client";
 
-import { GlassCard } from "@/components/ui/glass-card";
 import { Expense, User } from "@/types";
-import { Receipt } from "lucide-react";
 import Link from "next/link";
 import { getCategoryById } from "@/lib/categories";
 
@@ -12,10 +10,10 @@ interface ExpenseCardProps {
     allUsers?: Record<string, User>;
 }
 
+// Minimalist recent-expense row (EQUIL - Flujo de Gastos redesign):
+// flat surface, category emoji in a neutral rounded square, "{quién} pagó · {badge}".
 export function ExpenseCard({ expense, paidByUser, allUsers }: ExpenseCardProps) {
     const category = getCategoryById(expense.category);
-    const Icon = category.icon || Receipt;
-    const colorClass = `${category.color} ${category.bgColor}`;
 
     // Determine beneficiary info
     let beneficiaryText = "Común";
@@ -33,36 +31,29 @@ export function ExpenseCard({ expense, paidByUser, allUsers }: ExpenseCardProps)
 
     return (
         <Link href={`/expense/${expense.id}`}>
-            <GlassCard className="flex items-center gap-4 hover:scale-[1.02] active:scale-95 cursor-pointer border-white/5 min-w-0">
-                <div className={`p-3 rounded-xl ${colorClass}`}>
-                    <Icon size={20} />
+            <div className="flex items-center gap-[13px] p-[13px] rounded-2xl bg-[hsl(var(--surface))] border border-white/5 cursor-pointer transition-all duration-150 hover:border-white/[0.14] active:scale-[0.99] min-w-0">
+                <div className="w-[42px] h-[42px] rounded-[11px] flex items-center justify-center text-xl shrink-0 bg-[hsl(var(--surface-raised))] border border-white/5">
+                    {category.emoji}
                 </div>
 
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                        <h3 className="font-medium truncate text-base">{expense.description}</h3>
-                        {expense.receiptUrl && <Receipt size={12} className="text-primary shrink-0" />}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
-                            <span className="font-medium text-foreground/80">{paidByUser.name}</span> pagó
-                        </p>
-                        <span className="h-1 w-1 rounded-full bg-white/20"></span>
-                        <p className="text-[10px] font-bold text-primary/80 uppercase tracking-tighter">
-                            {beneficiaryText}
-                        </p>
+                    <h3 className="font-semibold truncate text-[15px] text-foreground">{expense.description}</h3>
+                    <div className="flex items-center gap-[7px] mt-[3px]">
+                        <span className="text-[11px] text-muted-foreground">{paidByUser.name} pagó</span>
+                        <span className="h-[2px] w-[2px] rounded-full bg-white/20" />
+                        <span className="text-[11px] text-muted-foreground">{beneficiaryText}</span>
                     </div>
                 </div>
 
-                <div className="text-right">
-                    <span className="block font-bold text-lg tracking-tight">
+                <div className="text-right shrink-0">
+                    <span className="block font-semibold text-[15px] font-mono text-foreground">
                         {new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(expense.amount)}
                     </span>
                     <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
                         {new Date(expense.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
                     </span>
                 </div>
-            </GlassCard>
+            </div>
         </Link>
     );
 }

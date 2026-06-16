@@ -11,66 +11,73 @@ interface VisualBalanceProps {
     className?: string;
 }
 
+// Minimalist balance scale (EQUIL - Flujo de Gastos redesign):
+// a thin neutral beam with flat circular avatars (initial in accent / green),
+// no gradients, glows or coloured shadows.
+function Pan({
+    user,
+    color,
+    tilt,
+    side,
+}: {
+    user: { name: string; avatar: string | null };
+    color: string;
+    tilt: number;
+    side: "left" | "right";
+}) {
+    const initial = user.name.charAt(0).toUpperCase();
+    return (
+        <div
+            className={cn(
+                "absolute flex flex-col items-center",
+                side === "left" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2"
+            )}
+        >
+            <motion.div
+                className="w-[50px] h-[50px] rounded-full bg-[hsl(var(--surface-raised))] border border-white/[0.08] flex items-center justify-center overflow-hidden text-lg font-bold"
+                style={{ color }}
+                animate={{ rotate: -tilt }} // counter-rotate so the face stays upright
+                transition={{ type: "spring", stiffness: 60, damping: 15 }}
+            >
+                {isAvatarUrl(user.avatar) ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
+                    <img src={user.avatar!} alt={user.name} className="w-full h-full object-cover" />
+                ) : (
+                    initial
+                )}
+            </motion.div>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.05em] mt-[9px] text-muted-foreground">
+                {user.name}
+            </span>
+        </div>
+    );
+}
+
 export function VisualBalance({ balance, user1, user2, className }: VisualBalanceProps) {
-    // Calculate rotation based on balance (clamped to +/- 20 degrees)
-    const maxTilt = 20;
-    const tilt = Math.min(Math.max((balance / 100) * 10, -maxTilt), maxTilt);
+    // Rotation tracks the balance, clamped to +/- 16 degrees (matches the design).
+    const maxTilt = 16;
+    const tilt = Math.min(Math.max((balance / 100) * 8, -maxTilt), maxTilt);
 
     return (
-        <div className={cn("relative flex flex-col items-center justify-center py-12", className)}>
-            {/* The Pivot Structure */}
-            <div className="absolute bottom-0 w-12 h-1 bg-white/20 rounded-full" />
-            <div className="absolute bottom-0 w-1 h-32 bg-gradient-to-t from-white/20 to-transparent" />
+        <div className={cn("relative flex items-center justify-center h-[150px]", className)}>
+            {/* Pivot base + post */}
+            <div className="absolute bottom-4 w-10 h-[3px] rounded-full bg-white/[0.12]" />
+            <div className="absolute bottom-4 w-[2px] h-[108px] bg-white/[0.1]" />
 
-            <div className="relative w-full max-w-[280px] h-40 flex items-center justify-center">
-                <motion.div
-                    className="relative w-full flex items-center justify-center"
-                    animate={{ rotate: tilt }}
-                    transition={{ type: "spring", stiffness: 60, damping: 15 }}
-                >
-                    {/* The Beam */}
-                    <div className="w-full h-[2px] bg-gradient-to-r from-primary via-white/50 to-emerald-400 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.2)]" />
+            <motion.div
+                className="relative w-[236px] h-[84px] flex items-center justify-center"
+                animate={{ rotate: tilt }}
+                transition={{ type: "spring", stiffness: 60, damping: 15 }}
+            >
+                {/* Beam */}
+                <div className="w-full h-[2px] rounded-full bg-white/[0.16]" />
 
-                    {/* User 1 (Left) */}
-                    <div className="absolute left-0 -translate-x-1/2 flex flex-col items-center">
-                        <motion.div
-                            className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-primary to-purple-500 shadow-xl"
-                            animate={{ rotate: -tilt }} // Counter-rotate to keep face upright
-                        >
-                            <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-2xl overflow-hidden border-2 border-black">
-                                {isAvatarUrl(user1.avatar) ? (
-                                    // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
-                                    <img src={user1.avatar!} alt={user1.name} className="w-full h-full object-cover" />
-                                ) : (
-                                    user1.avatar || "👤"
-                                )}
-                            </div>
-                        </motion.div>
-                        <span className="text-[10px] font-bold uppercase tracking-tighter mt-2 text-primary">{user1.name}</span>
-                    </div>
+                <Pan user={user1} color="var(--color-primary, #7c3aed)" tilt={tilt} side="left" />
+                <Pan user={user2} color="#34d399" tilt={tilt} side="right" />
+            </motion.div>
 
-                    {/* User 2 (Right) */}
-                    <div className="absolute right-0 translate-x-1/2 flex flex-col items-center">
-                        <motion.div
-                            className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-emerald-400 to-cyan-500 shadow-xl"
-                            animate={{ rotate: -tilt }}
-                        >
-                            <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-2xl overflow-hidden border-2 border-black">
-                                {isAvatarUrl(user2.avatar) ? (
-                                    // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
-                                    <img src={user2.avatar!} alt={user2.name} className="w-full h-full object-cover" />
-                                ) : (
-                                    user2.avatar || "👤"
-                                )}
-                            </div>
-                        </motion.div>
-                        <span className="text-[10px] font-bold uppercase tracking-tighter mt-2 text-emerald-400">{user2.name}</span>
-                    </div>
-                </motion.div>
-            </div>
-
-            {/* Scale Center Pivot Point */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-3 w-3 rounded-full bg-white shadow-[0_0_10px_white]" />
+            {/* Centre pivot dot */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[7px] w-[7px] rounded-full bg-white/[0.45]" />
         </div>
     );
 }

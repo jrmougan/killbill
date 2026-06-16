@@ -36,11 +36,16 @@
 
 /* Define the actual values */
 :root {
-  --background: 240 10% 3.9%;
-  --foreground: 0 0% 98%;
+  --background: 240 9% 4%;
+  --foreground: 240 6% 96%;
 
-  --card: 240 10% 3.9%;
-  --card-foreground: 0 0% 98%;
+  --card: 240 6% 8%;
+  --card-foreground: 240 6% 96%;
+
+  /* Minimalist flat surfaces (EQUIL - Flujo de Gastos redesign) */
+  --surface: 240 6% 8%;        /* #141416 - cards */
+  --surface-raised: 240 4% 11%; /* #1c1c1f - avatars, chips */
+  --hairline: 255 255 255;      /* rgb base for translucent borders */
 
   --popover: 240 10% 3.9%;
   --popover-foreground: 0 0% 98%;
@@ -72,8 +77,11 @@ html.light {
   --background: 0 0% 97%;
   --foreground: 240 10% 10%;
 
-  --card: 0 0% 97%;
+  --card: 0 0% 100%;
   --card-foreground: 240 10% 10%;
+
+  --surface: 0 0% 100%;
+  --surface-raised: 240 5% 96%;
 
   --popover: 0 0% 100%;
   --popover-foreground: 240 10% 10%;
@@ -105,13 +113,15 @@ body {
   font-feature-settings: "rlig" 1, "calt" 1;
 }
 
-/* Glassmorphism Utilities */
+/* Surface Utilities — flat minimalist surfaces (EQUIL - Flujo de Gastos redesign) */
 @utility glass {
-  @apply bg-background/60 backdrop-blur-lg border border-white/10;
+  @apply bg-background/80 backdrop-blur-lg border border-white/10;
 }
 
+/* Flat card: solid #141416 with a 1px hairline border, no blur, no colored glow. */
 @utility glass-card {
-  @apply bg-white/5 backdrop-blur-md border border-white/10 shadow-xl;
+  background-color: hsl(var(--surface));
+  border: 1px solid rgb(255 255 255 / 0.06);
 }
 
 html.light .glass {
@@ -119,6 +129,6 @@ html.light .glass {
 }
 
 html.light .glass-card {
-  background-color: rgb(0 0 0 / 0.04);
+  background-color: hsl(var(--surface));
   border-color: rgb(0 0 0 / 0.08);
 }

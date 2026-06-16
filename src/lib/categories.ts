@@ -8,6 +8,8 @@ export interface Category {
     labelEn: string;
     color: string;
     bgColor: string;
+    /** Solid hex used by the minimalist spending-breakdown bar (EQUIL - Flujo de Gastos redesign). */
+    hex: string;
     icon: LucideIcon;
 }
 
@@ -19,6 +21,7 @@ export const CATEGORIES: Record<string, Category> = {
         labelEn: "shopping",
         color: "text-pink-400",
         bgColor: "bg-pink-400/20",
+        hex: "#f472b6",
         icon: ShoppingBag,
     },
     food: {
@@ -28,6 +31,7 @@ export const CATEGORIES: Record<string, Category> = {
         labelEn: "food",
         color: "text-orange-400",
         bgColor: "bg-orange-400/20",
+        hex: "#fb923c",
         icon: Coffee,
     },
     rent: {
@@ -37,6 +41,7 @@ export const CATEGORIES: Record<string, Category> = {
         labelEn: "rent",
         color: "text-blue-400",
         bgColor: "bg-blue-400/20",
+        hex: "#60a5fa",
         icon: Home,
     },
     utilities: {
@@ -46,6 +51,7 @@ export const CATEGORIES: Record<string, Category> = {
         labelEn: "utilities",
         color: "text-yellow-400",
         bgColor: "bg-yellow-400/20",
+        hex: "#facc15",
         icon: Lightbulb,
     },
     transport: {
@@ -55,6 +61,7 @@ export const CATEGORIES: Record<string, Category> = {
         labelEn: "transport",
         color: "text-green-400",
         bgColor: "bg-green-400/20",
+        hex: "#4ade80",
         icon: TramFront,
     },
     entertainment: {
@@ -64,6 +71,7 @@ export const CATEGORIES: Record<string, Category> = {
         labelEn: "entertainment",
         color: "text-purple-400",
         bgColor: "bg-purple-400/20",
+        hex: "#c084fc",
         icon: Clapperboard,
     },
     health: {
@@ -73,6 +81,7 @@ export const CATEGORIES: Record<string, Category> = {
         labelEn: "health",
         color: "text-red-400",
         bgColor: "bg-red-400/20",
+        hex: "#f87171",
         icon: Heart,
     },
     other: {
@@ -82,6 +91,7 @@ export const CATEGORIES: Record<string, Category> = {
         labelEn: "other",
         color: "text-gray-400",
         bgColor: "bg-gray-400/20",
+        hex: "#9ca3af",
         icon: Receipt,
     },
 };
