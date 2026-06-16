@@ -217,7 +217,7 @@ export default async function DashboardPage() {
                     </Link>
                     <div className="h-[38px] w-[38px] rounded-full bg-[hsl(var(--surface-raised))] border border-white/[0.08] flex items-center justify-center font-bold text-sm text-primary overflow-hidden">
                         {isAvatarUrl(user.avatar) ? (
-                            // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
+                            // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                             <img src={user.avatar!} alt={user.name} className="h-full w-full object-cover" />
                         ) : (
                             user.name.charAt(0).toUpperCase()

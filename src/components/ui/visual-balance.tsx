@@ -40,7 +40,7 @@ function Pan({
                 transition={{ type: "spring", stiffness: 60, damping: 15 }}
             >
                 {isAvatarUrl(user.avatar) ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
+                    // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                     <img src={user.avatar!} alt={user.name} className="w-full h-full object-cover" />
                 ) : (
                     initial
