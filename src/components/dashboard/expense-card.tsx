@@ -38,10 +38,10 @@ export function ExpenseCard({ expense, paidByUser, allUsers }: ExpenseCardProps)
 
                 <div className="flex-1 min-w-0">
                     <h3 className="font-semibold truncate text-[15px] text-foreground">{expense.description}</h3>
-                    <div className="flex items-center gap-[7px] mt-[3px]">
-                        <span className="text-[11px] text-muted-foreground">{paidByUser.name} pagó</span>
-                        <span className="h-[2px] w-[2px] rounded-full bg-white/20" />
-                        <span className="text-[11px] text-muted-foreground">{beneficiaryText}</span>
+                    <div className="flex items-center gap-[7px] mt-[3px] min-w-0">
+                        <span className="text-[11px] text-muted-foreground truncate">{paidByUser.name} pagó</span>
+                        <span className="h-[2px] w-[2px] rounded-full bg-white/20 shrink-0" />
+                        <span className="text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">{beneficiaryText}</span>
                     </div>
                 </div>
 
