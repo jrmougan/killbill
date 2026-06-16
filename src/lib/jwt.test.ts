@@ -31,9 +31,14 @@ describe('jwt utilities', () => {
 
     it('should return null for a tampered token', async () => {
         const token = await signToken({ userId: 'user1' });
-        // Flip the final character of the signature segment.
-        const lastChar = token.slice(-1);
-        const tampered = token.slice(0, -1) + (lastChar === 'a' ? 'b' : 'a');
+        // Flip the FIRST character of the signature segment. Flipping the last
+        // base64url char can be a no-op (its trailing bits are unused, so a→b
+        // may decode to identical bytes and still verify — a flaky test); the
+        // first char always carries a full 6 bits, so the signature is always
+        // altered.
+        const [header, payloadSeg, sig] = token.split('.');
+        const flippedSig = (sig[0] === 'a' ? 'b' : 'a') + sig.slice(1);
+        const tampered = `${header}.${payloadSeg}.${flippedSig}`;
         const payload = await verifyToken(tampered);
         expect(payload).toBeNull();
     });
