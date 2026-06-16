@@ -24,6 +24,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Reports known vulnerabilities but never fails the build.
+      - name: Security audit (non-blocking)
+        run: npm audit --audit-level=high || true
+
       - name: Generate Prisma client
         run: ./node_modules/.bin/prisma generate
 
