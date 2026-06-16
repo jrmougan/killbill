@@ -2,47 +2,20 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useActionState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { loginAction } from "./actions";
+import type { AuthState } from "@/lib/auth-types";
 
 function LoginForm() {
-    const router = useRouter();
     const searchParams = useSearchParams();
     const inviteCode = searchParams.get("code");
 
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setError("");
-
-        try {
-            const res = await fetch("/api/auth/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, password, inviteCode }),
-            });
-
-            const data = await res.json();
-
-            if (res.ok) {
-                router.push("/dashboard");
-                router.refresh();
-            } else {
-                setError(data.error || "Algo salió mal");
-            }
-        } catch (err) {
-            console.error(err);
-            setError("Error de conexión");
-        } finally {
-            setLoading(false);
-        }
-    };
+    // Server Action handles auth + cookie + redirect("/dashboard") in a single
+    // server response, so navigation never races the cookie write (the old
+    // "tap login twice on mobile" bug). Errors come back as form state.
+    const [state, formAction, pending] = useActionState<AuthState, FormData>(loginAction, {});
 
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-8 max-w-md mx-auto">
@@ -55,20 +28,21 @@ function LoginForm() {
                 </p>
             </div>
 
-            <form onSubmit={handleLogin} className="w-full space-y-4">
-                {error && (
+            <form action={formAction} className="w-full space-y-4">
+                {state.error && (
                     <div data-testid="login-error" className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
-                        {error}
+                        {state.error}
                     </div>
                 )}
+
+                {inviteCode && <input type="hidden" name="inviteCode" defaultValue={inviteCode} />}
 
                 <div className="space-y-4">
                     <Input
                         data-testid="login-email"
+                        name="email"
                         type="email"
                         placeholder="Email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
                         required
                         autoFocus
                         autoComplete="email"
@@ -76,10 +50,9 @@ function LoginForm() {
                     />
                     <Input
                         data-testid="login-password"
+                        name="password"
                         type="password"
                         placeholder="Contraseña"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
                         required
                         autoComplete="current-password"
                         className="text-lg h-12"
@@ -91,7 +64,7 @@ function LoginForm() {
                     type="submit"
                     size="lg"
                     className="w-full h-12 text-lg shadow-xl shadow-primary/20"
-                    isLoading={loading}
+                    isLoading={pending}
                 >
                     Entrar
                 </Button>

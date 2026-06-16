@@ -53,7 +53,7 @@ export async function POST(request: Request) {
 
     // Rate limit the paid Gemini OCR call: 10 requests / 5 minutes, keyed per
     // authenticated user (falls back to client IP if userId is somehow absent).
-    const rateKey = session.userId ? `ocr:user:${session.userId}` : `ocr:ip:${getClientIp(request)}`;
+    const rateKey = session.userId ? `ocr:user:${session.userId}` : `ocr:ip:${getClientIp(request.headers)}`;
     const limit = rateLimit(rateKey, 10, 5 * 60 * 1000);
     if (!limit.allowed) {
         return NextResponse.json(

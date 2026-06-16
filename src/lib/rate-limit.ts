@@ -55,15 +55,18 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
 /**
  * Derives a best-effort client identifier from proxy headers, falling back to
  * a constant when none are present (e.g. local dev without a proxy).
+ *
+ * Accepts any Headers-like object (`Request.headers` in route handlers, or the
+ * result of `await headers()` in Server Actions/Components).
  */
-export function getClientIp(request: Request): string {
-    const forwarded = request.headers.get('x-forwarded-for');
+export function getClientIp(headers: { get(name: string): string | null }): string {
+    const forwarded = headers.get('x-forwarded-for');
     if (forwarded) {
         // x-forwarded-for may be a comma-separated list; the first is the client.
         return forwarded.split(',')[0].trim();
     }
 
-    const realIp = request.headers.get('x-real-ip');
+    const realIp = headers.get('x-real-ip');
     if (realIp) {
         return realIp.trim();
     }

@@ -2,55 +2,19 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useActionState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { registerAction } from "./actions";
+import type { AuthState } from "@/lib/auth-types";
 
 function RegisterForm() {
-    const router = useRouter();
     const searchParams = useSearchParams();
     const urlCode = searchParams.get("code");
 
-    const [name, setName] = useState("");
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
-    const [inviteCode, setInviteCode] = useState(urlCode || "");
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-
-    const handleRegister = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError("");
-
-        if (password.length < 8) {
-            setError("La contraseña debe tener al menos 8 caracteres");
-            return;
-        }
-
-        setLoading(true);
-
-        try {
-            const res = await fetch("/api/auth/register", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, email, password, inviteCode }),
-            });
-
-            const data = await res.json();
-
-            if (res.ok) {
-                router.push("/dashboard");
-                router.refresh();
-            } else {
-                setError(data.error || "Algo salió mal");
-            }
-        } catch (err) {
-            console.error(err);
-            setError("Error de conexión");
-        } finally {
-            setLoading(false);
-        }
-    };
+    // Server Action handles register + cookie + redirect("/dashboard") in one
+    // server response (no client cookie/cache race). Errors come back as state.
+    const [state, formAction, pending] = useActionState<AuthState, FormData>(registerAction, {});
 
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-8 max-w-md mx-auto">
@@ -65,48 +29,46 @@ function RegisterForm() {
                 </p>
             </div>
 
-            <form onSubmit={handleRegister} className="w-full space-y-4">
-                {error && (
+            <form action={formAction} className="w-full space-y-4">
+                {state.error && (
                     <div data-testid="register-error" className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
-                        {error}
+                        {state.error}
                     </div>
                 )}
 
                 <div className="space-y-4">
                     <Input
                         data-testid="register-invite-code"
+                        name="inviteCode"
                         placeholder="Código de invitación"
-                        value={inviteCode}
-                        onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                        defaultValue={urlCode || ""}
                         required
-                        className="text-lg h-12 font-mono text-center tracking-widest"
+                        className="text-lg h-12 font-mono text-center tracking-widest uppercase placeholder:normal-case"
                         maxLength={8}
                     />
                     <Input
                         data-testid="register-name"
+                        name="name"
                         placeholder="Nombre"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
                         required
                         className="text-lg h-12"
                     />
                     <Input
                         data-testid="register-email"
+                        name="email"
                         type="email"
                         placeholder="Email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
                         required
                         autoComplete="email"
                         className="text-lg h-12"
                     />
                     <Input
                         data-testid="register-password"
+                        name="password"
                         type="password"
                         placeholder="Contraseña"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
                         required
+                        minLength={8}
                         autoComplete="new-password"
                         className="text-lg h-12"
                     />
@@ -117,7 +79,7 @@ function RegisterForm() {
                     type="submit"
                     size="lg"
                     className="w-full h-12 text-lg shadow-xl shadow-primary/20"
-                    isLoading={loading}
+                    isLoading={pending}
                 >
                     Registrarse
                 </Button>
