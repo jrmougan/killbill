@@ -19,12 +19,18 @@ test.describe('Expenses - Create', () => {
     await apiContext.dispose();
   });
 
+  // The add-expense flow is a 2-step wizard: step 1 = amount (+ keypad / scan),
+  // step 2 = details (description, category, split). "Siguiente" advances; "Guardar gasto" submits.
+
   test('create expense with description and amount - appears in expense list', async ({ page }) => {
     await loginAs(page, userA);
 
     await page.goto('/expenses/new');
-    await page.fill('[data-testid="expense-description"]', 'Test E2E Expense');
+    // Step 1: amount
     await page.fill('[data-testid="expense-amount"]', '25.50');
+    await page.click('[data-testid="expense-next"]');
+    // Step 2: details
+    await page.fill('[data-testid="expense-description"]', 'Test E2E Expense');
     await page.click('[data-testid="expense-submit"]');
 
     // Should redirect to dashboard after saving
@@ -35,43 +41,27 @@ test.describe('Expenses - Create', () => {
     await expect(page.getByText('Test E2E Expense')).toBeVisible({ timeout: 10000 });
   });
 
-  test('amount 0 - submit button is disabled or validation error shown', async ({ page }) => {
+  test('amount 0 - next button is disabled (cannot reach details)', async ({ page }) => {
     await loginAs(page, userA);
 
     await page.goto('/expenses/new');
-    await page.fill('[data-testid="expense-description"]', 'Zero Amount Test');
     await page.fill('[data-testid="expense-amount"]', '0');
 
-    const submitBtn = page.locator('[data-testid="expense-submit"]');
-
-    // Check if the button is disabled or if submitting shows a validation state
-    const isDisabled = await submitBtn.getAttribute('disabled');
-    if (isDisabled !== null) {
-      expect(isDisabled).toBeDefined();
-    } else {
-      // Try submitting - should not navigate away
-      await submitBtn.click();
-      // Should still be on the new expense page (HTML5 validation prevents submit)
-      await expect(page).toHaveURL(/\/expenses\/new/);
-    }
+    // The "Siguiente" button gates the amount step; with 0 it must be disabled.
+    const nextBtn = page.locator('[data-testid="expense-next"]');
+    await expect(nextBtn).toBeDisabled();
   });
 
-  test('empty description - submit button is disabled or validation error', async ({ page }) => {
+  test('empty description - submit button is disabled', async ({ page }) => {
     await loginAs(page, userA);
 
     await page.goto('/expenses/new');
-    // Leave description empty, fill amount only
+    // Step 1: provide a valid amount and advance
     await page.fill('[data-testid="expense-amount"]', '15.00');
+    await page.click('[data-testid="expense-next"]');
 
+    // Step 2: leave description empty -> Guardar must be disabled
     const submitBtn = page.locator('[data-testid="expense-submit"]');
-
-    const isDisabled = await submitBtn.getAttribute('disabled');
-    if (isDisabled !== null) {
-      expect(isDisabled).toBeDefined();
-    } else {
-      await submitBtn.click();
-      // HTML5 required validation should prevent navigation
-      await expect(page).toHaveURL(/\/expenses\/new/);
-    }
+    await expect(submitBtn).toBeDisabled();
   });
 });

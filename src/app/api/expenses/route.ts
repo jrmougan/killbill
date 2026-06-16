@@ -73,7 +73,7 @@ export async function POST(request: Request) {
         const userId = session.userId as string;
 
         const body = await request.json();
-        const { description, amount, category, beneficiaryId, customSplits, receiptUrl, receiptData, notes, isRecurring, recurringInterval } = body;
+        const { description, amount, category, beneficiaryId, customSplits, receiptUrl, receiptData, notes, isRecurring, recurringInterval, paidById: paidByIdInput } = body;
 
         const user = await prisma.user.findUnique({
             where: { id: userId },
@@ -99,6 +99,12 @@ export async function POST(request: Request) {
             select: { id: true }
         });
         const memberIds = new Set(coupleMembers.map(m => m.id));
+
+        // The payer defaults to the creator, but the client may attribute the expense
+        // to the partner ("¿Quién pagó?"). Only honour an id that belongs to the couple.
+        const paidById = (typeof paidByIdInput === 'string' && memberIds.has(paidByIdInput))
+            ? paidByIdInput
+            : userId;
 
         // Calculate nextRecurringDate if recurring
         let nextRecurringDate: Date | undefined = undefined;
@@ -126,7 +132,7 @@ export async function POST(request: Request) {
             description,
             amount: amountCents,
             category: normalizedCategory,
-            paidById: userId,
+            paidById,
             coupleId: user.coupleId,
             receiptUrl: receiptUrl || null,
             receiptData: receiptData || undefined, // Prisma Json handling
