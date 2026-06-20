@@ -45,3 +45,7 @@ next-env.d.ts
 
 /playwright-report/
 /test-results/
+
+# Uploaded receipts (runtime, served from a persistent volume in prod)
+/public/uploads/*
+!/public/uploads/.gitkeep

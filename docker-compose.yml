@@ -19,7 +19,10 @@ services:
       - mysql_network
       - traefik
     volumes:
-      - ./uploads:/app/public/uploads
+      # Volumen nombrado (NO bind mount): un volumen nombrado hereda la propiedad
+      # del punto de montaje de la imagen (nextjs:nodejs), así el usuario no-root
+      # puede escribir. Un bind mount `./uploads` quedaría como root → EACCES.
+      - killbill_uploads:/app/public/uploads
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.killbill.rule=Host(`finanzas.mougan.es`)"
@@ -27,6 +30,9 @@ services:
       - "traefik.http.routers.killbill.tls.certresolver=myresolver"
       - "traefik.http.services.killbill.loadbalancer.server.port=3000"
       - "traefik.docker.network=traefik"
+
+volumes:
+  killbill_uploads:
 
 networks:
   mysql_network:

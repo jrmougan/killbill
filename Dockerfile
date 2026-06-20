@@ -46,7 +46,14 @@ RUN adduser --system --uid 1001 nextjs
 # --- OPTIMIZACIÓN CLAVE ---
 
 # 1. Copiamos la carpeta public (imágenes estáticas, favicon, etc.)
-COPY --from=builder /app/public ./public
+#    --chown es CLAVE: sin él la carpeta queda como root y el usuario `nextjs`
+#    no puede escribir los tickets subidos en public/uploads (EACCES).
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Aseguramos que el directorio de subidas existe y es escribible por `nextjs`.
+# Es el punto de montaje del volumen persistente de Coolify; al crearlo aquí
+# con la propiedad correcta, un volumen nombrado hereda esos permisos.
+RUN mkdir -p ./public/uploads && chown -R nextjs:nodejs ./public/uploads
 
 # 2. Copiamos SOLO la carpeta standalone. 
 # Next.js ya metió aquí dentro sus propias dependencias necesarias.
