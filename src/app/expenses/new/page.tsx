@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ReceiptItem } from "@/types";
 import { getAllCategories } from "@/lib/categories";
-import { formatEuros } from "@/lib/currency";
+import { formatEuros, parseAmountInput, formatAmountInput } from "@/lib/currency";
 
 type Step = "amount" | "details";
 type ScanState = "idle" | "scanning" | "done";
@@ -20,8 +20,10 @@ type SplitChoice = "equal" | "me" | "partner" | "custom";
 type PaidBy = "me" | "partner";
 type RecurringInterval = "weekly" | "monthly" | "yearly";
 
-// ReceiptItem with a stable client-side id used as the React key for editable rows
-type EditableReceiptItem = ReceiptItem & { _uid: string };
+// ReceiptItem with a stable client-side id used as the React key for editable rows.
+// quantityStr/priceStr hold the raw text being typed so es-ES users can enter a
+// comma decimal (e.g. "2,5") without it collapsing on every keystroke.
+type EditableReceiptItem = ReceiptItem & { _uid: string; quantityStr?: string; priceStr?: string };
 
 let receiptItemUidCounter = 0;
 const nextReceiptItemUid = () => `item-${++receiptItemUidCounter}`;
@@ -99,7 +101,7 @@ export default function NewExpensePage() {
     const partnerPercent = 100 - myPercent;
 
     // es-ES users type the decimal separator as a comma; normalise before parsing
-    const amountNum = parseFloat(amount.replace(",", ".")) || 0;
+    const amountNum = parseAmountInput(amount);
     const amountValid = Number.isFinite(amountNum) && amountNum > 0 && amountNum <= 999999.99;
     const previewAmountCents = Math.round(amountNum * 100);
     const previewMyCents = Math.round((previewAmountCents * myPercent) / 100);
@@ -258,12 +260,24 @@ export default function NewExpensePage() {
 
     const updateItem = (index: number, field: keyof ReceiptItem, value: string | number | null) => {
         const newItems = [...receiptItems];
-        const item = { ...newItems[index], [field]: value };
-        if (field === "quantity" || field === "price") {
-            item.quantity = Math.max(0, item.quantity || 0);
-            item.price = Math.max(0, item.price || 0);
-            item.total = Number((item.quantity * item.price).toFixed(2));
+        newItems[index] = { ...newItems[index], [field]: value };
+        setReceiptItems(newItems);
+    };
+
+    // Numeric item fields are edited as raw text so the comma decimal separator
+    // survives partial input ("2," → "2,5"); the parsed number drives the totals.
+    const updateItemNumeric = (index: number, field: "quantity" | "price", raw: string) => {
+        const sanitized = raw.replace(/[^0-9.,]/g, "");
+        const newItems = [...receiptItems];
+        const item = { ...newItems[index] };
+        if (field === "quantity") {
+            item.quantityStr = sanitized;
+            item.quantity = Math.max(0, parseAmountInput(sanitized));
+        } else {
+            item.priceStr = sanitized;
+            item.price = Math.max(0, parseAmountInput(sanitized));
         }
+        item.total = Number((item.quantity * item.price).toFixed(2));
         newItems[index] = item;
         setReceiptItems(newItems);
         syncAmountFromItems(newItems);
@@ -759,19 +773,19 @@ export default function NewExpensePage() {
                                                             <div className="flex items-center gap-1 flex-shrink-0">
                                                                 <input
                                                                     aria-label={`Cantidad del producto ${idx + 1}`}
-                                                                    type="number" inputMode="decimal" min={0}
+                                                                    type="text" inputMode="decimal"
                                                                     className="bg-transparent text-xs w-7 text-right focus:outline-none text-muted-foreground"
-                                                                    value={item.quantity}
-                                                                    onChange={(e) => updateItem(idx, "quantity", parseFloat(e.target.value) || 0)}
+                                                                    value={item.quantityStr ?? formatAmountInput(item.quantity)}
+                                                                    onChange={(e) => updateItemNumeric(idx, "quantity", e.target.value)}
                                                                 />
                                                                 <span className="text-xs text-muted-foreground">x</span>
                                                                 <input
                                                                     aria-label={`Precio del producto ${idx + 1}`}
-                                                                    type="number" inputMode="decimal" min={0}
+                                                                    type="text" inputMode="decimal"
                                                                     className="bg-transparent text-xs w-11 text-right focus:outline-none text-muted-foreground"
-                                                                    value={item.price}
-                                                                    onChange={(e) => updateItem(idx, "price", parseFloat(e.target.value) || 0)}
-                                                                    placeholder="0.00"
+                                                                    value={item.priceStr ?? formatAmountInput(item.price)}
+                                                                    onChange={(e) => updateItemNumeric(idx, "price", e.target.value)}
+                                                                    placeholder="0,00"
                                                                 />
                                                             </div>
                                                             <div className="font-mono font-bold text-xs w-14 text-right flex-shrink-0">{item.total.toFixed(2)}</div>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toCents, toEuros } from './currency';
+import { toCents, toEuros, parseAmountInput, formatAmountInput } from './currency';
 
 describe('currency utilities', () => {
     describe('toCents', () => {
@@ -44,6 +44,47 @@ describe('currency utilities', () => {
         it('should handle negative cents', () => {
             expect(toEuros(-1050)).toBe(-10.5);
             expect(toEuros(-1)).toBe(-0.01);
+        });
+    });
+
+    describe('parseAmountInput', () => {
+        it('should parse a comma decimal separator (es-ES)', () => {
+            expect(parseAmountInput('12,50')).toBe(12.5);
+        });
+
+        it('should parse a dot decimal separator', () => {
+            expect(parseAmountInput('12.50')).toBe(12.5);
+        });
+
+        it('should not truncate at the comma like a raw parseFloat would', () => {
+            // parseFloat("2,50") === 2 — this is the OCR-form bug we are guarding against
+            expect(parseAmountInput('2,50')).toBe(2.5);
+        });
+
+        it('should strip non-numeric characters', () => {
+            expect(parseAmountInput('1 234,5 €')).toBe(1234.5);
+        });
+
+        it('should return 0 for empty or invalid input instead of NaN', () => {
+            expect(parseAmountInput('')).toBe(0);
+            expect(parseAmountInput(',')).toBe(0);
+            expect(parseAmountInput('abc')).toBe(0);
+        });
+
+        it('should keep cents exact when converted via toCents', () => {
+            expect(toCents(parseAmountInput('2,50'))).toBe(250);
+        });
+    });
+
+    describe('formatAmountInput', () => {
+        it('should render a number with a comma separator', () => {
+            expect(formatAmountInput(2.5)).toBe('2,5');
+        });
+
+        it('should round-trip with parseAmountInput', () => {
+            for (const n of [0, 0.01, 2.5, 12.5, 1234.99]) {
+                expect(parseAmountInput(formatAmountInput(n))).toBeCloseTo(n, 2);
+            }
         });
     });
 

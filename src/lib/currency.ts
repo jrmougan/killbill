@@ -21,6 +21,28 @@ export function toEuros(cents: number): number {
 }
 
 /**
+ * Parses a user-typed amount string into a number.
+ * es-ES users type the decimal separator as a comma, so strip everything
+ * except digits and separators, normalise the comma to a dot, and return 0
+ * for empty/invalid input (never NaN).
+ * Example: "12,50" → 12.5
+ */
+export function parseAmountInput(input: string): number {
+    const normalized = input.replace(/[^0-9.,]/g, '').replace(',', '.');
+    const n = parseFloat(normalized);
+    return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Formats a number as the value for a decimal text input, using a comma as
+ * the decimal separator (es-ES). Round-trips with parseAmountInput.
+ * Example: 2.5 → "2,5"
+ */
+export function formatAmountInput(value: number): string {
+    return Number.isFinite(value) ? String(value).replace('.', ',') : '';
+}
+
+/**
  * Formats cents as a localized EUR currency string.
  * Example: 1050 → "10,50 €"
  */
