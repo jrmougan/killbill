@@ -39,6 +39,7 @@ export default async function AnalyticsPage() {
         prisma.expense.findMany({
             where: {
                 coupleId: couple.id,
+                visibility: "SHARED",
                 date: { gte: twelveMonthsAgo },
             },
             include: { splits: true },

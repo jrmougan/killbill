@@ -2,17 +2,19 @@
 
 import { Expense, User } from "@/types";
 import Link from "next/link";
+import { Lock } from "lucide-react";
 import { getCategoryById } from "@/lib/categories";
 
 interface ExpenseCardProps {
     expense: Expense;
     paidByUser: User;
     allUsers?: Record<string, User>;
+    isPersonal?: boolean;
 }
 
 // Minimalist recent-expense row (EQUIL - Flujo de Gastos redesign):
 // flat surface, category emoji in a neutral rounded square, "{quién} pagó · {badge}".
-export function ExpenseCard({ expense, paidByUser, allUsers }: ExpenseCardProps) {
+export function ExpenseCard({ expense, paidByUser, allUsers, isPersonal = false }: ExpenseCardProps) {
     const category = getCategoryById(expense.category);
 
     // Determine beneficiary info
@@ -39,9 +41,17 @@ export function ExpenseCard({ expense, paidByUser, allUsers }: ExpenseCardProps)
                 <div className="flex-1 min-w-0">
                     <h3 className="font-semibold truncate text-[15px] text-foreground">{expense.description}</h3>
                     <div className="flex items-center gap-[7px] mt-[3px] min-w-0">
-                        <span className="text-[11px] text-muted-foreground truncate">{paidByUser.name} pagó</span>
-                        <span className="h-[2px] w-[2px] rounded-full bg-white/20 shrink-0" />
-                        <span className="text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">{beneficiaryText}</span>
+                        {isPersonal ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">
+                                <Lock className="h-3 w-3" /> Personal
+                            </span>
+                        ) : (
+                            <>
+                                <span className="text-[11px] text-muted-foreground truncate">{paidByUser.name} pagó</span>
+                                <span className="h-[2px] w-[2px] rounded-full bg-white/20 shrink-0" />
+                                <span className="text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">{beneficiaryText}</span>
+                            </>
+                        )}
                     </div>
                 </div>
 

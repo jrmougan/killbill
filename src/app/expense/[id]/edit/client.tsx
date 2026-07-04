@@ -52,6 +52,7 @@ interface EditExpenseClientProps {
     initialRecurringInterval: RecurringInterval;
     initialTagIds: string[];
     allTags: TagItem[];
+    isPersonal?: boolean;
 }
 
 export function EditExpenseClient({
@@ -70,6 +71,7 @@ export function EditExpenseClient({
     initialRecurringInterval,
     initialTagIds,
     allTags,
+    isPersonal = false,
 }: EditExpenseClientProps) {
     const router = useRouter();
 
@@ -524,7 +526,13 @@ export function EditExpenseClient({
                     )}
                 </div>
 
-                {/* 6. Split mode */}
+                {/* 6. Split mode — only for shared expenses */}
+                {isPersonal ? (
+                    <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 text-sm text-muted-foreground">
+                        <User className="h-4 w-4 text-primary" />
+                        Gasto personal — privado, sin reparto
+                    </div>
+                ) : (
                 <div className="space-y-4">
                     <div className="grid grid-cols-3 gap-2 p-1 bg-white/5 rounded-xl">
                         {(["shared", "solo", "custom"] as SplitMode[]).map((mode) => {
@@ -586,6 +594,7 @@ export function EditExpenseClient({
                         </div>
                     )}
                 </div>
+                )}
 
                 {/* 7. Notes */}
                 <div className="space-y-2">

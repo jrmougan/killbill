@@ -25,14 +25,16 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
 
     if (!expense) redirect("/dashboard");
 
-    const isMember = expense.couple.members.some((m) => m.id === userId);
-    if (!isMember) redirect("/dashboard");
+    // Personal expenses are editable only by their owner; shared ones by couple members.
+    const isMember = expense.couple?.members.some((m) => m.id === userId) ?? false;
+    const canEdit = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
+    if (!canEdit) redirect("/dashboard");
 
     const allTags = user?.coupleId
         ? await prisma.tag.findMany({ where: { coupleId: user.coupleId } })
         : [];
 
-    const partner = expense.couple.members.find((m) => m.id !== userId) ?? null;
+    const partner = expense.couple?.members.find((m) => m.id !== userId) ?? null;
 
     // Detect initial split mode from current splits
     let initialSplitMode: "shared" | "solo" | "custom" = "shared";
@@ -79,6 +81,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
             initialRecurringInterval={(expense.recurringInterval as "weekly" | "monthly" | "yearly") ?? "monthly"}
             initialTagIds={expense.tags.map((t) => t.tagId)}
             allTags={allTags}
+            isPersonal={expense.visibility === "PERSONAL"}
         />
     );
 }

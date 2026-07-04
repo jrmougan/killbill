@@ -164,6 +164,7 @@ export async function POST(request: Request) {
           amount: 10000, // 100€ in cents
           category: 'other',
           paidById: userA.id,
+          ownerId: userA.id,
           coupleId: couple.id,
           splits: {
             create: [
@@ -220,6 +221,7 @@ export async function POST(request: Request) {
           amount: 10000,
           category: 'other',
           paidById: userA.id,
+          ownerId: userA.id,
           coupleId: couple.id,
           splits: {
             create: [
@@ -247,6 +249,70 @@ export async function POST(request: Request) {
         userB: { email: emailB, password: PASSWORD, id: userB.id },
         coupleId: couple.id,
         settlementId: settlement.id,
+      });
+    }
+
+    if (scenario === 'couple-with-personal-expense') {
+      const emailA = uniqueEmail('userA');
+      const emailB = uniqueEmail('userB');
+
+      const couple = await prisma.couple.create({
+        data: { name: 'Personal Couple', code: randomCode() },
+      });
+
+      const userA = await prisma.user.create({
+        data: { name: 'User A', email: emailA, password: hashedPassword, avatar: '👤', coupleId: couple.id },
+      });
+      const userB = await prisma.user.create({
+        data: { name: 'User B', email: emailB, password: hashedPassword, avatar: '👤', coupleId: couple.id },
+      });
+
+      // A shared expense (100€, 50/50) so the couple balance is non-trivial...
+      const sharedExpense = await prisma.expense.create({
+        data: {
+          description: 'Shared Expense',
+          amount: 10000,
+          category: 'other',
+          paidById: userA.id,
+          ownerId: userA.id,
+          visibility: 'SHARED',
+          coupleId: couple.id,
+          splits: {
+            create: [
+              { userId: userA.id, amount: 5000 },
+              { userId: userB.id, amount: 5000 },
+            ],
+          },
+        },
+      });
+
+      // ...and a PERSONAL expense owned by userA (private, no couple, no splits).
+      const personalExpense = await prisma.expense.create({
+        data: {
+          description: 'Personal Expense',
+          amount: 50000, // 500€
+          category: 'health',
+          paidById: userA.id,
+          ownerId: userA.id,
+          visibility: 'PERSONAL',
+          coupleId: null,
+        },
+      });
+
+      // A personal budget for userA (health category).
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const personalBudget = await prisma.budget.create({
+        data: { category: 'health', amount: 60000, month: monthStart, ownerId: userA.id },
+      });
+
+      return NextResponse.json({
+        userA: { email: emailA, password: PASSWORD, id: userA.id },
+        userB: { email: emailB, password: PASSWORD, id: userB.id },
+        coupleId: couple.id,
+        sharedExpenseId: sharedExpense.id,
+        personalExpenseId: personalExpense.id,
+        personalBudgetId: personalBudget.id,
       });
     }
 

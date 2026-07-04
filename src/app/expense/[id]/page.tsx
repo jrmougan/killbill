@@ -39,8 +39,17 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
     if (!expense) redirect("/dashboard");
 
+    // Privacy: a personal expense is only visible to its owner; a shared one to
+    // members of its couple.
+    const isCoupleMember = expense.couple?.members.some(m => m.id === userId) ?? false;
+    const canView = expense.visibility === "PERSONAL"
+        ? expense.ownerId === userId
+        : isCoupleMember;
+    if (!canView) redirect("/dashboard");
+
+    const isPersonal = expense.visibility === "PERSONAL";
     const isMe = userId === expense.paidById;
-    const partner = expense.couple.members.find(m => m.id !== expense.paidById);
+    const partner = expense.couple?.members.find(m => m.id !== expense.paidById);
 
     return (
         <div className="flex flex-col min-h-screen p-3 sm:p-4 space-y-6 max-w-md mx-auto relative pb-24 w-full overflow-x-hidden">
@@ -82,6 +91,12 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     </div>
                 </div>
 
+                {isPersonal ? (
+                    <div className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-white/5 border border-white/10 text-sm text-muted-foreground">
+                        <User className="h-4 w-4 text-primary" />
+                        Gasto personal — privado, solo tú lo ves
+                    </div>
+                ) : (
                 <div className="space-y-4">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1 flex items-center gap-2">
                         <Heart className="h-4 w-4 fill-primary text-primary" />
@@ -122,6 +137,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         )}
                     </div>
                 </div>
+                )}
 
                 {expense.tags.length > 0 && (
                     <div className="space-y-4">

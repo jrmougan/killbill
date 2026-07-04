@@ -107,6 +107,26 @@ describe('finance utilities', () => {
             expect(balances['user1']).toBe(30);
             expect(balances['user2']).toBe(-30);
         });
+
+        it('ignores personal expenses when they are filtered out before balancing', () => {
+            // The dashboard/analytics/settle queries pass only SHARED expenses to
+            // calculateBalances. A personal expense (owned by one user, no split)
+            // must never reach it — otherwise it would skew the couple balance.
+            const allExpenses = [
+                { id: 'shared1', paidById: 'user1', amount: 100, visibility: 'SHARED' as const },
+                // Personal: user2 spent 500 on themselves — must not touch the balance.
+                { id: 'personal1', paidById: 'user2', amount: 500, visibility: 'PERSONAL' as const },
+            ];
+            const sharedOnly = allExpenses.filter(e => e.visibility === 'SHARED');
+            const settlements: { fromUserId: string; toUserId: string; amount: number }[] = [];
+
+            const balances = calculateBalances(users, sharedOnly, settlements, 'user1');
+
+            // Only the 100 shared expense counts: Alice +50, Bob -50.
+            // The 500 personal expense is invisible to the couple balance.
+            expect(balances['user1']).toBe(50);
+            expect(balances['user2']).toBe(-50);
+        });
     });
 
     describe('getMyDebts', () => {

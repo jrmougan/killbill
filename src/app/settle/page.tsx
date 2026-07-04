@@ -31,9 +31,9 @@ export default async function SettlePage() {
     const { couple } = user;
     const members = couple.members;
 
-    // Fetch Expenses for couple with splits
+    // Fetch shared expenses for couple with splits (personal expenses never affect debts).
     const rawExpenses = await prisma.expense.findMany({
-        where: { coupleId: couple.id },
+        where: { coupleId: couple.id, visibility: "SHARED" },
         include: { splits: true },
     });
 

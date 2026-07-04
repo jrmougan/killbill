@@ -16,27 +16,33 @@ export default async function BudgetPage() {
         include: { couple: true },
     });
 
-    if (!user?.couple) redirect("/dashboard");
+    if (!user) redirect("/login");
 
-    const coupleId = user.couple.id;
+    const coupleId = user.couple?.id ?? null;
+    const hasCouple = Boolean(coupleId);
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-    const [budgets, expenses] = await Promise.all([
-        prisma.budget.findMany({
-            where: { coupleId, month: monthStart },
-            orderBy: { category: "asc" },
-        }),
-        prisma.expense.findMany({
-            where: {
-                coupleId,
-                date: { gte: monthStart, lt: monthEnd },
-            },
-            select: { category: true, amount: true },
-        }),
-    ]);
+    // Server-render the SHARED (couple) budgets for first paint; the Personal tab
+    // is loaded client-side. A user with no couple starts on the Personal tab.
+    const [budgets, expenses] = hasCouple
+        ? await Promise.all([
+            prisma.budget.findMany({
+                where: { coupleId: coupleId!, month: monthStart },
+                orderBy: { category: "asc" },
+            }),
+            prisma.expense.findMany({
+                where: {
+                    coupleId: coupleId!,
+                    visibility: "SHARED",
+                    date: { gte: monthStart, lt: monthEnd },
+                },
+                select: { category: true, amount: true },
+            }),
+        ])
+        : [[], []] as const;
 
     const spentByCategory: Record<string, number> = {};
     for (const e of expenses) {
@@ -61,5 +67,5 @@ export default async function BudgetPage() {
     const rawMonthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
     const monthLabel = rawMonthLabel.charAt(0).toUpperCase() + rawMonthLabel.slice(1);
 
-    return <BudgetClient budgetData={budgetData} monthLabel={monthLabel} />;
+    return <BudgetClient budgetData={budgetData} monthLabel={monthLabel} hasCouple={hasCouple} />;
 }

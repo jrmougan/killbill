@@ -25,9 +25,12 @@ export async function DELETE(
             return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
         }
 
-        // Check if user is part of the couple
-        const isMember = expense.couple.members.some(m => m.id === userId);
-        if (!isMember) {
+        // Personal expenses are authorized by ownership; shared ones strictly by
+        // current couple membership (an ex-member who still "owns" a shared expense
+        // must NOT be able to mutate the couple's data after unlinking).
+        const isMember = expense.couple?.members.some(m => m.id === userId) ?? false;
+        const authorized = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
+        if (!authorized) {
             return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
@@ -66,13 +69,16 @@ export async function PATCH(
             return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
         }
 
-        // Check if user is part of the couple
-        const isMember = expense.couple.members.some(m => m.id === userId);
-        if (!isMember) {
+        // Personal expenses are authorized by ownership; shared ones strictly by
+        // current couple membership (see DELETE above).
+        const isMember = expense.couple?.members.some(m => m.id === userId) ?? false;
+        const authorized = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
+        if (!authorized) {
             return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
-        const members = expense.couple.members;
+        // Personal expenses have no couple/partner, so split recalculation is skipped below.
+        const members = expense.couple?.members ?? [];
         const partner = members.find(m => m.id !== expense.paidById);
         const memberIds = new Set(members.map(m => m.id));
 

@@ -111,7 +111,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
     };
 
     return (
-        <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto relative pb-10">
+        <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto relative pb-24">
             <header className="flex items-center gap-4 pt-2">
                 <Link href="/dashboard">
                     <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">

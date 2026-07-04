@@ -4,13 +4,15 @@ import { ExpenseCard } from "@/components/dashboard/expense-card";
 import { User, Expense } from "@/types";
 import { InviteCard } from "@/components/dashboard/invite-card";
 import { JoinGroupCard } from "@/components/dashboard/join-group-card";
-import { Plus, Heart, Settings, BarChart2, ArrowLeftRight } from "lucide-react";
+import { Plus, Heart, Settings, ArrowLeftRight, Lock } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { calculateBalances, getLastSettlementDate } from "@/lib/finance";
-import { materializeDueRecurringExpenses } from "@/lib/recurring";
+import { materializeDueRecurringExpenses, materializeDueRecurringExpensesForOwner } from "@/lib/recurring";
+import { ScopeSegment } from "@/components/nav/scope-segment";
+import { normalizeScope } from "@/lib/scope";
 import { toEuros, formatEuros } from "@/lib/currency";
 import { getCategoryById } from "@/lib/categories";
 import { getSettlementStatusLabel, getSettlementMethodLabel } from "@/lib/settlement-labels";
@@ -22,10 +24,14 @@ import { randomBytes } from "crypto";
 
 export const dynamic = 'force-dynamic';
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
     const session = await getSession();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
+
+    // Scope is a lens over the same home: 'todo' (default), 'comun' (couple only)
+    // or 'personal' (private only). Read from ?scope= so it survives navigation.
+    const scope = normalizeScope((await searchParams).scope);
 
     // Fetch User with couple and partner
     const user = await prisma.user.findUnique({
@@ -115,11 +121,32 @@ export default async function DashboardPage() {
         console.error("Failed to materialize recurring expenses", err);
     }
 
-    // Fetch ALL Expenses for balance calculation
+    // Fetch ALL shared Expenses for balance calculation.
+    // Personal expenses (visibility PERSONAL) are private and must never affect
+    // the couple's balances.
     const allExpenses = await prisma.expense.findMany({
-        where: { coupleId: couple.id },
+        where: { coupleId: couple.id, visibility: "SHARED" },
         include: { splits: true },
     });
+
+    // Personal ledger (private to this user). Materialize the user's own recurring
+    // personal sources (the couple runner above never sees them: coupleId is null),
+    // then load them for the unified feed and the "Personal este mes" tile.
+    try {
+        await materializeDueRecurringExpensesForOwner(userId);
+    } catch (err) {
+        console.error("Failed to materialize personal recurring expenses", err);
+    }
+    const personalExpenses = await prisma.expense.findMany({
+        where: { ownerId: userId, visibility: "PERSONAL" },
+        include: { splits: true },
+    });
+    const personalMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const personalThisMonth = toEuros(
+        personalExpenses
+            .filter(e => new Date(e.date) >= personalMonthStart)
+            .reduce((sum, e) => sum + e.amount, 0)
+    );
 
     // Fetch Settlements
     const settlements = await prisma.settlement.findMany({
@@ -161,9 +188,10 @@ export default async function DashboardPage() {
     const confirmedSettlements = settlements.filter(s => s.status === "CONFIRMED");
     const lastSettlementDate = getLastSettlementDate(confirmedSettlements);
 
-    // Combined recent items for display (unified view) - convert cents to euros
-    const combinedRecent = [
-        ...allExpenses.map(e => ({
+    // Unified feed, filtered by scope. Shared expenses respect the settlement
+    // "clean slate"; personal ones are just the user's recent private movements.
+    const sharedFeed = allExpenses
+        .map(e => ({
             id: e.id,
             type: "EXPENSE" as const,
             description: e.description,
@@ -173,8 +201,12 @@ export default async function DashboardPage() {
             paidBy: e.paidById,
             receiptUrl: e.receiptUrl,
             splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
-        })),
-        ...settlements.map((s) => ({
+            isPersonal: false,
+        }))
+        .filter(i => new Date(i.date) > lastSettlementDate);
+
+    const settlementFeed = settlements
+        .map((s) => ({
             id: s.id,
             type: "SETTLEMENT" as const,
             description: `Liquidación`,
@@ -184,12 +216,29 @@ export default async function DashboardPage() {
             paidBy: s.fromUserId,
             toUserId: s.toUserId,
             method: s.method,
-            status: s.status
+            status: s.status,
         }))
-    ].filter(i => {
-        if (i.type === "EXPENSE") return new Date(i.date) > lastSettlementDate;
-        return i.type === "SETTLEMENT" && i.status === "PENDING";
-    })
+        .filter(i => i.status === "PENDING");
+
+    const personalFeed = personalExpenses.map(e => ({
+        id: e.id,
+        type: "EXPENSE" as const,
+        description: e.description,
+        amount: toEuros(e.amount),
+        date: e.date.toISOString(),
+        category: e.category,
+        paidBy: e.paidById,
+        receiptUrl: e.receiptUrl,
+        splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
+        isPersonal: true,
+    }));
+
+    const feedForScope =
+        scope === "personal" ? personalFeed
+        : scope === "comun" ? [...sharedFeed, ...settlementFeed]
+        : [...sharedFeed, ...settlementFeed, ...personalFeed];
+
+    const combinedRecent = feedForScope
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         .slice(0, 10);
 
@@ -204,28 +253,38 @@ export default async function DashboardPage() {
                         {partner ? `Pareja con ${partner.name}` : "Esperando a tu pareja..."}
                     </div>
                 </div>
-                <div className="flex items-center gap-3.5">
-                    <Link href="/analytics">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-transparent">
-                            <BarChart2 className="h-5 w-5" />
-                        </Button>
-                    </Link>
-                    <Link href="/settings">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground hover:bg-transparent">
-                            <Settings className="h-5 w-5" />
-                        </Button>
-                    </Link>
-                    <div className="h-[38px] w-[38px] rounded-full bg-[hsl(var(--surface-raised))] border border-white/[0.08] flex items-center justify-center font-bold text-sm text-primary overflow-hidden">
-                        {isAvatarUrl(user.avatar) ? (
-                            // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
-                            <img src={user.avatar!} alt={user.name} className="h-full w-full object-cover" />
-                        ) : (
-                            user.name.charAt(0).toUpperCase()
-                        )}
-                    </div>
+                {/* Navigation (Analíticas/Ajustes) now lives in the bottom nav. */}
+                <div className="h-[38px] w-[38px] rounded-full bg-[hsl(var(--surface-raised))] border border-white/[0.08] flex items-center justify-center font-bold text-sm text-primary overflow-hidden">
+                    {isAvatarUrl(user.avatar) ? (
+                        // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
+                        <img src={user.avatar!} alt={user.name} className="h-full w-full object-cover" />
+                    ) : (
+                        user.name.charAt(0).toUpperCase()
+                    )}
                 </div>
             </header>
 
+            {/* Scope lens: Todo · Común · Personal */}
+            <ScopeSegment scope={scope} />
+
+            {/* Personal spend this month — a neutral total, not a signed balance. */}
+            {scope !== "comun" && (
+                <div className="rounded-[16px] bg-[hsl(var(--surface))] border border-white/5 px-5 py-4 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <span className="text-[11px] uppercase font-semibold tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
+                            <Lock className="h-3 w-3" /> Personal este mes
+                        </span>
+                        <p className="text-[22px] leading-none font-mono font-bold text-foreground mt-1.5">{formatEuros(personalThisMonth)}</p>
+                    </div>
+                    {scope === "personal" && (
+                        <span className="text-[11px] text-muted-foreground text-right shrink-0">Privado —<br />solo tú lo ves</span>
+                    )}
+                </div>
+            )}
+
+            {/* Couple surfaces — hidden when viewing the Personal lens. */}
+            {scope !== "personal" && (
+            <>
             <section className="grid grid-cols-1 gap-4">
                 <GlassCard className="p-0 flex flex-col items-center justify-center text-center overflow-hidden rounded-[20px]">
                     {!partner ? (
@@ -365,11 +424,15 @@ export default async function DashboardPage() {
             </section>
 
             {!partner && <InviteCard code={couple.code} />}
+            </>
+            )}
 
             <section className="space-y-3">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-[13px] font-semibold tracking-[0.04em] uppercase text-muted-foreground">Recientes</h2>
-                    {(allExpenses.length > 0 || settlements.length > 0) && (
+                    <h2 className="text-[13px] font-semibold tracking-[0.04em] uppercase text-muted-foreground">
+                        {scope === "personal" ? "Movimientos personales" : "Recientes"}
+                    </h2>
+                    {scope !== "personal" && (allExpenses.length > 0 || settlements.length > 0) && (
                         <Link href="/expenses/list" className="text-[13px] text-primary hover:underline">
                             Ver todos →
                         </Link>
@@ -378,7 +441,14 @@ export default async function DashboardPage() {
 
                 <div className="space-y-2">
                     {combinedRecent.length === 0 ? (
-                        (allExpenses.length > 0 || settlements.length > 0) ? (
+                        scope === "personal" ? (
+                            <div className="text-center py-12 px-5 rounded-2xl border border-dashed border-white/10">
+                                <p className="font-semibold text-[15px] text-foreground">Sin gastos personales</p>
+                                <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
+                                    Pulsa <span className="text-primary font-semibold">+</span> para registrar un gasto privado.
+                                </p>
+                            </div>
+                        ) : (allExpenses.length > 0 || settlements.length > 0) ? (
                             <div className="text-center py-10 px-5 rounded-2xl border border-dashed border-white/10">
                                 <p className="font-semibold text-[15px] text-foreground">Todo al día</p>
                                 <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
@@ -411,6 +481,7 @@ export default async function DashboardPage() {
                                         expense={item as Expense}
                                         paidByUser={usersMap[item.paidBy]}
                                         allUsers={usersMap}
+                                        isPersonal={item.isPersonal}
                                     />
                                 );
                             } else {
@@ -448,9 +519,9 @@ export default async function DashboardPage() {
                 </div>
             </section>
 
-            {partner ? (
-                <div className="fixed bottom-[30px] right-6 z-50">
-                    <Link href="/expenses/new">
+            {partner || scope === "personal" ? (
+                <div className="fixed bottom-[92px] right-6 z-50">
+                    <Link href={scope === "personal" ? "/expenses/new?type=personal" : "/expenses/new"}>
                         <Button size="icon" className="h-14 w-14 rounded-full shadow-[0_10px_28px_-10px_rgba(0,0,0,0.8)] bg-primary hover:bg-primary/90 active:scale-90 transition-transform">
                             <Plus className="h-6 w-6" />
                         </Button>

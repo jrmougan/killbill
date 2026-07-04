@@ -31,7 +31,7 @@ export default async function ExpensesListPage() {
 
     // Fetch all expenses
     const rawExpenses = await prisma.expense.findMany({
-        where: { coupleId: couple.id },
+        where: { coupleId: couple.id, visibility: "SHARED" },
         include: { splits: true },
         orderBy: { date: "desc" },
     });

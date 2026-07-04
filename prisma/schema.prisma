@@ -36,6 +36,11 @@ enum SettlementMethod {
   TRANSFER
 }
 
+enum ExpenseVisibility {
+  PERSONAL
+  SHARED
+}
+
 model Couple {
   id        String    @id @default(cuid())
   name      String?
@@ -63,12 +68,15 @@ model User {
   coupleId String?
   couple   Couple? @relation(fields: [coupleId], references: [id])
 
-  expensesPaid Expense[] @relation("Payer")
-  splits       Split[]
+  expensesPaid  Expense[] @relation("Payer")
+  expensesOwned Expense[] @relation("Owner")
+  splits        Split[]
 
   settlementsPaid     Settlement[] @relation("SettlementPayer")
   settlementsReceived Settlement[] @relation("SettlementReceiver")
-  
+
+  personalBudgets Budget[] @relation("PersonalBudget")
+
   inviteCodesCreated InviteCode[] @relation("InviteCreator")
   inviteCodeUsed     InviteCode?  @relation("InviteUser")
 }
@@ -99,6 +107,8 @@ model Expense {
   receiptUrl  String?
   receiptData Json?
 
+  visibility  ExpenseVisibility @default(SHARED)
+
   notes               String?
   isRecurring         Boolean   @default(false)
   recurringInterval   RecurringInterval?
@@ -107,8 +117,15 @@ model Expense {
   paidById String
   paidBy   User   @relation("Payer", fields: [paidById], references: [id], onDelete: Cascade)
 
-  coupleId String
-  couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  // Owner of the "book" this expense belongs to (always set). For shared
+  // expenses this defaults to the creator; for personal expenses it is the
+  // only user who can see it.
+  ownerId String
+  owner   User   @relation("Owner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // Personal expenses have no couple; shared ones are scoped to a Couple.
+  coupleId String?
+  couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: Cascade)
 
   splits Split[]
   tags   ExpenseTag[]
@@ -116,8 +133,16 @@ model Expense {
   settlementId String?
   settlement   Settlement? @relation(fields: [settlementId], references: [id])
 
+  currency  String   @default("EUR")
+  minorUnit Int      @default(2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([coupleId])
   @@index([paidById])
+  @@index([ownerId])
+  @@index([ownerId, visibility])
 }
 
 model Split {
@@ -129,6 +154,9 @@ model Split {
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([expenseId, userId])
   @@index([expenseId])
@@ -154,6 +182,12 @@ model Settlement {
   status SettlementStatus @default(PENDING)
   method SettlementMethod @default(CASH)
 
+  currency  String   @default("EUR")
+  minorUnit Int      @default(2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   expenses Expense[]
 
   @@index([coupleId])
@@ -168,6 +202,9 @@ model Tag {
   coupleId String
   couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
   expenses ExpenseTag[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([name, coupleId])
   @@index([coupleId])
@@ -187,9 +224,22 @@ model Budget {
   category ExpenseCategory
   amount   Int             // limite en centavos
   month    DateTime // primer dia del mes al que aplica
-  coupleId String
-  couple   Couple   @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+
+  // A budget is either shared (coupleId set) or personal (ownerId set).
+  coupleId String?
+  couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+
+  ownerId String?
+  owner   User?   @relation("PersonalBudget", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  currency  String   @default("EUR")
+  minorUnit Int      @default(2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([category, month, coupleId])
+  @@unique([category, month, ownerId])
   @@index([coupleId])
+  @@index([ownerId])
 }

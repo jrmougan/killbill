@@ -6,7 +6,7 @@ export async function proxy(request: NextRequest) {
 
     // Define protected paths
     // /setup should NOT be protected as it handles its own logic
-    const protectedPaths = ['/dashboard', '/admin', '/api/admin', '/expenses', '/settle', '/settings']
+    const protectedPaths = ['/dashboard', '/admin', '/api/admin', '/expenses', '/personal', '/settle', '/settings']
     const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
 
     if (isProtected) {
@@ -32,6 +32,7 @@ export const config = {
         '/admin/:path*',
         '/api/admin/:path*',
         '/expenses/:path*',
+        '/personal/:path*',
         '/settle/:path*',
         '/settings/:path*',
     ],

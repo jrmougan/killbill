@@ -17,7 +17,8 @@ export async function GET(request: Request) {
     const from = searchParams.get('from');
     const to = searchParams.get('to');
 
-    const where: Prisma.ExpenseWhereInput = { coupleId: user.coupleId };
+    // Only shared expenses belong to the couple export; personal expenses are private.
+    const where: Prisma.ExpenseWhereInput = { coupleId: user.coupleId, visibility: 'SHARED' };
     if (from || to) {
         const dateFilter: Prisma.DateTimeFilter = {};
         if (from) dateFilter.gte = new Date(from);

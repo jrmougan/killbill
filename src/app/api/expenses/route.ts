@@ -18,9 +18,18 @@ export async function GET(request: Request) {
             where: { id: userId },
         });
 
-        if (!user?.coupleId) return NextResponse.json({ expenses: [], nextCursor: null });
-
         const { searchParams } = new URL(request.url);
+        const scope = searchParams.get('scope') === 'personal' ? 'personal' : 'shared';
+
+        // Shared scope needs a couple; personal scope works for any user.
+        if (scope === 'shared' && !user?.coupleId) {
+            return NextResponse.json({ expenses: [], nextCursor: null });
+        }
+
+        // Personal expenses belong to the caller only; shared ones to the couple.
+        const where = scope === 'personal'
+            ? { ownerId: userId, visibility: 'PERSONAL' as const }
+            : { coupleId: user!.coupleId!, visibility: 'SHARED' as const };
 
         // Parse limit with sane default and bounds
         const parsedLimit = parseInt(searchParams.get('limit') ?? '', 10);
@@ -34,7 +43,7 @@ export async function GET(request: Request) {
         const skip = Number.isFinite(parsedSkip) && parsedSkip > 0 ? parsedSkip : undefined;
 
         const expenses = await prisma.expense.findMany({
-            where: { coupleId: user.coupleId },
+            where,
             include: {
                 paidBy: {
                     select: { name: true }
@@ -73,13 +82,17 @@ export async function POST(request: Request) {
         const userId = session.userId as string;
 
         const body = await request.json();
-        const { description, amount, category, beneficiaryId, customSplits, receiptUrl, receiptData, notes, isRecurring, recurringInterval, paidById: paidByIdInput } = body;
+        const { description, amount, category, beneficiaryId, customSplits, receiptUrl, receiptData, notes, isRecurring, recurringInterval, paidById: paidByIdInput, visibility: visibilityInput, isPersonal } = body;
 
         const user = await prisma.user.findUnique({
             where: { id: userId },
         });
 
-        if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+        // Personal expenses are a private ledger and never touch the couple; shared
+        // expenses require a couple (existing behaviour).
+        const isPersonalExpense = isPersonal === true || visibilityInput === 'PERSONAL';
+        if (!isPersonalExpense && !user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         // Validate description is a non-empty string (missing/empty previously 500'd at the DB layer).
         if (typeof description !== 'string' || description.trim().length === 0) {
@@ -94,15 +107,19 @@ export async function POST(request: Request) {
 
         // Load couple members up-front so we can validate any client-supplied
         // userId/beneficiaryId actually belongs to the caller's couple (prevents IDOR).
-        const coupleMembers = await prisma.user.findMany({
-            where: { coupleId: user.coupleId },
-            select: { id: true }
-        });
+        // Personal expenses have no couple, so there are no members to load.
+        const coupleMembers = (!isPersonalExpense && user.coupleId)
+            ? await prisma.user.findMany({
+                where: { coupleId: user.coupleId },
+                select: { id: true }
+            })
+            : [];
         const memberIds = new Set(coupleMembers.map(m => m.id));
 
         // The payer defaults to the creator, but the client may attribute the expense
         // to the partner ("¿Quién pagó?"). Only honour an id that belongs to the couple.
-        const paidById = (typeof paidByIdInput === 'string' && memberIds.has(paidByIdInput))
+        // Personal expenses are always paid by (and owned by) the creator.
+        const paidById = (!isPersonalExpense && typeof paidByIdInput === 'string' && memberIds.has(paidByIdInput))
             ? paidByIdInput
             : userId;
 
@@ -133,7 +150,9 @@ export async function POST(request: Request) {
             amount: amountCents,
             category: normalizedCategory,
             paidById,
-            coupleId: user.coupleId,
+            ownerId: userId,
+            visibility: isPersonalExpense ? 'PERSONAL' : 'SHARED',
+            coupleId: isPersonalExpense ? null : user.coupleId,
             receiptUrl: receiptUrl || null,
             receiptData: receiptData || undefined, // Prisma Json handling
             notes: notes || null,
@@ -142,7 +161,10 @@ export async function POST(request: Request) {
             nextRecurringDate: nextRecurringDate || null,
         };
 
-        if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
+        if (isPersonalExpense) {
+            // Personal expenses are a private ledger — never split, never settled.
+            // (no splits created)
+        } else if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
             if (customSplits.some((s: { amount: number }) => (s?.amount ?? 0) < 0)) {
                 return NextResponse.json({ error: 'Split amounts must not be negative' }, { status: 400 });
             }

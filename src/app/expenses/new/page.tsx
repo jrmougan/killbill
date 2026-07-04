@@ -18,6 +18,7 @@ type Step = "amount" | "details";
 type ScanState = "idle" | "scanning" | "done";
 type SplitChoice = "equal" | "me" | "partner" | "custom";
 type PaidBy = "me" | "partner";
+type ExpenseType = "shared" | "personal";
 type RecurringInterval = "weekly" | "monthly" | "yearly";
 
 // ReceiptItem with a stable client-side id used as the React key for editable rows.
@@ -66,6 +67,9 @@ export default function NewExpensePage() {
     const [categoryAutoDetected, setCategoryAutoDetected] = useState(false);
     const [loading, setLoading] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
+
+    // Personal (private ledger) vs shared (couple) expense
+    const [expenseType, setExpenseType] = useState<ExpenseType>("shared");
 
     // Split / payer
     const [paidBy, setPaidBy] = useState<PaidBy>("me");
@@ -119,6 +123,14 @@ export default function NewExpensePage() {
         if (item.assignedTo === partner?.id) return acc + item.total;
         return acc;
     }, 0);
+
+    // Preselect the expense type from ?type=personal (linked from the /personal
+    // ledger) without useSearchParams so the page stays statically renderable.
+    useEffect(() => {
+        if (new URLSearchParams(window.location.search).get("type") === "personal") {
+            setExpenseType("personal");
+        }
+    }, []);
 
     useEffect(() => {
         fetch("/api/couple")
@@ -349,14 +361,17 @@ export default function NewExpensePage() {
             setFormError("Añade un concepto para el gasto.");
             return;
         }
-        if (split === "custom" && myPercent + partnerPercent !== 100) {
-            setFormError("Los porcentajes deben sumar 100%.");
-            return;
-        }
-        const needsPartner = split === "partner" || paidBy === "partner";
-        if (needsPartner && !partner) {
-            setFormError("Necesitas una pareja configurada para esta opción.");
-            return;
+        const isPersonal = expenseType === "personal";
+        if (!isPersonal) {
+            if (split === "custom" && myPercent + partnerPercent !== 100) {
+                setFormError("Los porcentajes deben sumar 100%.");
+                return;
+            }
+            const needsPartner = split === "partner" || paidBy === "partner";
+            if (needsPartner && !partner) {
+                setFormError("Necesitas una pareja configurada para esta opción.");
+                return;
+            }
         }
 
         setLoading(true);
@@ -382,7 +397,6 @@ export default function NewExpensePage() {
                 amount: amountNum,
                 description,
                 category,
-                paidById: paidBy === "me" ? userId : partner?.id,
                 receiptUrl: uploadedUrl,
                 receiptData: receiptItems.length > 0
                     ? receiptItems.map(({ description, quantity, price, total, assignedTo }) => ({
@@ -394,24 +408,31 @@ export default function NewExpensePage() {
                 recurringInterval: isRecurring ? recurringInterval : undefined,
             };
 
-            if (hasItemAssignments && userId && partner) {
-                const myCents = Math.round(itemSplitMyAmount * 100);
-                bodyPayload.customSplits = [
-                    { userId, amount: myCents },
-                    { userId: partner.id, amount: amountCents - myCents },
-                ];
-            } else if (split === "custom" && userId && partner) {
-                const myCents = Math.round((amountCents * myPercent) / 100);
-                bodyPayload.customSplits = [
-                    { userId, amount: myCents },
-                    { userId: partner.id, amount: amountCents - myCents },
-                ];
-            } else if (split === "me" && userId) {
-                bodyPayload.beneficiaryId = userId;
-            } else if (split === "partner" && partner) {
-                bodyPayload.beneficiaryId = partner.id;
+            if (isPersonal) {
+                // Personal expense: private, no payer/split — the API owns it to the caller.
+                bodyPayload.visibility = "PERSONAL";
+            } else {
+                bodyPayload.paidById = paidBy === "me" ? userId : partner?.id;
+
+                if (hasItemAssignments && userId && partner) {
+                    const myCents = Math.round(itemSplitMyAmount * 100);
+                    bodyPayload.customSplits = [
+                        { userId, amount: myCents },
+                        { userId: partner.id, amount: amountCents - myCents },
+                    ];
+                } else if (split === "custom" && userId && partner) {
+                    const myCents = Math.round((amountCents * myPercent) / 100);
+                    bodyPayload.customSplits = [
+                        { userId, amount: myCents },
+                        { userId: partner.id, amount: amountCents - myCents },
+                    ];
+                } else if (split === "me" && userId) {
+                    bodyPayload.beneficiaryId = userId;
+                } else if (split === "partner" && partner) {
+                    bodyPayload.beneficiaryId = partner.id;
+                }
+                // split === "equal" → no beneficiary/customSplits → API splits equally
             }
-            // split === "equal" → no beneficiary/customSplits → API splits equally
 
             const res = await fetch("/api/expenses", {
                 method: "POST",
@@ -424,7 +445,7 @@ export default function NewExpensePage() {
                 if (selectedTagIds.length > 0 && data.expenseId) {
                     await applyTagsToExpense(data.expenseId);
                 }
-                router.push("/dashboard");
+                router.push(isPersonal ? "/dashboard?scope=personal" : "/dashboard");
                 router.refresh();
             } else {
                 const errData = await res.json().catch(() => null);
@@ -626,7 +647,37 @@ export default function NewExpensePage() {
                             </div>
                         </div>
 
-                        {/* Who paid */}
+                        {/* Personal vs shared */}
+                        <fieldset className="space-y-2 border-0 p-0 m-0">
+                            <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">Tipo de gasto</legend>
+                            <div className="flex gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5">
+                                {([["shared", "Común", "Se reparte con tu pareja"], ["personal", "Personal", "Privado, solo para ti"]] as const).map(([key, label, hint]) => (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        onClick={() => setExpenseType(key)}
+                                        aria-pressed={expenseType === key}
+                                        data-testid={`expense-type-${key}`}
+                                        className={cn(
+                                            "flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all active:scale-[0.98]",
+                                            expenseType === key ? "bg-primary text-white shadow" : "text-muted-foreground"
+                                        )}
+                                        title={hint}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground/70 px-1">
+                                {expenseType === "personal"
+                                    ? "Solo tú lo verás. No afecta a los balances de la pareja."
+                                    : "Se reparte con tu pareja y cuenta en los balances."}
+                            </p>
+                        </fieldset>
+
+                        {/* Who paid + how to split — only for shared expenses */}
+                        {expenseType === "shared" && (
+                        <>
                         <fieldset className="space-y-2 border-0 p-0 m-0">
                             <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">¿Quién pagó?</legend>
                             <div className="flex gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5">
@@ -726,6 +777,8 @@ export default function NewExpensePage() {
                                 </div>
                             )}
                         </fieldset>
+                        </>
+                        )}
 
                         {/* Advanced (collapsible): notes, tags, recurring, item breakdown */}
                         <div className="space-y-2">
@@ -789,6 +842,7 @@ export default function NewExpensePage() {
                                                                 />
                                                             </div>
                                                             <div className="font-mono font-bold text-xs w-14 text-right flex-shrink-0">{item.total.toFixed(2)}</div>
+                                                            {expenseType === "shared" && (
                                                             <div className="flex items-center flex-shrink-0 rounded-lg overflow-hidden border border-white/10 text-[11px] font-bold">
                                                                 <button type="button" onClick={() => setItemAssignment(idx, null)} aria-pressed={item.assignedTo === null} aria-label="Compartido 50/50"
                                                                     className={cn("px-2.5 py-2 transition-colors", item.assignedTo === null ? "bg-primary text-white" : "text-muted-foreground hover:bg-white/10")} title="Compartido (50/50)">½</button>
@@ -797,16 +851,19 @@ export default function NewExpensePage() {
                                                                 <button type="button" onClick={() => setItemAssignment(idx, partner?.id || null)} aria-pressed={item.assignedTo === partner?.id && item.assignedTo !== null} aria-label={`Solo ${partnerName}`}
                                                                     className={cn("px-2.5 py-2 border-l border-white/10 transition-colors", item.assignedTo === partner?.id && item.assignedTo !== null ? "bg-pink-500/30 text-pink-300" : "text-muted-foreground hover:bg-white/10")} title={`Solo ${partnerName}`}>{partner?.name?.charAt(0).toUpperCase() ?? "P"}</button>
                                                             </div>
+                                                            )}
                                                             <button type="button" onClick={() => removeItem(idx)} aria-label={`Eliminar producto ${idx + 1}`} className="text-muted-foreground hover:text-red-400 p-2 flex-shrink-0">
                                                                 <Trash2 className="h-4 w-4" />
                                                             </button>
                                                         </div>
                                                     ))}
                                                 </div>
+                                                {expenseType === "shared" && (
                                                 <div className="text-xs px-2 py-2 bg-white/5 rounded-lg space-y-1">
                                                     <div className="flex justify-between font-semibold text-blue-300"><span>Tu parte:</span><span>{formatEuros(itemSplitMyAmount)}</span></div>
                                                     <div className="flex justify-between font-semibold text-pink-300"><span>{partnerName}:</span><span>{formatEuros(itemSplitPartnerAmount)}</span></div>
                                                 </div>
+                                                )}
                                             </>
                                         )}
                                     </div>

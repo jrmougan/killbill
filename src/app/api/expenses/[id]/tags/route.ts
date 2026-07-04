@@ -8,7 +8,10 @@ async function getExpenseAndVerifyMembership(expenseId: string, userId: string) 
         include: { couple: { include: { members: true } } },
     });
     if (!expense) return { expense: null, authorized: false };
-    const authorized = expense.couple.members.some((m) => m.id === userId);
+    // Personal: owner-only. Shared: current couple membership only (no lingering
+    // owner access after unlinking).
+    const isMember = expense.couple?.members.some((m) => m.id === userId) ?? false;
+    const authorized = expense.visibility === 'PERSONAL' ? expense.ownerId === userId : isMember;
     return { expense, authorized };
 }
 

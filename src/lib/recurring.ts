@@ -22,12 +22,31 @@ export function addInterval(base: Date, interval: string): Date {
 // Safety cap on catch-up iterations per source expense to avoid runaway loops.
 const MAX_CATCHUP_ITERATIONS = 60;
 
+import type { Prisma } from '@/generated/prisma/client';
+
 /**
- * Lazily materializes any due recurring expenses for a couple.
+ * Lazily materializes any due recurring expenses for a couple (shared expenses).
+ * @returns total number of expense instances created across all source expenses.
+ */
+export async function materializeDueRecurringExpenses(coupleId: string): Promise<number> {
+    return materializeDueRecurring({ coupleId, visibility: 'SHARED' });
+}
+
+/**
+ * Lazily materializes any due recurring PERSONAL expenses for a single user.
+ * Personal recurring sources have coupleId=null and are never picked up by the
+ * couple-scoped runner, so the personal ledger view triggers this instead.
+ */
+export async function materializeDueRecurringExpensesForOwner(ownerId: string): Promise<number> {
+    return materializeDueRecurring({ ownerId, visibility: 'PERSONAL' });
+}
+
+/**
+ * Core catch-up loop shared by the couple and owner scopes.
  *
- * For each recurring source expense whose `nextRecurringDate` is in the past,
- * every missed period is caught up: an instance is created for each scheduled
- * occurrence until `nextRecurringDate` moves into the future.
+ * For each recurring source expense (matching `scope`) whose `nextRecurringDate`
+ * is in the past, every missed period is caught up: an instance is created for
+ * each scheduled occurrence until `nextRecurringDate` moves into the future.
  *
  * Each iteration is concurrency-safe via a conditional-advance guard: the source
  * date is advanced with an `updateMany` conditioned on the value we read, so only
@@ -36,10 +55,10 @@ const MAX_CATCHUP_ITERATIONS = 60;
  *
  * @returns total number of expense instances created across all source expenses.
  */
-export async function materializeDueRecurringExpenses(coupleId: string): Promise<number> {
+async function materializeDueRecurring(scope: Prisma.ExpenseWhereInput): Promise<number> {
     const dueExpenses = await prisma.expense.findMany({
         where: {
-            coupleId,
+            ...scope,
             isRecurring: true,
             nextRecurringDate: { lte: new Date() },
         },
@@ -87,6 +106,8 @@ export async function materializeDueRecurringExpenses(coupleId: string): Promise
                         amount: expense.amount,
                         category: expense.category,
                         paidById: expense.paidById,
+                        ownerId: expense.ownerId,
+                        visibility: expense.visibility,
                         coupleId: expense.coupleId,
                         notes: expense.notes ?? null,
                         date: occurrence, // the scheduled occurrence date, not now

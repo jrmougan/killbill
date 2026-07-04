@@ -6,13 +6,18 @@ import { CATEGORIES } from '@/lib/categories';
 
 const VALID_CATEGORIES = Object.keys(CATEGORIES);
 
-export async function GET() {
+export async function GET(request: Request) {
     const session = await getSession();
     if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const userId = session.userId as string;
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.coupleId) return NextResponse.json({ budgets: [] });
+
+    const { searchParams } = new URL(request.url);
+    const scope = searchParams.get('scope') === 'personal' ? 'personal' : 'shared';
+
+    // Shared budgets need a couple; personal budgets work for any user.
+    if (scope === 'shared' && !user?.coupleId) return NextResponse.json({ budgets: [] });
 
     // Current month boundaries
     const now = new Date();
@@ -20,19 +25,19 @@ export async function GET() {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
     const budgets = await prisma.budget.findMany({
-        where: {
-            coupleId: user.coupleId,
-            month: monthStart,
-        },
+        where: scope === 'personal'
+            ? { ownerId: userId, month: monthStart }
+            : { coupleId: user!.coupleId!, month: monthStart },
         orderBy: { category: 'asc' },
     });
 
-    // Get actual spending per category for the current month
+    // Get actual spending per category for the current month.
+    // Personal budgets are measured against the caller's personal expenses;
+    // shared budgets against the couple's shared expenses only.
     const expenses = await prisma.expense.findMany({
-        where: {
-            coupleId: user.coupleId,
-            date: { gte: monthStart, lt: monthEnd },
-        },
+        where: scope === 'personal'
+            ? { ownerId: userId, visibility: 'PERSONAL', date: { gte: monthStart, lt: monthEnd } }
+            : { coupleId: user!.coupleId!, visibility: 'SHARED', date: { gte: monthStart, lt: monthEnd } },
         select: { category: true, amount: true },
     });
 
@@ -57,10 +62,13 @@ export async function POST(request: Request) {
         const userId = session.userId as string;
 
         const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
         const body = await request.json();
-        const { category, amount, month } = body;
+        const { category, amount, month, scope: scopeInput } = body;
+        const scope = scopeInput === 'personal' ? 'personal' : 'shared';
+
+        // Shared budgets require a couple; personal budgets do not.
+        if (scope === 'shared' && !user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
         if (!category || amount === undefined) {
             return NextResponse.json({ error: 'category and amount are required' }, { status: 400 });
@@ -90,24 +98,43 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'amount must be greater than 0' }, { status: 400 });
         }
 
-        const budget = await prisma.budget.upsert({
-            where: {
-                category_month_coupleId: {
-                    category,
-                    month: monthDate,
-                    coupleId: user.coupleId,
+        const budget = scope === 'personal'
+            ? await prisma.budget.upsert({
+                where: {
+                    category_month_ownerId: {
+                        category,
+                        month: monthDate,
+                        ownerId: userId,
+                    },
                 },
-            },
-            create: {
-                category,
-                amount: amountCents,
-                month: monthDate,
-                coupleId: user.coupleId,
-            },
-            update: {
-                amount: amountCents,
-            },
-        });
+                create: {
+                    category,
+                    amount: amountCents,
+                    month: monthDate,
+                    ownerId: userId,
+                },
+                update: {
+                    amount: amountCents,
+                },
+            })
+            : await prisma.budget.upsert({
+                where: {
+                    category_month_coupleId: {
+                        category,
+                        month: monthDate,
+                        coupleId: user!.coupleId!,
+                    },
+                },
+                create: {
+                    category,
+                    amount: amountCents,
+                    month: monthDate,
+                    coupleId: user!.coupleId!,
+                },
+                update: {
+                    amount: amountCents,
+                },
+            });
 
         return NextResponse.json({ budget }, { status: 201 });
     } catch (error) {
