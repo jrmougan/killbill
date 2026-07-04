@@ -41,6 +41,18 @@ enum ExpenseVisibility {
   SHARED
 }
 
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  LEFT
+  REMOVED
+}
+
 model Couple {
   id        String    @id @default(cuid())
   name      String?
@@ -48,6 +60,7 @@ model Couple {
   createdAt DateTime  @default(now())
 
   members     User[]
+  memberships Membership[]
   expenses    Expense[]
   settlements Settlement[]
   tags        Tag[]
@@ -64,9 +77,12 @@ model User {
   isAdmin   Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  // Couple support (one user, one couple)
+  // Couple support (one user, one couple) — kept as the source of truth in
+  // Phase 1; Membership is added alongside (rename/drop deferred to Phase 2).
   coupleId String?
   couple   Couple? @relation(fields: [coupleId], references: [id])
+
+  memberships Membership[]
 
   expensesPaid  Expense[] @relation("Payer")
   expensesOwned Expense[] @relation("Owner")
@@ -95,6 +111,32 @@ model InviteCode {
   // Who used this invite (null if unused)
   usedById String? @unique
   usedBy   User?   @relation("InviteUser", fields: [usedById], references: [id])
+}
+
+// Many-to-many membership layer added in Phase 1 alongside the one-user-one-couple
+// model. groupId == Couple.id for now (FK to Couple until the Phase 2 rename to Group).
+model Membership {
+  id       String @id @default(cuid())
+
+  groupId  String
+  group    Couple @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role     MembershipRole   @default(MEMBER)
+  status   MembershipStatus @default(ACTIVE)
+
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@index([groupId, status])
 }
 
 model Expense {

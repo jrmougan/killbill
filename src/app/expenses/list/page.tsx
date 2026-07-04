@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ExpensesListClient } from "./client";
 import { getSession } from "@/lib/auth";
+import { getGroupMembers } from "@/lib/membership";
 import { toEuros } from "@/lib/currency";
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +28,7 @@ export default async function ExpensesListPage() {
     }
 
     const { couple } = user;
-    const members = couple.members;
+    const members = await getGroupMembers(couple.id);
 
     // Fetch all expenses
     const rawExpenses = await prisma.expense.findMany({

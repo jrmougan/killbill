@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { getMyDebts, getLastSettlementDate } from "@/lib/finance";
+import { getGroupMembers } from "@/lib/membership";
 import { calculateSplitAmounts } from "@/lib/splits";
 import { toEuros } from "@/lib/currency";
 import { SettleClient } from "./client";
@@ -29,7 +30,7 @@ export default async function SettlePage() {
     }
 
     const { couple } = user;
-    const members = couple.members;
+    const members = await getGroupMembers(couple.id);
 
     // Fetch shared expenses for couple with splits (personal expenses never affect debts).
     const rawExpenses = await prisma.expense.findMany({

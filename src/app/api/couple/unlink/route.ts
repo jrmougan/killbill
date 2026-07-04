@@ -26,6 +26,13 @@ export async function POST(_request: Request) {
                 data: { coupleId: null }
             });
 
+            // Soft-leave the membership (preserve history; never hard-delete).
+            // If the couple is torn down below, its memberships cascade-delete.
+            await tx.membership.updateMany({
+                where: { groupId: coupleId, userId },
+                data: { status: 'LEFT', leftAt: new Date() }
+            });
+
             // Count remaining members within the same transaction to avoid race condition
             const remainingMembers = await tx.user.count({
                 where: { coupleId }

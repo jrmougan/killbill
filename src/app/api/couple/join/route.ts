@@ -41,6 +41,12 @@ export async function POST(request: Request) {
                     where: { id: userId },
                     data: { coupleId: couple.id }
                 });
+                // Dual-write the Membership (upsert handles a previous LEFT rejoin).
+                await tx.membership.upsert({
+                    where: { groupId_userId: { groupId: couple.id, userId } },
+                    create: { groupId: couple.id, userId, role: 'MEMBER', status: 'ACTIVE' },
+                    update: { status: 'ACTIVE', leftAt: null },
+                });
             });
         } catch (e) {
             if (e instanceof Error && e.message === 'ALREADY_IN_COUPLE') {

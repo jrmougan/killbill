@@ -11,6 +11,7 @@ import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { calculateBalances, getLastSettlementDate } from "@/lib/finance";
 import { materializeDueRecurringExpenses, materializeDueRecurringExpensesForOwner } from "@/lib/recurring";
+import { getGroupMembers } from "@/lib/membership";
 import { ScopeSegment } from "@/components/nav/scope-segment";
 import { normalizeScope } from "@/lib/scope";
 import { toEuros, formatEuros } from "@/lib/currency";
@@ -109,7 +110,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
     // Couple exists - show normal dashboard
     const couple = user.couple;
-    const members = couple.members;
+    const members = await getGroupMembers(couple.id);
     const partner = members.find(m => m.id !== userId);
     const usersMap = members.reduce<Record<string, User>>((acc, u) => ({ ...acc, [u.id]: u }), {});
 

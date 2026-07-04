@@ -45,14 +45,22 @@ export async function POST(request: Request) {
     // Generate cryptographically random code for invite
     const code = randomBytes(3).toString('hex').toUpperCase();
 
-    const couple = await prisma.couple.create({
-        data: {
-            name: name || "Nuestra Pareja",
-            code: code,
-            members: {
-                connect: { id: userId }
+    // Create the couple and the creator's OWNER membership atomically (dual-write:
+    // coupleId stays the source of truth in Phase 1, Membership is kept in sync).
+    const couple = await prisma.$transaction(async (tx) => {
+        const created = await tx.couple.create({
+            data: {
+                name: name || "Nuestra Pareja",
+                code: code,
+                members: {
+                    connect: { id: userId }
+                }
             }
-        }
+        });
+        await tx.membership.create({
+            data: { groupId: created.id, userId, role: 'OWNER', status: 'ACTIVE' }
+        });
+        return created;
     });
 
     return NextResponse.json({ success: true, couple });

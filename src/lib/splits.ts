@@ -50,9 +50,11 @@ export function calculateSplitAmounts(
         }
     }
 
-    // Split the common part 50/50
-    const commonBase = Math.floor(commonTotalCents / 2);
-    const commonRemainder = commonTotalCents - (commonBase * 2);
+    // Split the common part equally among all members (N-way; behaviour-identical
+    // for a 2-person couple, correct for groups >2).
+    const n = coupleMembers.length;
+    const commonBase = Math.floor(commonTotalCents / n);
+    const commonRemainder = commonTotalCents - (commonBase * n);
 
     // Build split amounts
     const splits = coupleMembers.map((m, i) => ({

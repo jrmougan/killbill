@@ -77,9 +77,10 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
         const inviteId = invite?.id;
         const coupleId = couple?.id;
         const user = await prisma.$transaction(async (tx) => {
+            let existingMemberCount = 0;
             if (coupleId) {
-                const memberCount = await tx.user.count({ where: { coupleId } });
-                if (memberCount >= 2) throw new Error('COUPLE_FULL');
+                existingMemberCount = await tx.user.count({ where: { coupleId } });
+                if (existingMemberCount >= 2) throw new Error('COUPLE_FULL');
             }
 
             const created = await tx.user.create({
@@ -91,6 +92,18 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
                     coupleId: couple?.id || undefined,
                 },
             });
+
+            // Dual-write the Membership (OWNER if first in the couple, else MEMBER).
+            if (coupleId) {
+                await tx.membership.create({
+                    data: {
+                        groupId: coupleId,
+                        userId: created.id,
+                        role: existingMemberCount === 0 ? 'OWNER' : 'MEMBER',
+                        status: 'ACTIVE',
+                    },
+                });
+            }
 
             if (inviteId) {
                 const consumed = await tx.inviteCode.updateMany({

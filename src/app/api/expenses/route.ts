@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { toCents } from '@/lib/currency';
 import { calculateSplitAmounts } from '@/lib/splits';
+import { getGroupMembers } from '@/lib/membership';
 import { Prisma } from '@/generated/prisma/client';
 
 const DEFAULT_LIMIT = 50;
@@ -107,12 +108,10 @@ export async function POST(request: Request) {
 
         // Load couple members up-front so we can validate any client-supplied
         // userId/beneficiaryId actually belongs to the caller's couple (prevents IDOR).
-        // Personal expenses have no couple, so there are no members to load.
+        // Members come from the Membership layer (ACTIVE, ordered) — split order
+        // must match. Personal expenses have no couple, so there are no members.
         const coupleMembers = (!isPersonalExpense && user.coupleId)
-            ? await prisma.user.findMany({
-                where: { coupleId: user.coupleId },
-                select: { id: true }
-            })
+            ? (await getGroupMembers(user.coupleId)).map(m => ({ id: m.id }))
             : [];
         const memberIds = new Set(coupleMembers.map(m => m.id));
 

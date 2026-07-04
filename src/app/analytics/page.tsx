@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { getGroupMembers } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { calculateBalances } from "@/lib/finance";
@@ -30,7 +31,7 @@ export default async function AnalyticsPage() {
     if (!user || !user.couple) redirect("/dashboard");
 
     const couple = user.couple;
-    const members = couple.members;
+    const members = await getGroupMembers(couple.id);
 
     const now = new Date();
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);

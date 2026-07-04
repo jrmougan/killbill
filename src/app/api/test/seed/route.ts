@@ -119,6 +119,13 @@ export async function POST(request: Request) {
         },
       });
 
+      await prisma.membership.createMany({
+        data: [
+          { groupId: couple.id, userId: userA.id, role: 'OWNER', status: 'ACTIVE' },
+          { groupId: couple.id, userId: userB.id, role: 'MEMBER', status: 'ACTIVE' },
+        ],
+      });
+
       return NextResponse.json({
         userA: { email: emailA, password: PASSWORD, id: userA.id },
         userB: { email: emailB, password: PASSWORD, id: userB.id },
@@ -155,6 +162,13 @@ export async function POST(request: Request) {
           avatar: '👤',
           coupleId: couple.id,
         },
+      });
+
+      await prisma.membership.createMany({
+        data: [
+          { groupId: couple.id, userId: userA.id, role: 'OWNER', status: 'ACTIVE' },
+          { groupId: couple.id, userId: userB.id, role: 'MEMBER', status: 'ACTIVE' },
+        ],
       });
 
       // 100€ expense paid by userA, split 50/50 (amounts in cents)
@@ -214,6 +228,13 @@ export async function POST(request: Request) {
         },
       });
 
+      await prisma.membership.createMany({
+        data: [
+          { groupId: couple.id, userId: userA.id, role: 'OWNER', status: 'ACTIVE' },
+          { groupId: couple.id, userId: userB.id, role: 'MEMBER', status: 'ACTIVE' },
+        ],
+      });
+
       // 100€ expense paid by userA
       await prisma.expense.create({
         data: {
@@ -265,6 +286,13 @@ export async function POST(request: Request) {
       });
       const userB = await prisma.user.create({
         data: { name: 'User B', email: emailB, password: hashedPassword, avatar: '👤', coupleId: couple.id },
+      });
+
+      await prisma.membership.createMany({
+        data: [
+          { groupId: couple.id, userId: userA.id, role: 'OWNER', status: 'ACTIVE' },
+          { groupId: couple.id, userId: userB.id, role: 'MEMBER', status: 'ACTIVE' },
+        ],
       });
 
       // A shared expense (100€, 50/50) so the couple balance is non-trivial...
