@@ -528,4 +528,5 @@ model Budget {
   @@index([coupleId])
   @@index([ownerId])
   @@index([categoryId])
+  @@index([periodStart])
 }

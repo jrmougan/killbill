@@ -20,15 +20,22 @@ export async function GET(request: Request) {
     // Shared budgets need a couple; personal budgets work for any user.
     if (scope === 'shared' && !user?.coupleId) return NextResponse.json({ budgets: [] });
 
-    // Current month boundaries
+    // Current-month view window [monthStart, monthEnd). Budgets are selected by
+    // half-open period-range overlap (Phase 2e/4 read-switch); spend is still
+    // measured over this same month window below.
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
+    // Phase 4 read-switch: select by [periodStart, periodEnd) range overlap with the
+    // current-month window instead of legacy `month` equality. For all-MONTH budgets
+    // (periodStart == month, periodEnd == next-month-start) this yields identical rows,
+    // and it also surfaces WEEK/YEAR/CUSTOM budgets overlapping the current month.
+    const periodOverlap = { periodStart: { lt: monthEnd }, periodEnd: { gt: monthStart } };
     const budgets = await prisma.budget.findMany({
         where: scope === 'personal'
-            ? { ownerId: userId, month: monthStart }
-            : { coupleId: user!.coupleId!, month: monthStart },
+            ? { ownerId: userId, ...periodOverlap }
+            : { coupleId: user!.coupleId!, ...periodOverlap },
         orderBy: { category: 'asc' },
     });
 
