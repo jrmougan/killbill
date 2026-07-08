@@ -67,16 +67,21 @@ export function getMyDebts(
     settlements: { fromUserId: string; toUserId: string; amount: number }[],
     currentUserId: string
 ): Record<string, number> {
-    // This is surprisingly complex to do perfectly "who owes who" without a graph simplification algorithm.
-    // However, for a simple splitwise clone, we can approximate or use the global net method.
-    // Dashboard uses global net. 
-    // If I have a net balance of -10 (I owe 10), and User B has +10 (Owed 10). I simply owe User B.
-    // If I owe 10, B is +5, C is +5. I owe B 5 and C 5? Or just owe the pot?
-
-    // Simplification: We will match negative balances (debtors) to positive balances (creditors).
-
     const balances = calculateBalances(users, expenses, settlements, currentUserId);
+    return resolveMyDebts(balances, currentUserId);
+}
 
+/**
+ * Resolve which creditors `currentUserId` owes, from a PRECOMPUTED net-balance
+ * map (cents). Pure and output-preserving — feed it calculateBalances OR the
+ * ledger-sourced getGroupBalances (they are proven equal by reconcile-ledger.ts).
+ * Positive result = I owe them. Greedy debtor→creditor matching with a 1-cent
+ * dead-band so sub-cent noise reads as settled.
+ */
+export function resolveMyDebts(
+    balances: Record<string, number>,
+    currentUserId: string
+): Record<string, number> {
     const debtors = Object.entries(balances)
         .filter(([_, amount]) => amount < -1) // Less than -1 cent
         .sort((a, b) => a[1] - b[1]); // Most debt first (most negative)

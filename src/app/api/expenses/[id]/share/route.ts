@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from "@/lib/splits";
 import { addInterval } from "@/lib/recurring";
+import { getGroupMembers } from "@/lib/membership";
+import { postExpenseLedger } from "@/lib/ledger";
 
 /**
  * Promote a personal expense to a shared (couple) expense.
@@ -39,10 +41,7 @@ export async function POST(
             return NextResponse.json({ error: 'El gasto ya es compartido' }, { status: 409 });
         }
 
-        const coupleMembers = await prisma.user.findMany({
-            where: { coupleId: user.coupleId },
-            select: { id: true },
-        });
+        const coupleMembers = (await getGroupMembers(user.coupleId)).map((m) => ({ id: m.id }));
 
         const splits = calculateSplitAmounts(
             expense.amount,
@@ -62,7 +61,7 @@ export async function POST(
         // Flip to shared, attach to the couple, and create the splits atomically.
         await prisma.$transaction(async (tx) => {
             await tx.split.deleteMany({ where: { expenseId: id } });
-            await tx.expense.update({
+            const updated = await tx.expense.update({
                 where: { id },
                 data: {
                     visibility: 'SHARED',
@@ -73,6 +72,18 @@ export async function POST(
                         create: splits.map(s => ({ userId: s.userId, amount: s.amount })),
                     },
                 },
+            });
+
+            // Phase 4: promotion to SHARED enters the couple balance — post its
+            // ledger transaction so a shared expense is never left with zero entries.
+            await postExpenseLedger(tx, {
+                expenseId: id,
+                groupId: user.coupleId!,
+                amount: updated.amount,
+                paidById: updated.paidById,
+                occurredAt: updated.date,
+                splits: splits.map(s => ({ userId: s.userId, amount: s.amount })),
+                members: coupleMembers,
             });
         });
 

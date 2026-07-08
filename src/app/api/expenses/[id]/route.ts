@@ -5,6 +5,8 @@ import { toCents } from "@/lib/currency";
 import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from "@/lib/splits";
 import { resolveCategoryId } from "@/lib/category-db";
 import { buildReceiptLineItems } from "@/lib/receipt";
+import { getGroupMembers } from "@/lib/membership";
+import { postExpenseLedger } from "@/lib/ledger";
 import { Prisma } from "@/generated/prisma/client";
 
 export async function DELETE(
@@ -79,8 +81,10 @@ export async function PATCH(
             return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
-        // Personal expenses have no couple/partner, so split recalculation is skipped below.
-        const members = expense.couple?.members ?? [];
+        // Members via the Membership layer (ACTIVE, ordered) so split remainder-cent
+        // allocation AND the ledger re-post below match POST/reconcile exactly.
+        // (The couple.members include still backs the isMember authz check above.)
+        const members = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
         const partner = members.find(m => m.id !== expense.paidById);
         const memberIds = new Set(members.map(m => m.id));
 
@@ -224,6 +228,32 @@ export async function PATCH(
                 if (lines.length > 0) {
                     await tx.receiptLineItem.createMany({
                         data: lines.map(l => ({ ...l, expenseId: id })),
+                    });
+                }
+            }
+
+            // Phase 4: keep the ledger in sync on edit. amount/splits may have just
+            // changed; re-post so Σ LedgerEntry stays == calculateBalances (reconcile
+            // invariant). postExpenseLedger upserts on dedupeKey 'expense:<id>' and
+            // rebuilds entries, so this is idempotent/self-healing. PERSONAL posts
+            // nothing. Guard: only re-post when the fresh splits sum to the amount —
+            // in a degenerate solo couple splits aren't recalculated on an amount
+            // edit, and posting a non-zero-sum txn would (correctly) throw.
+            if (updated.visibility === 'SHARED' && updated.coupleId) {
+                const freshSplits = await tx.split.findMany({
+                    where: { expenseId: id },
+                    select: { userId: true, amount: true },
+                });
+                const splitSum = freshSplits.reduce((a, s) => a + s.amount, 0);
+                if (splitSum === updated.amount) {
+                    await postExpenseLedger(tx, {
+                        expenseId: id,
+                        groupId: updated.coupleId,
+                        amount: updated.amount,
+                        paidById: updated.paidById,
+                        occurredAt: updated.date,
+                        splits: freshSplits,
+                        members,
                     });
                 }
             }

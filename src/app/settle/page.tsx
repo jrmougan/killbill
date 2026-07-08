@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { getMyDebts, getLastSettlementDate } from "@/lib/finance";
+import { resolveMyDebts, getLastSettlementDate } from "@/lib/finance";
+import { getGroupBalances } from "@/lib/ledger-read";
 import { getGroupMembers } from "@/lib/membership";
 import { calculateSplitAmounts } from "@/lib/splits";
 import { toEuros } from "@/lib/currency";
@@ -43,17 +44,11 @@ export default async function SettlePage() {
         where: { coupleId: couple.id },
     });
 
-    // Only confirmed settlements count towards debt calculation.
-    // Pending settlements must not reduce debt before the receiver confirms.
-    const effectiveSettlements = settlements.filter(s => s.status === "CONFIRMED");
-
-    // Calculate My Debts (High Level)
-    const myDebtsMap = getMyDebts(
-        members,
-        rawExpenses.map(e => ({ paidById: e.paidById, amount: e.amount, splits: e.splits.map(s => ({ userId: s.userId, amount: s.amount })) })),
-        effectiveSettlements,
-        userId
-    );
+    // Debts resolve from ledger-sourced balances (proven == calculateBalances by
+    // reconcile-ledger.ts). resolveMyDebts is the same greedy matching algorithm,
+    // now fed the ledger balances instead of a fresh calculateBalances pass.
+    const balances = await getGroupBalances(couple.id);
+    const myDebtsMap = resolveMyDebts(balances, userId);
 
     // Format for client - convert cents to euros
     const debts = Object.entries(myDebtsMap).map(([targetId, amountCents]) => {

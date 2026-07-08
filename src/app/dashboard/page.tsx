@@ -9,7 +9,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { calculateBalances, getLastSettlementDate } from "@/lib/finance";
+import { getLastSettlementDate } from "@/lib/finance";
+import { getGroupBalances } from "@/lib/ledger-read";
 import { materializeDueRecurringExpenses, materializeDueRecurringExpensesForOwner } from "@/lib/recurring";
 import { getGroupMembers } from "@/lib/membership";
 import { ScopeSegment } from "@/components/nav/scope-segment";
@@ -154,17 +155,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         where: { coupleId: couple.id },
     });
 
-    // Only confirmed settlements count towards the balance.
-    // Pending settlements must not reduce debt before the receiver confirms.
-    const effectiveSettlements = settlements.filter(s => s.status === "CONFIRMED");
-
-    // Calculate Balances using ALL expenses
-    const balances = calculateBalances(
-        members,
-        allExpenses.map(e => ({ paidById: e.paidById, amount: e.amount, splits: e.splits })),
-        effectiveSettlements,
-        userId
-    );
+    // Balances now come from the double-entry ledger (Σ LedgerEntry per active
+    // member's Account). reconcile-ledger.ts proves this equals calculateBalances
+    // exactly, so displayed balances are unchanged — the ledger is now the source
+    // of truth (finance.ts retained for analytics + the debt-matching algorithm).
+    const balances = await getGroupBalances(couple.id);
 
     // Balance is in CENTS, convert to euros for display
     let myBalanceCents = balances[userId] || 0;

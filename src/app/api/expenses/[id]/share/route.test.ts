@@ -9,6 +9,11 @@ const mockTxSplitDeleteMany = vi.fn();
 const mockTransaction = vi.fn();
 
 vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
+// Members come from the Membership layer; ledger posting is covered by
+// reconcile-ledger.ts + ledger tests — both stubbed so this test stays focused
+// on the personal->shared promotion + split generation.
+vi.mock('@/lib/membership', () => ({ getGroupMembers: async () => [{ id: 'u1' }, { id: 'u2' }] }));
+vi.mock('@/lib/ledger', () => ({ postExpenseLedger: vi.fn() }));
 vi.mock('@/lib/db', () => ({
     prisma: {
         user: {
