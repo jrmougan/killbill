@@ -83,6 +83,12 @@ describe('budget API — personal scope', () => {
         expect(arg.create.ownerId).toBe('u1');
         expect(arg.create.amount).toBe(10000); // 100€ → cents
         expect(arg.create.categoryId).toBe('cat-health'); // Phase 2b dual-write
+
+        // Phase 2e dual-write: half-open [periodStart, periodEnd) derived from month.
+        expect(arg.create.periodType).toBe('MONTH');
+        expect(arg.create.periodStart).toEqual(arg.create.month);
+        expect(arg.create.periodEnd.getTime()).toBeGreaterThan(arg.create.periodStart.getTime());
+        expect(arg.create.periodEnd.getDate()).toBe(1); // first day of the next month
     });
 
     it('POST scope=shared without a couple is rejected (400)', async () => {

@@ -103,6 +103,12 @@ export async function POST(request: Request) {
         // group, so they resolve to the system category.
         const categoryId = await resolveCategoryId(category, scope === 'personal' ? null : user!.coupleId);
 
+        // Phase 2e dual-write: derive the half-open [periodStart, periodEnd) range
+        // from the same monthDate that seeds the legacy `month` column (local-midnight
+        // convention, matching how monthDate is built above).
+        const periodStart = monthDate;
+        const periodEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1);
+
         const budget = scope === 'personal'
             ? await prisma.budget.upsert({
                 where: {
@@ -117,6 +123,9 @@ export async function POST(request: Request) {
                     categoryId,
                     amount: amountCents,
                     month: monthDate,
+                    periodStart,
+                    periodEnd,
+                    periodType: 'MONTH',
                     ownerId: userId,
                 },
                 update: {
@@ -137,6 +146,9 @@ export async function POST(request: Request) {
                     categoryId,
                     amount: amountCents,
                     month: monthDate,
+                    periodStart,
+                    periodEnd,
+                    periodType: 'MONTH',
                     coupleId: user!.coupleId!,
                 },
                 update: {

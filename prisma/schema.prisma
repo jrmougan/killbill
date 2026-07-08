@@ -57,6 +57,15 @@ enum MembershipRole {
   MEMBER
 }
 
+// Phase 2e: semantics of a Budget's period so a MONTH budget and a CUSTOM budget
+// covering the same range stay distinguishable. Every legacy budget is a month.
+enum BudgetPeriodType {
+  MONTH
+  WEEK
+  YEAR
+  CUSTOM
+}
+
 enum MembershipStatus {
   ACTIVE
   LEFT
@@ -405,6 +414,12 @@ model Budget {
   category ExpenseCategory
   amount   Int             // limite en centavos
   month    DateTime // primer dia del mes al que aplica
+
+  // Phase 2e: explicit half-open [periodStart, periodEnd) range, dual-written
+  // alongside the legacy `month` column (which remains the source of truth).
+  periodStart DateTime?
+  periodEnd   DateTime?
+  periodType  BudgetPeriodType @default(MONTH)
 
   // Relational category (Phase 2b), dual-written alongside the enum.
   categoryId  String?
