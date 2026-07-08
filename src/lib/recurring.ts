@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/db';
+import { getGroupMembers } from '@/lib/membership';
+import { postExpenseLedger } from '@/lib/ledger';
 
 /**
  * Returns a NEW Date advanced by one period from `base`.
@@ -100,7 +102,7 @@ async function materializeDueRecurring(scope: Prisma.ExpenseWhereInput): Promise
                 // Another concurrent run already advanced this expense — stop here.
                 if (advanced.count === 0) return false;
 
-                await tx.expense.create({
+                const instance = await tx.expense.create({
                     data: {
                         description: expense.description,
                         amount: expense.amount,
@@ -131,7 +133,23 @@ async function materializeDueRecurring(scope: Prisma.ExpenseWhereInput): Promise
                               }
                             : undefined,
                     },
+                    include: { splits: true },
                 });
+
+                // Phase 3 dual-write: a materialized SHARED instance is an ordinary
+                // expense finance.ts counts, so post its ledger transaction here.
+                if (instance.visibility === 'SHARED' && instance.coupleId) {
+                    const members = (await getGroupMembers(instance.coupleId)).map((m) => ({ id: m.id }));
+                    await postExpenseLedger(tx, {
+                        expenseId: instance.id,
+                        groupId: instance.coupleId,
+                        amount: instance.amount,
+                        paidById: instance.paidById,
+                        occurredAt: instance.date,
+                        splits: instance.splits.map((s) => ({ userId: s.userId, amount: s.amount })),
+                        members,
+                    });
+                }
 
                 return true;
             });

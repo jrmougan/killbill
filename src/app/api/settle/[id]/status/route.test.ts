@@ -6,15 +6,23 @@ const mockSettlementUpdate = vi.fn();
 const mockUserFindUnique = vi.fn();
 
 vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
-vi.mock('@/lib/db', () => ({
-    prisma: {
-        settlement: {
-            findUnique: (...a: unknown[]) => mockSettlementFindUnique(...a),
-            update: (...a: unknown[]) => mockSettlementUpdate(...a),
+// Ledger posting is covered by scripts/reconcile-ledger.ts + the ledger helper;
+// here it is a no-op so this test stays focused on authz + transitions.
+vi.mock('@/lib/ledger', () => ({ postSettlementLedger: vi.fn() }));
+vi.mock('@/lib/db', () => {
+    const settlement = {
+        findUnique: (...a: unknown[]) => mockSettlementFindUnique(...a),
+        update: (...a: unknown[]) => mockSettlementUpdate(...a),
+    };
+    return {
+        prisma: {
+            settlement,
+            user: { findUnique: (...a: unknown[]) => mockUserFindUnique(...a) },
+            // Run the callback with a tx exposing the same settlement mock.
+            $transaction: (cb: (tx: unknown) => unknown) => cb({ settlement }),
         },
-        user: { findUnique: (...a: unknown[]) => mockUserFindUnique(...a) },
-    },
-}));
+    };
+});
 
 import { PATCH } from './route';
 

@@ -66,6 +66,12 @@ enum BudgetPeriodType {
   CUSTOM
 }
 
+// Phase 3: kind of economic event a LedgerTransaction records.
+enum LedgerTxnKind {
+  EXPENSE
+  SETTLEMENT
+}
+
 enum MembershipStatus {
   ACTIVE
   LEFT
@@ -86,6 +92,8 @@ model Couple {
   budgets     Budget[]
   categories  Category[]
   recurringSeries RecurringSeries[]
+  accounts           Account[]
+  ledgerTransactions LedgerTransaction[]
 }
 
 model User {
@@ -112,6 +120,8 @@ model User {
 
   recurringSeriesOwned RecurringSeries[] @relation("RecurringSeriesOwner")
   recurringSeriesPaid  RecurringSeries[] @relation("RecurringSeriesPayer")
+
+  accounts Account[]
 
   settlementsPaid     Settlement[] @relation("SettlementPayer")
   settlementsReceived Settlement[] @relation("SettlementReceiver")
@@ -237,6 +247,7 @@ model Expense {
   splits      Split[]
   tags        ExpenseTag[]
   lineItems   ReceiptLineItem[]
+  ledgerTransactions LedgerTransaction[]
 
   settlementId String?
   settlement   Settlement? @relation(fields: [settlementId], references: [id])
@@ -379,6 +390,7 @@ model Settlement {
   updatedAt DateTime @updatedAt
 
   expenses Expense[]
+  ledgerTransactions LedgerTransaction[]
 
   @@index([coupleId])
   @@index([fromUserId])
@@ -407,6 +419,79 @@ model ExpenseTag {
   tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([expenseId, tagId])
+}
+
+// Phase 3: double-entry ledger — an auditable shadow of finance.ts. Every economic
+// event that moves a group balance becomes ONE balanced LedgerTransaction whose
+// per-member LedgerEntry rows are net deltas summing to zero. A member's running
+// entry-sum reproduces calculateBalances[member] exactly (integer cents). finance.ts
+// stays the sole source of truth this phase (read-switch deferred).
+model Account {
+  id        String   @id @default(cuid())
+
+  groupId   String
+  group     Couple   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  entries   LedgerEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+model LedgerTransaction {
+  id           String        @id @default(cuid())
+
+  groupId      String
+  group        Couple        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  kind         LedgerTxnKind
+
+  // Idempotency key: 'expense:<id>' | 'settlement:<id>:confirm'. Backfill and
+  // dual-write upsert on it, so events self-heal instead of double-posting.
+  dedupeKey    String        @unique
+
+  amount       Int           // gross magnitude in cents (audit/display only)
+  postedAt     DateTime      // economic date (expense.date / settlement.date)
+
+  expenseId    String?
+  expense      Expense?      @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  settlementId String?
+  settlement   Settlement?   @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  entries      LedgerEntry[]
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([groupId, kind])
+  @@index([expenseId])
+  @@index([settlementId])
+}
+
+model LedgerEntry {
+  id            String            @id @default(cuid())
+
+  transactionId String
+  transaction   LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  accountId     String
+  account       Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  amount        Int               // signed cents: + = member is owed, - = member owes
+
+  createdAt     DateTime          @default(now())
+
+  @@unique([transactionId, accountId])
+  @@index([transactionId])
+  @@index([accountId])
 }
 
 model Budget {

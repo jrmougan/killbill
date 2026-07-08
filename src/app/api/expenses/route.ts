@@ -6,6 +6,7 @@ import { calculateSplitAmounts, hasExclusiveReceiptItems } from '@/lib/splits';
 import { getGroupMembers } from '@/lib/membership';
 import { resolveCategoryId } from '@/lib/category-db';
 import { buildReceiptLineItems } from '@/lib/receipt';
+import { postExpenseLedger } from '@/lib/ledger';
 import { Prisma } from '@/generated/prisma/client';
 
 const DEFAULT_LIMIT = 50;
@@ -255,7 +256,21 @@ export async function POST(request: Request) {
                 });
                 expenseData.seriesId = series.id;
             }
-            return tx.expense.create({ data: expenseData });
+            const created = await tx.expense.create({ data: expenseData, include: { splits: true } });
+            // Phase 3 dual-write: a SHARED expense posts its balanced ledger
+            // transaction in the same tx. PERSONAL expenses post nothing.
+            if (created.visibility === 'SHARED' && created.coupleId) {
+                await postExpenseLedger(tx, {
+                    expenseId: created.id,
+                    groupId: created.coupleId,
+                    amount: created.amount,
+                    paidById: created.paidById,
+                    occurredAt: created.date,
+                    splits: created.splits.map((s) => ({ userId: s.userId, amount: s.amount })),
+                    members: coupleMembers,
+                });
+            }
+            return created;
         });
 
         return NextResponse.json({ success: true, expenseId: expense.id });
