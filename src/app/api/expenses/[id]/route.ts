@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { toCents } from "@/lib/currency";
 import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from "@/lib/splits";
 import { resolveCategoryId } from "@/lib/category-db";
+import { buildReceiptLineItems } from "@/lib/receipt";
 import { Prisma } from "@/generated/prisma/client";
 
 export async function DELETE(
@@ -211,6 +212,18 @@ export async function PATCH(
                 } else {
                     await tx.split.create({
                         data: { expenseId: id, userId: partner.id, amount: amountCents }
+                    });
+                }
+            }
+
+            // Keep relational receipt line items in sync when the receipt changes
+            // (Phase 2c), mirroring the receiptData JSON rewrite above.
+            if (receiptItems !== undefined) {
+                await tx.receiptLineItem.deleteMany({ where: { expenseId: id } });
+                const lines = buildReceiptLineItems(receiptItems, memberIds);
+                if (lines.length > 0) {
+                    await tx.receiptLineItem.createMany({
+                        data: lines.map(l => ({ ...l, expenseId: id })),
                     });
                 }
             }

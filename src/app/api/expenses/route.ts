@@ -5,6 +5,7 @@ import { toCents } from '@/lib/currency';
 import { calculateSplitAmounts, hasExclusiveReceiptItems } from '@/lib/splits';
 import { getGroupMembers } from '@/lib/membership';
 import { resolveCategoryId } from '@/lib/category-db';
+import { buildReceiptLineItems } from '@/lib/receipt';
 import { Prisma } from '@/generated/prisma/client';
 
 const DEFAULT_LIMIT = 50;
@@ -220,6 +221,13 @@ export async function POST(request: Request) {
                     }))
                 };
             }
+        }
+
+        // Dual-write relational receipt line items alongside the receiptData JSON
+        // (Phase 2c). assignedTo is validated against couple members.
+        const lineItems = buildReceiptLineItems(receiptData, memberIds);
+        if (lineItems.length > 0) {
+            expenseData.lineItems = { create: lineItems };
         }
 
         const expense = await prisma.expense.create({
