@@ -105,6 +105,7 @@ async function materializeDueRecurring(scope: Prisma.ExpenseWhereInput): Promise
                         description: expense.description,
                         amount: expense.amount,
                         category: expense.category,
+                        categoryId: expense.categoryId, // inherit relational category (Phase 2b)
                         paidById: expense.paidById,
                         ownerId: expense.ownerId,
                         visibility: expense.visibility,

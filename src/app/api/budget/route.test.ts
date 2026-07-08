@@ -5,6 +5,7 @@ const mockUserFindUnique = vi.fn();
 const mockBudgetFindMany = vi.fn();
 const mockBudgetUpsert = vi.fn();
 const mockExpenseFindMany = vi.fn();
+const mockCategoryFindFirst = vi.fn();
 
 vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
 vi.mock('@/lib/db', () => ({
@@ -15,6 +16,7 @@ vi.mock('@/lib/db', () => ({
             upsert: (...a: unknown[]) => mockBudgetUpsert(...a),
         },
         expense: { findMany: (...a: unknown[]) => mockExpenseFindMany(...a) },
+        category: { findFirst: (...a: unknown[]) => mockCategoryFindFirst(...a) },
     },
 }));
 
@@ -22,7 +24,7 @@ import { GET, POST } from './route';
 
 describe('budget API — personal scope', () => {
     beforeEach(() => {
-        [mockGetSession, mockUserFindUnique, mockBudgetFindMany, mockBudgetUpsert, mockExpenseFindMany].forEach((m) => m.mockReset());
+        [mockGetSession, mockUserFindUnique, mockBudgetFindMany, mockBudgetUpsert, mockExpenseFindMany, mockCategoryFindFirst].forEach((m) => m.mockReset());
     });
 
     it('GET scope=personal filters budgets + spend by ownerId and PERSONAL expenses', async () => {
@@ -68,6 +70,7 @@ describe('budget API — personal scope', () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
         mockUserFindUnique.mockResolvedValue({ id: 'u1', coupleId: null });
         mockBudgetUpsert.mockResolvedValue({ id: 'b1' });
+        mockCategoryFindFirst.mockResolvedValue({ id: 'cat-health' });
 
         const res = await POST(new Request('http://localhost/api/budget', {
             method: 'POST',
@@ -79,6 +82,7 @@ describe('budget API — personal scope', () => {
         expect(arg.where.category_month_ownerId.ownerId).toBe('u1');
         expect(arg.create.ownerId).toBe('u1');
         expect(arg.create.amount).toBe(10000); // 100€ → cents
+        expect(arg.create.categoryId).toBe('cat-health'); // Phase 2b dual-write
     });
 
     it('POST scope=shared without a couple is rejected (400)', async () => {

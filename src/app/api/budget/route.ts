@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { toCents } from '@/lib/currency';
 import { CATEGORIES } from '@/lib/categories';
+import { resolveCategoryId } from '@/lib/category-db';
 
 const VALID_CATEGORIES = Object.keys(CATEGORIES);
 
@@ -98,6 +99,10 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'amount must be greater than 0' }, { status: 400 });
         }
 
+        // Dual-write the relational Category (Phase 2b). Personal budgets have no
+        // group, so they resolve to the system category.
+        const categoryId = await resolveCategoryId(category, scope === 'personal' ? null : user!.coupleId);
+
         const budget = scope === 'personal'
             ? await prisma.budget.upsert({
                 where: {
@@ -109,12 +114,14 @@ export async function POST(request: Request) {
                 },
                 create: {
                     category,
+                    categoryId,
                     amount: amountCents,
                     month: monthDate,
                     ownerId: userId,
                 },
                 update: {
                     amount: amountCents,
+                    categoryId,
                 },
             })
             : await prisma.budget.upsert({
@@ -127,12 +134,14 @@ export async function POST(request: Request) {
                 },
                 create: {
                     category,
+                    categoryId,
                     amount: amountCents,
                     month: monthDate,
                     coupleId: user!.coupleId!,
                 },
                 update: {
                     amount: amountCents,
+                    categoryId,
                 },
             });
 

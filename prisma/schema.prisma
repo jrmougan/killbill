@@ -75,6 +75,7 @@ model Couple {
   settlements Settlement[]
   tags        Tag[]
   budgets     Budget[]
+  categories  Category[]
 }
 
 model User {
@@ -149,12 +150,47 @@ model Membership {
   @@index([groupId, status])
 }
 
+// Category metadata + membership, replacing the fixed ExpenseCategory enum.
+// System categories have groupId = null (global, available to everyone incl.
+// personal expenses); a set groupId makes it a group-custom category. Icons are
+// stored as a lucide component name (mapped to a component in categories.ts).
+model Category {
+  id        String  @id @default(cuid())
+  key       String  // stable slug; matches ExpenseCategory for system rows
+  label     String
+  labelEn   String
+  emoji     String
+  icon      String  // lucide-react component name
+  color     String  // tailwind text-* class (system rows)
+  bgColor   String  // tailwind bg-* class (system rows)
+  hex       String
+  sortOrder Int     @default(0)
+  isSystem  Boolean @default(false)
+
+  groupId String?
+  group   Couple? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  expenses Expense[]
+  budgets  Budget[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, key])
+  @@index([groupId])
+}
+
 model Expense {
   id          String   @id @default(cuid())
   description String
   amount      Int
   date        DateTime @default(now())
   category    ExpenseCategory @default(other)
+
+  // Relational category (Phase 2b). Nullable + dual-written alongside the enum,
+  // which remains the source of truth until the read-switch/contract step.
+  categoryId  String?
+  categoryRef Category? @relation(fields: [categoryId], references: [id])
 
   receiptUrl  String?
   receiptData Json?
@@ -199,6 +235,7 @@ model Expense {
   @@index([paidById])
   @@index([ownerId])
   @@index([ownerId, visibility])
+  @@index([categoryId])
 }
 
 model Split {
@@ -281,6 +318,10 @@ model Budget {
   amount   Int             // limite en centavos
   month    DateTime // primer dia del mes al que aplica
 
+  // Relational category (Phase 2b), dual-written alongside the enum.
+  categoryId  String?
+  categoryRef Category? @relation(fields: [categoryId], references: [id])
+
   // A budget is either shared (coupleId set) or personal (ownerId set).
   coupleId String?
   couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: Cascade)
@@ -298,4 +339,5 @@ model Budget {
   @@unique([category, month, ownerId])
   @@index([coupleId])
   @@index([ownerId])
+  @@index([categoryId])
 }

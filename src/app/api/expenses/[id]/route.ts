@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { toCents } from "@/lib/currency";
 import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from "@/lib/splits";
+import { resolveCategoryId } from "@/lib/category-db";
 import { Prisma } from "@/generated/prisma/client";
 
 export async function DELETE(
@@ -151,6 +152,10 @@ export async function PATCH(
         if (isRecurring !== undefined) updateData.isRecurring = isRecurring;
         if (recurringInterval !== undefined) updateData.recurringInterval = recurringInterval;
         if (nextRecurringDate !== undefined) updateData.nextRecurringDate = nextRecurringDate;
+        // Keep the relational Category in sync when the enum category changes (Phase 2b).
+        if (category !== undefined && category !== null) {
+            updateData.categoryId = await resolveCategoryId(category, expense.coupleId);
+        }
 
         // Recalculate splits if split mode changed, amount changed, receiptItems changed, or customSplits provided
         const shouldRecalcSplits = splitWithPartner !== undefined || amount !== undefined || receiptItems !== undefined || customSplits !== undefined;

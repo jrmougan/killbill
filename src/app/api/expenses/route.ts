@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { toCents } from '@/lib/currency';
 import { calculateSplitAmounts, hasExclusiveReceiptItems } from '@/lib/splits';
 import { getGroupMembers } from '@/lib/membership';
+import { resolveCategoryId } from '@/lib/category-db';
 import { Prisma } from '@/generated/prisma/client';
 
 const DEFAULT_LIMIT = 50;
@@ -144,10 +145,18 @@ export async function POST(request: Request) {
         const normalizedCategory = VALID_CATEGORIES.includes(category) ? category : 'other';
         const normalizedInterval = VALID_INTERVALS.includes(recurringInterval) ? recurringInterval : null;
 
+        // Dual-write the relational Category (Phase 2b). Personal expenses have no
+        // group, so they resolve to the system category.
+        const categoryId = await resolveCategoryId(
+            normalizedCategory,
+            isPersonalExpense ? null : user.coupleId,
+        );
+
         const expenseData: Prisma.ExpenseUncheckedCreateInput = {
             description,
             amount: amountCents,
             category: normalizedCategory,
+            categoryId,
             paidById,
             ownerId: userId,
             visibility: isPersonalExpense ? 'PERSONAL' : 'SHARED',
