@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { calculateSplitAmounts, type ReceiptItemForSplit } from "@/lib/splits";
+import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from "@/lib/splits";
 import { addInterval } from "@/lib/recurring";
 
 /**
@@ -67,6 +67,7 @@ export async function POST(
                 data: {
                     visibility: 'SHARED',
                     coupleId: user.coupleId,
+                    splitStrategy: hasExclusiveReceiptItems(expense.receiptData) ? 'ITEMIZED' : 'EQUAL',
                     ...(nextRecurringDate ? { nextRecurringDate } : {}),
                     splits: {
                         create: splits.map(s => ({ userId: s.userId, amount: s.amount })),

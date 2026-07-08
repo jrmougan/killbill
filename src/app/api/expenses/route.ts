@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { toCents } from '@/lib/currency';
-import { calculateSplitAmounts } from '@/lib/splits';
+import { calculateSplitAmounts, hasExclusiveReceiptItems } from '@/lib/splits';
 import { getGroupMembers } from '@/lib/membership';
 import { Prisma } from '@/generated/prisma/client';
 
@@ -162,7 +162,7 @@ export async function POST(request: Request) {
 
         if (isPersonalExpense) {
             // Personal expenses are a private ledger — never split, never settled.
-            // (no splits created)
+            // splitStrategy stays null (no splits created).
         } else if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
             if (customSplits.some((s: { amount: number }) => (s?.amount ?? 0) < 0)) {
                 return NextResponse.json({ error: 'Split amounts must not be negative' }, { status: 400 });
@@ -177,6 +177,7 @@ export async function POST(request: Request) {
             if (splitsTotal !== amountCents) {
                 return NextResponse.json({ error: 'Splits must sum to the total amount' }, { status: 400 });
             }
+            expenseData.splitStrategy = 'CUSTOM';
             expenseData.splits = {
                 create: customSplits.map((s: { userId: string; amount: number }) => ({
                     userId: s.userId,
@@ -187,6 +188,7 @@ export async function POST(request: Request) {
             if (!memberIds.has(beneficiaryId)) {
                 return NextResponse.json({ error: 'Beneficiary is not a member of your couple' }, { status: 400 });
             }
+            expenseData.splitStrategy = 'EXCLUSIVE';
             expenseData.splits = {
                 create: [
                     {
@@ -196,8 +198,11 @@ export async function POST(request: Request) {
                 ]
             };
         } else {
-            // Split among couple members, accounting for exclusive items
+            // Split among couple members, accounting for exclusive items. If the
+            // receipt assigns any item to a specific member the split is ITEMIZED,
+            // otherwise it's a plain EQUAL division.
             if (coupleMembers.length > 0) {
+                expenseData.splitStrategy = hasExclusiveReceiptItems(receiptData) ? 'ITEMIZED' : 'EQUAL';
                 const splits = calculateSplitAmounts(amountCents, receiptData, coupleMembers);
                 expenseData.splits = {
                     create: splits.map(s => ({

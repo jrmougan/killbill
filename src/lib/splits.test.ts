@@ -1,5 +1,38 @@
 import { describe, it, expect } from 'vitest';
-import { calculateSplitAmounts } from './splits';
+import { calculateSplitAmounts, hasExclusiveReceiptItems } from './splits';
+
+describe('hasExclusiveReceiptItems', () => {
+    it('returns false for null/undefined/empty', () => {
+        expect(hasExclusiveReceiptItems(null)).toBe(false);
+        expect(hasExclusiveReceiptItems(undefined)).toBe(false);
+        expect(hasExclusiveReceiptItems([])).toBe(false);
+    });
+
+    it('returns false when no item is assigned', () => {
+        expect(hasExclusiveReceiptItems([
+            { total: 10, assignedTo: null },
+            { total: 5 },
+        ])).toBe(false);
+    });
+
+    it('returns true when any item is assigned to a member (bare array)', () => {
+        expect(hasExclusiveReceiptItems([
+            { total: 10, assignedTo: null },
+            { total: 5, assignedTo: 'user2' },
+        ])).toBe(true);
+    });
+
+    it('tolerates an object wrapping an items array', () => {
+        expect(hasExclusiveReceiptItems({ items: [{ total: 5, assignedTo: 'user1' }] })).toBe(true);
+        expect(hasExclusiveReceiptItems({ items: [{ total: 5 }] })).toBe(false);
+    });
+
+    it('returns false for malformed JSON shapes', () => {
+        expect(hasExclusiveReceiptItems({ foo: 'bar' })).toBe(false);
+        expect(hasExclusiveReceiptItems('not an object')).toBe(false);
+        expect(hasExclusiveReceiptItems(42)).toBe(false);
+    });
+});
 
 describe('calculateSplitAmounts', () => {
     const members = [

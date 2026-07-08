@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { toCents } from "@/lib/currency";
-import { calculateSplitAmounts, type ReceiptItemForSplit } from "@/lib/splits";
+import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from "@/lib/splits";
 import { Prisma } from "@/generated/prisma/client";
 
 export async function DELETE(
@@ -163,6 +163,19 @@ export async function PATCH(
             isSplitWithPartner = splitWithPartner !== undefined
                 ? splitWithPartner
                 : existingSplits.length === 2;
+        }
+
+        // Keep the persisted split strategy in sync when splits are recalculated.
+        if (shouldRecalcSplits && partner) {
+            if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
+                updateData.splitStrategy = 'CUSTOM';
+            } else if (isSplitWithPartner) {
+                updateData.splitStrategy = hasExclusiveReceiptItems(receiptItems ?? expense.receiptData)
+                    ? 'ITEMIZED'
+                    : 'EQUAL';
+            } else {
+                updateData.splitStrategy = 'EXCLUSIVE';
+            }
         }
 
         // Update the expense and rewrite its splits atomically so a failure mid-way

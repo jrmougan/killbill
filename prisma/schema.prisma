@@ -41,6 +41,16 @@ enum ExpenseVisibility {
   SHARED
 }
 
+// How an expense's Split rows were derived. Persisted so an expense can be
+// re-edited/audited without re-guessing intent. Null for PERSONAL expenses
+// (never split) and legacy rows not yet backfilled.
+enum SplitStrategy {
+  EQUAL     // divided evenly among ACTIVE members
+  CUSTOM    // explicit per-user amounts supplied by the client
+  EXCLUSIVE // 100% charged to a single beneficiary
+  ITEMIZED  // derived from receipt line items (common part split + exclusive items)
+}
+
 enum MembershipRole {
   OWNER
   ADMIN
@@ -150,6 +160,10 @@ model Expense {
   receiptData Json?
 
   visibility  ExpenseVisibility @default(SHARED)
+
+  // How `splits` were derived (see SplitStrategy). Nullable: PERSONAL expenses
+  // have no splits, and pre-Phase-2 rows are backfilled best-effort.
+  splitStrategy SplitStrategy?
 
   notes               String?
   isRecurring         Boolean   @default(false)

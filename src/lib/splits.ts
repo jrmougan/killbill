@@ -10,6 +10,21 @@ interface CoupleMMember {
 }
 
 /**
+ * True when a receipt assigns at least one line item exclusively to a member
+ * (i.e. the split is ITEMIZED rather than a plain EQUAL division). Tolerates any
+ * JSON shape: a bare item array, or an object wrapping an `items` array.
+ */
+export function hasExclusiveReceiptItems(receiptData: unknown): boolean {
+    if (!receiptData) return false;
+    const items = Array.isArray(receiptData)
+        ? receiptData
+        : Array.isArray((receiptData as { items?: unknown }).items)
+            ? (receiptData as { items: unknown[] }).items
+            : null;
+    return items?.some((it) => it && typeof it === 'object' && (it as ReceiptItemForSplit).assignedTo) ?? false;
+}
+
+/**
  * Calculate split amounts (in cents) for a couple expense,
  * accounting for exclusive items assigned to a specific partner.
  *
