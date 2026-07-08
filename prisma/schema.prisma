@@ -76,6 +76,7 @@ model Couple {
   tags        Tag[]
   budgets     Budget[]
   categories  Category[]
+  recurringSeries RecurringSeries[]
 }
 
 model User {
@@ -99,6 +100,9 @@ model User {
   expensesOwned Expense[] @relation("Owner")
   splits        Split[]
   receiptLines  ReceiptLineItem[] @relation("ReceiptLineAssignee")
+
+  recurringSeriesOwned RecurringSeries[] @relation("RecurringSeriesOwner")
+  recurringSeriesPaid  RecurringSeries[] @relation("RecurringSeriesPayer")
 
   settlementsPaid     Settlement[] @relation("SettlementPayer")
   settlementsReceived Settlement[] @relation("SettlementReceiver")
@@ -173,6 +177,7 @@ model Category {
 
   expenses Expense[]
   budgets  Budget[]
+  recurringSeries RecurringSeries[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -227,6 +232,12 @@ model Expense {
   settlementId String?
   settlement   Settlement? @relation(fields: [settlementId], references: [id])
 
+  // Phase 2d: link generated instances (and the original template) to their
+  // recurring series. Nullable + dual-written; recurrence source of truth stays
+  // on the Expense.* fields above this phase.
+  seriesId String?
+  series   RecurringSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+
   currency  String   @default("EUR")
   minorUnit Int      @default(2)
 
@@ -238,6 +249,7 @@ model Expense {
   @@index([ownerId])
   @@index([ownerId, visibility])
   @@index([categoryId])
+  @@index([seriesId])
 }
 
 // Relational receipt line items (Phase 2c), replacing the Expense.receiptData
@@ -265,6 +277,53 @@ model ReceiptLineItem {
 
   @@index([expenseId])
   @@index([assignedToId])
+}
+
+// Phase 2d: the recurring RULE/TEMPLATE, separated from the generated instances.
+// Recurrence currently lives on Expense (isRecurring/recurringInterval/
+// nextRecurringDate), which conflates template and instance. This model holds the
+// rule + template values; generated instances (and the original template) point
+// back via Expense.seriesId. Additive + dual-written — the Expense.* recurrence
+// fields stay the source of truth this phase (read-switch deferred).
+model RecurringSeries {
+  id          String @id @default(cuid())
+
+  description String
+  amount      Int
+  category    ExpenseCategory @default(other)
+
+  categoryId  String?
+  categoryRef Category? @relation(fields: [categoryId], references: [id])
+
+  visibility    ExpenseVisibility @default(SHARED)
+  splitStrategy SplitStrategy?
+  notes         String?
+
+  interval    RecurringInterval
+  nextRunDate DateTime
+
+  coupleId String?
+  couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+
+  ownerId String
+  owner   User   @relation("RecurringSeriesOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  paidById String
+  paidBy   User   @relation("RecurringSeriesPayer", fields: [paidById], references: [id], onDelete: Cascade)
+
+  currency  String @default("EUR")
+  minorUnit Int    @default(2)
+
+  expenses Expense[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([coupleId])
+  @@index([ownerId])
+  @@index([paidById])
+  @@index([categoryId])
+  @@index([nextRunDate])
 }
 
 model Split {

@@ -111,6 +111,7 @@ async function materializeDueRecurring(scope: Prisma.ExpenseWhereInput): Promise
                         visibility: expense.visibility,
                         splitStrategy: expense.splitStrategy, // inherit intent from the source
                         coupleId: expense.coupleId,
+                        seriesId: expense.seriesId, // Phase 2d: link instance to its series (inherited from the template)
                         notes: expense.notes ?? null,
                         date: occurrence, // the scheduled occurrence date, not now
                         isRecurring: false, // only the source stays recurring

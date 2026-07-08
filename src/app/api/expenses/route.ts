@@ -230,8 +230,32 @@ export async function POST(request: Request) {
             expenseData.lineItems = { create: lineItems };
         }
 
-        const expense = await prisma.expense.create({
-            data: expenseData
+        // Phase 2d dual-write: a recurring expense is the TEMPLATE of a series.
+        // Persist the rule/template in RecurringSeries and link the template via
+        // seriesId. Expense.isRecurring/recurringInterval/nextRecurringDate stay the
+        // source of truth this phase (read-switch deferred). Both writes share one
+        // transaction so a failed expense.create can't leave an orphan series.
+        const expense = await prisma.$transaction(async (tx) => {
+            if (expenseData.isRecurring && normalizedInterval && nextRecurringDate) {
+                const series = await tx.recurringSeries.create({
+                    data: {
+                        description,
+                        amount: amountCents,
+                        category: normalizedCategory,
+                        categoryId,
+                        visibility: isPersonalExpense ? 'PERSONAL' : 'SHARED',
+                        splitStrategy: expenseData.splitStrategy ?? null,
+                        notes: notes || null,
+                        interval: normalizedInterval,
+                        nextRunDate: nextRecurringDate,
+                        coupleId: isPersonalExpense ? null : user.coupleId,
+                        ownerId: userId,
+                        paidById,
+                    },
+                });
+                expenseData.seriesId = series.id;
+            }
+            return tx.expense.create({ data: expenseData });
         });
 
         return NextResponse.json({ success: true, expenseId: expense.id });
