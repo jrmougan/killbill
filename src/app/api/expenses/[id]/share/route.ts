@@ -27,7 +27,7 @@ export async function POST(
         // Phase 4 selector switch: the caller's group comes from the Membership layer.
         const groupId = await getPrimaryGroup(userId);
         if (!groupId) {
-            return NextResponse.json({ error: 'Necesitas una pareja para compartir un gasto' }, { status: 400 });
+            return NextResponse.json({ error: 'Necesitas un grupo para compartir un gasto' }, { status: 400 });
         }
 
         const expense = await prisma.expense.findUnique({ where: { id }, include: { ...RECEIPT_LINES_SELECT, series: true } });

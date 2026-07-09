@@ -14,7 +14,7 @@ export async function POST(_request: Request) {
         const coupleId = await getPrimaryGroup(userId);
 
         if (!coupleId) {
-            return NextResponse.json({ error: 'No estás en ninguna pareja' }, { status: 400 });
+            return NextResponse.json({ error: 'No estás en ningún grupo' }, { status: 400 });
         }
 
         await prisma.$transaction(async (tx) => {

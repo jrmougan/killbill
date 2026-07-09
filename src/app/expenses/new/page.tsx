@@ -369,7 +369,7 @@ export default function NewExpensePage() {
             }
             const needsPartner = split === "partner" || paidBy === "partner";
             if (needsPartner && !partner) {
-                setFormError("Necesitas una pareja configurada para esta opción.");
+                setFormError("Necesitas un grupo configurado para esta opción.");
                 return;
             }
         }
@@ -651,7 +651,7 @@ export default function NewExpensePage() {
                         <fieldset className="space-y-2 border-0 p-0 m-0">
                             <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">Tipo de gasto</legend>
                             <div className="flex gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5">
-                                {([["shared", "Común", "Se reparte con tu pareja"], ["personal", "Personal", "Privado, solo para ti"]] as const).map(([key, label, hint]) => (
+                                {([["shared", "Común", "Se reparte con el grupo"], ["personal", "Personal", "Privado, solo para ti"]] as const).map(([key, label, hint]) => (
                                     <button
                                         key={key}
                                         type="button"
@@ -670,8 +670,8 @@ export default function NewExpensePage() {
                             </div>
                             <p className="text-[11px] text-muted-foreground/70 px-1">
                                 {expenseType === "personal"
-                                    ? "Solo tú lo verás. No afecta a los balances de la pareja."
-                                    : "Se reparte con tu pareja y cuenta en los balances."}
+                                    ? "Solo tú lo verás. No afecta a los balances del grupo."
+                                    : "Se reparte con el grupo y cuenta en los balances."}
                             </p>
                         </fieldset>
 

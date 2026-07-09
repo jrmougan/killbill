@@ -82,7 +82,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
     };
 
     const handleUnlink = async () => {
-        if (!confirm("¿ESTÁS SEGURO? Perderás acceso a todos los gastos y desgloses de esta pareja. Esta acción no se puede deshacer.")) return;
+        if (!confirm("¿ESTÁS SEGURO? Perderás acceso a todos los gastos y desgloses de este grupo. Esta acción no se puede deshacer.")) return;
 
         setIsUnlinking(true);
         try {
@@ -219,14 +219,14 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                     <section className="space-y-4">
                         <div className="flex items-center gap-2 px-1">
                             <Heart className="h-5 w-5 text-pink-500" />
-                            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Mi Pareja</h2>
+                            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Mi Grupo</h2>
                         </div>
 
                         <GlassCard className="p-4 space-y-4">
                             <div className="flex items-center justify-between">
                                 <div className="space-y-1">
                                     <p className="text-sm font-bold">{partner ? partner.name : "Esperando..."}</p>
-                                    <p className="text-xs text-muted-foreground">{partner ? "Vinculado como pareja" : "Comparte tu código"}</p>
+                                    <p className="text-xs text-muted-foreground">{partner ? "Miembro del grupo" : "Comparte tu código"}</p>
                                 </div>
                                 <div className="h-10 w-10 rounded-full bg-pink-500/20 flex items-center justify-center text-xl overflow-hidden">
                                     {partner?.avatar && isAvatarUrl(partner.avatar) ? (
@@ -297,7 +297,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                                 onClick={handleUnlink}
                                 isLoading={isUnlinking}
                             >
-                                <Trash2 className="h-5 w-5 mr-3" /> Desvincularme de mi pareja
+                                <Trash2 className="h-5 w-5 mr-3" /> Salir del grupo
                             </Button>
                         )}
                     </div>
@@ -306,7 +306,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
 
             <footer className="text-center space-y-1 py-4">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">EQUIL App v1.0.0 Beta</p>
-                <p className="text-[10px] text-white/20">Hecho con ❤️ para parejas</p>
+                <p className="text-[10px] text-white/20">Hecho con ❤️ para compartir gastos</p>
             </footer>
         </div>
     );

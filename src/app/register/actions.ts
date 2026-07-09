@@ -5,6 +5,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { signToken } from '@/lib/auth';
+import { MAX_GROUP_MEMBERS } from '@/lib/membership';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import type { AuthState } from '@/lib/auth-types';
 
@@ -54,8 +55,8 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
             const memberCount = await prisma.membership.count({
                 where: { groupId: couple.id, status: 'ACTIVE' },
             });
-            if (memberCount >= 2) {
-                return { error: 'Esta pareja ya está completa' };
+            if (memberCount >= MAX_GROUP_MEMBERS) {
+                return { error: 'Este grupo ya está completo' };
             }
         } else {
             if (invite.usedById) {
@@ -85,7 +86,7 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
                 existingMemberCount = await tx.membership.count({
                     where: { groupId: coupleId, status: 'ACTIVE' },
                 });
-                if (existingMemberCount >= 2) throw new Error('COUPLE_FULL');
+                if (existingMemberCount >= MAX_GROUP_MEMBERS) throw new Error('COUPLE_FULL');
             }
 
             const created = await tx.user.create({
@@ -137,7 +138,7 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
             return { error: 'Este código ya fue utilizado' };
         }
         if (error instanceof Error && error.message === 'COUPLE_FULL') {
-            return { error: 'Esta pareja ya está completa' };
+            return { error: 'Este grupo ya está completo' };
         }
         console.error('Registration Error:', error);
         return { error: 'Algo salió mal. Inténtalo de nuevo.' };

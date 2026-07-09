@@ -2,6 +2,13 @@ import { prisma } from "@/lib/db";
 import type { User } from "@/generated/prisma/client";
 
 /**
+ * Max ACTIVE members per group. Phase "decouple" F3: was a hard cap of 2
+ * (couples-only); now a group (family) can hold several members. A sane upper
+ * bound guards against abuse; the split/finance/ledger math is N-way already.
+ */
+export const MAX_GROUP_MEMBERS = 20;
+
+/**
  * Returns the ACTIVE members of a group (a.k.a. couple) via the Membership layer.
  *
  * Ordered by joinedAt asc, then userId asc — the backfill set joinedAt = User.createdAt,

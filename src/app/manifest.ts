@@ -2,7 +2,7 @@ import { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
     return {
-        name: "EQUIL - Finanzas en Pareja",
+        name: "EQUIL - Finanzas Compartidas",
         short_name: "EQUIL",
         description: "Equilibrio y justicia en vuestra economía compartida.",
         start_url: "/",

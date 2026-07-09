@@ -190,7 +190,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         Hola, {user.name}
                     </h1>
                     <div className="text-[13px] text-muted-foreground mt-1">
-                        {partner ? `Pareja con ${partner.name}` : groupId ? "Esperando a tu pareja..." : "Cuenta personal"}
+                        {couple ? (couple.name ?? "Mi grupo") : "Cuenta personal"}
                     </div>
                 </div>
                 {/* Navigation (Analíticas/Ajustes) now lives in the bottom nav. */}
@@ -232,7 +232,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                             <span className="text-[11px] uppercase font-semibold tracking-[0.18em] text-muted-foreground mb-1 block">Tu balance</span>
                             <h2 className="text-3xl font-bold text-foreground">Esperando...</h2>
                             <p className="text-sm text-muted-foreground mt-2">
-                                Invita a tu pareja para empezar a registrar gastos juntos
+                                Invita a tu grupo para empezar a registrar gastos juntos
                             </p>
                         </div>
                     ) : (
@@ -415,7 +415,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                 <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
                                     {partner
                                         ? <>Pulsa <span className="text-primary font-semibold">+</span> para añadir vuestro primer gasto.</>
-                                        : "Comparte el enlace de arriba para que tu pareja se una."
+                                        : "Comparte el enlace de arriba para que tu grupo se una."
                                     }
                                 </p>
                             </div>

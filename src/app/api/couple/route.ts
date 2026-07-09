@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
     // Reject if the caller already belongs to a couple (Membership selector read).
     if (await getPrimaryGroup(userId)) {
-        return NextResponse.json({ error: 'Ya perteneces a una pareja' }, { status: 400 });
+        return NextResponse.json({ error: 'Ya perteneces a un grupo' }, { status: 400 });
     }
 
     const body = await request.json();
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     const couple = await prisma.$transaction(async (tx) => {
         const created = await tx.couple.create({
             data: {
-                name: name || "Nuestra Pareja",
+                name: name || "Mi grupo",
                 code: code,
             }
         });

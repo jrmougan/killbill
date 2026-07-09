@@ -5,7 +5,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { signToken } from '@/lib/auth';
-import { getPrimaryGroup } from '@/lib/membership';
+import { getPrimaryGroup, MAX_GROUP_MEMBERS } from '@/lib/membership';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import type { AuthState } from '@/lib/auth-types';
 
@@ -65,7 +65,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
                     const memberCount = await tx.membership.count({
                         where: { groupId: couple.id, status: 'ACTIVE' },
                     });
-                    if (memberCount >= 2) return;
+                    if (memberCount >= MAX_GROUP_MEMBERS) return;
                     // Upsert handles a previous LEFT rejoin.
                     await tx.membership.upsert({
                         where: { groupId_userId: { groupId: couple.id, userId: user.id } },

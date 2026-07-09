@@ -6,8 +6,8 @@ import { SettingsClient } from "./settings-client";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Ajustes · EQUIL - Finanzas en Pareja",
-    description: "Configura tu perfil y tu pareja en EQUIL.",
+    title: "Ajustes · EQUIL - Finanzas Compartidas",
+    description: "Configura tu perfil y tu grupo en EQUIL.",
 };
 
 export default async function SettingsPage() {

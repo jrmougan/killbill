@@ -196,7 +196,7 @@ export function AnalyticsClient({
                             verticalAlign="top"
                             height={24}
                             wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}
-                            formatter={(value) => value === "total" ? "Total pareja" : "Mi parte"}
+                            formatter={(value) => value === "total" ? "Total grupo" : "Mi parte"}
                         />
                         <Bar dataKey="total" name="total" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
                         <Bar dataKey="myShare" name="myShare" fill="#06b6d4" radius={[4, 4, 0, 0]} />

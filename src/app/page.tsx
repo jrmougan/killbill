@@ -23,7 +23,7 @@ export default function Home() {
           <VisualBalanceLazy
             balance={-35.50}
             user1={{ name: "Tú", avatar: "👤" }}
-            user2={{ name: "Pareja", avatar: "💕" }}
+            user2={{ name: "Grupo", avatar: "💕" }}
           />
           <div className="text-center mt-[-30px]">
             <p className="text-[10px] text-white/30 uppercase tracking-[0.4em] font-black">Visualización de Deuda</p>
@@ -81,7 +81,7 @@ export default function Home() {
       <footer className="mt-auto px-6 py-12 text-center space-y-4 z-10 border-t border-white/5 bg-black/50 backdrop-blur-xl">
         <h4 className="text-xl font-black italic tracking-tighter opacity-20">EQUIL</h4>
         <div className="flex justify-center gap-6 text-xs text-muted-foreground font-medium">
-          <span className="flex items-center gap-1"><Heart className="h-3 w-3 text-red-500" /> Para parejas</span>
+          <span className="flex items-center gap-1"><Heart className="h-3 w-3 text-red-500" /> Para grupos y familias</span>
         </div>
         <p className="text-[10px] text-white/10 uppercase tracking-widest font-bold">© 2026 EQUIL Finanzas. Todos los derechos reservados.</p>
       </footer>

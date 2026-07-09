@@ -14,7 +14,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: "EQUIL - Finanzas en Pareja",
+  title: "EQUIL - Finanzas Compartidas",
   description: "Equilibrio y justicia en vuestra economía compartida.",
   appleWebApp: {
     capable: true,

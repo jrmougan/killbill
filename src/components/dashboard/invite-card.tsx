@@ -42,7 +42,7 @@ export function InviteCard({ code }: InviteCardProps) {
     return (
         <GlassCard className="p-3 bg-white/5 flex items-center justify-between">
             <div className="text-sm">
-                <p className="font-medium">Invita a tu pareja</p>
+                <p className="font-medium">Invita a tu grupo</p>
                 <p className="text-xs text-muted-foreground">Toca para compartir enlace</p>
             </div>
 

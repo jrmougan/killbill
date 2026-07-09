@@ -37,7 +37,7 @@ export function JoinGroupCard() {
         <div className="p-4 rounded-3xl bg-white/5 border border-white/10 space-y-3 mt-4">
             <div className="flex items-center gap-2 text-muted-foreground">
                 <Heart className="h-4 w-4" />
-                <span className="text-xs font-bold uppercase tracking-wider text-pink-500/80">Unirse a una pareja</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-pink-500/80">Unirse a un grupo</span>
             </div>
             <form onSubmit={handleJoin} className="flex gap-2">
                 <Input

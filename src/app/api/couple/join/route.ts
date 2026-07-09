@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { getPrimaryGroup } from '@/lib/membership';
+import { getPrimaryGroup, MAX_GROUP_MEMBERS } from '@/lib/membership';
 
 export async function POST(request: Request) {
     try {
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
         // Membership layer. The transactional re-check below stays on coupleId
         // (write-side TOCTOU guard) until the gated User.coupleId drop.
         if (await getPrimaryGroup(userId)) {
-            return NextResponse.json({ error: 'Ya perteneces a una pareja' }, { status: 400 });
+            return NextResponse.json({ error: 'Ya perteneces a un grupo' }, { status: 400 });
         }
 
         const couple = await prisma.couple.findUnique({
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
                 const memberCount = await tx.membership.count({
                     where: { groupId: couple.id, status: 'ACTIVE' },
                 });
-                if (memberCount >= 2) throw new Error('COUPLE_FULL');
+                if (memberCount >= MAX_GROUP_MEMBERS) throw new Error('COUPLE_FULL');
 
                 // Upsert handles a previous LEFT rejoin.
                 await tx.membership.upsert({
@@ -53,17 +53,17 @@ export async function POST(request: Request) {
             });
         } catch (e) {
             if (e instanceof Error && e.message === 'ALREADY_IN_COUPLE') {
-                return NextResponse.json({ error: 'Ya perteneces a una pareja' }, { status: 400 });
+                return NextResponse.json({ error: 'Ya perteneces a un grupo' }, { status: 400 });
             }
             if (e instanceof Error && e.message === 'COUPLE_FULL') {
-                return NextResponse.json({ error: 'Esta pareja ya está completa' }, { status: 400 });
+                return NextResponse.json({ error: 'Este grupo ya está completo' }, { status: 400 });
             }
             throw e;
         }
 
         return NextResponse.json({ success: true });
     } catch (error) {
-        console.error('Error al unirse a la pareja:', error);
-        return NextResponse.json({ error: 'Error al unirse a la pareja' }, { status: 500 });
+        console.error('Error al unirse al grupo:', error);
+        return NextResponse.json({ error: 'Error al unirse al grupo' }, { status: 500 });
     }
 }

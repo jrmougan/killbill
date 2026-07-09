@@ -106,7 +106,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                 <div className="space-y-4">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1 flex items-center gap-2">
                         <Heart className="h-4 w-4 fill-primary text-primary" />
-                        Reparto en Pareja
+                        Reparto del gasto
                     </h3>
                     <div className="bg-card border border-white/10 rounded-2xl overflow-hidden">
                         {expense.splits.length === 0 ? (
