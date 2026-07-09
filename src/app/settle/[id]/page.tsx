@@ -7,6 +7,7 @@ import { ArrowLeft, Check, Calendar, CreditCard } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/currency";
 import { getCategoryById } from "@/lib/categories";
+import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { getSettlementStatusLabel, getSettlementMethodLabel } from "@/lib/settlement-labels";
 
 interface SettlementDetailPageProps {
@@ -25,7 +26,8 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
             toUser: true,
             expenses: {
                 include: {
-                    splits: true
+                    splits: true,
+                    ...CATEGORY_REF_SELECT
                 }
             }
         }
@@ -125,7 +127,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                                 <GlassCard key={expense.id} className="p-4 flex items-center justify-between border-white/5 bg-white/5">
                                     <div className="flex items-center gap-3">
                                         <div className="h-8 w-8 rounded-lg bg-white/5 flex items-center justify-center text-sm">
-                                            {getCategoryById(expense.category).emoji}
+                                            {getCategoryById(categoryKeyOf(expense)).emoji}
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold">{expense.description}</p>

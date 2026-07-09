@@ -114,8 +114,9 @@ async function materializeDueRecurring(scope: Prisma.RecurringSeriesWhereInput):
                     data: {
                         description: template.description,
                         amount: template.amount,
-                        category: template.category,
-                        categoryId: template.categoryId, // inherit relational category (Phase 2b)
+                        // Phase 5 (WS5): enum category no longer written; inherit only
+                        // the relational categoryId (Phase 2b).
+                        categoryId: template.categoryId,
                         paidById: template.paidById,
                         ownerId: template.ownerId,
                         visibility: template.visibility,

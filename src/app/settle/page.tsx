@@ -5,6 +5,7 @@ import { getGroupBalances } from "@/lib/ledger-read";
 import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
 import { calculateSplitAmounts } from "@/lib/splits";
 import { toEuros } from "@/lib/currency";
+import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { SettleClient } from "./client";
 import { getSession } from "@/lib/auth";
 
@@ -26,7 +27,7 @@ export default async function SettlePage() {
     // Fetch shared expenses for couple with splits (personal expenses never affect debts).
     const rawExpenses = await prisma.expense.findMany({
         where: { coupleId: groupId, visibility: "SHARED" },
-        include: { splits: true },
+        include: { splits: true, ...CATEGORY_REF_SELECT },
     });
 
     // Fetch Settlements for couple
@@ -78,7 +79,7 @@ export default async function SettlePage() {
                 amount: toEuros(e.amount), // Convert to euros
                 myAmount: toEuros(myAmountCents), // Convert to euros
                 date: e.date.toISOString(),
-                category: e.category,
+                category: categoryKeyOf(e),
                 paidBy: e.paidById
             };
         })

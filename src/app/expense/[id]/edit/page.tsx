@@ -4,6 +4,7 @@ import { getPrimaryGroup, getGroupMembers } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
+import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { EditExpenseClient } from "./client";
 
 export default async function EditExpensePage({ params }: { params: Promise<{ id: string }> }) {
@@ -23,6 +24,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
                 tags: { include: { tag: true } },
                 series: true,
                 ...RECEIPT_LINES_SELECT,
+                ...CATEGORY_REF_SELECT,
             },
         }),
         getPrimaryGroup(userId),
@@ -80,7 +82,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
             partner={partner ? { id: partner.id, name: partner.name } : null}
             initialAmount={toEuros(expense.amount)}
             initialDescription={expense.description}
-            initialCategory={expense.category}
+            initialCategory={categoryKeyOf(expense)}
             initialSplitMode={initialSplitMode}
             initialMyPercent={initialMyPercent}
             initialReceiptItems={receiptItemsView(expense.lineItems)}

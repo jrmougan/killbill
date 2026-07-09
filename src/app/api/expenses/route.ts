@@ -157,7 +157,8 @@ export async function POST(request: Request) {
         const expenseData: Prisma.ExpenseUncheckedCreateInput = {
             description,
             amount: amountCents,
-            category: normalizedCategory,
+            // Phase 5 (WS5): the enum category column is no longer written; categoryId
+            // (the relational Category) is the sole category source.
             categoryId,
             paidById,
             ownerId: userId,
@@ -244,7 +245,7 @@ export async function POST(request: Request) {
                     data: {
                         description,
                         amount: amountCents,
-                        category: normalizedCategory,
+                        // Phase 5 (WS5): enum category no longer written; categoryId only.
                         categoryId,
                         visibility: isPersonalExpense ? 'PERSONAL' : 'SHARED',
                         splitStrategy: expenseData.splitStrategy ?? null,

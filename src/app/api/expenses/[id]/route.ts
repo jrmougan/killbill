@@ -173,7 +173,7 @@ export async function PATCH(
         const updateData: Prisma.ExpenseUncheckedUpdateInput = {
             description: description ?? expense.description,
             amount: amountCents,
-            category: category ?? expense.category,
+            // Phase 5 (WS5): enum category no longer written; categoryId is synced below.
         };
         if (notes !== undefined) updateData.notes = notes;
         // Phase 5 (stop-dual-write): Expense.isRecurring/recurringInterval/
@@ -317,8 +317,7 @@ export async function PATCH(
                         data: {
                             description: updated.description,
                             amount: updated.amount,
-                            category: updated.category,
-                            categoryId: updated.categoryId,
+                            categoryId: updated.categoryId, // Phase 5 (WS5): enum category no longer mirrored
                             splitStrategy: updated.splitStrategy,
                             notes: updated.notes,
                             isActive: true, // re-activate when recurring is toggled back ON
@@ -337,8 +336,7 @@ export async function PATCH(
                     data: {
                         description: updated.description,
                         amount: updated.amount,
-                        category: updated.category,
-                        categoryId: updated.categoryId,
+                        categoryId: updated.categoryId, // Phase 5 (WS5): enum category no longer written
                         visibility: updated.visibility,
                         splitStrategy: updated.splitStrategy,
                         notes: updated.notes,
