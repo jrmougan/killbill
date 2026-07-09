@@ -8,7 +8,8 @@ import { getSession } from "@/lib/auth";
 import { formatCurrency, formatEuros } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
-import { getGroupMembers } from "@/lib/membership";
+import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
+import { PromoteButton } from "@/components/expense/promote-button";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -57,6 +58,10 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
     const isMe = userId === expense.paidById;
     const partner = members.find(m => m.id !== expense.paidById);
 
+    // A personal expense can be promoted to shared if the owner belongs to a group.
+    const myGroupId = isPersonal && expense.ownerId === userId ? await getPrimaryGroup(userId) : null;
+    const canPromote = Boolean(myGroupId);
+
     return (
         <div className="flex flex-col min-h-screen p-3 sm:p-4 space-y-6 max-w-md mx-auto relative pb-24 w-full overflow-x-hidden">
             <header className="flex items-center gap-2 pt-2">
@@ -75,6 +80,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         <span className="hidden sm:inline">Editar</span>
                     </Button>
                 </Link>
+                {canPromote && <PromoteButton expenseId={expense.id} />}
                 <DeleteExpenseButton expenseId={expense.id} />
             </header>
 
