@@ -16,7 +16,7 @@ import { formatEuros, parseAmountInput, formatAmountInput } from "@/lib/currency
 
 type Step = "amount" | "details";
 type ScanState = "idle" | "scanning" | "done";
-type SplitChoice = "equal" | "me" | "partner" | "custom";
+type SplitChoice = "equal" | "me" | "partner" | "custom" | "amounts";
 type ExpenseType = "shared" | "personal";
 type RecurringInterval = "weekly" | "monthly" | "yearly";
 
@@ -75,6 +75,9 @@ export default function NewExpensePage() {
     const [paidById, setPaidById] = useState<string>("");
     const [split, setSplit] = useState<SplitChoice>("equal");
     const [myPercent, setMyPercent] = useState(50);
+    // Per-member custom amounts (euro strings keyed by userId), used by the
+    // "amounts" split mode for groups of >2 where percentages don't scale.
+    const [memberAmounts, setMemberAmounts] = useState<Record<string, string>>({});
     const [members, setMembers] = useState<{ id: string; name: string; avatar: string | null }[]>([]);
     const [userId, setUserId] = useState<string | null>(null);
 
@@ -114,6 +117,14 @@ export default function NewExpensePage() {
     const previewMyCents = Math.round((previewAmountCents * myPercent) / 100);
     const myAmount = previewMyCents / 100;
     const partnerAmount = (previewAmountCents - previewMyCents) / 100;
+
+    // Per-member custom amounts (cents) for the N>2 "amounts" split mode.
+    const memberAmountsCents = members.reduce<Record<string, number>>((acc, m) => {
+        acc[m.id] = Math.round(parseAmountInput(memberAmounts[m.id] || "") * 100) || 0;
+        return acc;
+    }, {});
+    const memberAmountsSum = Object.values(memberAmountsCents).reduce((a, b) => a + b, 0);
+    const memberAmountsRemaining = previewAmountCents - memberAmountsSum;
 
     const hasItemAssignments = receiptItems.length > 0;
     const itemSplitMyAmount = receiptItems.reduce((acc, item) => {
@@ -370,6 +381,10 @@ export default function NewExpensePage() {
                 setFormError("Los porcentajes deben sumar 100%.");
                 return;
             }
+            if (!isTwoMember && split === "amounts" && memberAmountsRemaining !== 0) {
+                setFormError("Los importes por miembro deben sumar el total.");
+                return;
+            }
             if (members.length === 0) {
                 setFormError("Necesitas un grupo configurado para un gasto compartido.");
                 return;
@@ -416,6 +431,16 @@ export default function NewExpensePage() {
             } else {
                 // N-way payer: any member (defaults to me).
                 bodyPayload.paidById = paidById || userId;
+
+                // Larger groups can split by explicit per-member amounts; otherwise
+                // they fall through to the N-way equal split (no customSplits → the
+                // API divides equally among ALL members).
+                if (!isTwoMember && split === "amounts") {
+                    bodyPayload.customSplits = members.map((m) => ({
+                        userId: m.id,
+                        amount: memberAmountsCents[m.id] || 0,
+                    }));
+                }
 
                 // The custom %, per-item and beneficiary modes are 2-member-only;
                 // larger groups always use the N-way equal split (no customSplits →
@@ -473,6 +498,23 @@ export default function NewExpensePage() {
 
     const amountDisplay = amount === "" ? "0" : amount;
 
+    // Selecting per-member amounts seeds each member with an equal share (largest
+    // remainder first) so the user only nudges the deltas from a valid baseline.
+    const selectSplit = (key: SplitChoice) => {
+        setSplit(key);
+        if (key === "amounts" && members.length > 0 && previewAmountCents > 0) {
+            const base = Math.floor(previewAmountCents / members.length);
+            let remainder = previewAmountCents - base * members.length;
+            const seeded: Record<string, string> = {};
+            for (const m of members) {
+                const cents = base + (remainder > 0 ? 1 : 0);
+                if (remainder > 0) remainder--;
+                seeded[m.id] = formatAmountInput(cents / 100);
+            }
+            setMemberAmounts(seeded);
+        }
+    };
+
     const splitOptions: { key: SplitChoice; label: string; hint: string }[] = isTwoMember
         ? [
             { key: "equal", label: "Mitad y mitad", hint: "50% · 50%" },
@@ -482,6 +524,7 @@ export default function NewExpensePage() {
           ]
         : [
             { key: "equal", label: "A partes iguales", hint: `Entre ${members.length} miembros` },
+            { key: "amounts", label: "Importes por miembro", hint: "Ajustar por persona" },
           ];
 
     return (
@@ -722,7 +765,7 @@ export default function NewExpensePage() {
                                             key={o.key}
                                             type="button"
                                             disabled={disabled}
-                                            onClick={() => setSplit(o.key)}
+                                            onClick={() => selectSplit(o.key)}
                                             aria-pressed={sel}
                                             aria-label={o.label}
                                             className={cn(
@@ -785,6 +828,40 @@ export default function NewExpensePage() {
                                             Yo: <strong className="text-foreground">{formatEuros(myAmount)}</strong> — {partnerName}: <strong className="text-foreground">{formatEuros(partnerAmount)}</strong>
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {split === "amounts" && !isTwoMember && (
+                                <div className="space-y-2 animate-in fade-in duration-200 bg-white/5 rounded-xl p-4 mt-1">
+                                    {members.map((m) => (
+                                        <div key={m.id} className="flex items-center justify-between gap-3">
+                                            <label htmlFor={`amount-${m.id}`} className="text-sm text-muted-foreground truncate">
+                                                {m.id === userId ? "Yo" : m.name}
+                                            </label>
+                                            <div className="flex items-center gap-1.5">
+                                                <input
+                                                    id={`amount-${m.id}`}
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={memberAmounts[m.id] ?? ""}
+                                                    onChange={(e) => setMemberAmounts((prev) => ({ ...prev, [m.id]: e.target.value }))}
+                                                    placeholder="0,00"
+                                                    className="w-24 bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:outline-none focus:border-primary/50"
+                                                />
+                                                <span className="text-sm text-muted-foreground">€</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className={cn(
+                                        "text-xs text-center pt-1 border-t border-white/10 mt-1",
+                                        memberAmountsRemaining === 0 ? "text-emerald-400" : "text-primary"
+                                    )}>
+                                        {memberAmountsRemaining === 0
+                                            ? "Cuadra con el total ✓"
+                                            : memberAmountsRemaining > 0
+                                                ? `Faltan ${formatEuros(memberAmountsRemaining / 100)}`
+                                                : `Te pasas ${formatEuros(Math.abs(memberAmountsRemaining) / 100)}`}
+                                    </div>
                                 </div>
                             )}
                         </fieldset>
