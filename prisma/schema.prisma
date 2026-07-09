@@ -322,6 +322,11 @@ model RecurringSeries {
   interval    RecurringInterval
   nextRunDate DateTime
 
+  // Phase 4 (recurring-sync): deactivation instead of deletion — deleting a
+  // series would SetNull instance.seriesId (losing lineage). isActive=false
+  // stops materialization; toggling the template recurring back ON re-activates.
+  isActive Boolean @default(true)
+
   coupleId String?
   couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: Cascade)
 
@@ -344,6 +349,7 @@ model RecurringSeries {
   @@index([paidById])
   @@index([categoryId])
   @@index([nextRunDate])
+  @@index([isActive, nextRunDate])
 }
 
 model Split {

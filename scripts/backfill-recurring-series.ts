@@ -46,6 +46,7 @@ async function main() {
           notes: e.notes,
           interval: e.recurringInterval!,
           nextRunDate: e.nextRecurringDate!,
+          isActive: true, // series-driven materializer only picks active series (Phase 4 recurring-sync)
           coupleId: e.coupleId,
           ownerId: e.ownerId,
           paidById: e.paidById,

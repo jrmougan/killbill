@@ -38,9 +38,20 @@ export async function DELETE(
             return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
-        // Delete expense (splits will cascade delete)
-        await prisma.expense.delete({
-            where: { id }
+        // Delete expense (splits cascade; the ledger Transaction cascades via FK).
+        // Phase 4 (recurring-sync): deleting a recurring TEMPLATE must stop its
+        // series or the series-driven materializer keeps firing with no template.
+        // Deactivate (don't delete) so already-materialized instances keep their
+        // seriesId lineage (series deletion would SetNull them). Instances
+        // (isRecurring=false) never deactivate the series.
+        await prisma.$transaction(async (tx) => {
+            if (expense.isRecurring && expense.seriesId) {
+                await tx.recurringSeries.update({
+                    where: { id: expense.seriesId },
+                    data: { isActive: false },
+                });
+            }
+            await tx.expense.delete({ where: { id } });
         });
 
         return NextResponse.json({ success: true });
@@ -256,6 +267,74 @@ export async function PATCH(
                         members,
                     });
                 }
+            }
+
+            // Phase 4 (recurring-sync): keep the linked RecurringSeries in lockstep
+            // with the template Expense, in the SAME transaction, so the series-
+            // driven materializer never reads stale scalars.
+            if (updated.seriesId) {
+                if (!updated.isRecurring) {
+                    // Deactivate ONLY on a genuine template toggle-off: the pre-state
+                    // must have been recurring. Editing a materialized INSTANCE
+                    // (isRecurring=false before AND after) must never touch the
+                    // series, or any notes/amount edit to an instance would silently
+                    // stop the whole recurrence. Deactivate, never delete —
+                    // Expense.seriesId is onDelete:SetNull, so deleting the series
+                    // would orphan instance lineage; isActive=false is reversible.
+                    if (expense.isRecurring) {
+                        await tx.recurringSeries.update({
+                            where: { id: updated.seriesId },
+                            data: { isActive: false },
+                        });
+                    }
+                } else {
+                    // Template still recurring: mirror its scalars to the series.
+                    // NOTE (non-gating risk): a materialized instance PATCHed to
+                    // isRecurring=true also lands here and would overwrite its
+                    // template's series with instance scalars — a rare, user-driven
+                    // edge. A future pass should create a fresh series (or reject)
+                    // when the edited expense is not the series' template.
+                    await tx.recurringSeries.update({
+                        where: { id: updated.seriesId },
+                        data: {
+                            description: updated.description,
+                            amount: updated.amount,
+                            category: updated.category,
+                            categoryId: updated.categoryId,
+                            splitStrategy: updated.splitStrategy,
+                            notes: updated.notes,
+                            isActive: true, // re-activate when recurring is toggled back ON
+                            // interval/nextRunDate are NOT NULL on the series; only
+                            // mirror when the template actually has values (legacy
+                            // templates can carry isRecurring=true with null interval).
+                            ...(updated.recurringInterval ? { interval: updated.recurringInterval } : {}),
+                            ...(updated.nextRecurringDate ? { nextRunDate: updated.nextRecurringDate } : {}),
+                        },
+                    });
+                }
+            } else if (updated.isRecurring && updated.recurringInterval && updated.nextRecurringDate) {
+                // Toggle ON for an expense that never had a series: create + link it
+                // (closes the last dual-write gap — POST already creates series).
+                const series = await tx.recurringSeries.create({
+                    data: {
+                        description: updated.description,
+                        amount: updated.amount,
+                        category: updated.category,
+                        categoryId: updated.categoryId,
+                        visibility: updated.visibility,
+                        splitStrategy: updated.splitStrategy,
+                        notes: updated.notes,
+                        interval: updated.recurringInterval,
+                        nextRunDate: updated.nextRecurringDate,
+                        coupleId: updated.coupleId,
+                        ownerId: updated.ownerId,
+                        paidById: updated.paidById,
+                        currency: updated.currency,
+                        minorUnit: updated.minorUnit,
+                        isActive: true,
+                    },
+                });
+                await tx.expense.update({ where: { id }, data: { seriesId: series.id } });
             }
 
             return updated;

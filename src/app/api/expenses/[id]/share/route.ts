@@ -86,6 +86,26 @@ export async function POST(
                 splits: splits.map(s => ({ userId: s.userId, amount: s.amount })),
                 members: coupleMembers,
             });
+
+            // Phase 4 (recurring-sync): the linked series must follow the promotion
+            // in the SAME tx, or the series-driven materializer would keep creating
+            // PERSONAL instances outside the couple. Guard on isRecurring && seriesId
+            // so ONLY sharing the TEMPLATE flips the series scope — sharing a
+            // materialized instance (isRecurring=false but seriesId set) must leave
+            // the series untouched. nextRunDate is reset to the next FUTURE
+            // occurrence (same anti-catch-up-burst rationale as the expense's
+            // nextRecurringDate reset above). A deactivated series stays inactive.
+            if (expense.isRecurring && expense.seriesId) {
+                await tx.recurringSeries.update({
+                    where: { id: expense.seriesId },
+                    data: {
+                        visibility: 'SHARED',
+                        coupleId: groupId,
+                        splitStrategy: updated.splitStrategy,
+                        ...(nextRecurringDate ? { nextRunDate: nextRecurringDate } : {}),
+                    },
+                });
+            }
         });
 
         return NextResponse.json({ success: true });

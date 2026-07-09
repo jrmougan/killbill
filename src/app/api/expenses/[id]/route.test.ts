@@ -5,14 +5,24 @@ const mockExpenseFindUnique = vi.fn();
 const mockExpenseDelete = vi.fn();
 
 vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
-vi.mock('@/lib/db', () => ({
-    prisma: {
-        expense: {
-            findUnique: (...a: unknown[]) => mockExpenseFindUnique(...a),
-            delete: (...a: unknown[]) => mockExpenseDelete(...a),
+vi.mock('@/lib/db', () => {
+    const expense = {
+        findUnique: (...a: unknown[]) => mockExpenseFindUnique(...a),
+        delete: (...a: unknown[]) => mockExpenseDelete(...a),
+    };
+    return {
+        prisma: {
+            expense,
+            // DELETE now wraps the delete (and a conditional series deactivation)
+            // in a $transaction; run the callback against a tx double exposing the
+            // same expense mock plus a no-op recurringSeries.update. The test
+            // fixtures carry no isRecurring/seriesId, so the deactivation branch is
+            // skipped and mockExpenseDelete is still called with { where: { id } }.
+            $transaction: (cb: (tx: unknown) => unknown) =>
+                cb({ expense, recurringSeries: { update: vi.fn() } }),
         },
-    },
-}));
+    };
+});
 
 import { DELETE } from './route';
 
