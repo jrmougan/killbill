@@ -23,6 +23,7 @@ import { getSettlementStatusLabel, getSettlementMethodLabel } from "@/lib/settle
 import { cn } from "@/lib/utils";
 import { isAvatarUrl } from "@/lib/avatar";
 import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
+import { MemberBalanceList } from "@/components/ui/member-balance-list";
 import { PendingSettlements } from "@/components/dashboard/pending-settlements";
 import { randomBytes } from "crypto";
 
@@ -257,19 +258,32 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                 </h2>
                             </div>
 
-                            <VisualBalanceLazy
-                                balance={myBalance}
-                                user1={{ name: user.name, avatar: user.avatar }}
-                                user2={{ name: partner.name, avatar: partner.avatar }}
-                                className="mt-1.5 mb-1"
-                            />
+                            {members.length > 2 ? (
+                                // The two-pan seesaw only maps to a 2-person relationship;
+                                // larger groups get a per-member net-balance list instead.
+                                <MemberBalanceList
+                                    members={members}
+                                    balances={balances}
+                                    currentUserId={userId}
+                                    className="mt-3"
+                                />
+                            ) : (
+                                <>
+                                    <VisualBalanceLazy
+                                        balance={myBalance}
+                                        user1={{ name: user.name, avatar: user.avatar }}
+                                        user2={{ name: partner.name, avatar: partner.avatar }}
+                                        className="mt-1.5 mb-1"
+                                    />
 
-                            <div className="pb-[22px] px-6">
-                                <span className="text-xs font-semibold tracking-[0.04em] text-[#a1a1aa]">
-                                    {myBalanceCents > 0 ? `Te deben ${formatEuros(myBalance)}` :
-                                        myBalanceCents < 0 ? `Debes ${formatEuros(Math.abs(myBalance))}` : "En equilibrio"}
-                                </span>
-                            </div>
+                                    <div className="pb-[22px] px-6">
+                                        <span className="text-xs font-semibold tracking-[0.04em] text-[#a1a1aa]">
+                                            {myBalanceCents > 0 ? `Te deben ${formatEuros(myBalance)}` :
+                                                myBalanceCents < 0 ? `Debes ${formatEuros(Math.abs(myBalance))}` : "En equilibrio"}
+                                        </span>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     )}
                 </GlassCard>
