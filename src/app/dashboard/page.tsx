@@ -76,16 +76,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         <form action={async () => {
                             'use server';
                             const code = randomBytes(3).toString('hex').toUpperCase();
-                            // Phase 5 (WS1): create the OWNER Membership alongside the
-                            // couple so the creator is resolvable via the Membership
-                            // layer (previously this path wrote only User.coupleId and
-                            // no Membership, stranding the creator once reads switch).
+                            // Phase 5 (WS1 write-stop): the OWNER Membership is the
+                            // sole group linkage — no User.coupleId connect.
                             await prisma.$transaction(async (tx) => {
                                 const created = await tx.couple.create({
                                     data: {
                                         name: "Nuestra Pareja",
                                         code,
-                                        members: { connect: { id: userId } },
                                     },
                                 });
                                 await tx.membership.create({

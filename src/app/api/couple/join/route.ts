@@ -30,17 +30,21 @@ export async function POST(request: Request) {
         // TOCTOU window where two users could join simultaneously and exceed the cap of 2.
         try {
             await prisma.$transaction(async (tx) => {
-                const fresh = await tx.user.findUnique({ where: { id: userId }, select: { coupleId: true } });
-                if (fresh?.coupleId) throw new Error('ALREADY_IN_COUPLE');
+                // Phase 5 (WS1 write-stop): the TOCTOU guards read the Membership
+                // layer and the Membership row is the sole write (User.coupleId is
+                // no longer written).
+                const existing = await tx.membership.findFirst({
+                    where: { userId, status: 'ACTIVE' },
+                    select: { id: true },
+                });
+                if (existing) throw new Error('ALREADY_IN_COUPLE');
 
-                const memberCount = await tx.user.count({ where: { coupleId: couple.id } });
+                const memberCount = await tx.membership.count({
+                    where: { groupId: couple.id, status: 'ACTIVE' },
+                });
                 if (memberCount >= 2) throw new Error('COUPLE_FULL');
 
-                await tx.user.update({
-                    where: { id: userId },
-                    data: { coupleId: couple.id }
-                });
-                // Dual-write the Membership (upsert handles a previous LEFT rejoin).
+                // Upsert handles a previous LEFT rejoin.
                 await tx.membership.upsert({
                     where: { groupId_userId: { groupId: couple.id, userId } },
                     create: { groupId: couple.id, userId, role: 'MEMBER', status: 'ACTIVE' },

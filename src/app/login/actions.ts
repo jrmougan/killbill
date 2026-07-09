@@ -45,35 +45,33 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
         }
 
         // Handle couple invite (explicit + safe): only join when the user has no
-        // couple yet, the code is valid, and the couple still has room. Done
+        // group yet, the code is valid, and the couple still has room. Done
         // atomically so two concurrent joins can't overfill the couple.
-        // Selector read via the Membership layer (Phase 4): "am I already in a
-        // group?" no longer reads user.coupleId. The coupleId WRITES below stay
-        // (dual-write) until the gated User.coupleId drop.
+        // Phase 5 (WS1 write-stop): the Membership row is the sole write and the
+        // guards read the Membership layer (User.coupleId is no longer written).
         if (inviteCode && !(await getPrimaryGroup(user.id))) {
             const couple = await prisma.couple.findUnique({
                 where: { code: inviteCode },
-                include: { members: true },
+                select: { id: true },
             });
 
-            if (couple && couple.members.length < 2) {
+            if (couple) {
                 await prisma.$transaction(async (tx) => {
-                    const memberCount = await tx.user.count({ where: { coupleId: couple.id } });
-                    if (memberCount >= 2) return;
-                    const joined = await tx.user.updateMany({
-                        where: { id: user.id, coupleId: null },
-                        data: { coupleId: couple.id },
+                    const existing = await tx.membership.findFirst({
+                        where: { userId: user.id, status: 'ACTIVE' },
+                        select: { id: true },
                     });
-                    // Dual-write the Membership (this path previously skipped it,
-                    // which would strand invite-login joiners once reads use the
-                    // Membership layer). Upsert handles a previous LEFT rejoin.
-                    if (joined.count === 1) {
-                        await tx.membership.upsert({
-                            where: { groupId_userId: { groupId: couple.id, userId: user.id } },
-                            create: { groupId: couple.id, userId: user.id, role: 'MEMBER', status: 'ACTIVE' },
-                            update: { status: 'ACTIVE', leftAt: null },
-                        });
-                    }
+                    if (existing) return;
+                    const memberCount = await tx.membership.count({
+                        where: { groupId: couple.id, status: 'ACTIVE' },
+                    });
+                    if (memberCount >= 2) return;
+                    // Upsert handles a previous LEFT rejoin.
+                    await tx.membership.upsert({
+                        where: { groupId_userId: { groupId: couple.id, userId: user.id } },
+                        create: { groupId: couple.id, userId: user.id, role: 'MEMBER', status: 'ACTIVE' },
+                        update: { status: 'ACTIVE', leftAt: null },
+                    });
                 });
             }
         }

@@ -18,22 +18,19 @@ export async function POST(_request: Request) {
         }
 
         await prisma.$transaction(async (tx) => {
-            // Unlink user inside transaction
-            await tx.user.update({
-                where: { id: userId },
-                data: { coupleId: null }
-            });
-
-            // Soft-leave the membership (preserve history; never hard-delete).
-            // If the couple is torn down below, its memberships cascade-delete.
+            // Phase 5 (WS1 write-stop): the soft-leave of the Membership is the sole
+            // state change (User.coupleId is no longer written). Preserve history;
+            // never hard-delete. If the couple is torn down below, its memberships
+            // cascade-delete.
             await tx.membership.updateMany({
                 where: { groupId: coupleId, userId },
                 data: { status: 'LEFT', leftAt: new Date() }
             });
 
-            // Count remaining members within the same transaction to avoid race condition
-            const remainingMembers = await tx.user.count({
-                where: { coupleId }
+            // Count remaining ACTIVE members (post soft-leave, so the leaver is
+            // already excluded) within the same transaction to avoid a race.
+            const remainingMembers = await tx.membership.count({
+                where: { groupId: coupleId, status: 'ACTIVE' }
             });
 
             if (remainingMembers === 0) {

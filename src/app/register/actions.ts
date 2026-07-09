@@ -94,7 +94,8 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
                     email,
                     password: hashedPassword,
                     avatar: '👤',
-                    coupleId: couple?.id || undefined,
+                    // Phase 5 (WS1 write-stop): no User.coupleId — the Membership
+                    // create below is the sole group linkage.
                 },
             });
 

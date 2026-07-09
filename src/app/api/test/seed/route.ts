@@ -105,7 +105,6 @@ export async function POST(request: Request) {
           email: emailA,
           password: hashedPassword,
           avatar: '👤',
-          coupleId: couple.id,
         },
       });
 
@@ -115,7 +114,6 @@ export async function POST(request: Request) {
           email: emailB,
           password: hashedPassword,
           avatar: '👤',
-          coupleId: couple.id,
         },
       });
 
@@ -150,7 +148,6 @@ export async function POST(request: Request) {
           email: emailA,
           password: hashedPassword,
           avatar: '👤',
-          coupleId: couple.id,
         },
       });
 
@@ -160,7 +157,6 @@ export async function POST(request: Request) {
           email: emailB,
           password: hashedPassword,
           avatar: '👤',
-          coupleId: couple.id,
         },
       });
 
@@ -214,7 +210,6 @@ export async function POST(request: Request) {
           email: emailA,
           password: hashedPassword,
           avatar: '👤',
-          coupleId: couple.id,
         },
       });
 
@@ -224,7 +219,6 @@ export async function POST(request: Request) {
           email: emailB,
           password: hashedPassword,
           avatar: '👤',
-          coupleId: couple.id,
         },
       });
 
@@ -282,10 +276,10 @@ export async function POST(request: Request) {
       });
 
       const userA = await prisma.user.create({
-        data: { name: 'User A', email: emailA, password: hashedPassword, avatar: '👤', coupleId: couple.id },
+        data: { name: 'User A', email: emailA, password: hashedPassword, avatar: '👤' },
       });
       const userB = await prisma.user.create({
-        data: { name: 'User B', email: emailB, password: hashedPassword, avatar: '👤', coupleId: couple.id },
+        data: { name: 'User B', email: emailB, password: hashedPassword, avatar: '👤' },
       });
 
       await prisma.membership.createMany({
