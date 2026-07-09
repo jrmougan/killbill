@@ -12,8 +12,9 @@ import { redirect } from "next/navigation";
 import { getLastSettlementDate } from "@/lib/finance";
 import { getGroupBalances } from "@/lib/ledger-read";
 import { materializeDueRecurringExpenses, materializeDueRecurringExpensesForOwner } from "@/lib/recurring";
-import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
+import { getGroupMembers, getActiveGroup, getUserGroups } from "@/lib/membership";
 import { ScopeSegment } from "@/components/nav/scope-segment";
+import { GroupSwitcher } from "@/components/nav/group-switcher";
 import { normalizeScope } from "@/lib/scope";
 import { toEuros, formatEuros } from "@/lib/currency";
 import { getCategoryById } from "@/lib/categories";
@@ -32,9 +33,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    // Fetch the user for display; resolve the group via the Membership layer.
+    // Fetch the user for display; resolve the ACTIVE group via the Membership
+    // layer (F4: honours the group-switcher cookie, else the primary group).
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    const groupId = await getPrimaryGroup(userId);
+    const groupId = await getActiveGroup(userId);
 
     if (!user) {
         return <div className="p-10 text-center">Usuario no encontrado. <Link href="/login" className="underline">Login de nuevo</Link></div>;
@@ -48,6 +50,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
     // Resolve the group entity + members only when the user belongs to one.
     const couple = groupId ? await prisma.couple.findUnique({ where: { id: groupId } }) : null;
+    const userGroups = couple ? await getUserGroups(userId) : [];
     const members = couple ? await getGroupMembers(couple.id) : [];
     const partner = members.find(m => m.id !== userId);
     // usersMap always includes the current user so personal expenses render even
@@ -190,7 +193,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         Hola, {user.name}
                     </h1>
                     <div className="text-[13px] text-muted-foreground mt-1">
-                        {couple ? (couple.name ?? "Mi grupo") : "Cuenta personal"}
+                        {couple
+                            ? (userGroups.length > 1
+                                ? <GroupSwitcher groups={userGroups} activeGroupId={groupId!} />
+                                : (couple.name ?? "Mi grupo"))
+                            : "Cuenta personal"}
                     </div>
                 </div>
                 {/* Navigation (Analíticas/Ajustes) now lives in the bottom nav. */}

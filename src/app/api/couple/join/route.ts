@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { getPrimaryGroup, MAX_GROUP_MEMBERS } from '@/lib/membership';
+import { MAX_GROUP_MEMBERS, ACTIVE_GROUP_COOKIE } from '@/lib/membership';
 
 export async function POST(request: Request) {
     try {
@@ -12,13 +13,8 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { code } = body;
 
-        // Phase 4 selector switch: "am I already in a group?" reads the
-        // Membership layer. The transactional re-check below stays on coupleId
-        // (write-side TOCTOU guard) until the gated User.coupleId drop.
-        if (await getPrimaryGroup(userId)) {
-            return NextResponse.json({ error: 'Ya perteneces a un grupo' }, { status: 400 });
-        }
-
+        // F4 (multi-group): a user may belong to several groups, so there is no
+        // blanket "already in a group" block — only a per-group idempotency guard.
         const couple = await prisma.couple.findUnique({
             where: { code: code.toUpperCase() },
             select: { id: true }
@@ -34,7 +30,7 @@ export async function POST(request: Request) {
                 // layer and the Membership row is the sole write (User.coupleId is
                 // no longer written).
                 const existing = await tx.membership.findFirst({
-                    where: { userId, status: 'ACTIVE' },
+                    where: { userId, groupId: couple.id, status: 'ACTIVE' },
                     select: { id: true },
                 });
                 if (existing) throw new Error('ALREADY_IN_COUPLE');
@@ -53,13 +49,18 @@ export async function POST(request: Request) {
             });
         } catch (e) {
             if (e instanceof Error && e.message === 'ALREADY_IN_COUPLE') {
-                return NextResponse.json({ error: 'Ya perteneces a un grupo' }, { status: 400 });
+                return NextResponse.json({ error: 'Ya estás en este grupo' }, { status: 400 });
             }
             if (e instanceof Error && e.message === 'COUPLE_FULL') {
                 return NextResponse.json({ error: 'Este grupo ya está completo' }, { status: 400 });
             }
             throw e;
         }
+
+        // F4: make the just-joined group the active one.
+        (await cookies()).set(ACTIVE_GROUP_COOKIE, couple.id, {
+            httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 365,
+        });
 
         return NextResponse.json({ success: true });
     } catch (error) {

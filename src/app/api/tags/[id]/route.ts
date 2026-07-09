@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { getPrimaryGroup } from '@/lib/membership';
+import { getActiveGroup } from '@/lib/membership';
 
 export async function DELETE(
     _request: Request,
@@ -13,7 +13,7 @@ export async function DELETE(
     const userId = session.userId as string;
 
     // Phase 4 selector switch: resolve my group via the Membership layer.
-    const groupId = await getPrimaryGroup(userId);
+    const groupId = await getActiveGroup(userId);
     if (!groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
     const tag = await prisma.tag.findUnique({ where: { id } });

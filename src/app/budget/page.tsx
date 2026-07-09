@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getPrimaryGroup } from "@/lib/membership";
+import { getActiveGroup } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
@@ -14,7 +14,7 @@ export default async function BudgetPage() {
     const userId = session.userId as string;
 
     // Phase 5 (WS1): resolve the group via the Membership layer.
-    const coupleId = await getPrimaryGroup(userId);
+    const coupleId = await getActiveGroup(userId);
     const hasCouple = Boolean(coupleId);
 
     const now = new Date();

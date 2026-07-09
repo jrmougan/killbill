@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ExpensesListClient } from "./client";
 import { getSession } from "@/lib/auth";
-import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
+import { getGroupMembers, getActiveGroup } from "@/lib/membership";
 import { NoGroupState } from "@/components/ui/no-group-state";
 import { toEuros } from "@/lib/currency";
 import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
@@ -15,7 +15,7 @@ export default async function ExpensesListPage() {
     const userId = session.userId as string;
 
     // Phase 5 (WS1): resolve the group + members via the Membership layer.
-    const groupId = await getPrimaryGroup(userId);
+    const groupId = await getActiveGroup(userId);
     if (!groupId) {
         return <NoGroupState title="Gastos del grupo" />;
     }

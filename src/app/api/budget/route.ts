@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { getPrimaryGroup } from '@/lib/membership';
+import { getActiveGroup } from '@/lib/membership';
 import { toCents } from '@/lib/currency';
 import { CATEGORIES } from '@/lib/categories';
 import { resolveCategoryId } from '@/lib/category-db';
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
 
     // Shared budgets need a couple; personal budgets work for any user.
     // Phase 4 selector switch: the caller's group comes from the Membership layer.
-    const groupId = scope === 'shared' ? await getPrimaryGroup(userId) : null;
+    const groupId = scope === 'shared' ? await getActiveGroup(userId) : null;
     if (scope === 'shared' && !groupId) return NextResponse.json({ budgets: [] });
 
     // Current-month view window [monthStart, monthEnd). Budgets are selected by
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
 
         // Shared budgets require a couple; personal budgets do not.
         // Phase 4 selector switch: the caller's group comes from the Membership layer.
-        const groupId = scope === 'shared' ? await getPrimaryGroup(userId) : null;
+        const groupId = scope === 'shared' ? await getActiveGroup(userId) : null;
         if (scope === 'shared' && !groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
         if (!category || amount === undefined) {

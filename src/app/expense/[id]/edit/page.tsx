@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getPrimaryGroup, getGroupMembers } from "@/lib/membership";
+import { getActiveGroup, getGroupMembers } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
@@ -27,7 +27,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
                 ...CATEGORY_REF_SELECT,
             },
         }),
-        getPrimaryGroup(userId),
+        getActiveGroup(userId),
     ]);
 
     if (!expense) redirect("/dashboard");

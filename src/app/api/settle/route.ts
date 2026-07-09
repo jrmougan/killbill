@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { getPrimaryGroup, getGroupMembers } from '@/lib/membership';
+import { getActiveGroup, getGroupMembers } from '@/lib/membership';
 import { toCents } from '@/lib/currency';
 
 export async function POST(request: Request) {
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
 
         // Phase 4 selector switch: group + members come from the Membership layer
         // (was user.coupleId + couple.members include).
-        const coupleId = await getPrimaryGroup(userId);
+        const coupleId = await getActiveGroup(userId);
         if (!coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
         const members = await getGroupMembers(coupleId);

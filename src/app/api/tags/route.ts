@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { getPrimaryGroup } from '@/lib/membership';
+import { getActiveGroup } from '@/lib/membership';
 
 export async function GET() {
     const session = await getSession();
@@ -9,7 +9,7 @@ export async function GET() {
     const userId = session.userId as string;
 
     // Phase 4 selector switch: resolve my group via the Membership layer.
-    const groupId = await getPrimaryGroup(userId);
+    const groupId = await getActiveGroup(userId);
     if (!groupId) return NextResponse.json({ tags: [] });
 
     const tags = await prisma.tag.findMany({
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
         if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const userId = session.userId as string;
 
-        const groupId = await getPrimaryGroup(userId);
+        const groupId = await getActiveGroup(userId);
         if (!groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
         const body = await request.json();

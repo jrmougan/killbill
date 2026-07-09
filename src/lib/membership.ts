@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/db";
+import { cookies } from "next/headers";
 import type { User } from "@/generated/prisma/client";
+
+/** Cookie holding the user's currently-active group (multi-group support, F4). */
+export const ACTIVE_GROUP_COOKIE = "active_group";
 
 /**
  * Max ACTIVE members per group. Phase "decouple" F3: was a hard cap of 2
@@ -44,6 +48,39 @@ export async function getPrimaryGroup(userId: string): Promise<string | null> {
         select: { groupId: true },
     });
     return membership?.groupId ?? null;
+}
+
+/**
+ * All ACTIVE groups the user belongs to, in a stable order (for the group
+ * switcher). Phase "decouple" F4: a user can be in several groups.
+ */
+export async function getUserGroups(userId: string): Promise<{ id: string; name: string | null }[]> {
+    const memberships = await prisma.membership.findMany({
+        where: { userId, status: "ACTIVE" },
+        orderBy: [{ joinedAt: "asc" }, { groupId: "asc" }],
+        include: { group: { select: { id: true, name: true } } },
+    });
+    return memberships.map((m) => ({ id: m.group.id, name: m.group.name }));
+}
+
+/**
+ * Resolves the user's ACTIVE group: the one stored in the `active_group` cookie
+ * (multi-group, F4) if the user actually belongs to it, else the primary (oldest)
+ * group. This is the "which group am I operating in?" resolver — use it for all
+ * reads/writes scoped to the current group. A tampered/stale cookie is ignored
+ * (the membership check is the guard), so it can never point at a foreign group.
+ */
+export async function getActiveGroup(userId: string): Promise<string | null> {
+    const cookieStore = await cookies();
+    const active = cookieStore.get(ACTIVE_GROUP_COOKIE)?.value;
+    if (active) {
+        const m = await prisma.membership.findFirst({
+            where: { userId, groupId: active, status: "ACTIVE" },
+            select: { groupId: true },
+        });
+        if (m) return m.groupId;
+    }
+    return getPrimaryGroup(userId);
 }
 
 /** Fetch a single membership (for role/status checks). */

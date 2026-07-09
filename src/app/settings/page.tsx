@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getPrimaryGroup, getGroupMembers } from "@/lib/membership";
+import { getActiveGroup, getGroupMembers } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { SettingsClient } from "./settings-client";
 import { Metadata } from "next";
@@ -19,7 +19,7 @@ export default async function SettingsPage() {
     if (!user) redirect("/login");
 
     // Phase 5 (WS1): resolve the group + members via the Membership layer.
-    const groupId = await getPrimaryGroup(userId);
+    const groupId = await getActiveGroup(userId);
     const [couple, members] = groupId
         ? await Promise.all([
             prisma.couple.findUnique({ where: { id: groupId } }),

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { getPrimaryGroup } from '@/lib/membership';
+import { getActiveGroup } from '@/lib/membership';
 import { postSettlementLedger } from '@/lib/ledger';
 
 export async function PATCH(
@@ -28,7 +28,7 @@ export async function PATCH(
     if (!settlement) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // Enforce Couple Context (Phase 4 selector switch: Membership layer).
-    const groupId = await getPrimaryGroup(userId);
+    const groupId = await getActiveGroup(userId);
 
     if (settlement.coupleId !== groupId) {
         return NextResponse.json({ error: 'Settlement does not belong to your couple' }, { status: 403 });

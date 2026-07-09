@@ -8,7 +8,7 @@ import { getSession } from "@/lib/auth";
 import { formatCurrency, formatEuros } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
-import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
+import { getGroupMembers, getActiveGroup } from "@/lib/membership";
 import { PromoteButton } from "@/components/expense/promote-button";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -59,7 +59,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
     const partner = members.find(m => m.id !== expense.paidById);
 
     // A personal expense can be promoted to shared if the owner belongs to a group.
-    const myGroupId = isPersonal && expense.ownerId === userId ? await getPrimaryGroup(userId) : null;
+    const myGroupId = isPersonal && expense.ownerId === userId ? await getActiveGroup(userId) : null;
     const canPromote = Boolean(myGroupId);
 
     return (

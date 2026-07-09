@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth";
 import { calculateSplitAmountsFromLines, hasExclusiveReceiptLines } from "@/lib/splits";
 import { RECEIPT_LINES_SELECT, linesForSplit } from "@/lib/receipt-read";
 import { addInterval } from "@/lib/recurring";
-import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
+import { getGroupMembers, getActiveGroup } from "@/lib/membership";
 import { postExpenseLedger } from "@/lib/ledger";
 
 /**
@@ -25,7 +25,7 @@ export async function POST(
         const userId = session.userId as string;
 
         // Phase 4 selector switch: the caller's group comes from the Membership layer.
-        const groupId = await getPrimaryGroup(userId);
+        const groupId = await getActiveGroup(userId);
         if (!groupId) {
             return NextResponse.json({ error: 'Necesitas un grupo para compartir un gasto' }, { status: 400 });
         }

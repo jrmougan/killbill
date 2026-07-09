@@ -16,7 +16,7 @@ vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
 // on the personal->shared promotion + split generation.
 vi.mock('@/lib/membership', () => ({
     getGroupMembers: async () => [{ id: 'u1' }, { id: 'u2' }],
-    getPrimaryGroup: (...a: unknown[]) => mockGetPrimaryGroup(...a),
+    getActiveGroup: (...a: unknown[]) => mockGetPrimaryGroup(...a),
 }));
 vi.mock('@/lib/ledger', () => ({ postExpenseLedger: vi.fn() }));
 vi.mock('@/lib/db', () => ({

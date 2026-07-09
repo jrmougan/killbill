@@ -8,6 +8,9 @@ const mockExpenseFindMany = vi.fn();
 const mockCategoryFindFirst = vi.fn();
 
 vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
+// No active-group cookie in tests → getActiveGroup falls back to getPrimaryGroup
+// (mocked prisma.membership.findFirst below).
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock('@/lib/db', () => ({
     prisma: {
         // getPrimaryGroup (real module) resolves the caller's group here.

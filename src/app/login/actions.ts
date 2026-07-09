@@ -5,7 +5,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { signToken } from '@/lib/auth';
-import { getPrimaryGroup, MAX_GROUP_MEMBERS } from '@/lib/membership';
+import { MAX_GROUP_MEMBERS } from '@/lib/membership';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import type { AuthState } from '@/lib/auth-types';
 
@@ -44,12 +44,11 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
             return { error: 'Credenciales incorrectas' };
         }
 
-        // Handle couple invite (explicit + safe): only join when the user has no
-        // group yet, the code is valid, and the couple still has room. Done
-        // atomically so two concurrent joins can't overfill the couple.
-        // Phase 5 (WS1 write-stop): the Membership row is the sole write and the
-        // guards read the Membership layer (User.coupleId is no longer written).
-        if (inviteCode && !(await getPrimaryGroup(user.id))) {
+        // Handle couple invite (explicit + safe): join the invited group when the
+        // code is valid and the group still has room. F4 (multi-group): joining is
+        // allowed even if the user already belongs to other groups; only a
+        // per-group idempotency guard applies. Done atomically.
+        if (inviteCode) {
             const couple = await prisma.couple.findUnique({
                 where: { code: inviteCode },
                 select: { id: true },
@@ -58,7 +57,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
             if (couple) {
                 await prisma.$transaction(async (tx) => {
                     const existing = await tx.membership.findFirst({
-                        where: { userId: user.id, status: 'ACTIVE' },
+                        where: { userId: user.id, groupId: couple.id, status: 'ACTIVE' },
                         select: { id: true },
                     });
                     if (existing) return;

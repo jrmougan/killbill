@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { SettlementHistoryClient } from "./client";
 import { getSession } from "@/lib/auth";
-import { getPrimaryGroup } from "@/lib/membership";
+import { getActiveGroup } from "@/lib/membership";
 import { NoGroupState } from "@/components/ui/no-group-state";
 
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ export default async function SettlementHistoryPage() {
     const userId = session.userId as string;
 
     // Phase 4 selector switch: resolve my group via the Membership layer.
-    const groupId = await getPrimaryGroup(userId);
+    const groupId = await getActiveGroup(userId);
 
     if (!groupId) return <NoGroupState title="Historial de liquidaciones" />;
 

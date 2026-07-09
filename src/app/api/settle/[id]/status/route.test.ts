@@ -6,6 +6,9 @@ const mockSettlementUpdate = vi.fn();
 const mockMembershipFindFirst = vi.fn();
 
 vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
+// No active-group cookie in tests → getActiveGroup falls back to getPrimaryGroup,
+// which resolves via the mocked prisma.membership.findFirst below.
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
 // Ledger posting is covered by scripts/reconcile-ledger.ts + the ledger helper;
 // here it is a no-op so this test stays focused on authz + transitions.
 vi.mock('@/lib/ledger', () => ({ postSettlementLedger: vi.fn() }));

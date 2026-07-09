@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { getPrimaryGroup } from '@/lib/membership';
+import { getActiveGroup } from '@/lib/membership';
 
 export async function POST(_request: Request) {
     const session = await getSession();
@@ -11,7 +11,7 @@ export async function POST(_request: Request) {
     try {
         // Phase 4 selector switch: resolve my group via the Membership layer.
         // All coupleId writes below stay (dual-write) until the gated drop.
-        const coupleId = await getPrimaryGroup(userId);
+        const coupleId = await getActiveGroup(userId);
 
         if (!coupleId) {
             return NextResponse.json({ error: 'No estás en ningún grupo' }, { status: 400 });

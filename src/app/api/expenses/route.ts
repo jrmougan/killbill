@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { toCents } from '@/lib/currency';
 import { calculateSplitAmounts, hasExclusiveReceiptItems } from '@/lib/splits';
-import { getGroupMembers, getPrimaryGroup } from '@/lib/membership';
+import { getGroupMembers, getActiveGroup } from '@/lib/membership';
 import { resolveCategoryId } from '@/lib/category-db';
 import { buildReceiptLineItems } from '@/lib/receipt';
 import { postExpenseLedger } from '@/lib/ledger';
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
         // Phase 4 selector switch: my group comes from the Membership layer.
         // Shared scope needs a couple; personal scope works for any user.
-        const groupId = scope === 'shared' ? await getPrimaryGroup(userId) : null;
+        const groupId = scope === 'shared' ? await getActiveGroup(userId) : null;
         if (scope === 'shared' && !groupId) {
             return NextResponse.json({ expenses: [], nextCursor: null });
         }
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
         // expenses require a couple (existing behaviour). Phase 4 selector switch:
         // the caller's group is resolved via the Membership layer once per request.
         const isPersonalExpense = isPersonal === true || visibilityInput === 'PERSONAL';
-        const groupId = isPersonalExpense ? null : await getPrimaryGroup(userId);
+        const groupId = isPersonalExpense ? null : await getActiveGroup(userId);
         if (!isPersonalExpense && !groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
         // Validate description is a non-empty string (missing/empty previously 500'd at the DB layer).

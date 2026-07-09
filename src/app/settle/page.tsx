@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { resolveMyDebts, getLastSettlementDate } from "@/lib/finance";
 import { getGroupBalances } from "@/lib/ledger-read";
-import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
+import { getGroupMembers, getActiveGroup } from "@/lib/membership";
 import { NoGroupState } from "@/components/ui/no-group-state";
 import { calculateSplitAmounts } from "@/lib/splits";
 import { toEuros } from "@/lib/currency";
@@ -18,7 +18,7 @@ export default async function SettlePage() {
     const userId = session.userId as string;
 
     // Phase 5 (WS1): resolve the group + members via the Membership layer.
-    const groupId = await getPrimaryGroup(userId);
+    const groupId = await getActiveGroup(userId);
     if (!groupId) {
         return <NoGroupState title="Liquidar deudas" />;
     }
