@@ -163,7 +163,6 @@ export async function PATCH(
             description: description ?? expense.description,
             amount: amountCents,
             category: category ?? expense.category,
-            receiptData: receiptItems ?? expense.receiptData,
         };
         if (notes !== undefined) updateData.notes = notes;
         if (isRecurring !== undefined) updateData.isRecurring = isRecurring;
@@ -240,8 +239,9 @@ export async function PATCH(
                 }
             }
 
-            // Keep relational receipt line items in sync when the receipt changes
-            // (Phase 2c), mirroring the receiptData JSON rewrite above.
+            // Rewrite the relational receipt line items when the receipt changes
+            // (the source of truth; the legacy receiptData JSON column is no longer
+            // written — Phase 5 stop-dual-write).
             if (receiptItems !== undefined) {
                 await tx.receiptLineItem.deleteMany({ where: { expenseId: id } });
                 const lines = buildReceiptLineItems(receiptItems, memberIds);

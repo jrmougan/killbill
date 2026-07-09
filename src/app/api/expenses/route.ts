@@ -164,7 +164,6 @@ export async function POST(request: Request) {
             visibility: isPersonalExpense ? 'PERSONAL' : 'SHARED',
             coupleId: isPersonalExpense ? null : groupId,
             receiptUrl: receiptUrl || null,
-            receiptData: receiptData || undefined, // Prisma Json handling
             notes: notes || null,
             isRecurring: isRecurring ?? false,
             recurringInterval: normalizedInterval,
@@ -224,7 +223,8 @@ export async function POST(request: Request) {
             }
         }
 
-        // Dual-write relational receipt line items alongside the receiptData JSON
+        // Persist relational receipt line items (the source of truth; the legacy
+        // receiptData JSON column is no longer written — Phase 5 stop-dual-write)
         // (Phase 2c). assignedTo is validated against couple members.
         const lineItems = buildReceiptLineItems(receiptData, memberIds);
         if (lineItems.length > 0) {
