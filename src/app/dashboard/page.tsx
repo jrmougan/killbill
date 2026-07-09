@@ -13,8 +13,7 @@ import { getLastSettlementDate } from "@/lib/finance";
 import { getGroupBalances } from "@/lib/ledger-read";
 import { materializeDueRecurringExpenses, materializeDueRecurringExpensesForOwner } from "@/lib/recurring";
 import { getGroupMembers, getActiveGroup, getUserGroups } from "@/lib/membership";
-import { ScopeSegment } from "@/components/nav/scope-segment";
-import { GroupSwitcher } from "@/components/nav/group-switcher";
+import { SpaceSwitcher } from "@/components/nav/space-switcher";
 import { normalizeScope } from "@/lib/scope";
 import { toEuros, formatEuros } from "@/lib/currency";
 import { getCategoryById } from "@/lib/categories";
@@ -53,6 +52,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const couple = groupId ? await prisma.couple.findUnique({ where: { id: groupId } }) : null;
     const userGroups = couple ? await getUserGroups(userId) : [];
     const members = couple ? await getGroupMembers(couple.id) : [];
+
+    // Spaces for the header switcher: Personal first, then one row per group.
+    // Presentation + navigation only — the actual lens is still `scope` below.
+    const spaces = [
+        { key: "personal", kind: "personal" as const, name: "Personal", sub: "Economía individual" },
+        ...userGroups.map((g) => ({
+            key: g.id,
+            kind: "group" as const,
+            name: g.name ?? "Mi grupo",
+            sub: `${g.memberCount} ${g.memberCount === 1 ? "miembro" : "miembros"}`,
+        })),
+    ];
+    // The active/checked space: the group when we're in a group lens, else Personal.
+    const activeSpaceKey = groupId && scope !== "personal" ? groupId : "personal";
     const partner = members.find(m => m.id !== userId);
     // usersMap always includes the current user so personal expenses render even
     // for a group-less user.
@@ -188,32 +201,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
     return (
         <div className="flex flex-col h-full min-h-screen p-4 pb-24 space-y-6 relative">
-            <header className="flex justify-between items-start pt-2">
-                <div>
-                    <h1 className="text-[23px] font-bold tracking-[-0.02em] text-foreground">
-                        Hola, {user.name}
-                    </h1>
-                    <div className="text-[13px] text-muted-foreground mt-1">
-                        {couple
-                            ? (userGroups.length > 1
-                                ? <GroupSwitcher groups={userGroups} activeGroupId={groupId!} />
-                                : (couple.name ?? "Mi grupo"))
-                            : "Cuenta personal"}
-                    </div>
-                </div>
-                {/* Navigation (Analíticas/Ajustes) now lives in the bottom nav. */}
-                <div className="h-[38px] w-[38px] rounded-full bg-secondary border border-[color:var(--line)] flex items-center justify-center font-bold text-sm text-primary overflow-hidden">
+            <header className="flex justify-between items-center pt-2">
+                <SpaceSwitcher spaces={spaces} activeSpaceKey={activeSpaceKey} />
+                {/* Profile avatar → account settings. Navigation (Analíticas/Ajustes) lives in the bottom nav. */}
+                <Link href="/settings" className="h-[38px] w-[38px] rounded-full bg-secondary border border-[color:var(--line)] flex items-center justify-center font-bold text-sm text-primary overflow-hidden shrink-0">
                     {isAvatarUrl(user.avatar) ? (
                         // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                         <img src={user.avatar!} alt={user.name} className="h-full w-full object-cover" />
                     ) : (
                         user.name.charAt(0).toUpperCase()
                     )}
-                </div>
+                </Link>
             </header>
-
-            {/* Scope lens: Todo · Común · Personal — only meaningful with a group. */}
-            {groupId && <ScopeSegment scope={scope} />}
 
             {/* Personal spend this month — a neutral total, not a signed balance. */}
             {scope !== "comun" && (

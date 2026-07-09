@@ -54,13 +54,28 @@ export async function getPrimaryGroup(userId: string): Promise<string | null> {
  * All ACTIVE groups the user belongs to, in a stable order (for the group
  * switcher). Phase "decouple" F4: a user can be in several groups.
  */
-export async function getUserGroups(userId: string): Promise<{ id: string; name: string | null }[]> {
+export async function getUserGroups(
+    userId: string
+): Promise<{ id: string; name: string | null; memberCount: number }[]> {
     const memberships = await prisma.membership.findMany({
         where: { userId, status: "ACTIVE" },
         orderBy: [{ joinedAt: "asc" }, { groupId: "asc" }],
-        include: { group: { select: { id: true, name: true } } },
+        include: {
+            group: {
+                select: {
+                    id: true,
+                    name: true,
+                    // ACTIVE-only member count — mirrors getGroupMembers semantics.
+                    _count: { select: { memberships: { where: { status: "ACTIVE" } } } },
+                },
+            },
+        },
     });
-    return memberships.map((m) => ({ id: m.group.id, name: m.group.name }));
+    return memberships.map((m) => ({
+        id: m.group.id,
+        name: m.group.name,
+        memberCount: m.group._count.memberships,
+    }));
 }
 
 /**
