@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ExpensesListClient } from "./client";
 import { getSession } from "@/lib/auth";
 import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
+import { NoGroupState } from "@/components/ui/no-group-state";
 import { toEuros } from "@/lib/currency";
 import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
 
@@ -16,7 +17,7 @@ export default async function ExpensesListPage() {
     // Phase 5 (WS1): resolve the group + members via the Membership layer.
     const groupId = await getPrimaryGroup(userId);
     if (!groupId) {
-        return redirect("/dashboard");
+        return <NoGroupState title="Gastos del grupo" />;
     }
 
     const members = await getGroupMembers(groupId);

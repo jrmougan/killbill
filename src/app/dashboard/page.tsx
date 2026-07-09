@@ -4,7 +4,7 @@ import { ExpenseCard } from "@/components/dashboard/expense-card";
 import { User, Expense } from "@/types";
 import { InviteCard } from "@/components/dashboard/invite-card";
 import { JoinGroupCard } from "@/components/dashboard/join-group-card";
-import { Plus, Heart, Settings, ArrowLeftRight, Lock } from "lucide-react";
+import { Plus, Heart, ArrowLeftRight, Lock } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
@@ -32,12 +32,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    // Scope is a lens over the same home: 'todo' (default), 'comun' (couple only)
-    // or 'personal' (private only). Read from ?scope= so it survives navigation.
-    const scope = normalizeScope((await searchParams).scope);
-
-    // Fetch the user for display; resolve the group via the Membership layer
-    // (Phase 5 WS1: no longer via the user.couple relation).
+    // Fetch the user for display; resolve the group via the Membership layer.
     const user = await prisma.user.findUnique({ where: { id: userId } });
     const groupId = await getPrimaryGroup(userId);
 
@@ -45,95 +40,40 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         return <div className="p-10 text-center">Usuario no encontrado. <Link href="/login" className="underline">Login de nuevo</Link></div>;
     }
 
-    // No couple - show onboarding
-    if (!groupId) {
-        return (
-            <div className="flex flex-col h-full min-h-screen p-4 space-y-6">
-                <header className="flex justify-between items-center pt-2">
-                    <div>
-                        <h1 className="text-[23px] font-bold tracking-[-0.02em] text-foreground">
-                            Hola, {user.name}
-                        </h1>
-                        <p className="text-[13px] text-muted-foreground mt-1">¡Bienvenido a EQUIL!</p>
-                    </div>
-                    <Link href="/settings">
-                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
-                            <Settings className="h-5 w-5 text-muted-foreground" />
-                        </Button>
-                    </Link>
-                </header>
+    // Scope is a lens over the home: 'todo' (default), 'comun' (group only) or
+    // 'personal' (private only). A user with NO group has only the personal lens —
+    // the app is fully usable solo, with an optional "create/join a group" CTA
+    // instead of a blocking onboarding wall.
+    const scope = groupId ? normalizeScope((await searchParams).scope) : "personal";
 
-                <GlassCard className="text-center py-10 space-y-6">
-                    <div className="space-y-2">
-                        <Heart className="h-16 w-16 text-pink-500 mx-auto animate-pulse" />
-                        <h2 className="text-2xl font-bold">Empieza con tu pareja</h2>
-                        <p className="text-muted-foreground text-sm max-w-[280px] mx-auto">
-                            Gestiona vuestros gastos compartidos, viajes y ahorros en un solo lugar.
-                        </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 px-4">
-                        <form action={async () => {
-                            'use server';
-                            const code = randomBytes(3).toString('hex').toUpperCase();
-                            // Phase 5 (WS1 write-stop): the OWNER Membership is the
-                            // sole group linkage — no User.coupleId connect.
-                            await prisma.$transaction(async (tx) => {
-                                const created = await tx.couple.create({
-                                    data: {
-                                        name: "Nuestra Pareja",
-                                        code,
-                                    },
-                                });
-                                await tx.membership.create({
-                                    data: { groupId: created.id, userId, role: 'OWNER', status: 'ACTIVE' },
-                                });
-                            });
-                            redirect("/dashboard");
-                        }}>
-                            <Button type="submit" size="lg" className="w-full h-16 text-lg font-bold">
-                                Crear Pareja <Heart className="ml-2 h-5 w-5 fill-current" />
-                            </Button>
-                        </form>
-                    </div>
-
-                    <div className="pt-4 px-4">
-                        <div className="relative mb-6">
-                            <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-white/10"></span></div>
-                            <div className="relative flex justify-center text-xs uppercase"><span className="bg-black px-2 text-muted-foreground">O únete a una</span></div>
-                        </div>
-                        <JoinGroupCard />
-                    </div>
-                </GlassCard>
-            </div>
-        );
-    }
-
-    // Couple exists - show normal dashboard. Load the group entity by id
-    // (getPrimaryGroup already proved membership).
-    const couple = await prisma.couple.findUnique({ where: { id: groupId } });
-    if (!couple) {
-        return <div className="p-10 text-center">Pareja no encontrada. <Link href="/login" className="underline">Login de nuevo</Link></div>;
-    }
-    const members = await getGroupMembers(couple.id);
+    // Resolve the group entity + members only when the user belongs to one.
+    const couple = groupId ? await prisma.couple.findUnique({ where: { id: groupId } }) : null;
+    const members = couple ? await getGroupMembers(couple.id) : [];
     const partner = members.find(m => m.id !== userId);
-    const usersMap = members.reduce<Record<string, User>>((acc, u) => ({ ...acc, [u.id]: u }), {});
+    // usersMap always includes the current user so personal expenses render even
+    // for a group-less user.
+    const usersMap = members.reduce<Record<string, User>>(
+        (acc, u) => ({ ...acc, [u.id]: u }),
+        { [user.id]: user as unknown as User }
+    );
 
-    // Lazily materialize any due recurring expenses so they show up automatically.
+    // Lazily materialize any due couple recurring expenses (skip when group-less).
     // A failure here must never block the dashboard render.
-    try {
-        await materializeDueRecurringExpenses(couple.id);
-    } catch (err) {
-        console.error("Failed to materialize recurring expenses", err);
+    if (couple) {
+        try {
+            await materializeDueRecurringExpenses(couple.id);
+        } catch (err) {
+            console.error("Failed to materialize recurring expenses", err);
+        }
     }
 
     // Fetch ALL shared Expenses for balance calculation.
     // Personal expenses (visibility PERSONAL) are private and must never affect
     // the couple's balances.
-    const allExpenses = await prisma.expense.findMany({
+    const allExpenses = couple ? await prisma.expense.findMany({
         where: { coupleId: couple.id, visibility: "SHARED" },
         include: { splits: true, ...CATEGORY_REF_SELECT },
-    });
+    }) : [];
 
     // Personal ledger (private to this user). Materialize the user's own recurring
     // personal sources (the couple runner above never sees them: coupleId is null),
@@ -154,16 +94,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             .reduce((sum, e) => sum + e.amount, 0)
     );
 
-    // Fetch Settlements
-    const settlements = await prisma.settlement.findMany({
+    // Fetch Settlements (none when group-less)
+    const settlements = couple ? await prisma.settlement.findMany({
         where: { coupleId: couple.id },
-    });
+    }) : [];
 
     // Balances now come from the double-entry ledger (Σ LedgerEntry per active
     // member's Account). reconcile-ledger.ts proves this equals calculateBalances
     // exactly, so displayed balances are unchanged — the ledger is now the source
     // of truth (finance.ts retained for analytics + the debt-matching algorithm).
-    const balances = await getGroupBalances(couple.id);
+    const balances = couple ? await getGroupBalances(couple.id) : {};
 
     // Balance is in CENTS, convert to euros for display
     let myBalanceCents = balances[userId] || 0;
@@ -250,7 +190,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         Hola, {user.name}
                     </h1>
                     <div className="text-[13px] text-muted-foreground mt-1">
-                        {partner ? `Pareja con ${partner.name}` : "Esperando a tu pareja..."}
+                        {partner ? `Pareja con ${partner.name}` : groupId ? "Esperando a tu pareja..." : "Cuenta personal"}
                     </div>
                 </div>
                 {/* Navigation (Analíticas/Ajustes) now lives in the bottom nav. */}
@@ -264,8 +204,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 </div>
             </header>
 
-            {/* Scope lens: Todo · Común · Personal */}
-            <ScopeSegment scope={scope} />
+            {/* Scope lens: Todo · Común · Personal — only meaningful with a group. */}
+            {groupId && <ScopeSegment scope={scope} />}
 
             {/* Personal spend this month — a neutral total, not a signed balance. */}
             {scope !== "comun" && (
@@ -427,7 +367,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 })()}
             </section>
 
-            {!partner && <InviteCard code={couple.code} />}
+            {couple && !partner && <InviteCard code={couple.code} />}
             </>
             )}
 
@@ -522,6 +462,32 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     )}
                 </div>
             </section>
+
+            {/* Optional, non-blocking group CTA for a solo user — replaces the old
+                onboarding wall. Shared expenses are opt-in, not required. */}
+            {!groupId && (
+                <GlassCard className="p-5 space-y-4 mt-2">
+                    <div className="flex items-center gap-3">
+                        <Heart className="h-5 w-5 text-pink-500 shrink-0" />
+                        <div className="min-w-0">
+                            <h3 className="font-semibold text-[15px] text-foreground">¿Gastos compartidos?</h3>
+                            <p className="text-[13px] text-muted-foreground">Crea un grupo o únete a uno para repartir gastos.</p>
+                        </div>
+                    </div>
+                    <form action={async () => {
+                        'use server';
+                        const code = randomBytes(3).toString('hex').toUpperCase();
+                        await prisma.$transaction(async (tx) => {
+                            const created = await tx.couple.create({ data: { name: "Mi grupo", code } });
+                            await tx.membership.create({ data: { groupId: created.id, userId, role: 'OWNER', status: 'ACTIVE' } });
+                        });
+                        redirect("/dashboard");
+                    }}>
+                        <Button type="submit" size="sm" className="w-full">Crear un grupo</Button>
+                    </form>
+                    <JoinGroupCard />
+                </GlassCard>
+            )}
 
             {partner || scope === "personal" ? (
                 <div className="fixed bottom-[92px] right-6 z-50">

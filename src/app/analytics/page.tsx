@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
+import { NoGroupState } from "@/components/ui/no-group-state";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { calculateBalances } from "@/lib/finance";
@@ -22,7 +23,7 @@ export default async function AnalyticsPage() {
 
     // Phase 5 (WS1): resolve the group + members via the Membership layer.
     const groupId = await getPrimaryGroup(userId);
-    if (!groupId) redirect("/dashboard");
+    if (!groupId) return <NoGroupState title="Análisis de grupo" />;
 
     const members = await getGroupMembers(groupId);
 

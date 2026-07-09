@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { resolveMyDebts, getLastSettlementDate } from "@/lib/finance";
 import { getGroupBalances } from "@/lib/ledger-read";
 import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
+import { NoGroupState } from "@/components/ui/no-group-state";
 import { calculateSplitAmounts } from "@/lib/splits";
 import { toEuros } from "@/lib/currency";
 import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
@@ -19,7 +20,7 @@ export default async function SettlePage() {
     // Phase 5 (WS1): resolve the group + members via the Membership layer.
     const groupId = await getPrimaryGroup(userId);
     if (!groupId) {
-        return redirect("/dashboard");
+        return <NoGroupState title="Liquidar deudas" />;
     }
 
     const members = await getGroupMembers(groupId);
