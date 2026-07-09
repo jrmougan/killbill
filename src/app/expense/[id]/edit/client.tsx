@@ -40,6 +40,7 @@ interface EditExpenseClientProps {
     expenseId: string;
     userId: string;
     partner: { id: string; name: string } | null;
+    members: { id: string; name: string }[];
     initialAmount: number;
     initialDescription: string;
     initialCategory: string;
@@ -59,6 +60,7 @@ export function EditExpenseClient({
     expenseId,
     userId,
     partner,
+    members,
     initialAmount,
     initialDescription,
     initialCategory,
@@ -113,6 +115,9 @@ export function EditExpenseClient({
     const [recurringInterval, setRecurringInterval] = useState<RecurringInterval>(initialRecurringInterval);
     const [recurringExpanded, setRecurringExpanded] = useState(initialIsRecurring);
 
+    // 2-member groups keep the "me vs partner" split modes; larger groups (family)
+    // edit as an N-way equal split (F5). The backend recalc is N-way already.
+    const isTwoMember = members.length === 2;
     const partnerPercent = 100 - myPercent;
     const amountNum = parseFloat(amount) || 0;
     const myAmount = ((amountNum * myPercent) / 100).toFixed(2);
@@ -247,7 +252,7 @@ export function EditExpenseClient({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (splitMode === "custom" && myPercent + partnerPercent !== 100) {
+        if (isTwoMember && splitMode === "custom" && myPercent + partnerPercent !== 100) {
             alert("Los porcentajes deben sumar 100%");
             return;
         }
@@ -280,20 +285,27 @@ export function EditExpenseClient({
                 recurringInterval: isRecurring ? recurringInterval : undefined,
             };
 
-            if (hasItemAssignments && partner) {
-                const myCents = Math.round(itemSplitMyAmount * 100);
-                bodyPayload.customSplits = [
-                    { userId, amount: myCents },
-                    { userId: partner.id, amount: amountCents - myCents },
-                ];
-            } else if (splitMode === "solo" && partner) {
-                bodyPayload.splitWithPartner = false;
-            } else if (splitMode === "custom" && partner) {
-                const myCents = Math.round((amountCents * myPercent) / 100);
-                bodyPayload.customSplits = [
-                    { userId, amount: myCents },
-                    { userId: partner.id, amount: amountCents - myCents },
-                ];
+            // The custom %, per-item and solo modes are 2-member-only; larger groups
+            // recalc as an N-way equal split (splitWithPartner → the API divides
+            // equally among ALL members).
+            if (isTwoMember && partner) {
+                if (hasItemAssignments) {
+                    const myCents = Math.round(itemSplitMyAmount * 100);
+                    bodyPayload.customSplits = [
+                        { userId, amount: myCents },
+                        { userId: partner.id, amount: amountCents - myCents },
+                    ];
+                } else if (splitMode === "solo") {
+                    bodyPayload.splitWithPartner = false;
+                } else if (splitMode === "custom") {
+                    const myCents = Math.round((amountCents * myPercent) / 100);
+                    bodyPayload.customSplits = [
+                        { userId, amount: myCents },
+                        { userId: partner.id, amount: amountCents - myCents },
+                    ];
+                } else {
+                    bodyPayload.splitWithPartner = true;
+                }
             } else {
                 bodyPayload.splitWithPartner = true;
             }
@@ -490,7 +502,7 @@ export function EditExpenseClient({
                                         <div className="font-mono font-bold text-[11px] w-14 text-right flex-shrink-0">
                                             {item.total.toFixed(2)}
                                         </div>
-                                        {partner && (
+                                        {isTwoMember && partner && (
                                             <div className="flex items-center flex-shrink-0 rounded-lg overflow-hidden border border-white/10 text-[9px] font-bold">
                                                 <button type="button" onClick={() => setItemAssignment(idx, null)}
                                                     className={cn("px-1.5 py-1 transition-colors", item.assignedTo === null ? "bg-primary text-white" : "text-muted-foreground hover:bg-white/10")}
@@ -531,6 +543,11 @@ export function EditExpenseClient({
                     <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 text-sm text-muted-foreground">
                         <User className="h-4 w-4 text-primary" />
                         Gasto personal — privado, sin reparto
+                    </div>
+                ) : !isTwoMember ? (
+                    <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 text-sm text-muted-foreground">
+                        <Heart className="h-4 w-4 text-primary" />
+                        Se reparte a partes iguales entre {members.length} miembros
                     </div>
                 ) : (
                 <div className="space-y-4">
