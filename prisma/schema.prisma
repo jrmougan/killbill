@@ -210,6 +210,11 @@ model Expense {
 
   notes String?
 
+  // Bank CSV import (Phase "decouple" F2): content fingerprint of an imported
+  // row (sha256 of ownerId|date|amountCents|description) — unique so re-importing
+  // the same statement never duplicates. NULL for manually-created expenses.
+  importFingerprint String? @unique
+
   paidById String
   paidBy   User   @relation("Payer", fields: [paidById], references: [id], onDelete: Cascade)
 

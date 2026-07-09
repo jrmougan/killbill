@@ -376,7 +376,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     <h2 className="text-[13px] font-semibold tracking-[0.04em] uppercase text-muted-foreground">
                         {scope === "personal" ? "Movimientos personales" : "Recientes"}
                     </h2>
-                    {scope !== "personal" && (allExpenses.length > 0 || settlements.length > 0) && (
+                    {scope === "personal" ? (
+                        <Link href="/expenses/import" className="text-[13px] text-primary hover:underline">
+                            Importar CSV →
+                        </Link>
+                    ) : (allExpenses.length > 0 || settlements.length > 0) && (
                         <Link href="/expenses/list" className="text-[13px] text-primary hover:underline">
                             Ver todos →
                         </Link>
