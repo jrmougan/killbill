@@ -33,8 +33,11 @@ export function ExpenseCard({ expense, paidByUser, allUsers, isPersonal = false 
 
     return (
         <Link href={`/expense/${expense.id}`}>
-            <div className="flex items-center gap-[13px] p-[13px] rounded-2xl bg-[hsl(var(--surface))] border border-white/5 cursor-pointer transition-all duration-150 hover:border-white/[0.14] active:scale-[0.99] min-w-0">
-                <div className="w-[42px] h-[42px] rounded-[11px] flex items-center justify-center text-xl shrink-0 bg-[hsl(var(--surface-raised))] border border-white/5">
+            <div className="flex items-center gap-[13px] p-[13px] rounded-2xl bg-card border border-[color:var(--line-2)] cursor-pointer transition-all duration-150 hover:border-[color:var(--accent-border)] active:scale-[0.99] min-w-0">
+                <div
+                    className="w-[42px] h-[42px] rounded-[11px] flex items-center justify-center text-xl shrink-0"
+                    style={{ backgroundColor: `${category.hex}20` }}
+                >
                     {category.emoji}
                 </div>
 
@@ -48,7 +51,7 @@ export function ExpenseCard({ expense, paidByUser, allUsers, isPersonal = false 
                         ) : (
                             <>
                                 <span className="text-[11px] text-muted-foreground truncate">{paidByUser.name} pagó</span>
-                                <span className="h-[2px] w-[2px] rounded-full bg-white/20 shrink-0" />
+                                <span className="h-[2px] w-[2px] rounded-full bg-[color:var(--ink-3)] shrink-0" />
                                 <span className="text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">{beneficiaryText}</span>
                             </>
                         )}

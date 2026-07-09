@@ -202,7 +202,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     </div>
                 </div>
                 {/* Navigation (Analíticas/Ajustes) now lives in the bottom nav. */}
-                <div className="h-[38px] w-[38px] rounded-full bg-[hsl(var(--surface-raised))] border border-white/[0.08] flex items-center justify-center font-bold text-sm text-primary overflow-hidden">
+                <div className="h-[38px] w-[38px] rounded-full bg-secondary border border-[color:var(--line)] flex items-center justify-center font-bold text-sm text-primary overflow-hidden">
                     {isAvatarUrl(user.avatar) ? (
                         // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                         <img src={user.avatar!} alt={user.name} className="h-full w-full object-cover" />
@@ -217,7 +217,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
             {/* Personal spend this month — a neutral total, not a signed balance. */}
             {scope !== "comun" && (
-                <div className="rounded-[16px] bg-[hsl(var(--surface))] border border-white/5 px-5 py-4 flex items-center justify-between gap-3">
+                <div className="rounded-[16px] bg-card border border-[color:var(--line)] px-5 py-4 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                         <span className="text-[11px] uppercase font-semibold tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
                             <Lock className="h-3 w-3" /> Personal este mes
@@ -234,7 +234,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             {scope !== "personal" && (
             <>
             <section className="grid grid-cols-1 gap-4">
-                <GlassCard className="p-0 flex flex-col items-center justify-center text-center overflow-hidden rounded-[20px]">
+                <GlassCard className="p-0 flex flex-col items-center justify-center text-center overflow-hidden rounded-[20px] bg-card border border-[color:var(--line)]">
                     {!partner ? (
                         <div className="p-6">
                             <span className="text-[11px] uppercase font-semibold tracking-[0.18em] text-muted-foreground mb-1 block">Tu balance</span>
@@ -251,7 +251,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                     data-testid="balance-amount"
                                     className={cn(
                                         "text-[40px] leading-none font-mono font-bold tracking-[-0.02em] mt-2",
-                                        myBalanceCents > 0 ? "text-emerald-400" : myBalanceCents < 0 ? "text-primary" : "text-foreground"
+                                        myBalanceCents > 0 ? "text-[color:var(--positive)]" : myBalanceCents < 0 ? "text-destructive" : "text-foreground"
                                     )}
                                 >
                                     {myBalanceCents > 0 ? "+" : ""}{formatEuros(myBalance)}
@@ -277,7 +277,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                     />
 
                                     <div className="pb-[22px] px-6">
-                                        <span className="text-xs font-semibold tracking-[0.04em] text-[#a1a1aa]">
+                                        <span className="text-xs font-semibold tracking-[0.04em] text-muted-foreground">
                                             {myBalanceCents > 0 ? `Te deben ${formatEuros(myBalance)}` :
                                                 myBalanceCents < 0 ? `Debes ${formatEuros(Math.abs(myBalance))}` : "En equilibrio"}
                                         </span>
@@ -295,7 +295,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
             {/* Dashboard Actions */}
             <Link href="/settle" className="block">
-                <div className="w-full h-[50px] rounded-[13px] bg-[hsl(var(--surface))] border border-white/[0.08] text-foreground font-semibold text-[15px] flex items-center justify-center cursor-pointer transition-all duration-150 hover:border-white/[0.18] active:scale-[0.98]">
+                <div className="w-full h-[50px] rounded-[13px] bg-card border border-[color:var(--line)] text-foreground font-semibold text-[15px] flex items-center justify-center cursor-pointer transition-all duration-150 hover:border-[color:var(--accent-border)] active:scale-[0.98]">
                     Liquidar deuda
                 </div>
             </Link>
@@ -335,20 +335,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
                     return (
                         <div className="space-y-2.5">
-                            <div className="grid grid-cols-3 gap-px bg-white/[0.06] border border-white/[0.06] rounded-[14px] overflow-hidden">
-                                <div className="bg-[hsl(var(--surface))] py-4 px-2 text-center">
+                            <div className="grid grid-cols-3 gap-px bg-[color:var(--line)] border border-[color:var(--line)] rounded-[14px] overflow-hidden">
+                                <div className="bg-card py-4 px-2 text-center">
                                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">Este mes</p>
                                     <p className="text-[15px] font-bold font-mono mt-1.5 text-foreground">{formatEuros(totalThisMonth)}</p>
                                 </div>
-                                <div className="bg-[hsl(var(--surface))] py-4 px-2 text-center">
+                                <div className="bg-card py-4 px-2 text-center">
                                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">Top</p>
                                     <p className="text-[15px] font-bold mt-1.5 text-foreground">{topCategory ? getCategoryById(topCategory[0]).label : "—"}</p>
                                 </div>
-                                <div className="bg-[hsl(var(--surface))] py-4 px-2 text-center">
+                                <div className="bg-card py-4 px-2 text-center">
                                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">vs Anterior</p>
                                     <p className={cn(
                                         "text-[15px] font-bold font-mono mt-1.5",
-                                        percentChange && Number(percentChange) > 0 ? "text-red-400" : "text-emerald-400"
+                                        percentChange && Number(percentChange) > 0 ? "text-destructive" : "text-[color:var(--positive)]"
                                     )}>
                                         {percentChange ? `${Number(percentChange) > 0 ? "+" : ""}${percentChange}%` : "—"}
                                     </p>
@@ -357,8 +357,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
                             {/* Spending Breakdown Bar */}
                             {totalThisMonth > 0 && (
-                                <GlassCard className="p-4 rounded-[14px] space-y-3.5">
-                                    <div className="flex h-2 w-full rounded-md overflow-hidden bg-white/5 gap-0.5">
+                                <GlassCard className="p-4 rounded-[14px] space-y-3.5 bg-card border border-[color:var(--line)]">
+                                    <div className="flex h-2 w-full rounded-md overflow-hidden bg-secondary gap-0.5">
                                         {sortedCategories.map(([cat, amount]) => {
                                             const percentage = (amount / totalThisMonth) * 100;
                                             return (
@@ -375,7 +375,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                         {sortedCategories.slice(0, 4).map(([cat, amount]) => (
                                             <div key={cat} className="flex items-center gap-1.5">
                                                 <div className="h-[7px] w-[7px] rounded-sm" style={{ backgroundColor: getCategoryById(cat).hex }} />
-                                                <span className="text-[11px] font-medium text-[#a1a1aa]">
+                                                <span className="text-[11px] font-medium text-muted-foreground">
                                                     {getCategoryById(cat).label} · {((amount / totalThisMonth) * 100).toFixed(0)}%
                                                 </span>
                                             </div>
@@ -411,14 +411,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 <div className="space-y-2">
                     {combinedRecent.length === 0 ? (
                         scope === "personal" ? (
-                            <div className="text-center py-12 px-5 rounded-2xl border border-dashed border-white/10">
+                            <div className="text-center py-12 px-5 rounded-2xl border border-dashed border-[color:var(--line-strong)]">
                                 <p className="font-semibold text-[15px] text-foreground">Sin gastos personales</p>
                                 <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
                                     Pulsa <span className="text-primary font-semibold">+</span> para registrar un gasto privado.
                                 </p>
                             </div>
                         ) : (allExpenses.length > 0 || settlements.length > 0) ? (
-                            <div className="text-center py-10 px-5 rounded-2xl border border-dashed border-white/10">
+                            <div className="text-center py-10 px-5 rounded-2xl border border-dashed border-[color:var(--line-strong)]">
                                 <p className="font-semibold text-[15px] text-foreground">Todo al día</p>
                                 <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
                                     No tenéis pagos pendientes.<br />
@@ -431,7 +431,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                 </Link>
                             </div>
                         ) : (
-                            <div className="text-center py-12 px-5 rounded-2xl border border-dashed border-white/10">
+                            <div className="text-center py-12 px-5 rounded-2xl border border-dashed border-[color:var(--line-strong)]">
                                 <p className="font-semibold text-[15px] text-foreground">{partner ? "Sin movimientos aún" : "Casi listos"}</p>
                                 <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
                                     {partner
@@ -459,15 +459,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
                                 return (
                                     <Link href={`/settle/${item.id}`} key={item.id}>
-                                        <div className="flex items-center gap-[13px] p-[13px] rounded-2xl bg-[hsl(var(--surface))] border border-white/5 cursor-pointer transition-all duration-150 hover:border-white/[0.14] active:scale-[0.99]">
-                                            <div className="w-[42px] h-[42px] rounded-[11px] flex items-center justify-center shrink-0 bg-[hsl(var(--surface-raised))] border border-white/5 text-muted-foreground">
+                                        <div className="flex items-center gap-[13px] p-[13px] rounded-2xl bg-card border border-[color:var(--line-2)] cursor-pointer transition-all duration-150 hover:border-[color:var(--accent-border)] active:scale-[0.99]">
+                                            <div className="w-[42px] h-[42px] rounded-[11px] flex items-center justify-center shrink-0 bg-secondary border border-[color:var(--line)] text-muted-foreground">
                                                 <ArrowLeftRight className="h-[18px] w-[18px]" />
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <h3 className="font-semibold text-[15px] text-foreground">Liquidación</h3>
                                                 <div className="flex items-center gap-[7px] mt-[3px]">
                                                     <span className="text-[11px] text-muted-foreground truncate">{fromUser?.name} → {toUser?.name}</span>
-                                                    <span className="h-[2px] w-[2px] rounded-full bg-white/20 shrink-0" />
+                                                    <span className="h-[2px] w-[2px] rounded-full bg-[color:var(--ink-3)] shrink-0" />
                                                     <span className="text-[11px] text-muted-foreground shrink-0">{getSettlementMethodLabel(item.method)}</span>
                                                 </div>
                                             </div>
@@ -491,9 +491,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             {/* Optional, non-blocking group CTA for a solo user — replaces the old
                 onboarding wall. Shared expenses are opt-in, not required. */}
             {!groupId && (
-                <GlassCard className="p-5 space-y-4 mt-2">
+                <GlassCard className="p-5 space-y-4 mt-2 bg-card border border-[color:var(--line)]">
                     <div className="flex items-center gap-3">
-                        <Heart className="h-5 w-5 text-pink-500 shrink-0" />
+                        <Heart className="h-5 w-5 text-primary shrink-0" />
                         <div className="min-w-0">
                             <h3 className="font-semibold text-[15px] text-foreground">¿Gastos compartidos?</h3>
                             <p className="text-[13px] text-muted-foreground">Crea un grupo o únete a uno para repartir gastos.</p>
@@ -517,14 +517,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             {partner || scope === "personal" ? (
                 <div className="fixed bottom-[92px] right-6 z-50">
                     <Link href={scope === "personal" ? "/expenses/new?type=personal" : "/expenses/new"}>
-                        <Button size="icon" className="h-14 w-14 rounded-full shadow-[0_10px_28px_-10px_rgba(0,0,0,0.8)] bg-primary hover:bg-primary/90 active:scale-90 transition-transform">
+                        <Button size="icon" className="h-14 w-14 rounded-full shadow-[0_12px_28px_-8px_rgba(189,93,58,0.6)] bg-primary hover:bg-primary/90 active:scale-90 transition-transform">
                             <Plus className="h-6 w-6" />
                         </Button>
                     </Link>
                 </div>
             ) : (
                 <div className="fixed bottom-[30px] right-6 z-50">
-                    <Button size="icon" className="h-14 w-14 rounded-full bg-white/10 cursor-not-allowed opacity-50" disabled>
+                    <Button size="icon" className="h-14 w-14 rounded-full bg-secondary cursor-not-allowed opacity-50" disabled>
                         <Plus className="h-6 w-6" />
                     </Button>
                 </div>

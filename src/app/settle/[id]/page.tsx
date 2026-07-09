@@ -39,33 +39,33 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-24">
             <header className="flex items-center gap-4 pt-2">
                 <Link href="/expenses/list">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
                 <div className="flex-1">
-                    <h1 className="text-xl font-bold">Detalle de Liquidación</h1>
+                    <h1 className="text-xl font-bold text-foreground">Detalle de Liquidación</h1>
                 </div>
                 {settlement.fromUserId === session.userId && (
                     <Link href={`/settle/${id}/edit`}>
-                        <Button variant="ghost" size="sm" className="rounded-full border border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
+                        <Button variant="ghost" size="sm" className="rounded-full border border-[color:var(--accent-border)] text-primary hover:bg-[var(--accent-tint)]">
                             Editar
                         </Button>
                     </Link>
                 )}
             </header>
 
-            <GlassCard className="p-6 space-y-6 border-blue-500/30 bg-blue-500/5 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-8 opacity-5">
-                    <Check className="h-24 w-24 text-blue-400" />
+            <GlassCard className="p-6 space-y-6 border-[color:var(--accent-border)] bg-[var(--accent-tint)] relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                    <Check className="h-24 w-24 text-primary" />
                 </div>
 
                 <div className="text-center space-y-2">
-                    <p className="text-xs font-bold uppercase tracking-widest text-blue-400">Total Liquidado</p>
-                    <h2 className="text-5xl font-mono font-bold text-white">
+                    <p className="text-xs font-bold uppercase tracking-widest text-primary">Total Liquidado</p>
+                    <h2 className="text-5xl font-mono font-semibold tracking-[-0.02em] text-foreground">
                         {formatCurrency(settlement.amount)}
                     </h2>
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 text-xs font-bold border border-blue-500/30">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--positive-tint)] text-[color:var(--positive)] text-xs font-bold border border-[color:var(--line)]">
                         <Check className="h-3 w-3" /> {getSettlementStatusLabel(settlement.status)}
                     </span>
                 </div>
@@ -74,24 +74,24 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                     <div className="space-y-1">
                         <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">De</p>
                         <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-full bg-white/10 flex items-center justify-center text-xs">
+                            <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center text-xs text-foreground">
                                 {settlement.fromUser.avatar || "👤"}
                             </div>
-                            <span className="text-sm font-bold truncate">{settlement.fromUser.name}</span>
+                            <span className="text-sm font-bold truncate text-foreground">{settlement.fromUser.name}</span>
                         </div>
                     </div>
                     <div className="space-y-1">
                         <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-tighter">Para</p>
                         <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 rounded-full bg-white/10 flex items-center justify-center text-xs">
+                            <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center text-xs text-foreground">
                                 {settlement.toUser.avatar || "👤"}
                             </div>
-                            <span className="text-sm font-bold truncate">{settlement.toUser.name}</span>
+                            <span className="text-sm font-bold truncate text-foreground">{settlement.toUser.name}</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="border-t border-white/10 pt-4 grid grid-cols-2 gap-4">
+                <div className="border-t border-[color:var(--line)] pt-4 grid grid-cols-2 gap-4">
                     <div className="flex items-center gap-2 text-muted-foreground">
                         <Calendar className="h-4 w-4" />
                         <span className="text-xs">{new Date(settlement.date).toLocaleDateString()}</span>
@@ -110,7 +110,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
 
                 <div className="space-y-3">
                     {settlement.expenses.length === 0 ? (
-                        <p className="text-center py-10 text-sm text-muted-foreground border border-dashed border-white/10 rounded-xl">
+                        <p className="text-center py-10 text-sm text-muted-foreground border border-dashed border-[color:var(--line-strong)] rounded-2xl">
                             Esta liquidación se hizo de forma global sin vincular gastos específicos.
                         </p>
                     ) : (
@@ -124,21 +124,21 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                             }
 
                             return (
-                                <GlassCard key={expense.id} className="p-4 flex items-center justify-between border-white/5 bg-white/5">
+                                <GlassCard key={expense.id} className="p-4 flex items-center justify-between border-[color:var(--line-2)] bg-card">
                                     <div className="flex items-center gap-3">
-                                        <div className="h-8 w-8 rounded-lg bg-white/5 flex items-center justify-center text-sm">
+                                        <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center text-sm">
                                             {getCategoryById(categoryKeyOf(expense)).emoji}
                                         </div>
                                         <div>
-                                            <p className="text-sm font-bold">{expense.description}</p>
-                                            <p className="text-[10px] text-muted-foreground">
+                                            <p className="text-sm font-bold text-foreground">{expense.description}</p>
+                                            <p className="text-[10px] text-[color:var(--ink-3)]">
                                                 {new Date(expense.date).toLocaleDateString()}
                                             </p>
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-mono font-bold">{formatCurrency(myShareCents)}</p>
-                                        <p className="text-[10px] text-muted-foreground italic">de {formatCurrency(expense.amount)}</p>
+                                        <p className="text-sm font-mono font-semibold tracking-[-0.02em] text-foreground">{formatCurrency(myShareCents)}</p>
+                                        <p className="text-[10px] text-muted-foreground italic font-mono">de {formatCurrency(expense.amount)}</p>
                                     </div>
                                 </GlassCard>
                             );

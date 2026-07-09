@@ -29,7 +29,7 @@ export function ScopeSegment({ scope }: { scope: Scope }) {
     };
 
     return (
-        <div className="flex gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5">
+        <div className="flex gap-1.5 p-1 rounded-xl bg-secondary border border-[color:var(--line)]">
             {OPTIONS.map(({ key, label }) => (
                 <button
                     key={key}

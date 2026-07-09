@@ -40,20 +40,20 @@ export function InviteCard({ code }: InviteCardProps) {
     };
 
     return (
-        <GlassCard className="p-3 bg-white/5 flex items-center justify-between">
+        <GlassCard className="p-3 bg-card border border-[color:var(--line)] flex items-center justify-between">
             <div className="text-sm">
-                <p className="font-medium">Invita a tu grupo</p>
+                <p className="font-medium text-foreground">Invita a tu grupo</p>
                 <p className="text-xs text-muted-foreground">Toca para compartir enlace</p>
             </div>
 
             <Button
                 variant="ghost"
                 size="sm"
-                className="gap-2 bg-black/20 hover:bg-black/40"
+                className="gap-2 bg-secondary hover:bg-[var(--surface-raised-hex)]"
                 onClick={handleShare}
             >
-                <code className="text-xs tracking-widest font-mono">{code}</code>
-                {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Share2 className="h-3 w-3 opacity-70" />}
+                <code className="text-xs tracking-widest font-mono text-foreground">{code}</code>
+                {copied ? <Check className="h-3 w-3 text-[color:var(--positive)]" /> : <Share2 className="h-3 w-3 opacity-70" />}
             </Button>
         </GlassCard>
     );

@@ -16,7 +16,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         const variants = {
             primary: "bg-primary text-primary-foreground shadow-lg shadow-primary/25 [@media(hover:hover)]:hover:shadow-primary/40 [@media(hover:hover)]:hover:scale-[1.02]",
             secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-            ghost: "hover:bg-white/10 text-foreground",
+            ghost: "hover:bg-secondary text-foreground",
             destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         };
 

@@ -144,7 +144,7 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                 {hasUnsettledActivity && (
                     <div className="space-y-3 pt-4">
                         <Button
-                            className="w-full h-12 bg-white/10 hover:bg-white/20 border border-white/10"
+                            className="w-full h-12 bg-card border border-[color:var(--line)] text-foreground hover:bg-secondary"
                             variant="secondary"
                             onClick={handleArchive}
                             isLoading={isSubmitting}
@@ -156,7 +156,7 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                             Esto vaciará la lista de &quot;Pendientes&quot; en el inicio.
                         </p>
                         {error && (
-                            <p className="text-xs text-red-400">{error}</p>
+                            <p className="text-xs text-destructive">{error}</p>
                         )}
                     </div>
                 )}
@@ -200,13 +200,13 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                                     setAmount(debt.amount.toFixed(2)); // Default to full amount
                                 }}
                                 className={cn(
-                                    "w-full flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all text-left",
-                                    selectedUserId === debt.userId ? "bg-primary/20 border-primary" : "bg-card border-white/10"
+                                    "w-full flex items-center justify-between p-4 rounded-[14px] border cursor-pointer transition-all text-left",
+                                    selectedUserId === debt.userId ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)]" : "bg-card border-[color:var(--line)]"
                                 )}
                             >
                                 <div className="flex items-center gap-3">
-                                    <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[2px]">
-                                        <div className="h-full w-full rounded-full bg-black flex items-center justify-center font-bold text-xs overflow-hidden">
+                                    <div className="h-10 w-10 rounded-full bg-[var(--accent-tint)] p-[2px]">
+                                        <div className="h-full w-full rounded-full bg-card flex items-center justify-center font-bold text-xs overflow-hidden text-primary">
                                             {isAvatarUrl(debt.avatar) ? (
                                                 // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                                 <img src={debt.avatar} alt={debt.name} className="h-full w-full object-cover" />
@@ -216,8 +216,8 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                                         </div>
                                     </div>
                                     <div className="text-left">
-                                        <p className="font-bold">{debt.name}</p>
-                                        <p className="text-xs text-muted-foreground">Debes {formatEuros(debt.amount)}</p>
+                                        <p className="font-bold text-foreground">{debt.name}</p>
+                                        <p className="text-xs text-muted-foreground">Debes <span className="font-mono">{formatEuros(debt.amount)}</span></p>
                                     </div>
                                 </div>
                                 {selectedUserId === debt.userId && <Check className="text-primary h-5 w-5" />}
@@ -229,25 +229,25 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                         <div className="space-y-3 pt-4">
                             <div className="flex items-center justify-between px-2">
                                 <p className="text-sm font-medium text-muted-foreground">Actividad reciente sin pagar:</p>
-                                <span className="text-[10px] uppercase bg-white/10 px-2 py-0.5 rounded text-muted-foreground">Contexto</span>
+                                <span className="text-[10px] uppercase bg-secondary px-2 py-0.5 rounded-lg text-muted-foreground font-bold tracking-[0.08em]">Contexto</span>
                             </div>
-                            <div className="space-y-2 opacity-75 grayscale-[0.3]">
+                            <div className="space-y-2 opacity-75">
                                 {debtorExpenses.map((expense: SettleExpense) => (
                                     <div
                                         key={expense.id}
-                                        className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-white/5"
+                                        className="flex items-center justify-between p-3 rounded-[14px] border border-[color:var(--line-2)] bg-card"
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className="text-left">
-                                                <p className="text-sm font-bold leading-none mb-1">{expense.description}</p>
-                                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                <p className="text-sm font-bold leading-none mb-1 text-foreground">{expense.description}</p>
+                                                <p className="text-[10px] text-[color:var(--ink-3)] uppercase tracking-wider">
                                                     {new Date(expense.date).toLocaleDateString()} • {expense.category}
                                                 </p>
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-sm font-mono font-bold">{formatEuros(expense.myAmount)}</p>
-                                            <p className="text-[10px] text-muted-foreground">de {formatEuros(expense.amount)}</p>
+                                            <p className="text-sm font-mono font-semibold tracking-[-0.02em] text-foreground">{formatEuros(expense.myAmount)}</p>
+                                            <p className="text-[10px] text-muted-foreground font-mono">de {formatEuros(expense.amount)}</p>
                                         </div>
                                     </div>
                                 ))}
@@ -264,9 +264,9 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
             {step === 2 && selectedDebtor && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
 
-                    <div className="p-4 rounded-xl bg-card border border-white/10 flex items-center gap-4">
-                        <div className="h-12 w-12 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[2px]">
-                            <div className="h-full w-full rounded-full bg-black flex items-center justify-center font-bold text-sm overflow-hidden">
+                    <div className="p-4 rounded-[16px] bg-card border border-[color:var(--line)] flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-full bg-[var(--accent-tint)] p-[2px]">
+                            <div className="h-full w-full rounded-full bg-card flex items-center justify-center font-bold text-sm overflow-hidden text-primary">
                                 {isAvatarUrl(selectedDebtor.avatar) ? (
                                     // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                     <img src={selectedDebtor.avatar} alt={selectedDebtor.name} className="h-full w-full object-cover" />
@@ -277,7 +277,7 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                         </div>
                         <div>
                             <p className="text-sm text-muted-foreground">Pagando a</p>
-                            <p className="font-bold text-lg">{selectedDebtor.name}</p>
+                            <p className="font-bold text-lg text-foreground">{selectedDebtor.name}</p>
                         </div>
                     </div>
 
@@ -289,12 +289,12 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                                 type="number"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
-                                className="text-2xl font-bold h-14 pl-10"
+                                className="text-2xl font-mono font-semibold tracking-[-0.02em] h-14 pl-10"
                                 placeholder="0.00"
                             />
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-muted-foreground">€</span>
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-mono font-semibold text-muted-foreground">€</span>
                         </div>
-                        <p className="text-xs text-right text-muted-foreground">Deuda total: {formatEuros(selectedDebtor.amount)}</p>
+                        <p className="text-xs text-right text-muted-foreground">Deuda total: <span className="font-mono">{formatEuros(selectedDebtor.amount)}</span></p>
                     </div>
 
                     <div className="space-y-2">
@@ -305,23 +305,23 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                                 type="button"
                                 onClick={() => setMethod("BIZUM")}
                                 className={cn(
-                                    "p-4 rounded-xl border flex flex-col items-center gap-2 transition-all",
-                                    method === "BIZUM" ? "bg-primary/20 border-primary shadow-lg shadow-primary/10" : "bg-card border-white/10 hover:bg-white/5"
+                                    "p-4 rounded-[14px] border flex flex-col items-center gap-2 transition-all",
+                                    method === "BIZUM" ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)]" : "bg-card border-[color:var(--line)] hover:bg-secondary"
                                 )}
                             >
-                                <Wallet className="h-6 w-6 text-emerald-400" />
-                                <span className="font-bold">Bizum / Transfer</span>
+                                <Wallet className="h-6 w-6 text-[color:var(--positive)]" />
+                                <span className="font-bold text-foreground">Bizum / Transfer</span>
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setMethod("CASH")}
                                 className={cn(
-                                    "p-4 rounded-xl border flex flex-col items-center gap-2 transition-all",
-                                    method === "CASH" ? "bg-primary/20 border-primary shadow-lg shadow-primary/10" : "bg-card border-white/10 hover:bg-white/5"
+                                    "p-4 rounded-[14px] border flex flex-col items-center gap-2 transition-all",
+                                    method === "CASH" ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)]" : "bg-card border-[color:var(--line)] hover:bg-secondary"
                                 )}
                             >
                                 <span className="text-2xl">💵</span>
-                                <span className="font-bold">Efectivo</span>
+                                <span className="font-bold text-foreground">Efectivo</span>
                             </button>
                         </div>
                     </div>
@@ -330,7 +330,7 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
             )}
 
             {/* FOOTER ACTIONS */}
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-black/80 backdrop-blur-md border-t border-white/10">
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-[var(--surface-hex)]/85 backdrop-blur-md border-t border-[color:var(--line)]">
                 <div className="max-w-md mx-auto flex gap-2">
                     {step === 1 && (
                         <Button className="w-full" onClick={() => setStep(2)} disabled={!selectedUserId}>

@@ -350,11 +350,11 @@ export function EditExpenseClient({
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto relative pb-24">
             <header className="flex items-center gap-4 pt-2">
                 <Link href={`/expense/${expenseId}`}>
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
-                <h1 className="text-xl font-bold">Editar Gasto</h1>
+                <h1 className="text-xl font-bold text-foreground">Editar Gasto</h1>
             </header>
 
             <form onSubmit={handleSubmit} className="flex-1 space-y-8 mt-4">
@@ -365,18 +365,18 @@ export function EditExpenseClient({
                         <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="w-full aspect-video rounded-2xl border-2 border-dashed border-white/10 bg-white/5 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/[0.08] transition-all group"
+                            className="w-full aspect-video rounded-2xl border-2 border-dashed border-[color:var(--line-strong)] bg-card flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-secondary transition-all group"
                         >
-                            <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <div className="h-12 w-12 rounded-full bg-[var(--accent-tint)] flex items-center justify-center group-hover:scale-110 transition-transform">
                                 <Camera className="h-6 w-6 text-primary" />
                             </div>
                             <div className="text-center">
-                                <p className="font-semibold text-sm">Añadir / Re-escanear Ticket</p>
+                                <p className="font-semibold text-sm text-foreground">Añadir / Re-escanear Ticket</p>
                                 <p className="text-xs text-muted-foreground">El OCR actualizará el desglose automáticamente</p>
                             </div>
                         </button>
                     ) : (
-                        <div className="relative rounded-2xl overflow-hidden border border-white/10 aspect-video bg-black/40">
+                        <div className="relative rounded-2xl overflow-hidden border border-[color:var(--line)] aspect-video bg-secondary">
                             {/* oxlint-disable-next-line nextjs/no-img-element -- user-uploaded receipt image of unknown dimensions; next/image would change layout/runtime */}
                             <img src={receiptPreview} alt="Ticket" className="w-full h-full object-contain" />
                             <Button
@@ -394,13 +394,13 @@ export function EditExpenseClient({
                                 <X className="h-4 w-4" />
                             </Button>
                             {isOcrRunning && (
-                                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center gap-4 animate-in fade-in duration-300">
-                                    <Loader2 className="h-10 w-10 text-primary animate-spin" />
+                                <div className="absolute inset-0 bg-[color:var(--ink)]/60 backdrop-blur-sm flex flex-col items-center justify-center gap-4 animate-in fade-in duration-300">
+                                    <Loader2 className="h-10 w-10 text-white animate-spin" />
                                     <div className="text-center">
                                         <p className="font-bold text-white">Leyendo ticket...</p>
-                                        <p className="text-xs text-primary">{ocrProgress}%</p>
+                                        <p className="text-xs font-mono text-white/80">{ocrProgress}%</p>
                                     </div>
-                                    <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
+                                    <div className="w-48 h-1 bg-white/20 rounded-full overflow-hidden">
                                         <div className="h-full bg-primary transition-all duration-300" style={{ width: `${ocrProgress}%` }} />
                                     </div>
                                 </div>
@@ -412,17 +412,17 @@ export function EditExpenseClient({
 
                 {/* 2. Category */}
                 <div className="space-y-4">
-                    <span className="block text-sm font-medium ml-1">Categoría</span>
+                    <span className="block text-sm font-medium ml-1 text-foreground">Categoría</span>
                     <div className="grid grid-cols-4 gap-2">
                         {getAllCategories().map((cat) => (
                             <button
                                 key={cat.id}
                                 type="button"
                                 onClick={() => setCategory(cat.id)}
-                                className={`p-3 rounded-xl border border-white/5 text-center transition-all ${
+                                className={`p-3 rounded-xl border text-center transition-all ${
                                     category === cat.id
                                         ? "bg-primary text-white border-primary scale-105"
-                                        : "bg-white/5 hover:bg-white/10"
+                                        : "bg-card border-[color:var(--line)] text-foreground hover:bg-secondary"
                                 }`}
                             >
                                 <span className="text-xl block mb-1">{cat.emoji}</span>
@@ -434,16 +434,16 @@ export function EditExpenseClient({
 
                 {/* 3. Amount */}
                 <div className="space-y-2 text-center py-2">
-                    <label htmlFor="expense-amount" className="text-sm text-muted-foreground uppercase tracking-widest font-bold">Importe</label>
+                    <label htmlFor="expense-amount" className="text-[11px] text-muted-foreground uppercase tracking-[0.08em] font-bold">Importe</label>
                     <div className="relative inline-block w-full max-w-[200px]">
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-muted-foreground">€</span>
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-mono font-semibold text-muted-foreground">€</span>
                         <input
                             id="expense-amount"
                             type="number"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
                             placeholder="0.00"
-                            className="w-full bg-transparent text-center text-5xl font-bold focus:outline-none placeholder:text-white/10 p-2 appearance-none"
+                            className="w-full bg-transparent text-center text-5xl font-mono font-semibold tracking-[-0.02em] text-foreground focus:outline-none placeholder:text-[color:var(--ink-3)] p-2 appearance-none"
                             required
                             step="0.01"
                         />
@@ -452,7 +452,7 @@ export function EditExpenseClient({
 
                 {/* 4. Description */}
                 <div className="space-y-2">
-                    <label htmlFor="expense-description" className="text-sm font-medium ml-1">Concepto</label>
+                    <label htmlFor="expense-description" className="text-sm font-medium ml-1 text-foreground">Concepto</label>
                     <Input
                         id="expense-description"
                         placeholder="Ej: Compra Mercadona"
@@ -465,7 +465,7 @@ export function EditExpenseClient({
                 {/* 5. Items breakdown */}
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-bold ml-1 flex items-center gap-2">
+                        <h3 className="text-sm font-bold ml-1 flex items-center gap-2 text-foreground">
                             <Calculator className="h-4 w-4 text-primary" />
                             Desglose de Ticket
                         </h3>
@@ -474,20 +474,20 @@ export function EditExpenseClient({
                         </Button>
                     </div>
 
-                    <div className="rounded-xl border border-white/10 overflow-hidden bg-black/20">
+                    <div className="rounded-xl border border-[color:var(--line)] overflow-hidden bg-card">
                         {receiptItems.length === 0 ? (
                             <div className="p-4 text-center text-sm text-muted-foreground">
                                 Añade items manualmente o re-escanea el ticket
                             </div>
                         ) : (
-                            <div className="divide-y divide-white/5">
+                            <div className="divide-y divide-[color:var(--line-2)]">
                                 {receiptItems.map((item, idx) => (
                                     <div
                                         key={item._uid}
-                                        className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 p-2 items-center hover:bg-white/5 transition-colors"
+                                        className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 p-2 items-center hover:bg-secondary transition-colors"
                                     >
                                         <input
-                                            className="bg-transparent text-sm w-full focus:outline-none font-medium min-w-0 px-1"
+                                            className="bg-transparent text-sm w-full focus:outline-none font-medium min-w-0 px-1 text-foreground placeholder:text-[color:var(--ink-3)]"
                                             value={item.description}
                                             onChange={(e) => updateItem(idx, "description", e.target.value)}
                                             placeholder="Producto..."
@@ -495,36 +495,36 @@ export function EditExpenseClient({
                                         <div className="flex items-center gap-1 flex-shrink-0">
                                             <input
                                                 type="number"
-                                                className="bg-transparent text-[10px] w-6 text-right focus:outline-none text-muted-foreground"
+                                                className="bg-transparent text-[10px] w-6 text-right focus:outline-none font-mono text-muted-foreground"
                                                 value={item.quantity}
                                                 onChange={(e) => updateItem(idx, "quantity", parseFloat(e.target.value) || 0)}
                                             />
                                             <span className="text-[10px] text-muted-foreground">x</span>
                                             <input
                                                 type="number"
-                                                className="bg-transparent text-[10px] w-10 text-right focus:outline-none text-muted-foreground"
+                                                className="bg-transparent text-[10px] w-10 text-right focus:outline-none font-mono text-muted-foreground"
                                                 value={item.price}
                                                 onChange={(e) => updateItem(idx, "price", parseFloat(e.target.value) || 0)}
                                                 placeholder="0.00"
                                             />
                                         </div>
-                                        <div className="font-mono font-bold text-[11px] w-14 text-right flex-shrink-0">
+                                        <div className="font-mono font-semibold tracking-[-0.02em] text-[11px] w-14 text-right flex-shrink-0 text-foreground">
                                             {item.total.toFixed(2)}
                                         </div>
                                         {isTwoMember && partner && (
-                                            <div className="flex items-center flex-shrink-0 rounded-lg overflow-hidden border border-white/10 text-[9px] font-bold">
+                                            <div className="flex items-center flex-shrink-0 rounded-lg overflow-hidden border border-[color:var(--line)] text-[9px] font-bold">
                                                 <button type="button" onClick={() => setItemAssignment(idx, null)}
-                                                    className={cn("px-1.5 py-1 transition-colors", item.assignedTo === null ? "bg-primary text-white" : "text-muted-foreground hover:bg-white/10")}
+                                                    className={cn("px-1.5 py-1 transition-colors", item.assignedTo === null ? "bg-primary text-white" : "text-muted-foreground hover:bg-secondary")}
                                                     title="Compartido (50/50)">½</button>
                                                 <button type="button" onClick={() => setItemAssignment(idx, userId)}
-                                                    className={cn("px-1.5 py-1 border-l border-white/10 transition-colors", item.assignedTo === userId ? "bg-blue-500/30 text-blue-300" : "text-muted-foreground hover:bg-white/10")}
+                                                    className={cn("px-1.5 py-1 border-l border-[color:var(--line)] transition-colors", item.assignedTo === userId ? "bg-[var(--accent-tint)] text-primary" : "text-muted-foreground hover:bg-secondary")}
                                                     title="Solo mío">Yo</button>
                                                 <button type="button" onClick={() => setItemAssignment(idx, partner.id)}
-                                                    className={cn("px-1.5 py-1 border-l border-white/10 transition-colors", item.assignedTo === partner.id ? "bg-pink-500/30 text-pink-300" : "text-muted-foreground hover:bg-white/10")}
+                                                    className={cn("px-1.5 py-1 border-l border-[color:var(--line)] transition-colors", item.assignedTo === partner.id ? "bg-[var(--positive-tint)] text-[color:var(--positive)]" : "text-muted-foreground hover:bg-secondary")}
                                                     title={`Solo ${partner.name}`}>{partner.name.charAt(0).toUpperCase()}</button>
                                             </div>
                                         )}
-                                        <button type="button" onClick={() => removeItem(idx)} className="text-muted-foreground hover:text-red-400 p-1 flex-shrink-0">
+                                        <button type="button" onClick={() => removeItem(idx)} className="text-muted-foreground hover:text-destructive p-1 flex-shrink-0">
                                             <Trash2 className="h-3.5 w-3.5" />
                                         </button>
                                     </div>
@@ -534,14 +534,14 @@ export function EditExpenseClient({
                     </div>
 
                     {receiptItems.length > 0 && hasItemAssignments && (
-                        <div className="text-xs px-2 py-2 bg-white/5 rounded-lg space-y-1">
+                        <div className="text-xs px-2 py-2 bg-secondary rounded-lg space-y-1">
                             <div className="flex justify-between font-semibold">
-                                <span className="text-blue-300">Tu parte:</span>
-                                <span className="text-blue-300">{formatEuros(itemSplitMyAmount)}</span>
+                                <span className="text-primary">Tu parte:</span>
+                                <span className="text-primary font-mono">{formatEuros(itemSplitMyAmount)}</span>
                             </div>
                             <div className="flex justify-between font-semibold">
-                                <span className="text-pink-300">{partner?.name ?? "Pareja"}:</span>
-                                <span className="text-pink-300">{formatEuros(itemSplitPartnerAmount)}</span>
+                                <span className="text-[color:var(--positive)]">{partner?.name ?? "Pareja"}:</span>
+                                <span className="text-[color:var(--positive)] font-mono">{formatEuros(itemSplitPartnerAmount)}</span>
                             </div>
                         </div>
                     )}
@@ -562,7 +562,7 @@ export function EditExpenseClient({
                                         aria-pressed={sel}
                                         className={cn(
                                             "px-3 py-2 rounded-xl text-sm font-medium border transition-all active:scale-[0.98]",
-                                            sel ? "bg-primary text-white border-primary shadow" : "bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10"
+                                            sel ? "bg-primary text-white border-primary shadow" : "bg-card border-[color:var(--line)] text-muted-foreground hover:bg-secondary"
                                         )}
                                     >
                                         {m.id === userId ? "Yo" : m.name}
@@ -575,18 +575,18 @@ export function EditExpenseClient({
 
                 {/* 6. Split mode — only for shared expenses */}
                 {isPersonal ? (
-                    <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 text-sm text-muted-foreground">
+                    <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-card border border-[color:var(--line)] text-sm text-muted-foreground">
                         <User className="h-4 w-4 text-primary" />
                         Gasto personal — privado, sin reparto
                     </div>
                 ) : !isTwoMember ? (
-                    <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-white/5 border border-white/10 text-sm text-muted-foreground">
+                    <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-card border border-[color:var(--line)] text-sm text-muted-foreground">
                         <Heart className="h-4 w-4 text-primary" />
                         Se reparte a partes iguales entre {members.length} miembros
                     </div>
                 ) : (
                 <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-2 p-1 bg-white/5 rounded-xl">
+                    <div className="grid grid-cols-3 gap-2 p-1 bg-secondary rounded-xl">
                         {(["shared", "solo", "custom"] as SplitMode[]).map((mode) => {
                             const icons = { shared: <Heart className={cn("h-4 w-4", splitMode === "shared" && "fill-current")} />, solo: <User className="h-4 w-4" />, custom: <SlidersHorizontal className="h-4 w-4" /> };
                             const labels = { shared: "Común", solo: `Solo ${partner?.name ?? "pareja"}`, custom: "Custom" };
@@ -596,7 +596,7 @@ export function EditExpenseClient({
                                     type="button"
                                     onClick={() => setSplitMode(mode)}
                                     className={`py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
-                                        splitMode === mode ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-white"
+                                        splitMode === mode ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-foreground"
                                     }`}
                                 >
                                     {icons[mode]}
@@ -607,7 +607,7 @@ export function EditExpenseClient({
                     </div>
 
                     {splitMode === "custom" && (
-                        <div className="space-y-3 animate-in fade-in duration-300 bg-white/5 rounded-xl p-4">
+                        <div className="space-y-3 animate-in fade-in duration-300 bg-secondary rounded-xl p-4">
                             <div className="flex items-center gap-3">
                                 <div className="flex-1 space-y-1">
                                     <label htmlFor="split-my-percent" className="text-xs text-muted-foreground">Yo</label>
@@ -616,7 +616,7 @@ export function EditExpenseClient({
                                             id="split-my-percent"
                                             type="number" min={0} max={100} value={myPercent}
                                             onChange={(e) => setMyPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                            className="w-16 bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-primary/50"
+                                            className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-mono font-semibold text-center text-foreground focus:outline-none focus:border-[color:var(--accent-border)]"
                                         />
                                         <span className="text-sm text-muted-foreground">%</span>
                                     </div>
@@ -629,7 +629,7 @@ export function EditExpenseClient({
                                             id="split-partner-percent"
                                             type="number" min={0} max={100} value={partnerPercent}
                                             onChange={(e) => setMyPercent(100 - Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                            className="w-16 bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-primary/50"
+                                            className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-mono font-semibold text-center text-foreground focus:outline-none focus:border-[color:var(--accent-border)]"
                                         />
                                         <span className="text-sm text-muted-foreground">%</span>
                                     </div>
@@ -637,11 +637,11 @@ export function EditExpenseClient({
                             </div>
                             {amountNum > 0 && (
                                 <div className="text-xs text-center text-muted-foreground">
-                                    Yo: <strong className="text-white">{formatEuros(Number(myAmount))}</strong> — {partner?.name ?? "Pareja"}: <strong className="text-white">{formatEuros(Number(partnerAmount))}</strong>
+                                    Yo: <strong className="text-foreground font-mono">{formatEuros(Number(myAmount))}</strong> — {partner?.name ?? "Pareja"}: <strong className="text-foreground font-mono">{formatEuros(Number(partnerAmount))}</strong>
                                 </div>
                             )}
                             {myPercent + partnerPercent !== 100 && (
-                                <p className="text-xs text-red-400 text-center">Los porcentajes deben sumar 100%</p>
+                                <p className="text-xs text-destructive text-center">Los porcentajes deben sumar 100%</p>
                             )}
                         </div>
                     )}
@@ -650,7 +650,7 @@ export function EditExpenseClient({
 
                 {/* 7. Notes */}
                 <div className="space-y-2">
-                    <label htmlFor="expense-notes" className="text-sm font-medium ml-1 flex items-center gap-2">
+                    <label htmlFor="expense-notes" className="text-sm font-medium ml-1 flex items-center gap-2 text-foreground">
                         <FileText className="h-4 w-4 text-primary" />
                         Notas
                         <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
@@ -662,9 +662,9 @@ export function EditExpenseClient({
                             onChange={(e) => setNotes(e.target.value.slice(0, 500))}
                             placeholder="Añade una nota opcional..."
                             rows={3}
-                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 resize-none placeholder:text-muted-foreground/50 transition-colors"
+                            className="w-full bg-card border border-[color:var(--line)] rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:border-[color:var(--accent-border)] resize-none placeholder:text-[color:var(--ink-3)] transition-colors"
                         />
-                        <span className={cn("absolute bottom-2 right-3 text-[10px]", notes.length >= 480 ? "text-yellow-400" : "text-muted-foreground/50")}>
+                        <span className={cn("absolute bottom-2 right-3 text-[10px] font-mono", notes.length >= 480 ? "text-primary" : "text-[color:var(--ink-3)]")}>
                             {notes.length}/500
                         </span>
                     </div>
@@ -675,20 +675,20 @@ export function EditExpenseClient({
                     <button
                         type="button"
                         onClick={() => setTagsExpanded((p) => !p)}
-                        className="w-full flex items-center justify-between text-sm font-medium p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+                        className="w-full flex items-center justify-between text-sm font-medium p-3 rounded-xl bg-card border border-[color:var(--line)] text-foreground hover:bg-secondary transition-colors"
                     >
                         <span className="flex items-center gap-2">
                             <Tag className="h-4 w-4 text-primary" />
                             Etiquetas
                             {selectedTagIds.length > 0 && (
-                                <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold">{selectedTagIds.length}</span>
+                                <span className="text-xs bg-[var(--accent-tint)] text-primary px-1.5 py-0.5 rounded-full font-bold font-mono">{selectedTagIds.length}</span>
                             )}
                         </span>
                         {tagsExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                     </button>
 
                     {tagsExpanded && (
-                        <div className="space-y-3 animate-in fade-in duration-200 bg-white/5 rounded-xl p-4">
+                        <div className="space-y-3 animate-in fade-in duration-200 bg-secondary rounded-xl p-4">
                             {tags.length > 0 && (
                                 <div className="flex flex-wrap gap-2">
                                     {tags.map((tag) => {
@@ -696,7 +696,7 @@ export function EditExpenseClient({
                                         return (
                                             <button
                                                 key={tag.id} type="button" onClick={() => toggleTag(tag.id)}
-                                                className={cn("px-3 py-1 rounded-full text-xs font-semibold border transition-all", isSelected ? "border-transparent text-white scale-105" : "border-white/10 text-muted-foreground bg-white/5 hover:bg-white/10")}
+                                                className={cn("px-3 py-1 rounded-full text-xs font-semibold border transition-all", isSelected ? "border-transparent text-white scale-105" : "border-[color:var(--line)] text-muted-foreground bg-card hover:bg-secondary")}
                                                 style={isSelected ? { backgroundColor: tag.color, borderColor: tag.color } : {}}
                                             >{tag.name}</button>
                                         );
@@ -704,7 +704,7 @@ export function EditExpenseClient({
                                 </div>
                             )}
                             {!showNewTagForm ? (
-                                <button type="button" onClick={() => setShowNewTagForm(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-white transition-colors">
+                                <button type="button" onClick={() => setShowNewTagForm(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
                                     <Plus className="h-3.5 w-3.5" /> Nueva etiqueta
                                 </button>
                             ) : (
@@ -712,14 +712,14 @@ export function EditExpenseClient({
                                     <input
                                         type="text" value={newTagName} onChange={(e) => setNewTagName(e.target.value)}
                                         placeholder="Nombre de la etiqueta"
-                                        className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+                                        className="w-full bg-card border border-[color:var(--line)] rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-[color:var(--accent-border)] placeholder:text-[color:var(--ink-3)]"
                                         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreateTag(); } }}
                                     />
                                     <div className="flex items-center gap-2 flex-wrap">
                                         {TAG_PRESET_COLORS.map((color) => (
                                             <button key={color} type="button" onClick={() => setNewTagColor(color)}
                                                 aria-label={`Color ${color}`}
-                                                className={cn("h-6 w-6 rounded-full border-2 transition-transform", newTagColor === color ? "border-white scale-110" : "border-transparent")}
+                                                className={cn("h-6 w-6 rounded-full border-2 transition-transform", newTagColor === color ? "border-foreground scale-110" : "border-transparent")}
                                                 style={{ backgroundColor: color }} />
                                         ))}
                                     </div>
@@ -742,13 +742,13 @@ export function EditExpenseClient({
                     <button
                         type="button"
                         onClick={() => setRecurringExpanded((p) => !p)}
-                        className="w-full flex items-center justify-between text-sm font-medium p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+                        className="w-full flex items-center justify-between text-sm font-medium p-3 rounded-xl bg-card border border-[color:var(--line)] text-foreground hover:bg-secondary transition-colors"
                     >
                         <span className="flex items-center gap-2">
                             <RefreshCw className="h-4 w-4 text-primary" />
                             Recurrente
                             {isRecurring && (
-                                <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold capitalize">
+                                <span className="text-xs bg-[var(--accent-tint)] text-primary px-1.5 py-0.5 rounded-full font-bold capitalize">
                                     {{ weekly: "Semanal", monthly: "Mensual", yearly: "Anual" }[recurringInterval]}
                                 </span>
                             )}
@@ -757,16 +757,16 @@ export function EditExpenseClient({
                     </button>
 
                     {recurringExpanded && (
-                        <div className="space-y-4 animate-in fade-in duration-200 bg-white/5 rounded-xl p-4">
+                        <div className="space-y-4 animate-in fade-in duration-200 bg-secondary rounded-xl p-4">
                             <div className="flex items-center justify-between">
-                                <span className="text-sm">¿Es un gasto recurrente?</span>
+                                <span className="text-sm text-foreground">¿Es un gasto recurrente?</span>
                                 <button
                                     type="button"
                                     onClick={() => setIsRecurring((p) => !p)}
                                     role="switch"
                                     aria-checked={isRecurring}
                                     aria-label="Activar gasto recurrente"
-                                    className={cn("relative h-6 w-11 rounded-full transition-colors", isRecurring ? "bg-primary" : "bg-white/10")}
+                                    className={cn("relative h-6 w-11 rounded-full transition-colors", isRecurring ? "bg-primary" : "bg-[color:var(--ink-3)]")}
                                 >
                                     <span className={cn("absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", isRecurring && "translate-x-5")} />
                                 </button>
@@ -780,7 +780,7 @@ export function EditExpenseClient({
                                             <button
                                                 key={interval} type="button" onClick={() => setRecurringInterval(interval)}
                                                 className={cn("py-3 rounded-xl border text-center transition-all text-sm font-medium",
-                                                    recurringInterval === interval ? "bg-primary/20 border-primary text-primary" : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10")}
+                                                    recurringInterval === interval ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)] text-primary" : "border-[color:var(--line)] bg-card text-muted-foreground hover:bg-secondary")}
                                             >
                                                 <span className="block text-lg mb-1">{icons[interval]}</span>
                                                 {labels[interval]}
@@ -802,7 +802,7 @@ export function EditExpenseClient({
                     <Button
                         type="submit"
                         size="lg"
-                        className="w-full text-base h-16 shadow-xl shadow-primary/20 font-bold"
+                        className="w-full text-base h-16 shadow-[0_12px_28px_-8px_rgba(189,93,58,0.35)] font-bold"
                         isLoading={loading}
                     >
                         Guardar Cambios <Check className="ml-2 h-5 w-5" />

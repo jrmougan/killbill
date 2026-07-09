@@ -542,7 +542,7 @@ export default function NewExpensePage() {
             <header className="flex items-center justify-between px-4 pt-3 pb-1">
                 {step === "amount" ? (
                     <Link href="/dashboard" aria-label="Volver al inicio">
-                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
                             <X className="h-5 w-5" />
                         </Button>
                     </Link>
@@ -551,7 +551,7 @@ export default function NewExpensePage() {
                         variant="ghost"
                         size="icon"
                         aria-label="Volver al importe"
-                        className="h-10 w-10 rounded-full hover:bg-white/10"
+                        className="h-10 w-10 rounded-full hover:bg-secondary"
                         onClick={() => setStep("amount")}
                     >
                         <ArrowLeft className="h-5 w-5" />
@@ -586,7 +586,7 @@ export default function NewExpensePage() {
                                     aria-label="Importe en euros"
                                     className={cn(
                                         "w-full max-w-[260px] bg-transparent text-center font-mono text-6xl font-bold tracking-tight focus:outline-none p-0",
-                                        amountValid ? "text-foreground" : "text-muted-foreground/40 placeholder:text-muted-foreground/40"
+                                        amountValid ? "text-foreground" : "text-[color:var(--ink-3)] placeholder:text-[color:var(--ink-3)]"
                                     )}
                                 />
                                 <span className="font-mono text-3xl font-bold text-muted-foreground ml-1">€</span>
@@ -595,14 +595,14 @@ export default function NewExpensePage() {
                             <button
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
-                                className="mt-7 inline-flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-4 py-2.5 text-sm font-semibold text-muted-foreground hover:border-white/20 hover:text-foreground transition-colors active:scale-95"
+                                className="mt-7 inline-flex items-center gap-2 rounded-xl bg-card border border-[color:var(--line)] px-4 py-2.5 text-sm font-semibold text-muted-foreground hover:border-[color:var(--accent-border)] hover:text-foreground transition-colors active:scale-95"
                             >
                                 <Camera className="h-4 w-4" />
                                 Escanear recibo
                             </button>
 
                             {ocrError && (
-                                <div role="alert" className="mt-4 flex items-center gap-2 rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-2.5 text-xs text-red-300 animate-in fade-in">
+                                <div role="alert" className="mt-4 flex items-center gap-2 rounded-xl bg-[var(--negative-tint)] border border-[color:var(--negative)]/30 px-3 py-2.5 text-xs text-destructive animate-in fade-in">
                                     <AlertCircle className="h-4 w-4 flex-shrink-0" />
                                     <span className="flex-1">{ocrError}</span>
                                     {receiptFile && (
@@ -622,7 +622,7 @@ export default function NewExpensePage() {
                                     type="button"
                                     aria-label={k === "⌫" ? "Borrar" : k === "," ? "Coma decimal" : k}
                                     onClick={() => pressKey(k)}
-                                    className="h-[60px] rounded-2xl bg-white/5 border border-white/5 font-mono text-2xl font-medium flex items-center justify-center transition-all active:scale-95 active:bg-white/10 [@media(hover:hover)]:hover:bg-white/[0.08]"
+                                    className="h-[60px] rounded-2xl bg-card border border-[color:var(--line)] font-mono text-2xl font-medium flex items-center justify-center transition-all active:scale-95 active:bg-secondary [@media(hover:hover)]:hover:bg-secondary"
                                 >
                                     {k === "⌫" ? <Delete className="h-6 w-6" /> : k}
                                 </button>
@@ -630,7 +630,7 @@ export default function NewExpensePage() {
                         </div>
 
                         {formError && (
-                            <div role="alert" className="mb-3 flex items-center gap-2 rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-2.5 text-sm text-red-300 animate-in fade-in">
+                            <div role="alert" className="mb-3 flex items-center gap-2 rounded-xl bg-[var(--negative-tint)] border border-[color:var(--negative)]/30 px-3 py-2.5 text-sm text-destructive animate-in fade-in">
                                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                                 <span>{formError}</span>
                             </div>
@@ -680,7 +680,7 @@ export default function NewExpensePage() {
                             <label className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground flex items-center gap-2">
                                 Categoría
                                 {categoryAutoDetected && (
-                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary normal-case tracking-normal">✨ Auto</span>
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--accent-tint)] text-primary normal-case tracking-normal">✨ Auto</span>
                                 )}
                             </label>
                             <div className="grid grid-cols-4 gap-2">
@@ -692,7 +692,7 @@ export default function NewExpensePage() {
                                         aria-pressed={category === cat.id}
                                         className={cn(
                                             "flex flex-col items-center gap-1 py-2.5 rounded-xl border transition-all active:scale-95",
-                                            category === cat.id ? "bg-primary/10 border-primary" : "bg-white/5 border-white/5 hover:bg-white/10"
+                                            category === cat.id ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)]" : "bg-card border-[color:var(--line)] hover:bg-secondary"
                                         )}
                                     >
                                         <span className="text-xl">{cat.emoji}</span>
@@ -705,7 +705,7 @@ export default function NewExpensePage() {
                         {/* Personal vs shared */}
                         <fieldset className="space-y-2 border-0 p-0 m-0">
                             <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">Tipo de gasto</legend>
-                            <div className="flex gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5">
+                            <div className="flex gap-1.5 p-1 rounded-xl bg-secondary border border-[color:var(--line)]">
                                 {([["shared", "Común", "Se reparte con el grupo"], ["personal", "Personal", "Privado, solo para ti"]] as const).map(([key, label, hint]) => (
                                     <button
                                         key={key}
@@ -735,7 +735,7 @@ export default function NewExpensePage() {
                         <>
                         <fieldset className="space-y-2 border-0 p-0 m-0">
                             <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">¿Quién pagó?</legend>
-                            <div className="flex flex-wrap gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5">
+                            <div className="flex flex-wrap gap-1.5 p-1 rounded-xl bg-secondary border border-[color:var(--line)]">
                                 {members.map((m) => (
                                     <button
                                         key={m.id}
@@ -770,7 +770,7 @@ export default function NewExpensePage() {
                                             aria-label={o.label}
                                             className={cn(
                                                 "flex items-center justify-between w-full px-4 py-3 rounded-xl border transition-all active:scale-[0.99] disabled:opacity-40",
-                                                sel ? "bg-primary/10 border-primary" : "bg-white/5 border-white/5 hover:bg-white/10"
+                                                sel ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)]" : "bg-card border-[color:var(--line)] hover:bg-secondary"
                                             )}
                                         >
                                             <span className="text-left">
@@ -779,7 +779,7 @@ export default function NewExpensePage() {
                                             </span>
                                             <span className={cn(
                                                 "h-[18px] w-[18px] rounded-full border-2 flex-shrink-0 transition-all",
-                                                sel ? "border-primary bg-primary shadow-[inset_0_0_0_3px_var(--color-background)]" : "border-white/20"
+                                                sel ? "border-primary bg-primary shadow-[inset_0_0_0_3px_var(--surface-hex)]" : "border-[color:var(--line-strong)]"
                                             )} />
                                         </button>
                                     );
@@ -787,7 +787,7 @@ export default function NewExpensePage() {
                             </div>
 
                             {split === "custom" && partner && (
-                                <div className="space-y-3 animate-in fade-in duration-200 bg-white/5 rounded-xl p-4 mt-1">
+                                <div className="space-y-3 animate-in fade-in duration-200 bg-secondary rounded-xl p-4 mt-1">
                                     <div className="flex items-center gap-3">
                                         <div className="flex-1 space-y-1">
                                             <label htmlFor="my-percent" className="text-xs text-muted-foreground">Yo</label>
@@ -800,7 +800,7 @@ export default function NewExpensePage() {
                                                     max={100}
                                                     value={myPercent}
                                                     onChange={(e) => setMyPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                                    className="w-16 bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-primary/50"
+                                                    className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-[color:var(--accent-border)]"
                                                 />
                                                 <span className="text-sm text-muted-foreground">%</span>
                                             </div>
@@ -817,7 +817,7 @@ export default function NewExpensePage() {
                                                     max={100}
                                                     value={partnerPercent}
                                                     onChange={(e) => setMyPercent(100 - Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                                    className="w-16 bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-primary/50"
+                                                    className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-[color:var(--accent-border)]"
                                                 />
                                                 <span className="text-sm text-muted-foreground">%</span>
                                             </div>
@@ -832,7 +832,7 @@ export default function NewExpensePage() {
                             )}
 
                             {split === "amounts" && !isTwoMember && (
-                                <div className="space-y-2 animate-in fade-in duration-200 bg-white/5 rounded-xl p-4 mt-1">
+                                <div className="space-y-2 animate-in fade-in duration-200 bg-secondary rounded-xl p-4 mt-1">
                                     {members.map((m) => (
                                         <div key={m.id} className="flex items-center justify-between gap-3">
                                             <label htmlFor={`amount-${m.id}`} className="text-sm text-muted-foreground truncate">
@@ -846,15 +846,15 @@ export default function NewExpensePage() {
                                                     value={memberAmounts[m.id] ?? ""}
                                                     onChange={(e) => setMemberAmounts((prev) => ({ ...prev, [m.id]: e.target.value }))}
                                                     placeholder="0,00"
-                                                    className="w-24 bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:outline-none focus:border-primary/50"
+                                                    className="w-24 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:outline-none focus:border-[color:var(--accent-border)]"
                                                 />
                                                 <span className="text-sm text-muted-foreground">€</span>
                                             </div>
                                         </div>
                                     ))}
                                     <div className={cn(
-                                        "text-xs text-center pt-1 border-t border-white/10 mt-1",
-                                        memberAmountsRemaining === 0 ? "text-emerald-400" : "text-primary"
+                                        "text-xs text-center pt-1 border-t border-[color:var(--line)] mt-1",
+                                        memberAmountsRemaining === 0 ? "text-[color:var(--positive)]" : "text-destructive"
                                     )}>
                                         {memberAmountsRemaining === 0
                                             ? "Cuadra con el total ✓"
@@ -873,7 +873,7 @@ export default function NewExpensePage() {
                             <button
                                 type="button"
                                 onClick={() => setAdvancedOpen((p) => !p)}
-                                className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-sm font-medium"
+                                className="w-full flex items-center justify-between p-3 rounded-xl bg-card border border-[color:var(--line)] hover:bg-secondary transition-colors text-sm font-medium"
                             >
                                 <span className="flex items-center gap-2">
                                     <SlidersHorizontal className="h-4 w-4 text-primary" />
@@ -901,7 +901,7 @@ export default function NewExpensePage() {
                                             <p className="text-xs text-muted-foreground px-1">Escanea un ticket o añade productos para repartir por persona.</p>
                                         ) : (
                                             <>
-                                                <div className="rounded-xl border border-white/10 overflow-hidden bg-black/20 divide-y divide-white/5">
+                                                <div className="rounded-xl border border-[color:var(--line)] overflow-hidden bg-card divide-y divide-[color:var(--line-2)]">
                                                     {receiptItems.map((item, idx) => (
                                                         <div key={item._uid} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 p-2 items-center">
                                                             <input
@@ -931,25 +931,25 @@ export default function NewExpensePage() {
                                                             </div>
                                                             <div className="font-mono font-bold text-xs w-14 text-right flex-shrink-0">{item.total.toFixed(2)}</div>
                                                             {expenseType === "shared" && isTwoMember && (
-                                                            <div className="flex items-center flex-shrink-0 rounded-lg overflow-hidden border border-white/10 text-[11px] font-bold">
+                                                            <div className="flex items-center flex-shrink-0 rounded-lg overflow-hidden border border-[color:var(--line)] text-[11px] font-bold">
                                                                 <button type="button" onClick={() => setItemAssignment(idx, null)} aria-pressed={item.assignedTo === null} aria-label="Compartido 50/50"
-                                                                    className={cn("px-2.5 py-2 transition-colors", item.assignedTo === null ? "bg-primary text-white" : "text-muted-foreground hover:bg-white/10")} title="Compartido (50/50)">½</button>
+                                                                    className={cn("px-2.5 py-2 transition-colors", item.assignedTo === null ? "bg-primary text-white" : "text-muted-foreground hover:bg-secondary")} title="Compartido (50/50)">½</button>
                                                                 <button type="button" onClick={() => setItemAssignment(idx, userId)} aria-pressed={item.assignedTo === userId} aria-label="Solo mío"
-                                                                    className={cn("px-2.5 py-2 border-l border-white/10 transition-colors", item.assignedTo === userId ? "bg-blue-500/30 text-blue-300" : "text-muted-foreground hover:bg-white/10")} title="Solo mío">Yo</button>
+                                                                    className={cn("px-2.5 py-2 border-l border-[color:var(--line)] transition-colors", item.assignedTo === userId ? "bg-[var(--accent-tint)] text-primary" : "text-muted-foreground hover:bg-secondary")} title="Solo mío">Yo</button>
                                                                 <button type="button" onClick={() => setItemAssignment(idx, partner?.id || null)} aria-pressed={item.assignedTo === partner?.id && item.assignedTo !== null} aria-label={`Solo ${partnerName}`}
-                                                                    className={cn("px-2.5 py-2 border-l border-white/10 transition-colors", item.assignedTo === partner?.id && item.assignedTo !== null ? "bg-pink-500/30 text-pink-300" : "text-muted-foreground hover:bg-white/10")} title={`Solo ${partnerName}`}>{partner?.name?.charAt(0).toUpperCase() ?? "P"}</button>
+                                                                    className={cn("px-2.5 py-2 border-l border-[color:var(--line)] transition-colors", item.assignedTo === partner?.id && item.assignedTo !== null ? "bg-secondary text-[color:var(--ink-2)]" : "text-muted-foreground hover:bg-secondary")} title={`Solo ${partnerName}`}>{partner?.name?.charAt(0).toUpperCase() ?? "P"}</button>
                                                             </div>
                                                             )}
-                                                            <button type="button" onClick={() => removeItem(idx)} aria-label={`Eliminar producto ${idx + 1}`} className="text-muted-foreground hover:text-red-400 p-2 flex-shrink-0">
+                                                            <button type="button" onClick={() => removeItem(idx)} aria-label={`Eliminar producto ${idx + 1}`} className="text-muted-foreground hover:text-destructive p-2 flex-shrink-0">
                                                                 <Trash2 className="h-4 w-4" />
                                                             </button>
                                                         </div>
                                                     ))}
                                                 </div>
                                                 {expenseType === "shared" && isTwoMember && (
-                                                <div className="text-xs px-2 py-2 bg-white/5 rounded-lg space-y-1">
-                                                    <div className="flex justify-between font-semibold text-blue-300"><span>Tu parte:</span><span>{formatEuros(itemSplitMyAmount)}</span></div>
-                                                    <div className="flex justify-between font-semibold text-pink-300"><span>{partnerName}:</span><span>{formatEuros(itemSplitPartnerAmount)}</span></div>
+                                                <div className="text-xs px-2 py-2 bg-secondary rounded-lg space-y-1">
+                                                    <div className="flex justify-between font-semibold text-primary"><span>Tu parte:</span><span className="font-mono">{formatEuros(itemSplitMyAmount)}</span></div>
+                                                    <div className="flex justify-between font-semibold text-[color:var(--ink-2)]"><span>{partnerName}:</span><span className="font-mono">{formatEuros(itemSplitPartnerAmount)}</span></div>
                                                 </div>
                                                 )}
                                             </>
@@ -969,9 +969,9 @@ export default function NewExpensePage() {
                                                 onChange={(e) => setNotes(e.target.value.slice(0, 500))}
                                                 placeholder="Añade una nota opcional..."
                                                 rows={3}
-                                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 resize-none placeholder:text-muted-foreground/50 transition-colors"
+                                                className="w-full bg-card border border-[color:var(--line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[color:var(--accent-border)] resize-none placeholder:text-[color:var(--ink-3)] transition-colors"
                                             />
-                                            <span className={cn("absolute bottom-2 right-3 text-[10px]", notes.length >= 480 ? "text-yellow-400" : "text-muted-foreground/50")}>
+                                            <span className={cn("absolute bottom-2 right-3 text-[10px]", notes.length >= 480 ? "text-destructive" : "text-[color:var(--ink-3)]")}>
                                                 {notes.length}/500
                                             </span>
                                         </div>
@@ -982,7 +982,7 @@ export default function NewExpensePage() {
                                         <label className="text-sm font-medium flex items-center gap-2">
                                             <Tag className="h-4 w-4 text-primary" /> Etiquetas
                                             {selectedTagIds.length > 0 && (
-                                                <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold">{selectedTagIds.length}</span>
+                                                <span className="text-xs bg-[var(--accent-tint)] text-primary px-1.5 py-0.5 rounded-full font-bold">{selectedTagIds.length}</span>
                                             )}
                                         </label>
                                         {tags.length > 0 && (
@@ -991,7 +991,7 @@ export default function NewExpensePage() {
                                                     const isSelected = selectedTagIds.includes(tag.id);
                                                     return (
                                                         <button key={tag.id} type="button" onClick={() => toggleTag(tag.id)} aria-pressed={isSelected}
-                                                            className={cn("px-3 py-1 rounded-full text-xs font-semibold border transition-all", isSelected ? "border-transparent text-white scale-105" : "border-white/10 text-muted-foreground bg-white/5 hover:bg-white/10")}
+                                                            className={cn("px-3 py-1 rounded-full text-xs font-semibold border transition-all", isSelected ? "border-transparent text-white scale-105" : "border-[color:var(--line)] text-muted-foreground bg-card hover:bg-secondary")}
                                                             style={isSelected ? { backgroundColor: tag.color, borderColor: tag.color } : {}}>
                                                             {tag.name}
                                                         </button>
@@ -1006,12 +1006,12 @@ export default function NewExpensePage() {
                                         ) : (
                                             <div className="space-y-3 animate-in fade-in duration-200">
                                                 <input type="text" value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="Nombre de la etiqueta" aria-label="Nombre de la etiqueta"
-                                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+                                                    className="w-full bg-card border border-[color:var(--line)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[color:var(--accent-border)]"
                                                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreateTag(); } }} />
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     {TAG_PRESET_COLORS.map((color) => (
                                                         <button key={color} type="button" aria-label={`Color ${color}`} aria-pressed={newTagColor === color} onClick={() => setNewTagColor(color)}
-                                                            className={cn("h-8 w-8 rounded-full border-2 transition-transform", newTagColor === color ? "border-white scale-110" : "border-transparent")}
+                                                            className={cn("h-8 w-8 rounded-full border-2 transition-transform", newTagColor === color ? "border-foreground scale-110" : "border-transparent")}
                                                             style={{ backgroundColor: color }} />
                                                     ))}
                                                 </div>
@@ -1031,11 +1031,11 @@ export default function NewExpensePage() {
                                             <span className="text-sm font-medium flex items-center gap-2">
                                                 <RefreshCw className="h-4 w-4 text-primary" /> Recurrente
                                                 {isRecurring && (
-                                                    <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold capitalize">{recurringIntervalLabel[recurringInterval]}</span>
+                                                    <span className="text-xs bg-[var(--accent-tint)] text-primary px-1.5 py-0.5 rounded-full font-bold capitalize">{recurringIntervalLabel[recurringInterval]}</span>
                                                 )}
                                             </span>
                                             <button type="button" role="switch" aria-checked={isRecurring} aria-label="¿Es un gasto recurrente?" onClick={() => setIsRecurring((p) => !p)}
-                                                className={cn("relative h-6 w-11 rounded-full transition-colors", isRecurring ? "bg-primary" : "bg-white/10")}>
+                                                className={cn("relative h-6 w-11 rounded-full transition-colors", isRecurring ? "bg-primary" : "bg-secondary border border-[color:var(--line)]")}>
                                                 <span className={cn("absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", isRecurring && "translate-x-5")} />
                                             </button>
                                         </div>
@@ -1046,7 +1046,7 @@ export default function NewExpensePage() {
                                                     const icons = { weekly: "📅", monthly: "🗓️", yearly: "🔄" };
                                                     return (
                                                         <button key={interval} type="button" onClick={() => setRecurringInterval(interval)} aria-pressed={recurringInterval === interval}
-                                                            className={cn("py-3 rounded-xl border text-center transition-all text-sm font-medium", recurringInterval === interval ? "bg-primary/20 border-primary text-primary" : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10")}>
+                                                            className={cn("py-3 rounded-xl border text-center transition-all text-sm font-medium", recurringInterval === interval ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)] text-primary" : "border-[color:var(--line)] bg-card text-muted-foreground hover:bg-secondary")}>
                                                             <span className="block text-lg mb-1">{icons[interval]}</span>
                                                             {labels[interval]}
                                                         </button>
@@ -1062,7 +1062,7 @@ export default function NewExpensePage() {
                         {/* Sticky submit */}
                         <div className="sticky bottom-0 -mx-4 px-4 pt-6 pb-4 mt-auto bg-gradient-to-t from-background via-background to-transparent space-y-3">
                             {formError && (
-                                <div role="alert" className="flex items-center gap-2 rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-2.5 text-sm text-red-300 animate-in fade-in slide-in-from-bottom-2">
+                                <div role="alert" className="flex items-center gap-2 rounded-xl bg-[var(--negative-tint)] border border-[color:var(--negative)]/30 px-3 py-2.5 text-sm text-destructive animate-in fade-in slide-in-from-bottom-2">
                                     <AlertCircle className="h-4 w-4 flex-shrink-0" />
                                     <span>{formError}</span>
                                 </div>
@@ -1084,21 +1084,21 @@ export default function NewExpensePage() {
 
             {/* ============ SCAN OVERLAY ============ */}
             {scanState !== "idle" && (
-                <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-md flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
                     <button type="button" onClick={discardScan} aria-label="Cerrar escáner" className="absolute top-12 right-6 text-muted-foreground p-1 active:scale-90">
                         <X className="h-6 w-6" />
                     </button>
 
                     {scanState === "scanning" && (
                         <output aria-live="polite" className="flex flex-col items-center">
-                            <div className="relative w-[200px] h-[260px] rounded-xl overflow-hidden bg-black/40 border border-white/10 shadow-2xl">
+                            <div className="relative w-[200px] h-[260px] rounded-xl overflow-hidden bg-secondary border border-[color:var(--line)] shadow-2xl">
                                 {receiptPreview ? (
                                     // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded receipt of unknown dimensions
                                     <img src={receiptPreview} alt="Ticket en escaneo" className="w-full h-full object-cover opacity-80" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center"><Camera className="h-10 w-10 text-muted-foreground" /></div>
                                 )}
-                                <div className="absolute left-0 right-0 h-0.5 bg-primary shadow-[0_0_14px_2px_var(--color-primary,#7c3aed)] animate-equil-scan" />
+                                <div className="absolute left-0 right-0 h-0.5 bg-primary shadow-[0_0_14px_2px_var(--accent-hex)] animate-equil-scan" />
                             </div>
                             <div className="flex items-center gap-2.5 mt-6 text-muted-foreground">
                                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -1110,8 +1110,8 @@ export default function NewExpensePage() {
                     {scanState === "done" && pendingOcr && (
                         <div className="w-full max-w-[320px] animate-in fade-in duration-200">
                             <div className="flex flex-col items-center">
-                                <div className="h-12 w-12 rounded-full bg-emerald-400/10 border border-emerald-400/30 flex items-center justify-center">
-                                    <Check className="h-6 w-6 text-emerald-400" />
+                                <div className="h-12 w-12 rounded-full bg-[var(--positive-tint)] border border-[color:var(--positive)]/30 flex items-center justify-center">
+                                    <Check className="h-6 w-6 text-[color:var(--positive)]" />
                                 </div>
                                 <h3 className="text-lg font-bold mt-3.5">Recibo detectado</h3>
                                 <p className="text-sm text-muted-foreground">
@@ -1119,7 +1119,7 @@ export default function NewExpensePage() {
                                 </p>
                             </div>
                             {pendingOcr.items.length > 0 && (
-                                <div className="mt-5 rounded-xl bg-white/5 border border-white/10 p-2 max-h-52 overflow-y-auto">
+                                <div className="mt-5 rounded-xl bg-card border border-[color:var(--line)] p-2 max-h-52 overflow-y-auto">
                                     {pendingOcr.items.slice(0, 8).map((it, i) => (
                                         <div key={i} className="flex justify-between px-3 py-2 text-sm">
                                             <span className="text-muted-foreground truncate mr-2">{it.description || "Producto"}</span>

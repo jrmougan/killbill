@@ -66,16 +66,16 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
         <div className="flex flex-col min-h-screen p-3 sm:p-4 space-y-6 max-w-md mx-auto relative pb-24 w-full overflow-x-hidden">
             <header className="flex items-center gap-2 pt-2">
                 <Link href="/dashboard">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
                 <div className="flex-1 min-w-0">
-                    <h1 className="text-xl font-bold truncate">{expense.description}</h1>
-                    <p className="text-xs text-muted-foreground">{new Date(expense.date).toLocaleDateString("es-ES")}</p>
+                    <h1 className="text-xl font-bold truncate text-foreground">{expense.description}</h1>
+                    <p className="text-xs text-[color:var(--ink-3)]">{new Date(expense.date).toLocaleDateString("es-ES")}</p>
                 </div>
                 <Link href={`/expense/${expense.id}/edit`}>
-                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-white">
+                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                         <Pencil className="h-4 w-4 sm:mr-2" />
                         <span className="hidden sm:inline">Editar</span>
                     </Button>
@@ -85,13 +85,13 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
             </header>
 
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="text-center py-6 bg-white/5 rounded-3xl border border-white/10">
-                    <p className="text-sm text-muted-foreground uppercase tracking-widest font-bold mb-2">Importe Total</p>
-                    <h2 className="text-4xl sm:text-5xl md:text-6xl font-mono font-bold tracking-tighter">
+                <div className="text-center py-6 bg-card rounded-3xl border border-[color:var(--line)]">
+                    <p className="text-[11px] text-muted-foreground uppercase tracking-[0.08em] font-bold mb-2">Importe Total</p>
+                    <h2 className="text-4xl sm:text-5xl md:text-6xl font-mono font-semibold tracking-[-0.02em] text-foreground">
                         {formatCurrency(expense.amount)}
                     </h2>
                     <div className="mt-4 flex items-center justify-center gap-2">
-                        <div className="h-6 w-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
+                        <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center overflow-hidden">
                             {isAvatarUrl(expense.paidBy.avatar) ? (
                                 // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                 <img src={expense.paidBy.avatar} alt={expense.paidBy.name} className="h-full w-full object-cover" />
@@ -99,32 +99,32 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                 expense.paidBy.avatar || "👤"
                             )}
                         </div>
-                        <p className="text-sm font-medium">Pagado por <span className="text-primary">{isMe ? "Ti" : expense.paidBy.name}</span></p>
+                        <p className="text-sm font-medium text-[color:var(--body-ink)]">Pagado por <span className="text-primary">{isMe ? "Ti" : expense.paidBy.name}</span></p>
                     </div>
                 </div>
 
                 {isPersonal ? (
-                    <div className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-white/5 border border-white/10 text-sm text-muted-foreground">
+                    <div className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-card border border-[color:var(--line)] text-sm text-muted-foreground">
                         <User className="h-4 w-4 text-primary" />
                         Gasto personal — privado, solo tú lo ves
                     </div>
                 ) : (
                 <div className="space-y-4">
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1 flex items-center gap-2">
+                    <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground ml-1 flex items-center gap-2">
                         <Heart className="h-4 w-4 fill-primary text-primary" />
                         Reparto del gasto
                     </h3>
-                    <div className="bg-card border border-white/10 rounded-2xl overflow-hidden">
+                    <div className="bg-card border border-[color:var(--line)] rounded-2xl overflow-hidden">
                         {expense.splits.length === 0 ? (
-                            <div className="p-8 text-center text-muted-foreground border-dashed border-white/10">
+                            <div className="p-8 text-center text-muted-foreground border-dashed border-[color:var(--line-strong)]">
                                 No hay detalles de reparto para este gasto.
                             </div>
                         ) : (
-                            <div className="divide-y divide-white/5">
+                            <div className="divide-y divide-[color:var(--line-2)]">
                                 {expense.splits.map((split) => (
-                                    <div key={split.id} className="flex items-center justify-between px-3 py-3 sm:p-4 bg-white/5">
+                                    <div key={split.id} className="flex items-center justify-between px-3 py-3 sm:p-4 bg-card">
                                         <div className="flex items-center gap-3">
-                                            <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center text-xs overflow-hidden text-lg">
+                                            <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-xs overflow-hidden text-lg">
                                                 {isAvatarUrl(split.user.avatar) ? (
                                                     // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                                     <img src={split.user.avatar} alt={split.user.name} className="h-full w-full object-cover" />
@@ -133,14 +133,14 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                                 )}
                                             </div>
                                             <div>
-                                                <p className="font-medium text-xs sm:text-sm">{split.userId === userId ? "Ti" : split.user.name}</p>
+                                                <p className="font-medium text-xs sm:text-sm text-foreground">{split.userId === userId ? "Ti" : split.user.name}</p>
                                                 {split.userId === expense.paidById && (
-                                                    <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-tighter">Pagó</p>
+                                                    <p className="text-[10px] text-[color:var(--positive)] font-bold uppercase tracking-tighter">Pagó</p>
                                                 )}
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-mono font-bold">{formatCurrency(split.amount)}</p>
+                                            <p className="font-mono font-semibold tracking-[-0.02em] text-foreground">{formatCurrency(split.amount)}</p>
                                             <p className="text-[10px] text-muted-foreground uppercase">{split.userId === expense.paidById ? "Su parte" : "Cargo"}</p>
                                         </div>
                                     </div>
@@ -153,7 +153,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
                 {expense.tags.length > 0 && (
                     <div className="space-y-4">
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1 flex items-center gap-2">
+                        <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground ml-1 flex items-center gap-2">
                             <Tag className="h-4 w-4 text-primary" />
                             Etiquetas
                         </h3>
@@ -177,28 +177,28 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
                 {receiptItems.length > 0 && (
                     <div className="space-y-4">
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1 flex items-center gap-2">
+                        <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground ml-1 flex items-center gap-2">
                             <Calculator className="h-4 w-4 text-primary" />
                             Desglose de Compra
                         </h3>
-                        <div className="rounded-2xl border border-white/10 overflow-hidden bg-black/20">
-                            <div className="divide-y divide-white/5">
+                        <div className="rounded-2xl border border-[color:var(--line)] overflow-hidden bg-card">
+                            <div className="divide-y divide-[color:var(--line-2)]">
                                 {receiptItems.map((item, idx) => (
                                     <div key={idx} className="grid grid-cols-[auto_1fr_auto_auto] gap-1.5 sm:gap-3 p-2.5 sm:p-3 items-center text-xs sm:text-sm">
                                         {/* Assignment indicator */}
-                                        <div className={`h-6 w-6 rounded-full flex-shrink-0 flex items-center justify-center ${item.assignedTo ? 'bg-pink-500/20 text-pink-400' : 'bg-white/5 text-muted-foreground'}`}>
+                                        <div className={`h-6 w-6 rounded-full flex-shrink-0 flex items-center justify-center ${item.assignedTo ? 'bg-[var(--accent-tint)] text-primary' : 'bg-secondary text-muted-foreground'}`}>
                                             {item.assignedTo ? <User className="h-3.5 w-3.5" /> : <Heart className="h-3.5 w-3.5" />}
                                         </div>
-                                        <div className="font-medium break-words leading-tight py-1 min-w-0">{item.description}</div>
+                                        <div className="font-medium break-words leading-tight py-1 min-w-0 text-foreground">{item.description}</div>
                                         <div className="text-right text-muted-foreground text-[10px] leading-tight min-w-[45px] sm:min-w-[60px]">
                                             {item.quantity > 1 && (
-                                                <div className="flex flex-col">
+                                                <div className="flex flex-col font-mono">
                                                     <span>{item.quantity} x</span>
                                                     <span>{formatEuros(item.price)}</span>
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="font-mono font-bold text-right w-fit min-w-[3.5rem] sm:w-16 flex-shrink-0 ml-1">
+                                        <div className="font-mono font-semibold tracking-[-0.02em] text-right w-fit min-w-[3.5rem] sm:w-16 flex-shrink-0 ml-1 text-foreground">
                                             {formatEuros(item.total)}
                                         </div>
                                     </div>
@@ -206,20 +206,20 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                             </div>
                             {/* Summary footer with shared vs personal breakdown */}
                             {receiptItems.some(i => i.assignedTo) && (
-                                <div className="bg-white/5 p-3 space-y-2 border-t border-white/5">
+                                <div className="bg-secondary p-3 space-y-2 border-t border-[color:var(--line)]">
                                     <div className="flex justify-between text-xs text-muted-foreground">
                                         <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> Común (50/50)</span>
-                                        <span>{formatEuros(receiptItems.filter(i => !i.assignedTo).reduce((acc, i) => acc + i.total, 0))}</span>
+                                        <span className="font-mono">{formatEuros(receiptItems.filter(i => !i.assignedTo).reduce((acc, i) => acc + i.total, 0))}</span>
                                     </div>
-                                    <div className="flex justify-between text-xs text-pink-400">
+                                    <div className="flex justify-between text-xs text-primary">
                                         <span className="flex items-center gap-1"><User className="h-3 w-3" /> Solo {partner?.name}</span>
-                                        <span>{formatEuros(receiptItems.filter(i => i.assignedTo).reduce((acc, i) => acc + i.total, 0))}</span>
+                                        <span className="font-mono">{formatEuros(receiptItems.filter(i => i.assignedTo).reduce((acc, i) => acc + i.total, 0))}</span>
                                     </div>
                                 </div>
                             )}
-                            <div className="bg-white/5 p-3 flex justify-between items-center border-t border-white/5">
+                            <div className="bg-secondary p-3 flex justify-between items-center border-t border-[color:var(--line)]">
                                 <span className="font-bold text-sm text-muted-foreground">Total Detallado</span>
-                                <span className="font-mono font-bold">
+                                <span className="font-mono font-semibold tracking-[-0.02em] text-foreground">
                                     {formatEuros(receiptItems.reduce((acc, i) => acc + i.total, 0))}
                                 </span>
                             </div>
@@ -229,8 +229,8 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
                 {expense.receiptUrl && (
                     <div className="space-y-4">
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1">Ticket de Compra</h3>
-                        <div className="rounded-2xl border border-white/10 overflow-hidden bg-white/5">
+                        <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground ml-1">Ticket de Compra</h3>
+                        <div className="rounded-2xl border border-[color:var(--line)] overflow-hidden bg-card">
                             {/* oxlint-disable-next-line nextjs/no-img-element -- user-uploaded receipt image of unknown dimensions; next/image would change layout/runtime */}
                             <img
                                 src={expense.receiptUrl}

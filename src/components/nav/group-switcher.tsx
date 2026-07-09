@@ -41,7 +41,7 @@ export function GroupSwitcher({ groups, activeGroupId }: { groups: { id: string;
             {open && (
                 <>
                     <button type="button" aria-label="Cerrar" className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} />
-                    <div className="absolute z-50 mt-1 left-0 min-w-[190px] rounded-xl bg-[hsl(var(--surface-raised))] border border-white/10 shadow-[0_10px_28px_-10px_rgba(0,0,0,0.8)] py-1">
+                    <div className="absolute z-50 mt-1 left-0 min-w-[190px] rounded-xl bg-card border border-[color:var(--line)] shadow-[0_10px_28px_-10px_rgba(0,0,0,0.15)] py-1">
                         {groups.map((g) => (
                             <button
                                 key={g.id}
@@ -49,7 +49,7 @@ export function GroupSwitcher({ groups, activeGroupId }: { groups: { id: string;
                                 onClick={() => pick(g.id)}
                                 disabled={pending}
                                 className={cn(
-                                    "flex items-center justify-between w-full px-3 py-2.5 text-sm hover:bg-white/5 transition-colors disabled:opacity-50",
+                                    "flex items-center justify-between w-full px-3 py-2.5 text-sm hover:bg-secondary transition-colors disabled:opacity-50",
                                     g.id === activeGroupId ? "text-foreground font-medium" : "text-muted-foreground"
                                 )}
                             >

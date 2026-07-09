@@ -109,11 +109,11 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto relative pb-24">
             <header className="flex items-center gap-4 pt-2">
                 <Link href="/dashboard">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
-                <h1 className="text-xl font-bold">Ajustes</h1>
+                <h1 className="text-xl font-bold text-foreground">Ajustes</h1>
             </header>
 
             <div className="space-y-8 flex-1">
@@ -146,12 +146,12 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                                 id="settings-email"
                                 value={user.email}
                                 disabled
-                                className="bg-white/5 opacity-50"
+                                className="bg-secondary opacity-60"
                             />
                         </div>
 
                         {message && (
-                            <p className={`text-xs text-center font-medium ${message.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                            <p className={`text-xs text-center font-medium ${message.type === 'success' ? 'text-[color:var(--positive)]' : 'text-destructive'}`}>
                                 {message.text}
                             </p>
                         )}
@@ -171,17 +171,17 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                 {couple && (
                     <section className="space-y-4">
                         <div className="flex items-center gap-2 px-1">
-                            <Heart className="h-5 w-5 text-pink-500" />
+                            <Heart className="h-5 w-5 text-primary" />
                             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Mi Grupo</h2>
                         </div>
 
                         <GlassCard className="p-4 space-y-4">
                             <div className="flex items-center justify-between">
                                 <div className="space-y-1">
-                                    <p className="text-sm font-bold">{partner ? partner.name : "Esperando..."}</p>
+                                    <p className="text-sm font-bold text-foreground">{partner ? partner.name : "Esperando..."}</p>
                                     <p className="text-xs text-muted-foreground">{partner ? "Miembro del grupo" : "Comparte tu código"}</p>
                                 </div>
-                                <div className="h-10 w-10 rounded-full bg-pink-500/20 flex items-center justify-center text-xl overflow-hidden">
+                                <div className="h-10 w-10 rounded-full bg-[var(--accent-tint)] flex items-center justify-center text-xl overflow-hidden">
                                     {partner?.avatar && isAvatarUrl(partner.avatar) ? (
                                         // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                         <img
@@ -195,13 +195,13 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                                 </div>
                             </div>
 
-                            <div className="p-3 bg-black/20 rounded-xl border border-white/5 flex items-center justify-between">
+                            <div className="p-3 bg-secondary rounded-xl border border-[color:var(--line)] flex items-center justify-between">
                                 <div className="space-y-1">
                                     <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Código de invitación</p>
-                                    <code className="text-lg font-mono font-bold tracking-tighter">{couple.code}</code>
+                                    <code className="text-lg font-mono font-bold tracking-tighter text-foreground">{couple.code}</code>
                                 </div>
                                 <Button size="icon" variant="ghost" onClick={copyCode} className="h-10 w-10">
-                                    {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                                    {copied ? <Check className="h-4 w-4 text-[color:var(--positive)]" /> : <Copy className="h-4 w-4" />}
                                 </Button>
                             </div>
                         </GlassCard>
@@ -217,17 +217,17 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                         </div>
 
                         <div className="space-y-3">
-                            <Link href="/budget" className="flex items-center gap-3 w-full h-14 px-4 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                            <Link href="/budget" className="flex items-center gap-3 w-full h-14 px-4 bg-card border border-[color:var(--line)] rounded-xl hover:bg-secondary transition-colors">
                                 <PieChart className="h-5 w-5 text-muted-foreground" />
-                                <span className="font-medium text-sm">Presupuestos</span>
+                                <span className="font-medium text-sm text-foreground">Presupuestos</span>
                             </Link>
-                            <Link href="/tags" className="flex items-center gap-3 w-full h-14 px-4 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                            <Link href="/tags" className="flex items-center gap-3 w-full h-14 px-4 bg-card border border-[color:var(--line)] rounded-xl hover:bg-secondary transition-colors">
                                 <Tag className="h-5 w-5 text-muted-foreground" />
-                                <span className="font-medium text-sm">Etiquetas</span>
+                                <span className="font-medium text-sm text-foreground">Etiquetas</span>
                             </Link>
-                            <a href="/api/export" download className="flex items-center gap-3 w-full h-14 px-4 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-colors">
+                            <a href="/api/export" download className="flex items-center gap-3 w-full h-14 px-4 bg-card border border-[color:var(--line)] rounded-xl hover:bg-secondary transition-colors">
                                 <Download className="h-5 w-5 text-muted-foreground" />
-                                <span className="font-medium text-sm">Exportar gastos (CSV)</span>
+                                <span className="font-medium text-sm text-foreground">Exportar gastos (CSV)</span>
                             </a>
                         </div>
                     </section>
@@ -236,17 +236,17 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                 {/* Account Section */}
                 <section className="space-y-4">
                     <div className="flex items-center gap-2 px-1">
-                        <ShieldAlert className="h-5 w-5 text-red-500" />
+                        <ShieldAlert className="h-5 w-5 text-destructive" />
                         <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Cuenta</h2>
                     </div>
 
                     <div className="space-y-3">
-                        <LogoutButton className="w-full justify-start h-14 bg-white/5 border border-white/5 hover:bg-white/10" />
+                        <LogoutButton className="w-full justify-start h-14 bg-card border border-[color:var(--line)] hover:bg-secondary" />
 
                         {couple && (
                             <Button
                                 variant="ghost"
-                                className="w-full justify-start h-14 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-red-500/20"
+                                className="w-full justify-start h-14 bg-[var(--negative-tint)] text-destructive hover:opacity-90 border border-[color:var(--line)]"
                                 onClick={handleUnlink}
                                 isLoading={isUnlinking}
                             >
@@ -259,7 +259,7 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
 
             <footer className="text-center space-y-1 py-4">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">EQUIL App v1.0.0 Beta</p>
-                <p className="text-[10px] text-white/20">Hecho con ❤️ para compartir gastos</p>
+                <p className="text-[10px] text-[color:var(--ink-3)]">Hecho con ❤️ para compartir gastos</p>
             </footer>
         </div>
     );

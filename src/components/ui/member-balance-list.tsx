@@ -37,10 +37,10 @@ export function MemberBalanceList({
                 return (
                     <li
                         key={m.id}
-                        className="flex items-center justify-between gap-3 rounded-xl bg-[hsl(var(--surface))] border border-white/[0.06] px-3 py-2.5"
+                        className="flex items-center justify-between gap-3 rounded-xl bg-card border border-[color:var(--line-2)] px-3 py-2.5"
                     >
                         <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="w-8 h-8 shrink-0 rounded-full bg-[hsl(var(--surface-raised))] border border-white/[0.08] flex items-center justify-center overflow-hidden text-sm font-bold text-muted-foreground">
+                            <span className="w-8 h-8 shrink-0 rounded-full bg-secondary border border-[color:var(--line)] flex items-center justify-center overflow-hidden text-sm font-bold text-muted-foreground">
                                 {isAvatarUrl(m.avatar) ? (
                                     // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                     <img src={m.avatar!} alt={m.name} className="w-full h-full object-cover" />
@@ -56,7 +56,7 @@ export function MemberBalanceList({
                         <span
                             className={cn(
                                 "text-sm font-mono font-semibold shrink-0",
-                                cents > 0 ? "text-emerald-400" : cents < 0 ? "text-primary" : "text-muted-foreground"
+                                cents > 0 ? "text-[color:var(--positive)]" : cents < 0 ? "text-destructive" : "text-muted-foreground"
                             )}
                         >
                             {cents > 0 ? "+" : ""}

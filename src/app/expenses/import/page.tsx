@@ -113,7 +113,7 @@ export default function ImportCsvPage() {
         <div className="flex flex-col min-h-screen p-4 pb-24 space-y-5 max-w-md mx-auto w-full">
             <header className="flex items-center gap-2 pt-2">
                 <Link href="/dashboard?scope=personal">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
@@ -122,7 +122,7 @@ export default function ImportCsvPage() {
 
             {result ? (
                 <GlassCard className="text-center py-10 px-6 space-y-4">
-                    <CheckCircle2 className="h-12 w-12 text-emerald-400 mx-auto" />
+                    <CheckCircle2 className="h-12 w-12 text-[color:var(--positive)] mx-auto" />
                     <div className="space-y-1">
                         <h2 className="text-lg font-bold">Importación completada</h2>
                         <p className="text-sm text-muted-foreground">
@@ -194,7 +194,7 @@ export default function ImportCsvPage() {
 
                     <div className="space-y-2">
                         {expenses.slice(0, 100).map((e) => (
-                            <label key={e.i} className="flex items-center gap-3 p-3 rounded-xl bg-[hsl(var(--surface))] border border-white/5 cursor-pointer">
+                            <label key={e.i} className="flex items-center gap-3 p-3 rounded-[14px] bg-card border border-[color:var(--line-2)] cursor-pointer">
                                 <input
                                     type="checkbox"
                                     checked={!excluded.has(e.i)}
@@ -209,7 +209,7 @@ export default function ImportCsvPage() {
                                     <p className="text-[14px] text-foreground truncate">{e.description}</p>
                                     <p className="text-[11px] text-muted-foreground">{e.dateISO}</p>
                                 </div>
-                                <span className="text-[14px] font-mono font-semibold text-foreground shrink-0">{formatEuros(e.amountCents / 100)}</span>
+                                <span className="text-[14px] font-mono font-semibold tracking-[-0.02em] text-foreground shrink-0">{formatEuros(e.amountCents / 100)}</span>
                             </label>
                         ))}
                         {expenses.length > 100 && (
@@ -220,7 +220,7 @@ export default function ImportCsvPage() {
                         )}
                     </div>
 
-                    {error && <p className="text-sm text-red-400 text-center">{error}</p>}
+                    {error && <p className="text-sm text-destructive text-center">{error}</p>}
 
                     <div className="sticky bottom-0 pt-2 pb-1 bg-gradient-to-t from-background to-transparent">
                         <Button className="w-full h-12" disabled={importing || toImport.length === 0} onClick={doImport}>
@@ -247,7 +247,7 @@ function Select({ value, options, labels, onChange }: { value: string; options: 
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full h-10 rounded-lg bg-[hsl(var(--surface-raised))] border border-white/10 px-2 text-[13px] text-foreground focus:outline-none focus:border-primary/60"
+            className="w-full h-10 rounded-lg bg-card border border-[color:var(--line)] px-2 text-[13px] text-foreground focus:outline-none focus:border-[color:var(--accent-border)]"
         >
             {options.map((o) => (
                 <option key={o} value={o}>{labels?.[o] ?? o}</option>

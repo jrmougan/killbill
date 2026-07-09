@@ -9,8 +9,8 @@ export function GlassCard({ children, className, gradient, ...props }: GlassCard
     return (
         <div
             className={cn(
-                "glass-card p-4 rounded-2xl transition-all duration-300",
-                gradient && "bg-gradient-to-br from-white/10 to-transparent",
+                "bg-card border border-[color:var(--line)] p-4 rounded-2xl transition-all duration-300",
+                gradient && "bg-gradient-to-br from-secondary to-transparent",
                 className
             )}
             {...props}

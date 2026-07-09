@@ -33,13 +33,13 @@ function ProgressBar({ percentage }: { percentage: number }) {
     const clamped = Math.min(percentage, 100);
     const colorClass =
         percentage > 100
-            ? "bg-red-500"
+            ? "bg-[color:var(--negative)]"
             : percentage >= 80
-            ? "bg-yellow-400"
-            : "bg-emerald-500";
+            ? "bg-[#C9A227]"
+            : "bg-[color:var(--positive)]";
 
     return (
-        <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+        <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
             <div
                 className={`h-full rounded-full transition-all duration-500 ${colorClass}`}
                 style={{ width: `${clamped}%` }}
@@ -132,7 +132,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-24">
             <header className="flex items-center gap-4 pt-2">
                 <Link href="/settings">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
@@ -143,7 +143,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
             </header>
 
             {hasCouple && (
-                <div className="flex gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5">
+                <div className="flex gap-1.5 p-1 rounded-xl bg-secondary border border-[color:var(--line)]">
                     {([["shared", "Común"], ["personal", "Personal"]] as const).map(([key, label]) => (
                         <button
                             key={key}
@@ -179,8 +179,8 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
                             <GlassCard key={entry.budget.id} className="p-4 space-y-3">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${cat?.bgColor ?? "bg-white/10"}`}>
-                                            {Icon && <Icon className={`h-5 w-5 ${cat?.color ?? "text-white"}`} />}
+                                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${cat?.bgColor ?? "bg-secondary"}`}>
+                                            {Icon && <Icon className={`h-5 w-5 ${cat?.color ?? "text-foreground"}`} />}
                                         </div>
                                         <div>
                                             <p className="font-semibold text-sm">{cat?.label ?? entry.budget.category}</p>
@@ -207,7 +207,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
                                                 <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="h-8 w-8 text-emerald-400 hover:text-emerald-300"
+                                                    className="h-8 w-8 text-[color:var(--positive)] hover:opacity-80"
                                                     onClick={() => handleSaveEdit(entry)}
                                                     disabled={saving}
                                                 >
@@ -216,19 +216,19 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
                                                 <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="h-8 w-8 text-muted-foreground hover:text-white"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                                     onClick={() => { setEditingId(null); setEditValue(""); setError(null); }}
                                                 >
                                                     <X className="h-4 w-4" />
                                                 </Button>
                                             </div>
-                                            {error && <p className="text-xs text-red-400">{error}</p>}
+                                            {error && <p className="text-xs text-destructive">{error}</p>}
                                         </div>
                                     ) : (
                                         <Button
                                             size="icon"
                                             variant="ghost"
-                                            className="h-8 w-8 text-muted-foreground hover:text-white"
+                                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                             onClick={() => {
                                                 setEditingId(entry.budget.id);
                                                 setEditValue(entry.budget.amount.toString());
@@ -293,7 +293,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
                                                 <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="h-8 w-8 text-emerald-400 hover:text-emerald-300"
+                                                    className="h-8 w-8 text-[color:var(--positive)] hover:opacity-80"
                                                     onClick={() => handleAddBudget(cat.id)}
                                                     disabled={saving}
                                                 >
@@ -302,19 +302,19 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
                                                 <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="h-8 w-8 text-muted-foreground hover:text-white"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                                     onClick={() => { setAddingCategory(null); setAddValue(""); setError(null); }}
                                                 >
                                                     <X className="h-4 w-4" />
                                                 </Button>
                                             </div>
-                                            {error && <p className="text-xs text-red-400">{error}</p>}
+                                            {error && <p className="text-xs text-destructive">{error}</p>}
                                         </div>
                                     ) : (
                                         <Button
                                             size="icon"
                                             variant="ghost"
-                                            className="h-8 w-8 text-muted-foreground hover:text-white"
+                                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                             onClick={() => {
                                                 setAddingCategory(cat.id);
                                                 setAddValue("");
