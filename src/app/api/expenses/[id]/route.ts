@@ -23,7 +23,7 @@ export async function DELETE(
         // Get expense and verify ownership
         const expense = await prisma.expense.findUnique({
             where: { id },
-            include: { couple: { include: { members: true } } }
+            include: { couple: { include: { members: true } }, series: true }
         });
 
         if (!expense) {
@@ -43,10 +43,11 @@ export async function DELETE(
         // Phase 4 (recurring-sync): deleting a recurring TEMPLATE must stop its
         // series or the series-driven materializer keeps firing with no template.
         // Deactivate (don't delete) so already-materialized instances keep their
-        // seriesId lineage (series deletion would SetNull them). Instances
-        // (isRecurring=false) never deactivate the series.
+        // seriesId lineage (series deletion would SetNull them). Phase 5: the
+        // template is identified by series.templateId === this expense (not the
+        // retired isRecurring column); instances never deactivate the series.
         await prisma.$transaction(async (tx) => {
-            if (expense.isRecurring && expense.seriesId) {
+            if (expense.seriesId && expense.series?.templateId === expense.id) {
                 await tx.recurringSeries.update({
                     where: { id: expense.seriesId },
                     data: { isActive: false },
@@ -78,7 +79,7 @@ export async function PATCH(
         // Get expense and verify ownership
         const expense = await prisma.expense.findUnique({
             where: { id },
-            include: { couple: { include: { members: true } }, ...RECEIPT_LINES_SELECT }
+            include: { couple: { include: { members: true } }, series: true, ...RECEIPT_LINES_SELECT }
         });
 
         if (!expense) {
@@ -138,9 +139,14 @@ export async function PATCH(
             }
         }
 
-        // Recalculate nextRecurringDate if recurring settings changed
-        const resolvedIsRecurring = isRecurring ?? expense.isRecurring;
-        const resolvedInterval = recurringInterval !== undefined ? recurringInterval : expense.recurringInterval;
+        // Recalculate nextRecurringDate if recurring settings changed.
+        // Phase 5 (stop-dual-write): pre-state comes from the linked series (this
+        // expense is the TEMPLATE iff series.templateId === its id), not the retired
+        // Expense.isRecurring/recurringInterval columns.
+        const wasTemplate = !!(expense.seriesId && expense.series?.templateId === expense.id);
+        const wasRecurring = wasTemplate && (expense.series?.isActive ?? false);
+        const resolvedIsRecurring = isRecurring ?? wasRecurring;
+        const resolvedInterval = recurringInterval !== undefined ? recurringInterval : (expense.series?.interval ?? null);
         let nextRecurringDate: Date | null | undefined = undefined;
         if (isRecurring !== undefined || recurringInterval !== undefined) {
             if (resolvedIsRecurring && resolvedInterval) {
@@ -165,9 +171,9 @@ export async function PATCH(
             category: category ?? expense.category,
         };
         if (notes !== undefined) updateData.notes = notes;
-        if (isRecurring !== undefined) updateData.isRecurring = isRecurring;
-        if (recurringInterval !== undefined) updateData.recurringInterval = recurringInterval;
-        if (nextRecurringDate !== undefined) updateData.nextRecurringDate = nextRecurringDate;
+        // Phase 5 (stop-dual-write): Expense.isRecurring/recurringInterval/
+        // nextRecurringDate are no longer written; the schedule is mirrored to the
+        // RecurringSeries in the series-sync block below (using the resolved locals).
         // Keep the relational Category in sync when the enum category changes (Phase 2b).
         if (category !== undefined && category !== null) {
             updateData.categoryId = await resolveCategoryId(category, expense.coupleId);
@@ -278,19 +284,19 @@ export async function PATCH(
                 }
             }
 
-            // Phase 4 (recurring-sync): keep the linked RecurringSeries in lockstep
-            // with the template Expense, in the SAME transaction, so the series-
-            // driven materializer never reads stale scalars.
+            // Phase 4/5 (recurring-sync + stop-dual-write): keep the linked
+            // RecurringSeries in lockstep with the template Expense, in the SAME
+            // transaction, using the resolved recurrence LOCALS (the Expense
+            // recurrence columns are no longer written). A template is the expense
+            // with series.templateId === its id (captured in wasTemplate/wasRecurring).
             if (updated.seriesId) {
-                if (!updated.isRecurring) {
-                    // Deactivate ONLY on a genuine template toggle-off: the pre-state
-                    // must have been recurring. Editing a materialized INSTANCE
-                    // (isRecurring=false before AND after) must never touch the
-                    // series, or any notes/amount edit to an instance would silently
-                    // stop the whole recurrence. Deactivate, never delete —
+                if (!resolvedIsRecurring) {
+                    // Deactivate ONLY on a genuine template toggle-off (pre-state was
+                    // recurring). Editing a materialized INSTANCE (wasRecurring false)
+                    // never touches the series. Deactivate, never delete —
                     // Expense.seriesId is onDelete:SetNull, so deleting the series
                     // would orphan instance lineage; isActive=false is reversible.
-                    if (expense.isRecurring) {
+                    if (wasRecurring) {
                         await tx.recurringSeries.update({
                             where: { id: updated.seriesId },
                             data: { isActive: false },
@@ -299,10 +305,8 @@ export async function PATCH(
                 } else {
                     // Template still recurring: mirror its scalars to the series.
                     // NOTE (non-gating risk): a materialized instance PATCHed to
-                    // isRecurring=true also lands here and would overwrite its
-                    // template's series with instance scalars — a rare, user-driven
-                    // edge. A future pass should create a fresh series (or reject)
-                    // when the edited expense is not the series' template.
+                    // isRecurring=true also lands here — a rare, user-driven edge a
+                    // future pass should create a fresh series for (or reject).
                     await tx.recurringSeries.update({
                         where: { id: updated.seriesId },
                         data: {
@@ -314,16 +318,16 @@ export async function PATCH(
                             notes: updated.notes,
                             isActive: true, // re-activate when recurring is toggled back ON
                             // interval/nextRunDate are NOT NULL on the series; only
-                            // mirror when the template actually has values (legacy
-                            // templates can carry isRecurring=true with null interval).
-                            ...(updated.recurringInterval ? { interval: updated.recurringInterval } : {}),
-                            ...(updated.nextRecurringDate ? { nextRunDate: updated.nextRecurringDate } : {}),
+                            // mirror when the resolved locals actually carry values
+                            // (an amount-only edit leaves both untouched).
+                            ...(resolvedInterval ? { interval: resolvedInterval } : {}),
+                            ...(nextRecurringDate ? { nextRunDate: nextRecurringDate } : {}),
                         },
                     });
                 }
-            } else if (updated.isRecurring && updated.recurringInterval && updated.nextRecurringDate) {
+            } else if (resolvedIsRecurring && resolvedInterval && nextRecurringDate) {
                 // Toggle ON for an expense that never had a series: create + link it
-                // (closes the last dual-write gap — POST already creates series).
+                // (POST already creates series). templateId points at this expense.
                 const series = await tx.recurringSeries.create({
                     data: {
                         description: updated.description,
@@ -333,14 +337,15 @@ export async function PATCH(
                         visibility: updated.visibility,
                         splitStrategy: updated.splitStrategy,
                         notes: updated.notes,
-                        interval: updated.recurringInterval,
-                        nextRunDate: updated.nextRecurringDate,
+                        interval: resolvedInterval,
+                        nextRunDate: nextRecurringDate,
                         coupleId: updated.coupleId,
                         ownerId: updated.ownerId,
                         paidById: updated.paidById,
                         currency: updated.currency,
                         minorUnit: updated.minorUnit,
                         isActive: true,
+                        templateId: id,
                     },
                 });
                 await tx.expense.update({ where: { id }, data: { seriesId: series.id } });

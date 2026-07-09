@@ -22,6 +22,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
                 splits: true,
                 couple: { include: { members: true } },
                 tags: { include: { tag: true } },
+                series: true,
                 ...RECEIPT_LINES_SELECT,
             },
         }),
@@ -82,8 +83,8 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
             initialReceiptItems={receiptItemsView(expense.lineItems)}
             initialReceiptUrl={expense.receiptUrl ?? null}
             initialNotes={expense.notes ?? ""}
-            initialIsRecurring={expense.isRecurring ?? false}
-            initialRecurringInterval={(expense.recurringInterval as "weekly" | "monthly" | "yearly") ?? "monthly"}
+            initialIsRecurring={!!(expense.seriesId && expense.series?.templateId === expense.id && expense.series?.isActive)}
+            initialRecurringInterval={(expense.series?.interval as "weekly" | "monthly" | "yearly") ?? "monthly"}
             initialTagIds={expense.tags.map((t) => t.tagId)}
             allTags={allTags}
             isPersonal={expense.visibility === "PERSONAL"}

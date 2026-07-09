@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockGetSession = vi.fn();
 const mockExpenseFindUnique = vi.fn();
 const mockExpenseDelete = vi.fn();
+const mockTxSeriesUpdate = vi.fn();
 
 vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
 vi.mock('@/lib/db', () => {
@@ -13,13 +14,12 @@ vi.mock('@/lib/db', () => {
     return {
         prisma: {
             expense,
-            // DELETE now wraps the delete (and a conditional series deactivation)
-            // in a $transaction; run the callback against a tx double exposing the
-            // same expense mock plus a no-op recurringSeries.update. The test
-            // fixtures carry no isRecurring/seriesId, so the deactivation branch is
-            // skipped and mockExpenseDelete is still called with { where: { id } }.
+            // DELETE wraps the delete (and a conditional series deactivation) in a
+            // $transaction; run the callback against a tx double exposing the same
+            // expense mock plus recurringSeries.update/create. Phase 5: the series is
+            // deactivated only when series.templateId === the deleted expense id.
             $transaction: (cb: (tx: unknown) => unknown) =>
-                cb({ expense, recurringSeries: { update: vi.fn() } }),
+                cb({ expense, recurringSeries: { update: (...a: unknown[]) => mockTxSeriesUpdate(...a), create: vi.fn() } }),
         },
     };
 });
@@ -48,7 +48,9 @@ describe('DELETE /api/expenses/[id] — authorization', () => {
         mockGetSession.mockReset();
         mockExpenseFindUnique.mockReset();
         mockExpenseDelete.mockReset();
+        mockTxSeriesUpdate.mockReset();
         mockExpenseDelete.mockResolvedValue({});
+        mockTxSeriesUpdate.mockResolvedValue({});
     });
 
     it('401 without a session', async () => {
@@ -95,5 +97,27 @@ describe('DELETE /api/expenses/[id] — authorization', () => {
         const res = await DELETE(req(), { params });
         expect(res.status).toBe(403);
         expect(mockExpenseDelete).not.toHaveBeenCalled();
+    });
+
+    it('deactivates the series when deleting the recurring TEMPLATE (Phase 5: series.templateId === id)', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        mockExpenseFindUnique.mockResolvedValue(personalExpense({
+            seriesId: 's1', series: { id: 's1', templateId: 'e1' },
+        }));
+        const res = await DELETE(req(), { params });
+        expect(res.status).toBe(200);
+        expect(mockTxSeriesUpdate).toHaveBeenCalledWith({ where: { id: 's1' }, data: { isActive: false } });
+        expect(mockExpenseDelete).toHaveBeenCalledWith({ where: { id: 'e1' } });
+    });
+
+    it('does NOT deactivate the series when deleting a materialized INSTANCE', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        mockExpenseFindUnique.mockResolvedValue(personalExpense({
+            seriesId: 's1', series: { id: 's1', templateId: 'tpl-other' },
+        }));
+        const res = await DELETE(req(), { params });
+        expect(res.status).toBe(200);
+        expect(mockTxSeriesUpdate).not.toHaveBeenCalled();
+        expect(mockExpenseDelete).toHaveBeenCalledWith({ where: { id: 'e1' } });
     });
 });

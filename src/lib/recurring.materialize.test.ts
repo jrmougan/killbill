@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockSeriesFindMany = vi.fn();
-const mockExpenseFindFirst = vi.fn();
+const mockExpenseFindUnique = vi.fn();
 const mockTransaction = vi.fn();
 
 vi.mock('@/lib/db', () => ({
     prisma: {
         recurringSeries: { findMany: (...a: unknown[]) => mockSeriesFindMany(...a) },
-        expense: { findFirst: (...a: unknown[]) => mockExpenseFindFirst(...a) },
+        expense: { findUnique: (...a: unknown[]) => mockExpenseFindUnique(...a) },
         $transaction: (...a: unknown[]) => mockTransaction(...a),
     },
 }));
@@ -19,10 +19,10 @@ vi.mock('@/lib/membership', () => ({
 import { materializeDueRecurringExpenses, materializeDueRecurringExpensesForOwner } from './recurring';
 import { postExpenseLedger } from '@/lib/ledger';
 
-describe('recurring materialization (series-driven)', () => {
+describe('recurring materialization (series-driven, templateId pointer)', () => {
     beforeEach(() => {
         mockSeriesFindMany.mockReset();
-        mockExpenseFindFirst.mockReset();
+        mockExpenseFindUnique.mockReset();
         mockTransaction.mockReset();
         vi.mocked(postExpenseLedger).mockClear();
         mockSeriesFindMany.mockResolvedValue([]);
@@ -46,25 +46,35 @@ describe('recurring materialization (series-driven)', () => {
         expect(where.ownerId).toBeUndefined();
     });
 
-    it('a due series with no live template is skipped (no create, no claim)', async () => {
+    it('a due series with no templateId pointer is skipped (no template lookup, no claim)', async () => {
         const past = new Date(Date.now() - 24 * 60 * 60 * 1000);
         mockSeriesFindMany.mockResolvedValue([
-            { id: 's1', interval: 'monthly', nextRunDate: past, amount: 999 },
+            { id: 's1', interval: 'monthly', nextRunDate: past, amount: 999, templateId: null },
         ]);
-        mockExpenseFindFirst.mockResolvedValue(null); // template deleted / never linked
         expect(await materializeDueRecurringExpenses('c1')).toBe(0);
+        expect(mockExpenseFindUnique).not.toHaveBeenCalled();
         expect(mockTransaction).not.toHaveBeenCalled();
     });
 
-    it('materializes from TEMPLATE scalars even when the series amount is stale, and advances template.nextRecurringDate in lockstep', async () => {
+    it('a series whose template was deleted (FK SetNull) is skipped', async () => {
+        const past = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        mockSeriesFindMany.mockResolvedValue([
+            { id: 's1', interval: 'monthly', nextRunDate: past, amount: 999, templateId: 'tpl-gone' },
+        ]);
+        mockExpenseFindUnique.mockResolvedValue(null);
+        expect(await materializeDueRecurringExpenses('c1')).toBe(0);
+        expect(mockExpenseFindUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'tpl-gone' } }));
+        expect(mockTransaction).not.toHaveBeenCalled();
+    });
+
+    it('materializes from TEMPLATE scalars (looked up by templateId) even when series amount is stale, and writes NO Expense recurrence columns', async () => {
         const past = new Date(Date.now() - 60 * 1000);
         // series.amount deliberately STALE (5000) vs template.amount (6000):
-        // the instance must use the template, whose splits sum to 6000 — this
-        // pins the edit-staleness fix (review bug 1: non-zero-sum ledger post).
+        // the instance must use the template, whose splits sum to 6000.
         mockSeriesFindMany.mockResolvedValue([
-            { id: 's1', interval: 'monthly', nextRunDate: past, amount: 5000 },
+            { id: 's1', interval: 'monthly', nextRunDate: past, amount: 5000, templateId: 'tpl1' },
         ]);
-        mockExpenseFindFirst.mockResolvedValue({
+        mockExpenseFindUnique.mockResolvedValue({
             id: 'tpl1', description: 'Rent', amount: 6000, category: 'rent',
             categoryId: null, paidById: 'u1', ownerId: 'u1', visibility: 'SHARED',
             splitStrategy: 'EQUAL', coupleId: 'c1', notes: null,
@@ -89,13 +99,12 @@ describe('recurring materialization (series-driven)', () => {
         const createdData = txExpenseCreate.mock.calls[0][0].data;
         expect(createdData.amount).toBe(6000);        // template, NOT stale series 5000
         expect(createdData.seriesId).toBe('s1');
-        expect(createdData.isRecurring).toBe(false);
         expect(createdData.date).toEqual(past);       // scheduled occurrence date
-        // lockstep dual-write on the template's legacy field
-        expect(txExpenseUpdate).toHaveBeenCalledWith(expect.objectContaining({
-            where: { id: 'tpl1' },
-            data: { nextRecurringDate: expect.any(Date) },
-        }));
+        // Phase 5: the instance no longer writes the isRecurring column at all.
+        expect('isRecurring' in createdData).toBe(false);
+        // Phase 5: the lockstep template.nextRecurringDate write is gone —
+        // series.nextRunDate (updateMany) is the sole schedule advance.
+        expect(txExpenseUpdate).not.toHaveBeenCalled();
         // ledger posted with the balanced template splits
         expect(vi.mocked(postExpenseLedger).mock.calls[0][1]).toMatchObject({
             expenseId: 'inst1', groupId: 'c1', amount: 6000,

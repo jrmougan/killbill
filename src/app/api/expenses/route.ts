@@ -165,9 +165,10 @@ export async function POST(request: Request) {
             coupleId: isPersonalExpense ? null : groupId,
             receiptUrl: receiptUrl || null,
             notes: notes || null,
-            isRecurring: isRecurring ?? false,
-            recurringInterval: normalizedInterval,
-            nextRecurringDate: nextRecurringDate || null,
+            // Phase 5 (stop-dual-write): the recurrence schedule lives on
+            // RecurringSeries (created below); Expense.isRecurring/recurringInterval/
+            // nextRecurringDate are no longer written. The template is identified by
+            // RecurringSeries.templateId, set once the expense id exists.
         };
 
         if (isPersonalExpense) {
@@ -237,7 +238,8 @@ export async function POST(request: Request) {
         // source of truth this phase (read-switch deferred). Both writes share one
         // transaction so a failed expense.create can't leave an orphan series.
         const expense = await prisma.$transaction(async (tx) => {
-            if (expenseData.isRecurring && normalizedInterval && nextRecurringDate) {
+            let newSeriesId: string | null = null;
+            if (isRecurring && normalizedInterval && nextRecurringDate) {
                 const series = await tx.recurringSeries.create({
                     data: {
                         description,
@@ -255,8 +257,13 @@ export async function POST(request: Request) {
                     },
                 });
                 expenseData.seriesId = series.id;
+                newSeriesId = series.id;
             }
             const created = await tx.expense.create({ data: expenseData, include: { splits: true } });
+            // Phase 5: set the durable template pointer now that the template id exists.
+            if (newSeriesId) {
+                await tx.recurringSeries.update({ where: { id: newSeriesId }, data: { templateId: created.id } });
+            }
             // Phase 3 dual-write: a SHARED expense posts its balanced ledger
             // transaction in the same tx. PERSONAL expenses post nothing.
             if (created.visibility === 'SHARED' && created.coupleId) {

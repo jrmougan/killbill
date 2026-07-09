@@ -52,6 +52,7 @@ async function main() {
           paidById: e.paidById,
           currency: e.currency,
           minorUnit: e.minorUnit,
+          templateId: e.id, // Phase 5 (stop-dual-write): durable template pointer
         },
       });
 

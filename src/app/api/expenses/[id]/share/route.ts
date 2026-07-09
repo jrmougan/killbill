@@ -30,7 +30,7 @@ export async function POST(
             return NextResponse.json({ error: 'Necesitas una pareja para compartir un gasto' }, { status: 400 });
         }
 
-        const expense = await prisma.expense.findUnique({ where: { id }, include: RECEIPT_LINES_SELECT });
+        const expense = await prisma.expense.findUnique({ where: { id }, include: { ...RECEIPT_LINES_SELECT, series: true } });
         if (!expense) {
             return NextResponse.json({ error: 'Gasto no encontrado' }, { status: 404 });
         }
@@ -51,13 +51,15 @@ export async function POST(
             coupleMembers,
         );
 
-        // If it was a personal recurring expense, its nextRecurringDate has been
-        // drifting in the past (the personal runner may not have caught up). Reset
-        // it to the next FUTURE occurrence so sharing doesn't trigger a catch-up
-        // burst of backdated shared expenses on the next couple dashboard load.
-        let nextRecurringDate: Date | undefined;
-        if (expense.isRecurring && expense.recurringInterval) {
-            nextRecurringDate = addInterval(new Date(), expense.recurringInterval);
+        // Phase 5 (stop-dual-write): recurrence lives on the series. This expense is
+        // the TEMPLATE iff series.templateId === its id. If it was a personal
+        // recurring template, reset the series nextRunDate to the next FUTURE
+        // occurrence so sharing doesn't trigger a catch-up burst of backdated shared
+        // expenses on the next couple dashboard load.
+        const isTemplate = !!(expense.seriesId && expense.series?.templateId === expense.id);
+        let nextRunReset: Date | undefined;
+        if (isTemplate && expense.series?.interval) {
+            nextRunReset = addInterval(new Date(), expense.series.interval);
         }
 
         // Flip to shared, attach to the couple, and create the splits atomically.
@@ -69,7 +71,6 @@ export async function POST(
                     visibility: 'SHARED',
                     coupleId: groupId,
                     splitStrategy: hasExclusiveReceiptLines(expense.lineItems) ? 'ITEMIZED' : 'EQUAL',
-                    ...(nextRecurringDate ? { nextRecurringDate } : {}),
                     splits: {
                         create: splits.map(s => ({ userId: s.userId, amount: s.amount })),
                     },
@@ -88,22 +89,20 @@ export async function POST(
                 members: coupleMembers,
             });
 
-            // Phase 4 (recurring-sync): the linked series must follow the promotion
-            // in the SAME tx, or the series-driven materializer would keep creating
-            // PERSONAL instances outside the couple. Guard on isRecurring && seriesId
-            // so ONLY sharing the TEMPLATE flips the series scope — sharing a
-            // materialized instance (isRecurring=false but seriesId set) must leave
-            // the series untouched. nextRunDate is reset to the next FUTURE
-            // occurrence (same anti-catch-up-burst rationale as the expense's
-            // nextRecurringDate reset above). A deactivated series stays inactive.
-            if (expense.isRecurring && expense.seriesId) {
+            // Phase 4/5: the linked series must follow the promotion in the SAME tx,
+            // or the series-driven materializer would keep creating PERSONAL instances
+            // outside the couple. Guard on isTemplate so ONLY sharing the TEMPLATE
+            // flips the series scope — sharing a materialized instance leaves the
+            // series untouched. nextRunDate resets to the next FUTURE occurrence
+            // (anti-catch-up-burst). A deactivated series stays inactive.
+            if (isTemplate) {
                 await tx.recurringSeries.update({
-                    where: { id: expense.seriesId },
+                    where: { id: expense.seriesId! },
                     data: {
                         visibility: 'SHARED',
                         coupleId: groupId,
                         splitStrategy: updated.splitStrategy,
-                        ...(nextRecurringDate ? { nextRunDate: nextRecurringDate } : {}),
+                        ...(nextRunReset ? { nextRunDate: nextRunReset } : {}),
                     },
                 });
             }

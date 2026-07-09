@@ -7,6 +7,7 @@ const mockUserFindMany = vi.fn();
 const mockExpenseFindUnique = vi.fn();
 const mockTxExpenseUpdate = vi.fn();
 const mockTxSplitDeleteMany = vi.fn();
+const mockTxSeriesUpdate = vi.fn();
 const mockTransaction = vi.fn();
 
 vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
@@ -41,14 +42,17 @@ function personal(overrides = {}) {
 
 describe('POST /api/expenses/[id]/share', () => {
     beforeEach(() => {
-        [mockGetSession, mockGetPrimaryGroup, mockUserFindUnique, mockUserFindMany, mockExpenseFindUnique, mockTxExpenseUpdate, mockTxSplitDeleteMany, mockTransaction].forEach((m) => m.mockReset());
-        // Run the transaction callback against a tx double.
+        [mockGetSession, mockGetPrimaryGroup, mockUserFindUnique, mockUserFindMany, mockExpenseFindUnique, mockTxExpenseUpdate, mockTxSplitDeleteMany, mockTxSeriesUpdate, mockTransaction].forEach((m) => m.mockReset());
+        // Run the transaction callback against a tx double. recurringSeries.update is
+        // exercised when the shared source is the recurring TEMPLATE (Phase 5).
         mockTransaction.mockImplementation(async (cb) => cb({
             split: { deleteMany: (...a: unknown[]) => mockTxSplitDeleteMany(...a) },
             expense: { update: (...a: unknown[]) => mockTxExpenseUpdate(...a) },
+            recurringSeries: { update: (...a: unknown[]) => mockTxSeriesUpdate(...a) },
         }));
         mockTxExpenseUpdate.mockResolvedValue({});
         mockTxSplitDeleteMany.mockResolvedValue({});
+        mockTxSeriesUpdate.mockResolvedValue({});
     });
 
     it('401 without a session', async () => {
@@ -101,15 +105,44 @@ describe('POST /api/expenses/[id]/share', () => {
         expect(created.reduce((s: number, x: { amount: number }) => s + x.amount, 0)).toBe(5000);
     });
 
-    it('resets nextRecurringDate to the future when the shared source is recurring', async () => {
+    it('flips the series to SHARED with a future nextRunDate when the source is the recurring TEMPLATE', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
         mockGetPrimaryGroup.mockResolvedValue('c1');
-        mockExpenseFindUnique.mockResolvedValue(personal({ isRecurring: true, recurringInterval: 'monthly' }));
+        // Phase 5: recurrence lives on the series; the expense is the TEMPLATE iff
+        // series.templateId === its id ('e1'). No Expense recurrence columns.
+        mockExpenseFindUnique.mockResolvedValue(personal({
+            seriesId: 's1',
+            series: { id: 's1', templateId: 'e1', interval: 'monthly', isActive: true },
+        }));
         mockUserFindMany.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
 
         await POST(req(), { params });
-        const arg = mockTxExpenseUpdate.mock.calls[0][0];
-        expect(arg.data.nextRecurringDate).toBeInstanceOf(Date);
-        expect(arg.data.nextRecurringDate.getTime()).toBeGreaterThan(Date.now());
+
+        // The expense.update no longer writes the retired nextRecurringDate column.
+        const expenseArg = mockTxExpenseUpdate.mock.calls[0][0];
+        expect(expenseArg.data.nextRecurringDate).toBeUndefined();
+
+        // The series flips scope and resets nextRunDate to the future.
+        expect(mockTxSeriesUpdate).toHaveBeenCalledOnce();
+        const seriesArg = mockTxSeriesUpdate.mock.calls[0][0];
+        expect(seriesArg.where).toEqual({ id: 's1' });
+        expect(seriesArg.data.visibility).toBe('SHARED');
+        expect(seriesArg.data.coupleId).toBe('c1');
+        expect(seriesArg.data.nextRunDate).toBeInstanceOf(Date);
+        expect(seriesArg.data.nextRunDate.getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it('does NOT flip the series when sharing a materialized INSTANCE (not the template)', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        mockGetPrimaryGroup.mockResolvedValue('c1');
+        // Instance: seriesId set but series.templateId points at a DIFFERENT expense.
+        mockExpenseFindUnique.mockResolvedValue(personal({
+            seriesId: 's1',
+            series: { id: 's1', templateId: 'tpl-other', interval: 'monthly', isActive: true },
+        }));
+        mockUserFindMany.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
+
+        expect((await POST(req(), { params })).status).toBe(200);
+        expect(mockTxSeriesUpdate).not.toHaveBeenCalled();
     });
 });

@@ -256,7 +256,11 @@ model Expense {
   // recurring series. Nullable + dual-written; recurrence source of truth stays
   // on the Expense.* fields above this phase.
   seriesId String?
-  series   RecurringSeries? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  series   RecurringSeries? @relation("SeriesInstances", fields: [seriesId], references: [id], onDelete: SetNull)
+
+  // Phase 5 (stop-dual-write): the durable pointer from a series to its TEMPLATE
+  // expense, replacing the isRecurring discriminator the materializer used to key on.
+  templateForSeries RecurringSeries? @relation("SeriesTemplate")
 
   currency  String   @default("EUR")
   minorUnit Int      @default(2)
@@ -339,7 +343,15 @@ model RecurringSeries {
   currency  String @default("EUR")
   minorUnit Int    @default(2)
 
-  expenses Expense[]
+  // Materialized instances of this series (Expense.seriesId back-relation).
+  expenses Expense[] @relation("SeriesInstances")
+
+  // Phase 5 (stop-dual-write): durable pointer to the TEMPLATE expense. The
+  // materializer copies money scalars + splits/tags from it; identifying the
+  // template no longer needs Expense.isRecurring. Nullable+unique (one template
+  // per series); FK SetNull so deleting the template clears the pointer.
+  templateId String?  @unique
+  template   Expense? @relation("SeriesTemplate", fields: [templateId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -76,11 +76,14 @@ async function materializeDueRecurring(scope: Prisma.RecurringSeriesWhereInput):
     let created = 0;
 
     for (const series of dueSeries) {
-        const template = await prisma.expense.findFirst({
-            where: { seriesId: series.id, isRecurring: true },
+        // Phase 5 (stop-dual-write): identify the template via the durable
+        // series.templateId pointer, not Expense.isRecurring (no longer written).
+        if (!series.templateId) continue; // no template pointer — skip safely
+        const template = await prisma.expense.findUnique({
+            where: { id: series.templateId },
             include: { splits: true, tags: true },
         });
-        if (!template) continue; // orphaned series — nothing to copy, skip safely
+        if (!template) continue; // template deleted (FK SetNull'd) — skip safely
 
         let current: Date | null = series.nextRunDate;
         let iterations = 0;
@@ -107,13 +110,6 @@ async function materializeDueRecurring(scope: Prisma.RecurringSeriesWhereInput):
                 // Another concurrent run already advanced this series — stop here.
                 if (advanced.count === 0) return false;
 
-                // Lockstep dual-write: keep the template's legacy recurrence field
-                // in sync until the Expense recurrence columns are dropped.
-                await tx.expense.update({
-                    where: { id: template.id },
-                    data: { nextRecurringDate: advancedDate },
-                });
-
                 const instance = await tx.expense.create({
                     data: {
                         description: template.description,
@@ -128,7 +124,6 @@ async function materializeDueRecurring(scope: Prisma.RecurringSeriesWhereInput):
                         seriesId: series.id,
                         notes: template.notes ?? null,
                         date: occurrence, // the scheduled occurrence date, not now
-                        isRecurring: false, // only the template stays recurring
                         splits: template.splits.length > 0
                             ? {
                                   create: template.splits.map((s) => ({
