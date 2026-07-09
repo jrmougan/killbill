@@ -3,11 +3,11 @@ import { ArrowLeft, Heart, Calculator, User, Pencil, Tag } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { ReceiptItem } from "@/types";
 import { DeleteExpenseButton } from "@/components/expense/delete-button";
 import { getSession } from "@/lib/auth";
 import { formatCurrency, formatEuros } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
+import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -33,11 +33,17 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                 include: {
                     tag: true
                 }
-            }
+            },
+            ...RECEIPT_LINES_SELECT
         }
     });
 
     if (!expense) redirect("/dashboard");
+
+    // Phase 4 read-switch: the ReceiptLineItem table (cents) is the read source
+    // for the receipt breakdown; receiptItemsView maps rows -> the euro DTO the
+    // markup already renders (toEuros(toCents(x))==x keeps every sum identical).
+    const receiptItems = receiptItemsView(expense.lineItems);
 
     // Privacy: a personal expense is only visible to its owner; a shared one to
     // members of its couple.
@@ -163,7 +169,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     </div>
                 )}
 
-                {expense.receiptData && (expense.receiptData as unknown as ReceiptItem[]).length > 0 && (
+                {receiptItems.length > 0 && (
                     <div className="space-y-4">
                         <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground ml-1 flex items-center gap-2">
                             <Calculator className="h-4 w-4 text-primary" />
@@ -171,7 +177,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         </h3>
                         <div className="rounded-2xl border border-white/10 overflow-hidden bg-black/20">
                             <div className="divide-y divide-white/5">
-                                {(expense.receiptData as unknown as ReceiptItem[]).map((item, idx) => (
+                                {receiptItems.map((item, idx) => (
                                     <div key={idx} className="grid grid-cols-[auto_1fr_auto_auto] gap-1.5 sm:gap-3 p-2.5 sm:p-3 items-center text-xs sm:text-sm">
                                         {/* Assignment indicator */}
                                         <div className={`h-6 w-6 rounded-full flex-shrink-0 flex items-center justify-center ${item.assignedTo ? 'bg-pink-500/20 text-pink-400' : 'bg-white/5 text-muted-foreground'}`}>
@@ -193,22 +199,22 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                 ))}
                             </div>
                             {/* Summary footer with shared vs personal breakdown */}
-                            {(expense.receiptData as unknown as ReceiptItem[]).some(i => i.assignedTo) && (
+                            {receiptItems.some(i => i.assignedTo) && (
                                 <div className="bg-white/5 p-3 space-y-2 border-t border-white/5">
                                     <div className="flex justify-between text-xs text-muted-foreground">
                                         <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> Común (50/50)</span>
-                                        <span>{formatEuros((expense.receiptData as unknown as ReceiptItem[]).filter(i => !i.assignedTo).reduce((acc, i) => acc + i.total, 0))}</span>
+                                        <span>{formatEuros(receiptItems.filter(i => !i.assignedTo).reduce((acc, i) => acc + i.total, 0))}</span>
                                     </div>
                                     <div className="flex justify-between text-xs text-pink-400">
                                         <span className="flex items-center gap-1"><User className="h-3 w-3" /> Solo {partner?.name}</span>
-                                        <span>{formatEuros((expense.receiptData as unknown as ReceiptItem[]).filter(i => i.assignedTo).reduce((acc, i) => acc + i.total, 0))}</span>
+                                        <span>{formatEuros(receiptItems.filter(i => i.assignedTo).reduce((acc, i) => acc + i.total, 0))}</span>
                                     </div>
                                 </div>
                             )}
                             <div className="bg-white/5 p-3 flex justify-between items-center border-t border-white/5">
                                 <span className="font-bold text-sm text-muted-foreground">Total Detallado</span>
                                 <span className="font-mono font-bold">
-                                    {formatEuros((expense.receiptData as unknown as ReceiptItem[]).reduce((acc, i) => acc + i.total, 0))}
+                                    {formatEuros(receiptItems.reduce((acc, i) => acc + i.total, 0))}
                                 </span>
                             </div>
                         </div>

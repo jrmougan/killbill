@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { getPrimaryGroup } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
-import { ReceiptItem } from "@/types";
+import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
 import { EditExpenseClient } from "./client";
 
 export default async function EditExpensePage({ params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +22,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
                 splits: true,
                 couple: { include: { members: true } },
                 tags: { include: { tag: true } },
+                ...RECEIPT_LINES_SELECT,
             },
         }),
         getPrimaryGroup(userId),
@@ -78,7 +79,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
             initialCategory={expense.category}
             initialSplitMode={initialSplitMode}
             initialMyPercent={initialMyPercent}
-            initialReceiptItems={(expense.receiptData as unknown as ReceiptItem[]) ?? []}
+            initialReceiptItems={receiptItemsView(expense.lineItems)}
             initialReceiptUrl={expense.receiptUrl ?? null}
             initialNotes={expense.notes ?? ""}
             initialIsRecurring={expense.isRecurring ?? false}

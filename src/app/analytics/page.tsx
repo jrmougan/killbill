@@ -6,7 +6,7 @@ import { toEuros } from "@/lib/currency";
 import { calculateBalances } from "@/lib/finance";
 import { getCategoryById } from "@/lib/categories";
 import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
-import { ReceiptItem } from "@/types";
+import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
 import { AnalyticsClient } from "./client";
 
 export const dynamic = "force-dynamic";
@@ -44,7 +44,7 @@ export default async function AnalyticsPage() {
                 visibility: "SHARED",
                 date: { gte: twelveMonthsAgo },
             },
-            include: { splits: true, ...CATEGORY_REF_SELECT },
+            include: { splits: true, ...CATEGORY_REF_SELECT, ...RECEIPT_LINES_SELECT },
             orderBy: { date: "asc" },
         }),
         prisma.settlement.findMany({
@@ -175,8 +175,8 @@ export default async function AnalyticsPage() {
 
     const itemMap: Record<string, { total: number; count: number }> = {};
     for (const e of recentExpenses) {
-        const items = e.receiptData as unknown as ReceiptItem[] | null;
-        if (!items || !Array.isArray(items)) continue;
+        const items = receiptItemsView(e.lineItems);
+        if (items.length === 0) continue;
         for (const item of items) {
             const key = item.description.trim().toLowerCase();
             if (!key) continue;

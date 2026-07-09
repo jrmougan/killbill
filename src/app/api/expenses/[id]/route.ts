@@ -2,7 +2,8 @@ import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { toCents } from "@/lib/currency";
-import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from "@/lib/splits";
+import { calculateSplitAmounts, calculateSplitAmountsFromLines, hasExclusiveReceiptItems, hasExclusiveReceiptLines, type ReceiptItemForSplit } from "@/lib/splits";
+import { RECEIPT_LINES_SELECT, linesForSplit } from "@/lib/receipt-read";
 import { resolveCategoryId } from "@/lib/category-db";
 import { buildReceiptLineItems } from "@/lib/receipt";
 import { getGroupMembers } from "@/lib/membership";
@@ -77,7 +78,7 @@ export async function PATCH(
         // Get expense and verify ownership
         const expense = await prisma.expense.findUnique({
             where: { id },
-            include: { couple: { include: { members: true } } }
+            include: { couple: { include: { members: true } }, ...RECEIPT_LINES_SELECT }
         });
 
         if (!expense) {
@@ -191,9 +192,13 @@ export async function PATCH(
             if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
                 updateData.splitStrategy = 'CUSTOM';
             } else if (isSplitWithPartner) {
-                updateData.splitStrategy = hasExclusiveReceiptItems(receiptItems ?? expense.receiptData)
-                    ? 'ITEMIZED'
-                    : 'EQUAL';
+                // Body branch: request receipt (euro floats). Fallback branch
+                // (receiptItems===undefined, e.g. amount-only edit): the PERSISTED
+                // ReceiptLineItem rows are the read source (Phase 4 read-switch).
+                const itemized = receiptItems !== undefined
+                    ? hasExclusiveReceiptItems(receiptItems)
+                    : hasExclusiveReceiptLines(expense.lineItems);
+                updateData.splitStrategy = itemized ? 'ITEMIZED' : 'EQUAL';
             } else {
                 updateData.splitStrategy = 'EXCLUSIVE';
             }
@@ -219,8 +224,12 @@ export async function PATCH(
                         }))
                     });
                 } else if (isSplitWithPartner) {
-                    const currentReceiptData = (receiptItems ?? expense.receiptData) as ReceiptItemForSplit[] | null;
-                    const splits = calculateSplitAmounts(amountCents, currentReceiptData, members);
+                    // Body branch: split from the request receipt (euro floats,
+                    // unchanged create-time path). Fallback branch: split from the
+                    // PERSISTED ReceiptLineItem rows (cents-native, Phase 4 switch).
+                    const splits = receiptItems !== undefined
+                        ? calculateSplitAmounts(amountCents, receiptItems as ReceiptItemForSplit[] | null, members)
+                        : calculateSplitAmountsFromLines(amountCents, linesForSplit(expense.lineItems), members);
                     await tx.split.createMany({
                         data: splits.map(s => ({ expenseId: id, userId: s.userId, amount: s.amount }))
                     });

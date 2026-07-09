@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
-import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from "@/lib/splits";
+import { calculateSplitAmountsFromLines, hasExclusiveReceiptLines } from "@/lib/splits";
+import { RECEIPT_LINES_SELECT, linesForSplit } from "@/lib/receipt-read";
 import { addInterval } from "@/lib/recurring";
 import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
 import { postExpenseLedger } from "@/lib/ledger";
@@ -29,7 +30,7 @@ export async function POST(
             return NextResponse.json({ error: 'Necesitas una pareja para compartir un gasto' }, { status: 400 });
         }
 
-        const expense = await prisma.expense.findUnique({ where: { id } });
+        const expense = await prisma.expense.findUnique({ where: { id }, include: RECEIPT_LINES_SELECT });
         if (!expense) {
             return NextResponse.json({ error: 'Gasto no encontrado' }, { status: 404 });
         }
@@ -44,9 +45,9 @@ export async function POST(
 
         const coupleMembers = (await getGroupMembers(groupId)).map((m) => ({ id: m.id }));
 
-        const splits = calculateSplitAmounts(
+        const splits = calculateSplitAmountsFromLines(
             expense.amount,
-            expense.receiptData as ReceiptItemForSplit[] | null,
+            linesForSplit(expense.lineItems),
             coupleMembers,
         );
 
@@ -67,7 +68,7 @@ export async function POST(
                 data: {
                     visibility: 'SHARED',
                     coupleId: groupId,
-                    splitStrategy: hasExclusiveReceiptItems(expense.receiptData) ? 'ITEMIZED' : 'EQUAL',
+                    splitStrategy: hasExclusiveReceiptLines(expense.lineItems) ? 'ITEMIZED' : 'EQUAL',
                     ...(nextRecurringDate ? { nextRecurringDate } : {}),
                     splits: {
                         create: splits.map(s => ({ userId: s.userId, amount: s.amount })),
