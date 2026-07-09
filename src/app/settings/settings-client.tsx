@@ -14,9 +14,6 @@ import {
     Copy,
     Check,
     ShieldAlert,
-    Sun,
-    Moon,
-    Palette,
     PieChart,
     Tag,
     Download,
@@ -24,7 +21,6 @@ import {
 import Link from "next/link";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
-import { useTheme } from "@/components/theme-provider";
 import { isAvatarUrl } from "@/lib/avatar";
 
 interface UserData {
@@ -48,7 +44,6 @@ interface SettingsClientProps {
 
 export function SettingsClient({ user, couple }: SettingsClientProps) {
     const router = useRouter();
-    const { theme, toggleTheme } = useTheme();
     const [name, setName] = useState(user.name);
     const [avatar, setAvatar] = useState(user.avatar);
     const [isSaving, setIsSaving] = useState(false);
@@ -169,48 +164,6 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                         >
                             <Save className="h-4 w-4" /> Guardar Cambios
                         </Button>
-                    </GlassCard>
-                </section>
-
-                {/* Appearance Section */}
-                <section className="space-y-4">
-                    <div className="flex items-center gap-2 px-1">
-                        <Palette className="h-5 w-5 text-primary" />
-                        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Apariencia</h2>
-                    </div>
-
-                    <GlassCard className="p-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                {theme === "dark" ? (
-                                    <Moon className="h-5 w-5 text-muted-foreground" />
-                                ) : (
-                                    <Sun className="h-5 w-5 text-amber-500" />
-                                )}
-                                <div>
-                                    <p className="text-sm font-medium">
-                                        {theme === "dark" ? "Modo oscuro" : "Modo claro"}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">
-                                        {theme === "dark" ? "Cambia al tema claro" : "Cambia al tema oscuro"}
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={toggleTheme}
-                                aria-label="Cambiar tema"
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                                    theme === "light" ? "bg-primary" : "bg-white/20"
-                                }`}
-                            >
-                                <span
-                                    className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                                        theme === "light" ? "translate-x-6" : "translate-x-1"
-                                    }`}
-                                />
-                            </button>
-                        </div>
                     </GlassCard>
                 </section>
 

@@ -1,16 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Instrument_Sans, Spline_Sans_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/components/theme-provider";
 import { BottomNav } from "@/components/nav/bottom-nav";
 
-const inter = Inter({ subsets: ["latin"] });
+// EQUIL - Economía Familiar design fonts.
+const instrumentSans = Instrument_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-instrument",
+});
+const splineSansMono = Spline_Sans_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-spline-mono",
+});
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#000000",
+  themeColor: "#F3EFE6",
 }
 
 export const metadata: Metadata = {
@@ -32,18 +42,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='light'){document.documentElement.classList.add('light');}}catch(e){}})();`,
-          }}
-        />
-      </head>
-      <body className={cn(inter.className, "antialiased min-h-screen")}>
+    <html lang="es" className={cn(instrumentSans.variable, splineSansMono.variable)}>
+      <body className="font-sans antialiased min-h-screen">
         <ThemeProvider>
-          <main className="relative flex flex-col min-h-screen overflow-hidden sm:max-w-md sm:mx-auto sm:border-x sm:border-white/10 bg-background">
-            {/* Flat minimalist background (EQUIL - Flujo de Gastos redesign): no decorative glows */}
+          <main className="relative flex flex-col min-h-screen overflow-hidden sm:max-w-md sm:mx-auto sm:border-x sm:border-[color:var(--line)] bg-background">
+            {/* Flat warm-paper background (EQUIL - Economía Familiar): no decorative glows */}
             {children}
           </main>
           {/* Global bottom navigation — self-hides on focused/full-screen flows */}

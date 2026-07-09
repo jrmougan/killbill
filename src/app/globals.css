@@ -29,106 +29,122 @@
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
 
+  /* Design fonts (EQUIL - Economía Familiar): Instrument Sans + Spline Sans Mono.
+     The variables are provided by next/font in layout.tsx. */
+  --font-sans: var(--font-instrument), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-spline-mono), ui-monospace, "SF Mono", monospace;
+
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
 }
 
-/* Define the actual values */
+/* ===========================================================================
+   EQUIL - Economía Familiar design tokens (single warm-light theme).
+   Palette: paper #F3EFE6 · surface #FBF9F3 · ink #26231d · accent #BD5D3A.
+   =========================================================================== */
 :root {
-  --background: 240 9% 4%;
-  --foreground: 240 6% 96%;
+  --background: 42 35% 93%;        /* #F3EFE6 warm paper */
+  --foreground: 40 13% 13%;        /* #26231d warm ink */
 
-  --card: 240 6% 8%;
-  --card-foreground: 240 6% 96%;
+  --card: 45 50% 97%;              /* #FBF9F3 raised paper */
+  --card-foreground: 40 13% 13%;
 
-  /* Minimalist flat surfaces (EQUIL - Flujo de Gastos redesign) */
-  --surface: 240 6% 8%;        /* #141416 - cards */
-  --surface-raised: 240 4% 11%; /* #1c1c1f - avatars, chips */
-  --hairline: 255 255 255;      /* rgb base for translucent borders */
+  /* Surfaces */
+  --surface: 45 50% 97%;           /* #FBF9F3 - cards */
+  --surface-raised: 41 37% 90%;    /* #efe9dc - avatars, chips, pressed */
+  --hairline: 38 35 29;            /* rgb base for translucent ink borders */
 
-  --popover: 240 10% 3.9%;
-  --popover-foreground: 0 0% 98%;
+  --popover: 45 50% 97%;
+  --popover-foreground: 40 13% 13%;
 
-  --primary: 263.4 70% 50.4%;
-  --primary-foreground: 210 40% 98%;
+  /* Accent (terracotta) is the primary brand colour */
+  --primary: 16 53% 48%;           /* #BD5D3A */
+  --primary-foreground: 0 0% 100%;
 
-  --secondary: 240 3.7% 15.9%;
-  --secondary-foreground: 0 0% 98%;
+  --secondary: 41 37% 90%;
+  --secondary-foreground: 40 13% 13%;
 
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
+  --muted: 41 37% 90%;
+  --muted-foreground: 39 8% 51%;   /* #8B8477 warm taupe */
 
-  --accent: 263.4 70% 50.4%;
-  --accent-foreground: 0 0% 98%;
+  --accent: 16 53% 48%;            /* #BD5D3A */
+  --accent-foreground: 0 0% 100%;
 
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 0 0% 98%;
+  --destructive: 4 48% 53%;        /* #C0554E */
+  --destructive-foreground: 0 0% 100%;
 
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 240 4.9% 83.9%;
+  --border: 40 13% 87%;            /* solid ink hairline on paper */
+  --input: 40 13% 87%;
+  --ring: 16 53% 48%;
 
-  --radius: 0.75rem;
-}
+  --radius: 0.8rem;
 
-/* Light mode overrides */
-html.light {
-  --background: 0 0% 97%;
-  --foreground: 240 10% 10%;
+  /* --- Direct design tokens (use via var(...)) --- */
+  --accent-hex: #BD5D3A;
+  --accent-hover: #9c4a2d;
+  --accent-tint: rgba(189, 93, 58, 0.094);   /* accent @ 0x18 */
+  --accent-border: rgba(189, 93, 58, 0.25);  /* accent @ 0x40 */
 
-  --card: 0 0% 100%;
-  --card-foreground: 240 10% 10%;
+  --paper: #F3EFE6;
+  --surface-hex: #FBF9F3;
+  --surface-raised-hex: #efe9dc;
 
-  --surface: 0 0% 100%;
-  --surface-raised: 240 5% 96%;
+  --ink: #26231d;      /* primary text */
+  --ink-2: #8B8477;    /* muted labels */
+  --ink-3: #a39c8c;    /* faint meta */
+  --body-ink: #57534a; /* body copy */
 
-  --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 10%;
+  --line: rgba(38, 35, 29, 0.09);         /* default hairline */
+  --line-2: rgba(38, 35, 29, 0.07);       /* softer hairline */
+  --line-strong: rgba(38, 35, 29, 0.14);  /* dashed / emphasis */
 
-  --primary: 263.4 70% 50.4%;
-  --primary-foreground: 210 40% 98%;
+  --positive: #3F6F52;   /* owed / detected / income */
+  --negative: #C0554E;   /* owes / delete / error */
+  --positive-tint: rgba(63, 111, 82, 0.12);
+  --negative-tint: rgba(192, 85, 78, 0.12);
 
-  --secondary: 240 5% 90%;
-  --secondary-foreground: 240 10% 10%;
-
-  --muted: 240 5% 90%;
-  --muted-foreground: 240 5% 45%;
-
-  --accent: 263.4 70% 50.4%;
-  --accent-foreground: 0 0% 98%;
-
-  --destructive: 0 62.8% 45%;
-  --destructive-foreground: 0 0% 98%;
-
-  --border: 240 5% 82%;
-  --input: 240 5% 82%;
-  --ring: 263.4 70% 50.4%;
+  /* Category accent colours (match the category catalog) */
+  --cat-food: #D9713C;
+  --cat-grocery: #C98A2B;
+  --cat-home: #3F6F52;
+  --cat-utilities: #C9A227;
+  --cat-transport: #3E6E8E;
+  --cat-shopping: #A85C8A;
+  --cat-health: #C0554E;
+  --cat-subs: #5B7A9E;
+  --cat-education: #7A6A3C;
+  --cat-other: #8B8477;
 }
 
 /* Global styles */
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
+  font-family: var(--font-sans);
   font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Surface Utilities — flat minimalist surfaces (EQUIL - Flujo de Gastos redesign) */
+/* Monetary figures / numeric emphasis use the mono face */
+.font-mono,
+.tabular,
+[data-mono] {
+  font-family: var(--font-mono);
+}
+
+/* Hide scrollbars on horizontal chip rows / scroll containers */
+.eq-scroll::-webkit-scrollbar { width: 0; height: 0; }
+.eq-scroll { scrollbar-width: none; }
+
+/* Surface utilities — warm paper cards with a hairline ink border. */
 @utility glass {
-  @apply bg-background/80 backdrop-blur-lg border border-white/10;
+  background-color: hsl(var(--surface));
+  border: 1px solid var(--line);
 }
 
-/* Flat card: solid #141416 with a 1px hairline border, no blur, no colored glow. */
+/* Flat card: solid #FBF9F3 with a 1px ink hairline, no blur, no colored glow. */
 @utility glass-card {
   background-color: hsl(var(--surface));
-  border: 1px solid rgb(255 255 255 / 0.06);
-}
-
-html.light .glass {
-  border-color: rgb(0 0 0 / 0.08);
-}
-
-html.light .glass-card {
-  background-color: hsl(var(--surface));
-  border-color: rgb(0 0 0 / 0.08);
+  border: 1px solid var(--line);
 }

@@ -1,8 +1,14 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext } from "react";
 
-type Theme = "dark" | "light";
+/**
+ * EQUIL - Economía Familiar ships a single warm-light theme. The provider is a
+ * passthrough kept only so existing `useTheme()` callers keep compiling while the
+ * light/dark toggle is retired from Settings. `theme` is always "light" and
+ * `toggleTheme` is a no-op.
+ */
+type Theme = "light";
 
 interface ThemeContextValue {
   theme: Theme;
@@ -10,38 +16,13 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  theme: "dark",
+  theme: "light",
   toggleTheme: () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "dark";
-    const stored = localStorage.getItem("theme") as Theme | null;
-    if (stored === "light" || stored === "dark") {
-      if (stored === "light") {
-        document.documentElement.classList.add("light");
-      }
-      return stored;
-    }
-    return "dark";
-  });
-
-  const toggleTheme = () => {
-    setTheme((prev) => {
-      const next: Theme = prev === "dark" ? "light" : "dark";
-      localStorage.setItem("theme", next);
-      if (next === "light") {
-        document.documentElement.classList.add("light");
-      } else {
-        document.documentElement.classList.remove("light");
-      }
-      return next;
-    });
-  };
-
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme: "light", toggleTheme: () => {} }}>
       {children}
     </ThemeContext.Provider>
   );
