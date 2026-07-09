@@ -41,6 +41,7 @@ interface EditExpenseClientProps {
     userId: string;
     partner: { id: string; name: string } | null;
     members: { id: string; name: string }[];
+    initialPaidById: string;
     initialAmount: number;
     initialDescription: string;
     initialCategory: string;
@@ -61,6 +62,7 @@ export function EditExpenseClient({
     userId,
     partner,
     members,
+    initialPaidById,
     initialAmount,
     initialDescription,
     initialCategory,
@@ -85,6 +87,8 @@ export function EditExpenseClient({
     // Split
     const [splitMode, setSplitMode] = useState<SplitMode>(initialSplitMode);
     const [myPercent, setMyPercent] = useState(initialMyPercent);
+    // Payer (N-way): who fronted the money. Editable for shared expenses.
+    const [paidById, setPaidById] = useState<string>(initialPaidById);
 
     // Items breakdown
     const [receiptItems, setReceiptItems] = useState<EditableReceiptItem[]>(() =>
@@ -284,6 +288,11 @@ export function EditExpenseClient({
                 isRecurring,
                 recurringInterval: isRecurring ? recurringInterval : undefined,
             };
+
+            // Payer change (N-way): shared expenses carry an editable payer.
+            if (!isPersonal) {
+                bodyPayload.paidById = paidById;
+            }
 
             // The custom %, per-item and solo modes are 2-member-only; larger groups
             // recalc as an N-way equal split (splitWithPartner → the API divides
@@ -537,6 +546,32 @@ export function EditExpenseClient({
                         </div>
                     )}
                 </div>
+
+                {/* 5b. Payer — only for shared expenses (N-way) */}
+                {!isPersonal && members.length > 0 && (
+                    <div className="space-y-2">
+                        <span className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">¿Quién pagó?</span>
+                        <div className="flex flex-wrap gap-2">
+                            {members.map((m) => {
+                                const sel = paidById === m.id;
+                                return (
+                                    <button
+                                        key={m.id}
+                                        type="button"
+                                        onClick={() => setPaidById(m.id)}
+                                        aria-pressed={sel}
+                                        className={cn(
+                                            "px-3 py-2 rounded-xl text-sm font-medium border transition-all active:scale-[0.98]",
+                                            sel ? "bg-primary text-white border-primary shadow" : "bg-white/5 border-white/10 text-muted-foreground hover:bg-white/10"
+                                        )}
+                                    >
+                                        {m.id === userId ? "Yo" : m.name}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 {/* 6. Split mode — only for shared expenses */}
                 {isPersonal ? (

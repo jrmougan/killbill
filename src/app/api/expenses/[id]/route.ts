@@ -76,7 +76,7 @@ export async function PATCH(
         const userId = session.userId as string;
 
         const body = await request.json();
-        const { description, amount, category, splitWithPartner, receiptItems, notes, isRecurring, recurringInterval, customSplits } = body;
+        const { description, amount, category, splitWithPartner, receiptItems, notes, isRecurring, recurringInterval, customSplits, paidById: paidByIdInput } = body;
 
         // Get expense and verify ownership
         const expense = await prisma.expense.findUnique({
@@ -93,7 +93,9 @@ export async function PATCH(
         // matches POST/reconcile exactly (Phase 5 WS1: no couple.members reverse
         // relation).
         const members = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
-        const partner = members.find(m => m.id !== expense.paidById);
+        // `partner` (the non-payer, for the 2-member split fallbacks) is recomputed
+        // below against the EFFECTIVE payer once a payer change is validated.
+        let partner = members.find(m => m.id !== expense.paidById);
 
         // Personal expenses are authorized by ownership; shared ones strictly by
         // current couple membership (an ex-member who still "owns" a shared expense
@@ -105,6 +107,17 @@ export async function PATCH(
         }
 
         const memberIds = new Set(members.map(m => m.id));
+
+        // Payer change (F5, N-way): accept a new payer when it's a current member.
+        // The ledger re-post below reads updated.paidById, so changing it re-attributes
+        // who fronted the money without touching the split shares.
+        if (paidByIdInput !== undefined && (typeof paidByIdInput !== 'string' || !memberIds.has(paidByIdInput))) {
+            return NextResponse.json({ error: 'Payer is not a member of your group' }, { status: 400 });
+        }
+        const effectivePaidById = typeof paidByIdInput === 'string' && memberIds.has(paidByIdInput)
+            ? paidByIdInput
+            : expense.paidById;
+        partner = members.find(m => m.id !== effectivePaidById);
 
         // Validate description (when provided) is a non-empty string; an empty one previously 500'd at the DB layer.
         if (description !== undefined && (typeof description !== 'string' || description.trim().length === 0)) {
@@ -176,6 +189,7 @@ export async function PATCH(
             // Phase 5 (WS5): enum category no longer written; categoryId is synced below.
         };
         if (notes !== undefined) updateData.notes = notes;
+        if (paidByIdInput !== undefined) updateData.paidById = effectivePaidById;
         // Phase 5 (stop-dual-write): Expense.isRecurring/recurringInterval/
         // nextRecurringDate are no longer written; the schedule is mirrored to the
         // RecurringSeries in the series-sync block below (using the resolved locals).

@@ -81,6 +81,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
             userId={userId}
             partner={partner ? { id: partner.id, name: partner.name } : null}
             members={members.map((m) => ({ id: m.id, name: m.name }))}
+            initialPaidById={expense.paidById}
             initialAmount={toEuros(expense.amount)}
             initialDescription={expense.description}
             initialCategory={categoryKeyOf(expense)}
