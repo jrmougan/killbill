@@ -117,6 +117,10 @@ export async function POST(request: Request) {
         // Dual-write the relational Category (Phase 2b). Personal budgets have no
         // group, so they resolve to the system category.
         const categoryId = await resolveCategoryId(category, scope === 'personal' ? null : groupId);
+        // Phase 5 (stop-dual-write): categoryId is now the NOT NULL unique key. An
+        // unresolvable (e.g. unseeded) category must fail cleanly, not throw a
+        // Prisma NOT-NULL error at upsert time.
+        if (!categoryId) return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
 
         // Phase 2e dual-write: derive the half-open [periodStart, periodEnd) range
         // from the same monthDate that seeds the legacy `month` column (local-midnight
@@ -127,17 +131,15 @@ export async function POST(request: Request) {
         const budget = scope === 'personal'
             ? await prisma.budget.upsert({
                 where: {
-                    category_month_ownerId: {
-                        category,
-                        month: monthDate,
+                    categoryId_periodStart_ownerId: {
+                        categoryId,
+                        periodStart,
                         ownerId: userId,
                     },
                 },
                 create: {
-                    category,
                     categoryId,
                     amount: amountCents,
-                    month: monthDate,
                     periodStart,
                     periodEnd,
                     periodType: 'MONTH',
@@ -150,17 +152,15 @@ export async function POST(request: Request) {
             })
             : await prisma.budget.upsert({
                 where: {
-                    category_month_coupleId: {
-                        category,
-                        month: monthDate,
+                    categoryId_periodStart_coupleId: {
+                        categoryId,
+                        periodStart,
                         coupleId: groupId!,
                     },
                 },
                 create: {
-                    category,
                     categoryId,
                     amount: amountCents,
-                    month: monthDate,
                     periodStart,
                     periodEnd,
                     periodType: 'MONTH',

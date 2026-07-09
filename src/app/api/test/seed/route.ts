@@ -330,8 +330,18 @@ export async function POST(request: Request) {
       // A personal budget for userA (health category).
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      // Phase 5 (stop-dual-write): Budget keys on categoryId + periodStart (the
+      // enum/month columns are no longer written). Resolve the system category.
+      const healthCat = await prisma.category.findFirst({ where: { groupId: null, key: 'health' } });
       const personalBudget = await prisma.budget.create({
-        data: { category: 'health', amount: 60000, month: monthStart, ownerId: userA.id },
+        data: {
+          categoryId: healthCat!.id,
+          amount: 60000,
+          periodStart: monthStart,
+          periodEnd: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+          periodType: 'MONTH',
+          ownerId: userA.id,
+        },
       });
 
       return NextResponse.json({

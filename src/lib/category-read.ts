@@ -16,8 +16,12 @@
  * without pulling in Prisma.
  */
 export interface CategoryKeyed {
-    /** Legacy ExpenseCategory enum value (string union at runtime). */
-    category: string;
+    /**
+     * Legacy ExpenseCategory enum value. Nullable since Phase 5 stopped writing
+     * Budget.category (new Budget rows carry NULL here); the categoryRef.key wins
+     * and 'other' is the final fallback, so a null enum is always safe.
+     */
+    category?: string | null;
     /** Joined relational category (select at least { key }). */
     categoryRef?: { key: string } | null;
 }

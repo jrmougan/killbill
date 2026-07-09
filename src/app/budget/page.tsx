@@ -31,7 +31,9 @@ export default async function BudgetPage() {
     const [budgets, expenses] = hasCouple
         ? await Promise.all([
             prisma.budget.findMany({
-                where: { coupleId: coupleId!, month: monthStart },
+                // Phase 4/5: select by half-open [periodStart, periodEnd) overlap
+                // with the current month (same as the GET route), not `month`.
+                where: { coupleId: coupleId!, periodStart: { lt: monthEnd }, periodEnd: { gt: monthStart } },
                 orderBy: { category: "asc" },
                 include: CATEGORY_REF_SELECT,
             }),
@@ -62,7 +64,7 @@ export default async function BudgetPage() {
                 id: budget.id,
                 category: categoryKeyOf(budget),
                 amount: parseFloat(toEuros(budget.amount).toFixed(2)),
-                month: budget.month.toISOString(),
+                month: budget.periodStart.toISOString(),
             },
             spent: parseFloat(toEuros(spentCents).toFixed(2)),
             percentage,

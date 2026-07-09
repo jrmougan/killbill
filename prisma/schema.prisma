@@ -514,19 +514,22 @@ model LedgerEntry {
 
 model Budget {
   id       String          @id @default(cuid())
-  category ExpenseCategory
+  // Phase 5 (stop-dual-write): legacy enum/month columns are no longer written;
+  // nullable so the writers can omit them. The category+period source of truth is
+  // categoryId + periodStart/periodEnd.
+  category ExpenseCategory?
   amount   Int             // limite en centavos
-  month    DateTime // primer dia del mes al que aplica
+  month    DateTime? // legacy; nullable once WS3 stops writing it
 
-  // Phase 2e: explicit half-open [periodStart, periodEnd) range, dual-written
-  // alongside the legacy `month` column (which remains the source of truth).
-  periodStart DateTime?
+  // Phase 2e: explicit half-open [periodStart, periodEnd) range. periodStart is
+  // now NOT NULL — a key part of the categoryId+periodStart uniques.
+  periodStart DateTime
   periodEnd   DateTime?
   periodType  BudgetPeriodType @default(MONTH)
 
-  // Relational category (Phase 2b), dual-written alongside the enum.
-  categoryId  String?
-  categoryRef Category? @relation(fields: [categoryId], references: [id])
+  // Relational category (Phase 2b) — now the sole category source (NOT NULL).
+  categoryId  String
+  categoryRef Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
   // A budget is either shared (coupleId set) or personal (ownerId set).
   coupleId String?
@@ -541,8 +544,8 @@ model Budget {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([category, month, coupleId])
-  @@unique([category, month, ownerId])
+  @@unique([categoryId, periodStart, coupleId])
+  @@unique([categoryId, periodStart, ownerId])
   @@index([coupleId])
   @@index([ownerId])
   @@index([categoryId])

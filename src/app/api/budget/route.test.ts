@@ -80,16 +80,36 @@ describe('budget API — personal scope', () => {
         expect(res.status).toBe(201);
 
         const arg = mockBudgetUpsert.mock.calls[0][0];
-        expect(arg.where.category_month_ownerId.ownerId).toBe('u1');
+        // Phase 5 (stop-dual-write): keyed on categoryId + periodStart, not the enum/month.
+        expect(arg.where.categoryId_periodStart_ownerId.ownerId).toBe('u1');
+        expect(arg.where.categoryId_periodStart_ownerId.categoryId).toBe('cat-health');
+        expect(arg.where.categoryId_periodStart_ownerId.periodStart).toEqual(arg.create.periodStart);
         expect(arg.create.ownerId).toBe('u1');
         expect(arg.create.amount).toBe(10000); // 100€ → cents
-        expect(arg.create.categoryId).toBe('cat-health'); // Phase 2b dual-write
+        expect(arg.create.categoryId).toBe('cat-health');
 
-        // Phase 2e dual-write: half-open [periodStart, periodEnd) derived from month.
+        // Legacy enum/month dual-writes are stopped.
+        expect(arg.create.category).toBeUndefined();
+        expect(arg.create.month).toBeUndefined();
+
+        // Half-open [periodStart, periodEnd) is the source of truth.
         expect(arg.create.periodType).toBe('MONTH');
-        expect(arg.create.periodStart).toEqual(arg.create.month);
+        expect(arg.create.periodStart).toBeInstanceOf(Date);
         expect(arg.create.periodEnd.getTime()).toBeGreaterThan(arg.create.periodStart.getTime());
         expect(arg.create.periodEnd.getDate()).toBe(1); // first day of the next month
+    });
+
+    it('POST returns 400 when the category cannot be resolved (unseeded)', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        mockMembershipFindFirst.mockResolvedValue(null);
+        mockCategoryFindFirst.mockResolvedValue(null); // resolveCategoryId → null
+
+        const res = await POST(new Request('http://localhost/api/budget', {
+            method: 'POST',
+            body: JSON.stringify({ scope: 'personal', category: 'health', amount: 100 }),
+        }));
+        expect(res.status).toBe(400);
+        expect(mockBudgetUpsert).not.toHaveBeenCalled();
     });
 
     it('POST scope=shared without a couple is rejected (400)', async () => {
