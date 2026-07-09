@@ -9,7 +9,6 @@ import {
     ArrowLeft,
     User,
     Heart,
-    Trash2,
     Save,
     Copy,
     Check,
@@ -17,11 +16,14 @@ import {
     PieChart,
     Tag,
     Download,
+    Plus,
+    LogIn,
+    LogOut,
 } from "lucide-react";
 import Link from "next/link";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
-import { isAvatarUrl } from "@/lib/avatar";
+import { setActiveGroup } from "@/app/actions/group";
 
 interface UserData {
     id: string;
@@ -30,28 +32,38 @@ interface UserData {
     avatar: string;
 }
 
-interface CoupleData {
+interface GroupData {
     id: string;
     name: string;
     code: string;
-    members: { id: string, name: string, avatar: string }[];
+    memberCount: number;
+    isActive: boolean;
 }
 
 interface SettingsClientProps {
     user: UserData;
-    couple: CoupleData | null;
+    groups: GroupData[];
+    activeGroupId: string | null;
 }
 
-export function SettingsClient({ user, couple }: SettingsClientProps) {
+export function SettingsClient({ user, groups }: SettingsClientProps) {
     const router = useRouter();
     const [name, setName] = useState(user.name);
     const [avatar, setAvatar] = useState(user.avatar);
     const [isSaving, setIsSaving] = useState(false);
-    const [isUnlinking, setIsUnlinking] = useState(false);
-    const [copied, setCopied] = useState(false);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [leavingId, setLeavingId] = useState<string | null>(null);
     const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
-    const partner = couple?.members.find(m => m.id !== user.id);
+    // Create-group form
+    const [newName, setNewName] = useState("");
+    const [creating, setCreating] = useState(false);
+    const [createError, setCreateError] = useState<string | null>(null);
+
+    // Join-group form
+    const [joinCode, setJoinCode] = useState("");
+    const [joining, setJoining] = useState(false);
+    const [joinError, setJoinError] = useState<string | null>(null);
 
     const handleSaveProfile = async () => {
         setIsSaving(true);
@@ -76,33 +88,80 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
         }
     };
 
-    const handleUnlink = async () => {
-        if (!confirm("¿ESTÁS SEGURO? Perderás acceso a todos los gastos y desgloses de este grupo. Esta acción no se puede deshacer.")) return;
+    const handleLeave = async (groupId: string, groupName: string) => {
+        if (!confirm(`¿Salir de "${groupName}"? Perderás acceso a sus gastos y desgloses. Esta acción no se puede deshacer.`)) return;
 
-        setIsUnlinking(true);
+        setLeavingId(groupId);
         try {
             const res = await fetch("/api/couple/unlink", {
                 method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ groupId }),
             });
             if (res.ok) {
-                router.push("/dashboard");
                 router.refresh();
             } else {
-                alert("Error al desvincular");
+                alert("Error al salir del grupo");
             }
         } catch (_err) {
             alert("Error de conexión");
         } finally {
-            setIsUnlinking(false);
+            setLeavingId(null);
         }
     };
 
-    const copyCode = () => {
-        if (couple?.code) {
-            navigator.clipboard.writeText(couple.code);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
+    const handleCreate = async () => {
+        setCreating(true);
+        setCreateError(null);
+        try {
+            const res = await fetch("/api/couple", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: newName || undefined }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                await setActiveGroup(data.couple.id);
+                setNewName("");
+                router.refresh();
+            } else {
+                setCreateError(data.error || "Error al crear el grupo");
+            }
+        } catch (_err) {
+            setCreateError("Error de conexión");
+        } finally {
+            setCreating(false);
         }
+    };
+
+    const handleJoin = async () => {
+        setJoining(true);
+        setJoinError(null);
+        try {
+            const res = await fetch("/api/couple/join", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ code: joinCode }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                if (data.couple?.id) await setActiveGroup(data.couple.id);
+                setJoinCode("");
+                router.refresh();
+            } else {
+                setJoinError(data.error || "Código inválido");
+            }
+        } catch (_err) {
+            setJoinError("Error de conexión");
+        } finally {
+            setJoining(false);
+        }
+    };
+
+    const copyCode = (code: string, id: string) => {
+        navigator.clipboard.writeText(code);
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
     };
 
     return (
@@ -167,49 +226,108 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
                     </GlassCard>
                 </section>
 
-                {/* Couple Section */}
-                {couple && (
-                    <section className="space-y-4">
-                        <div className="flex items-center gap-2 px-1">
-                            <Heart className="h-5 w-5 text-primary" />
-                            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Mi Grupo</h2>
-                        </div>
+                {/* Groups Section (multi-group) */}
+                <section className="space-y-4">
+                    <div className="flex items-center gap-2 px-1">
+                        <Heart className="h-5 w-5 text-primary" />
+                        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Mis grupos</h2>
+                    </div>
 
-                        <GlassCard className="p-4 space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div className="space-y-1">
-                                    <p className="text-sm font-bold text-foreground">{partner ? partner.name : "Esperando..."}</p>
-                                    <p className="text-xs text-muted-foreground">{partner ? "Miembro del grupo" : "Comparte tu código"}</p>
-                                </div>
-                                <div className="h-10 w-10 rounded-full bg-[var(--accent-tint)] flex items-center justify-center text-xl overflow-hidden">
-                                    {partner?.avatar && isAvatarUrl(partner.avatar) ? (
-                                        // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
-                                        <img
-                                            src={partner.avatar}
-                                            alt={partner.name}
-                                            className="h-full w-full object-cover"
-                                        />
-                                    ) : (
-                                        partner?.avatar || "💕"
-                                    )}
+                    {groups.length === 0 && (
+                        <p className="text-xs text-muted-foreground px-1">Todavía no perteneces a ningún grupo. Crea uno o únete con un código.</p>
+                    )}
+
+                    {groups.map((g) => (
+                        <GlassCard key={g.id} className="rounded-[16px] bg-card border border-[color:var(--line)] p-4 space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="space-y-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-sm font-bold text-foreground truncate">{g.name}</p>
+                                        {g.isActive && (
+                                            <span className="text-[11px] font-bold px-2 py-[3px] rounded-lg bg-[var(--accent-tint)] text-primary shrink-0">Activo</span>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        {g.memberCount} {g.memberCount === 1 ? "miembro" : "miembros"}
+                                    </p>
                                 </div>
                             </div>
 
                             <div className="p-3 bg-secondary rounded-xl border border-[color:var(--line)] flex items-center justify-between">
                                 <div className="space-y-1">
                                     <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Código de invitación</p>
-                                    <code className="text-lg font-mono font-bold tracking-tighter text-foreground">{couple.code}</code>
+                                    <code className="text-lg font-mono font-bold tracking-tighter text-foreground">{g.code}</code>
                                 </div>
-                                <Button size="icon" variant="ghost" onClick={copyCode} className="h-10 w-10">
-                                    {copied ? <Check className="h-4 w-4 text-[color:var(--positive)]" /> : <Copy className="h-4 w-4" />}
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => copyCode(g.code, g.id)}
+                                    className="h-10 w-10"
+                                    aria-label="Copiar código de invitación"
+                                >
+                                    {copiedId === g.id ? <Check className="h-4 w-4 text-[color:var(--positive)]" /> : <Copy className="h-4 w-4" />}
                                 </Button>
                             </div>
+
+                            <Button
+                                variant="ghost"
+                                className="w-full justify-center h-11 bg-[var(--negative-tint)] text-destructive hover:opacity-90 border border-[color:var(--line)]"
+                                onClick={() => handleLeave(g.id, g.name)}
+                                isLoading={leavingId === g.id}
+                            >
+                                <LogOut className="h-4 w-4 mr-2" /> Salir
+                            </Button>
                         </GlassCard>
-                    </section>
-                )}
+                    ))}
+
+                    {/* Create group — always available */}
+                    <GlassCard className="rounded-[16px] bg-card border border-[color:var(--line)] p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <Plus className="h-4 w-4 text-primary" />
+                            <h3 className="text-[13px] font-bold text-foreground">Crear grupo</h3>
+                        </div>
+                        <Input
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            placeholder="Nombre del grupo (opcional)"
+                            className="h-[50px] rounded-xl bg-card border border-[color:var(--line)] text-foreground px-[15px] focus:border-[color:var(--accent-border)]"
+                        />
+                        {createError && <p className="text-destructive text-xs">{createError}</p>}
+                        <Button
+                            className="w-full h-[52px] rounded-[13px] bg-primary text-white font-semibold"
+                            onClick={handleCreate}
+                            isLoading={creating}
+                        >
+                            <Plus className="h-4 w-4 mr-2" /> Crear grupo
+                        </Button>
+                    </GlassCard>
+
+                    {/* Join group — always available */}
+                    <GlassCard className="rounded-[16px] bg-card border border-[color:var(--line)] p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <LogIn className="h-4 w-4 text-primary" />
+                            <h3 className="text-[13px] font-bold text-foreground">Unirse con código</h3>
+                        </div>
+                        <Input
+                            value={joinCode}
+                            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                            placeholder="Código de invitación"
+                            className="h-[50px] rounded-xl bg-card border border-[color:var(--line)] text-foreground px-[15px] font-mono tracking-tighter focus:border-[color:var(--accent-border)]"
+                        />
+                        {joinError && <p className="text-destructive text-xs">{joinError}</p>}
+                        <Button
+                            className="w-full h-[52px] rounded-[13px] bg-primary text-white font-semibold"
+                            onClick={handleJoin}
+                            isLoading={joining}
+                            disabled={!joinCode.trim()}
+                        >
+                            <LogIn className="h-4 w-4 mr-2" /> Unirse
+                        </Button>
+                    </GlassCard>
+                </section>
 
                 {/* Tools Section */}
-                {couple && (
+                {groups.length > 0 && (
                     <section className="space-y-4">
                         <div className="flex items-center gap-2 px-1">
                             <PieChart className="h-5 w-5 text-primary" />
@@ -242,17 +360,6 @@ export function SettingsClient({ user, couple }: SettingsClientProps) {
 
                     <div className="space-y-3">
                         <LogoutButton className="w-full justify-start h-14 bg-card border border-[color:var(--line)] hover:bg-secondary" />
-
-                        {couple && (
-                            <Button
-                                variant="ghost"
-                                className="w-full justify-start h-14 bg-[var(--negative-tint)] text-destructive hover:opacity-90 border border-[color:var(--line)]"
-                                onClick={handleUnlink}
-                                isLoading={isUnlinking}
-                            >
-                                <Trash2 className="h-5 w-5 mr-3" /> Salir del grupo
-                            </Button>
-                        )}
                     </div>
                 </section>
             </div>

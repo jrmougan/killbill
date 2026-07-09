@@ -56,7 +56,7 @@ export async function getPrimaryGroup(userId: string): Promise<string | null> {
  */
 export async function getUserGroups(
     userId: string
-): Promise<{ id: string; name: string | null; memberCount: number }[]> {
+): Promise<{ id: string; name: string | null; code: string; memberCount: number }[]> {
     const memberships = await prisma.membership.findMany({
         where: { userId, status: "ACTIVE" },
         orderBy: [{ joinedAt: "asc" }, { groupId: "asc" }],
@@ -65,6 +65,7 @@ export async function getUserGroups(
                 select: {
                     id: true,
                     name: true,
+                    code: true,
                     // ACTIVE-only member count — mirrors getGroupMembers semantics.
                     _count: { select: { memberships: { where: { status: "ACTIVE" } } } },
                 },
@@ -74,6 +75,7 @@ export async function getUserGroups(
     return memberships.map((m) => ({
         id: m.group.id,
         name: m.group.name,
+        code: m.group.code,
         memberCount: m.group._count.memberships,
     }));
 }

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getActiveGroup, getGroupMembers } from "@/lib/membership";
+import { getUserGroups, getActiveGroup } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { SettingsClient } from "./settings-client";
 import { Metadata } from "next";
@@ -18,14 +18,11 @@ export default async function SettingsPage() {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) redirect("/login");
 
-    // Phase 5 (WS1): resolve the group + members via the Membership layer.
-    const groupId = await getActiveGroup(userId);
-    const [couple, members] = groupId
-        ? await Promise.all([
-            prisma.couple.findUnique({ where: { id: groupId } }),
-            getGroupMembers(groupId),
-        ])
-        : [null, []];
+    // F4 (multi-group): resolve ALL the user's ACTIVE groups + the active one.
+    const [groups, activeGroupId] = await Promise.all([
+        getUserGroups(userId),
+        getActiveGroup(userId),
+    ]);
 
     return (
         <SettingsClient
@@ -35,16 +32,14 @@ export default async function SettingsPage() {
                 email: user.email || "",
                 avatar: user.avatar || "👤"
             }}
-            couple={couple ? {
-                id: couple.id,
-                name: couple.name || "Nuestra Pareja",
-                code: couple.code,
-                members: members.map(m => ({
-                    id: m.id,
-                    name: m.name,
-                    avatar: m.avatar || "👤"
-                }))
-            } : null}
+            groups={groups.map(g => ({
+                id: g.id,
+                name: g.name ?? "Mi grupo",
+                code: g.code,
+                memberCount: g.memberCount,
+                isActive: g.id === activeGroupId,
+            }))}
+            activeGroupId={activeGroupId}
         />
     );
 }

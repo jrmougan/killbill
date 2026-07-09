@@ -62,7 +62,7 @@ export async function POST(request: Request) {
             httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 365,
         });
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, couple: { id: couple.id } });
     } catch (error) {
         console.error('Error al unirse al grupo:', error);
         return NextResponse.json({ error: 'Error al unirse al grupo' }, { status: 500 });
