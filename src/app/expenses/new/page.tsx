@@ -17,7 +17,6 @@ import { formatEuros, parseAmountInput, formatAmountInput } from "@/lib/currency
 type Step = "amount" | "details";
 type ScanState = "idle" | "scanning" | "done";
 type SplitChoice = "equal" | "me" | "partner" | "custom";
-type PaidBy = "me" | "partner";
 type ExpenseType = "shared" | "personal";
 type RecurringInterval = "weekly" | "monthly" | "yearly";
 
@@ -71,8 +70,9 @@ export default function NewExpensePage() {
     // Personal (private ledger) vs shared (couple) expense
     const [expenseType, setExpenseType] = useState<ExpenseType>("shared");
 
-    // Split / payer
-    const [paidBy, setPaidBy] = useState<PaidBy>("me");
+    // Split / payer. Phase "decouple" F5: the payer is any group member (N-way),
+    // not just me/partner. Defaults to the current user once loaded.
+    const [paidById, setPaidById] = useState<string>("");
     const [split, setSplit] = useState<SplitChoice>("equal");
     const [myPercent, setMyPercent] = useState(50);
     const [members, setMembers] = useState<{ id: string; name: string; avatar: string | null }[]>([]);
@@ -103,6 +103,9 @@ export default function NewExpensePage() {
     const partner = members.find((m) => m.id !== userId);
     const partnerName = partner?.name || "pareja";
     const partnerPercent = 100 - myPercent;
+    // 2-member groups keep the "me vs partner" split modes; larger groups use the
+    // N-way equal split (backend handles both). Custom %/per-item are 2-member-only.
+    const isTwoMember = members.length === 2;
 
     // es-ES users type the decimal separator as a comma; normalise before parsing
     const amountNum = parseAmountInput(amount);
@@ -137,7 +140,7 @@ export default function NewExpensePage() {
             .then((res) => res.json())
             .then((data) => {
                 if (data.couple) setMembers(data.couple.members);
-                if (data.userId) setUserId(data.userId);
+                if (data.userId) { setUserId(data.userId); setPaidById(data.userId); }
             })
             .catch((err) => console.error("Failed to fetch couple", err));
     }, []);
@@ -363,13 +366,12 @@ export default function NewExpensePage() {
         }
         const isPersonal = expenseType === "personal";
         if (!isPersonal) {
-            if (split === "custom" && myPercent + partnerPercent !== 100) {
+            if (isTwoMember && split === "custom" && myPercent + partnerPercent !== 100) {
                 setFormError("Los porcentajes deben sumar 100%.");
                 return;
             }
-            const needsPartner = split === "partner" || paidBy === "partner";
-            if (needsPartner && !partner) {
-                setFormError("Necesitas un grupo configurado para esta opción.");
+            if (members.length === 0) {
+                setFormError("Necesitas un grupo configurado para un gasto compartido.");
                 return;
             }
         }
@@ -412,26 +414,32 @@ export default function NewExpensePage() {
                 // Personal expense: private, no payer/split — the API owns it to the caller.
                 bodyPayload.visibility = "PERSONAL";
             } else {
-                bodyPayload.paidById = paidBy === "me" ? userId : partner?.id;
+                // N-way payer: any member (defaults to me).
+                bodyPayload.paidById = paidById || userId;
 
-                if (hasItemAssignments && userId && partner) {
-                    const myCents = Math.round(itemSplitMyAmount * 100);
-                    bodyPayload.customSplits = [
-                        { userId, amount: myCents },
-                        { userId: partner.id, amount: amountCents - myCents },
-                    ];
-                } else if (split === "custom" && userId && partner) {
-                    const myCents = Math.round((amountCents * myPercent) / 100);
-                    bodyPayload.customSplits = [
-                        { userId, amount: myCents },
-                        { userId: partner.id, amount: amountCents - myCents },
-                    ];
-                } else if (split === "me" && userId) {
-                    bodyPayload.beneficiaryId = userId;
-                } else if (split === "partner" && partner) {
-                    bodyPayload.beneficiaryId = partner.id;
+                // The custom %, per-item and beneficiary modes are 2-member-only;
+                // larger groups always use the N-way equal split (no customSplits →
+                // the API divides equally among ALL members).
+                if (isTwoMember && userId && partner) {
+                    if (hasItemAssignments) {
+                        const myCents = Math.round(itemSplitMyAmount * 100);
+                        bodyPayload.customSplits = [
+                            { userId, amount: myCents },
+                            { userId: partner.id, amount: amountCents - myCents },
+                        ];
+                    } else if (split === "custom") {
+                        const myCents = Math.round((amountCents * myPercent) / 100);
+                        bodyPayload.customSplits = [
+                            { userId, amount: myCents },
+                            { userId: partner.id, amount: amountCents - myCents },
+                        ];
+                    } else if (split === "me") {
+                        bodyPayload.beneficiaryId = userId;
+                    } else if (split === "partner") {
+                        bodyPayload.beneficiaryId = partner.id;
+                    }
+                    // split === "equal" → no beneficiary/customSplits → equal split
                 }
-                // split === "equal" → no beneficiary/customSplits → API splits equally
             }
 
             const res = await fetch("/api/expenses", {
@@ -465,12 +473,16 @@ export default function NewExpensePage() {
 
     const amountDisplay = amount === "" ? "0" : amount;
 
-    const splitOptions: { key: SplitChoice; label: string; hint: string }[] = [
-        { key: "equal", label: "Mitad y mitad", hint: "50% · 50%" },
-        { key: "me", label: "Pagué por mí", hint: "100% Yo" },
-        { key: "partner", label: `Favor para ${partnerName}`, hint: `100% ${partnerName}` },
-        { key: "custom", label: "Personalizado", hint: "Ajustar %" },
-    ];
+    const splitOptions: { key: SplitChoice; label: string; hint: string }[] = isTwoMember
+        ? [
+            { key: "equal", label: "Mitad y mitad", hint: "50% · 50%" },
+            { key: "me", label: "Pagué por mí", hint: "100% Yo" },
+            { key: "partner", label: `Favor para ${partnerName}`, hint: `100% ${partnerName}` },
+            { key: "custom", label: "Personalizado", hint: "Ajustar %" },
+          ]
+        : [
+            { key: "equal", label: "A partes iguales", hint: `Entre ${members.length} miembros` },
+          ];
 
     return (
         <div className="flex flex-col min-h-screen max-w-md mx-auto relative">
@@ -680,20 +692,19 @@ export default function NewExpensePage() {
                         <>
                         <fieldset className="space-y-2 border-0 p-0 m-0">
                             <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">¿Quién pagó?</legend>
-                            <div className="flex gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5">
-                                {([["me", "Yo"], ["partner", partnerName]] as const).map(([key, label]) => (
+                            <div className="flex flex-wrap gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5">
+                                {members.map((m) => (
                                     <button
-                                        key={key}
+                                        key={m.id}
                                         type="button"
-                                        disabled={key === "partner" && !partner}
-                                        onClick={() => setPaidBy(key)}
-                                        aria-pressed={paidBy === key}
+                                        onClick={() => setPaidById(m.id)}
+                                        aria-pressed={paidById === m.id}
                                         className={cn(
-                                            "flex-1 h-11 rounded-lg text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-40",
-                                            paidBy === key ? "bg-primary text-white shadow" : "text-muted-foreground"
+                                            "flex-1 min-w-[72px] h-11 rounded-lg text-sm font-semibold transition-all active:scale-[0.98]",
+                                            paidById === m.id ? "bg-primary text-white shadow" : "text-muted-foreground"
                                         )}
                                     >
-                                        {label}
+                                        {m.id === userId ? "Yo" : m.name}
                                     </button>
                                 ))}
                             </div>
@@ -842,7 +853,7 @@ export default function NewExpensePage() {
                                                                 />
                                                             </div>
                                                             <div className="font-mono font-bold text-xs w-14 text-right flex-shrink-0">{item.total.toFixed(2)}</div>
-                                                            {expenseType === "shared" && (
+                                                            {expenseType === "shared" && isTwoMember && (
                                                             <div className="flex items-center flex-shrink-0 rounded-lg overflow-hidden border border-white/10 text-[11px] font-bold">
                                                                 <button type="button" onClick={() => setItemAssignment(idx, null)} aria-pressed={item.assignedTo === null} aria-label="Compartido 50/50"
                                                                     className={cn("px-2.5 py-2 transition-colors", item.assignedTo === null ? "bg-primary text-white" : "text-muted-foreground hover:bg-white/10")} title="Compartido (50/50)">½</button>
@@ -858,7 +869,7 @@ export default function NewExpensePage() {
                                                         </div>
                                                     ))}
                                                 </div>
-                                                {expenseType === "shared" && (
+                                                {expenseType === "shared" && isTwoMember && (
                                                 <div className="text-xs px-2 py-2 bg-white/5 rounded-lg space-y-1">
                                                     <div className="flex justify-between font-semibold text-blue-300"><span>Tu parte:</span><span>{formatEuros(itemSplitMyAmount)}</span></div>
                                                     <div className="flex justify-between font-semibold text-pink-300"><span>{partnerName}:</span><span>{formatEuros(itemSplitPartnerAmount)}</span></div>
