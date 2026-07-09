@@ -5,6 +5,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { signToken } from '@/lib/auth';
+import { getPrimaryGroup } from '@/lib/membership';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import type { AuthState } from '@/lib/auth-types';
 
@@ -46,7 +47,10 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
         // Handle couple invite (explicit + safe): only join when the user has no
         // couple yet, the code is valid, and the couple still has room. Done
         // atomically so two concurrent joins can't overfill the couple.
-        if (inviteCode && !user.coupleId) {
+        // Selector read via the Membership layer (Phase 4): "am I already in a
+        // group?" no longer reads user.coupleId. The coupleId WRITES below stay
+        // (dual-write) until the gated User.coupleId drop.
+        if (inviteCode && !(await getPrimaryGroup(user.id))) {
             const couple = await prisma.couple.findUnique({
                 where: { code: inviteCode },
                 include: { members: true },
@@ -56,10 +60,20 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
                 await prisma.$transaction(async (tx) => {
                     const memberCount = await tx.user.count({ where: { coupleId: couple.id } });
                     if (memberCount >= 2) return;
-                    await tx.user.updateMany({
+                    const joined = await tx.user.updateMany({
                         where: { id: user.id, coupleId: null },
                         data: { coupleId: couple.id },
                     });
+                    // Dual-write the Membership (this path previously skipped it,
+                    // which would strand invite-login joiners once reads use the
+                    // Membership layer). Upsert handles a previous LEFT rejoin.
+                    if (joined.count === 1) {
+                        await tx.membership.upsert({
+                            where: { groupId_userId: { groupId: couple.id, userId: user.id } },
+                            create: { groupId: couple.id, userId: user.id, role: 'MEMBER', status: 'ACTIVE' },
+                            update: { status: 'ACTIVE', leftAt: null },
+                        });
+                    }
                 });
             }
         }

@@ -17,6 +17,7 @@ import { ScopeSegment } from "@/components/nav/scope-segment";
 import { normalizeScope } from "@/lib/scope";
 import { toEuros, formatEuros } from "@/lib/currency";
 import { getCategoryById } from "@/lib/categories";
+import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { getSettlementStatusLabel, getSettlementMethodLabel } from "@/lib/settlement-labels";
 import { cn } from "@/lib/utils";
 import { isAvatarUrl } from "@/lib/avatar";
@@ -128,7 +129,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // the couple's balances.
     const allExpenses = await prisma.expense.findMany({
         where: { coupleId: couple.id, visibility: "SHARED" },
-        include: { splits: true },
+        include: { splits: true, ...CATEGORY_REF_SELECT },
     });
 
     // Personal ledger (private to this user). Materialize the user's own recurring
@@ -141,7 +142,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     }
     const personalExpenses = await prisma.expense.findMany({
         where: { ownerId: userId, visibility: "PERSONAL" },
-        include: { splits: true },
+        include: { splits: true, ...CATEGORY_REF_SELECT },
     });
     const personalMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const personalThisMonth = toEuros(
@@ -193,7 +194,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             description: e.description,
             amount: toEuros(e.amount), // cents -> euros
             date: e.date.toISOString(),
-            category: e.category,
+            category: categoryKeyOf(e), // Category table is the read key (enum fallback)
             paidBy: e.paidById,
             receiptUrl: e.receiptUrl,
             splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
@@ -222,7 +223,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         description: e.description,
         amount: toEuros(e.amount),
         date: e.date.toISOString(),
-        category: e.category,
+        category: categoryKeyOf(e), // Category table is the read key (enum fallback)
         paidBy: e.paidById,
         receiptUrl: e.receiptUrl,
         splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
@@ -352,8 +353,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     const totalThisMonth = toEuros(thisMonthExpenses.reduce((sum, e) => sum + e.amount, 0));
                     const totalLastMonth = toEuros(lastMonthExpenses.reduce((sum, e) => sum + e.amount, 0));
 
+                    // Phase 4 read-switch: group by the relational Category key
+                    // (categoryRef.key, enum fallback) — behavior-identical while
+                    // system rows mirror the enum.
                     const categoryTotals = thisMonthExpenses.reduce<Record<string, number>>((acc, e) => {
-                        acc[e.category] = (acc[e.category] || 0) + toEuros(e.amount);
+                        const key = categoryKeyOf(e);
+                        acc[key] = (acc[key] || 0) + toEuros(e.amount);
                         return acc;
                     }, {});
                     const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];

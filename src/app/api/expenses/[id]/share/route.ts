@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from "@/lib/splits";
 import { addInterval } from "@/lib/recurring";
-import { getGroupMembers } from "@/lib/membership";
+import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
 import { postExpenseLedger } from "@/lib/ledger";
 
 /**
@@ -23,8 +23,9 @@ export async function POST(
         if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const userId = session.userId as string;
 
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (!user?.coupleId) {
+        // Phase 4 selector switch: the caller's group comes from the Membership layer.
+        const groupId = await getPrimaryGroup(userId);
+        if (!groupId) {
             return NextResponse.json({ error: 'Necesitas una pareja para compartir un gasto' }, { status: 400 });
         }
 
@@ -41,7 +42,7 @@ export async function POST(
             return NextResponse.json({ error: 'El gasto ya es compartido' }, { status: 409 });
         }
 
-        const coupleMembers = (await getGroupMembers(user.coupleId)).map((m) => ({ id: m.id }));
+        const coupleMembers = (await getGroupMembers(groupId)).map((m) => ({ id: m.id }));
 
         const splits = calculateSplitAmounts(
             expense.amount,
@@ -65,7 +66,7 @@ export async function POST(
                 where: { id },
                 data: {
                     visibility: 'SHARED',
-                    coupleId: user.coupleId,
+                    coupleId: groupId,
                     splitStrategy: hasExclusiveReceiptItems(expense.receiptData) ? 'ITEMIZED' : 'EQUAL',
                     ...(nextRecurringDate ? { nextRecurringDate } : {}),
                     splits: {
@@ -78,7 +79,7 @@ export async function POST(
             // ledger transaction so a shared expense is never left with zero entries.
             await postExpenseLedger(tx, {
                 expenseId: id,
-                groupId: user.coupleId!,
+                groupId,
                 amount: updated.amount,
                 paidById: updated.paidById,
                 occurredAt: updated.date,

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { getPrimaryGroup, getGroupMembers } from '@/lib/membership';
 import { randomBytes } from 'crypto';
 
 export async function GET(_request: Request) {
@@ -8,20 +9,18 @@ export async function GET(_request: Request) {
     if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-            couple: {
-                include: {
-                    members: true
-                }
-            }
-        }
-    });
+    // Phase 4 selector switch: group + members come from the Membership layer
+    // instead of user.coupleId / couple.members.
+    const groupId = await getPrimaryGroup(userId);
+    if (!groupId) return NextResponse.json({ couple: null, userId });
 
-    if (!user?.coupleId) return NextResponse.json({ couple: null, userId });
+    const [couple, members] = await Promise.all([
+        prisma.couple.findUnique({ where: { id: groupId } }),
+        getGroupMembers(groupId),
+    ]);
+    if (!couple) return NextResponse.json({ couple: null, userId });
 
-    return NextResponse.json({ couple: user.couple, userId });
+    return NextResponse.json({ couple: { ...couple, members }, userId });
 }
 
 export async function POST(request: Request) {
@@ -29,13 +28,8 @@ export async function POST(request: Request) {
     if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const userId = session.userId as string;
 
-    // Reject if the caller already belongs to a couple.
-    const existing = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { coupleId: true }
-    });
-
-    if (existing?.coupleId) {
+    // Reject if the caller already belongs to a couple (Membership selector read).
+    if (await getPrimaryGroup(userId)) {
         return NextResponse.json({ error: 'Ya perteneces a una pareja' }, { status: 400 });
     }
 

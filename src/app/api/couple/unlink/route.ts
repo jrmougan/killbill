@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { getPrimaryGroup } from '@/lib/membership';
 
 export async function POST(_request: Request) {
     const session = await getSession();
@@ -8,16 +9,13 @@ export async function POST(_request: Request) {
     const userId = session.userId as string;
 
     try {
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { coupleId: true }
-        });
+        // Phase 4 selector switch: resolve my group via the Membership layer.
+        // All coupleId writes below stay (dual-write) until the gated drop.
+        const coupleId = await getPrimaryGroup(userId);
 
-        if (!user?.coupleId) {
+        if (!coupleId) {
             return NextResponse.json({ error: 'No estás en ninguna pareja' }, { status: 400 });
         }
-
-        const coupleId = user.coupleId;
 
         await prisma.$transaction(async (tx) => {
             // Unlink user inside transaction

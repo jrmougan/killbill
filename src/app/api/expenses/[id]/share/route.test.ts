@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockGetSession = vi.fn();
+const mockGetPrimaryGroup = vi.fn();
 const mockUserFindUnique = vi.fn();
 const mockUserFindMany = vi.fn();
 const mockExpenseFindUnique = vi.fn();
@@ -12,7 +13,10 @@ vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
 // Members come from the Membership layer; ledger posting is covered by
 // reconcile-ledger.ts + ledger tests — both stubbed so this test stays focused
 // on the personal->shared promotion + split generation.
-vi.mock('@/lib/membership', () => ({ getGroupMembers: async () => [{ id: 'u1' }, { id: 'u2' }] }));
+vi.mock('@/lib/membership', () => ({
+    getGroupMembers: async () => [{ id: 'u1' }, { id: 'u2' }],
+    getPrimaryGroup: (...a: unknown[]) => mockGetPrimaryGroup(...a),
+}));
 vi.mock('@/lib/ledger', () => ({ postExpenseLedger: vi.fn() }));
 vi.mock('@/lib/db', () => ({
     prisma: {
@@ -37,7 +41,7 @@ function personal(overrides = {}) {
 
 describe('POST /api/expenses/[id]/share', () => {
     beforeEach(() => {
-        [mockGetSession, mockUserFindUnique, mockUserFindMany, mockExpenseFindUnique, mockTxExpenseUpdate, mockTxSplitDeleteMany, mockTransaction].forEach((m) => m.mockReset());
+        [mockGetSession, mockGetPrimaryGroup, mockUserFindUnique, mockUserFindMany, mockExpenseFindUnique, mockTxExpenseUpdate, mockTxSplitDeleteMany, mockTransaction].forEach((m) => m.mockReset());
         // Run the transaction callback against a tx double.
         mockTransaction.mockImplementation(async (cb) => cb({
             split: { deleteMany: (...a: unknown[]) => mockTxSplitDeleteMany(...a) },
@@ -54,34 +58,34 @@ describe('POST /api/expenses/[id]/share', () => {
 
     it('400 when the caller has no couple', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
-        mockUserFindUnique.mockResolvedValue({ id: 'u1', coupleId: null });
+        mockGetPrimaryGroup.mockResolvedValue(null);
         expect((await POST(req(), { params })).status).toBe(400);
     });
 
     it('404 when the expense does not exist', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
-        mockUserFindUnique.mockResolvedValue({ id: 'u1', coupleId: 'c1' });
+        mockGetPrimaryGroup.mockResolvedValue('c1');
         mockExpenseFindUnique.mockResolvedValue(null);
         expect((await POST(req(), { params })).status).toBe(404);
     });
 
     it('403 when the caller is not the owner', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u2' });
-        mockUserFindUnique.mockResolvedValue({ id: 'u2', coupleId: 'c1' });
+        mockGetPrimaryGroup.mockResolvedValue('c1');
         mockExpenseFindUnique.mockResolvedValue(personal({ ownerId: 'u1' }));
         expect((await POST(req(), { params })).status).toBe(403);
     });
 
     it('409 when the expense is already shared', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
-        mockUserFindUnique.mockResolvedValue({ id: 'u1', coupleId: 'c1' });
+        mockGetPrimaryGroup.mockResolvedValue('c1');
         mockExpenseFindUnique.mockResolvedValue(personal({ visibility: 'SHARED' }));
         expect((await POST(req(), { params })).status).toBe(409);
     });
 
     it('promotes to SHARED with couple + generated splits', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
-        mockUserFindUnique.mockResolvedValue({ id: 'u1', coupleId: 'c1' });
+        mockGetPrimaryGroup.mockResolvedValue('c1');
         mockExpenseFindUnique.mockResolvedValue(personal());
         mockUserFindMany.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
 
@@ -99,7 +103,7 @@ describe('POST /api/expenses/[id]/share', () => {
 
     it('resets nextRecurringDate to the future when the shared source is recurring', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
-        mockUserFindUnique.mockResolvedValue({ id: 'u1', coupleId: 'c1' });
+        mockGetPrimaryGroup.mockResolvedValue('c1');
         mockExpenseFindUnique.mockResolvedValue(personal({ isRecurring: true, recurringInterval: 'monthly' }));
         mockUserFindMany.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
 

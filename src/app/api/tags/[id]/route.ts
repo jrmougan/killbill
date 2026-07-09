@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { getPrimaryGroup } from '@/lib/membership';
 
 export async function DELETE(
     _request: Request,
@@ -11,13 +12,14 @@ export async function DELETE(
     if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+    // Phase 4 selector switch: resolve my group via the Membership layer.
+    const groupId = await getPrimaryGroup(userId);
+    if (!groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
     const tag = await prisma.tag.findUnique({ where: { id } });
     if (!tag) return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
 
-    if (tag.coupleId !== user.coupleId) {
+    if (tag.coupleId !== groupId) {
         return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 

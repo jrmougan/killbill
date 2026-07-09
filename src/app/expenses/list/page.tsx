@@ -4,6 +4,7 @@ import { ExpensesListClient } from "./client";
 import { getSession } from "@/lib/auth";
 import { getGroupMembers } from "@/lib/membership";
 import { toEuros } from "@/lib/currency";
+import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,7 @@ export default async function ExpensesListPage() {
     // Fetch all expenses
     const rawExpenses = await prisma.expense.findMany({
         where: { coupleId: couple.id, visibility: "SHARED" },
-        include: { splits: true },
+        include: { splits: true, ...CATEGORY_REF_SELECT },
         orderBy: { date: "desc" },
     });
 
@@ -52,7 +53,9 @@ export default async function ExpensesListPage() {
             description: e.description,
             amount: toEuros(e.amount),
             date: e.date.toISOString(),
-            category: e.category,
+            // Phase 4 read-switch: the client's category filters key on the
+            // relational Category (enum fallback), not the enum column.
+            category: categoryKeyOf(e),
             paidBy: e.paidById,
             receiptUrl: e.receiptUrl,
             splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { getPrimaryGroup } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { ReceiptItem } from "@/types";
@@ -11,7 +12,10 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    const [expense, user] = await Promise.all([
+    // Phase 4 selector switch: the caller's group comes from the Membership
+    // layer (the expense's own couple.members include remains until the gated
+    // User.coupleId / Couple.members contract drop).
+    const [expense, groupId] = await Promise.all([
         prisma.expense.findUnique({
             where: { id },
             include: {
@@ -20,7 +24,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
                 tags: { include: { tag: true } },
             },
         }),
-        prisma.user.findUnique({ where: { id: userId } }),
+        getPrimaryGroup(userId),
     ]);
 
     if (!expense) redirect("/dashboard");
@@ -30,8 +34,8 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
     const canEdit = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
     if (!canEdit) redirect("/dashboard");
 
-    const allTags = user?.coupleId
-        ? await prisma.tag.findMany({ where: { coupleId: user.coupleId } })
+    const allTags = groupId
+        ? await prisma.tag.findMany({ where: { coupleId: groupId } })
         : [];
 
     const partner = expense.couple?.members.find((m) => m.id !== userId) ?? null;

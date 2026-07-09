@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
+import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { BudgetClient } from "./client";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,7 @@ export default async function BudgetPage() {
             prisma.budget.findMany({
                 where: { coupleId: coupleId!, month: monthStart },
                 orderBy: { category: "asc" },
+                include: CATEGORY_REF_SELECT,
             }),
             prisma.expense.findMany({
                 where: {
@@ -39,23 +41,26 @@ export default async function BudgetPage() {
                     visibility: "SHARED",
                     date: { gte: monthStart, lt: monthEnd },
                 },
-                select: { category: true, amount: true },
+                select: { category: true, amount: true, ...CATEGORY_REF_SELECT },
             }),
         ])
         : [[], []] as const;
 
+    // Phase 4 read-switch: spend-by-category keys on the relational Category
+    // (categoryRef.key, enum fallback) on BOTH sides of the budget↔expense match.
     const spentByCategory: Record<string, number> = {};
     for (const e of expenses) {
-        spentByCategory[e.category] = (spentByCategory[e.category] ?? 0) + e.amount;
+        const key = categoryKeyOf(e);
+        spentByCategory[key] = (spentByCategory[key] ?? 0) + e.amount;
     }
 
     const budgetData = budgets.map((budget) => {
-        const spentCents = spentByCategory[budget.category] ?? 0;
+        const spentCents = spentByCategory[categoryKeyOf(budget)] ?? 0;
         const percentage = budget.amount > 0 ? Math.round((spentCents / budget.amount) * 100) : 0;
         return {
             budget: {
                 id: budget.id,
-                category: budget.category,
+                category: categoryKeyOf(budget),
                 amount: parseFloat(toEuros(budget.amount).toFixed(2)),
                 month: budget.month.toISOString(),
             },

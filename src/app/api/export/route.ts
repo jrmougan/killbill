@@ -1,24 +1,27 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { getPrimaryGroup } from '@/lib/membership';
 import { toEuros } from '@/lib/currency';
 import { Prisma } from '@/generated/prisma/client';
 import { escapeCsvField } from '@/lib/csv';
+import { categoryKeyOf, CATEGORY_REF_SELECT } from '@/lib/category-read';
 
 export async function GET(request: Request) {
     const session = await getSession();
     if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+    // Phase 4 selector switch: resolve my group via the Membership layer.
+    const groupId = await getPrimaryGroup(userId);
+    if (!groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
     const { searchParams } = new URL(request.url);
     const from = searchParams.get('from');
     const to = searchParams.get('to');
 
     // Only shared expenses belong to the couple export; personal expenses are private.
-    const where: Prisma.ExpenseWhereInput = { coupleId: user.coupleId, visibility: 'SHARED' };
+    const where: Prisma.ExpenseWhereInput = { coupleId: groupId, visibility: 'SHARED' };
     if (from || to) {
         const dateFilter: Prisma.DateTimeFilter = {};
         if (from) dateFilter.gte = new Date(from);
@@ -38,6 +41,7 @@ export async function GET(request: Request) {
                 where: { userId },
                 select: { amount: true },
             },
+            ...CATEGORY_REF_SELECT,
         },
         orderBy: { date: 'asc' },
     });
@@ -52,7 +56,7 @@ export async function GET(request: Request) {
             escapeCsvField(fecha),
             escapeCsvField(e.description),
             escapeCsvField(importe),
-            escapeCsvField(e.category),
+            escapeCsvField(categoryKeyOf(e)), // relational Category key (enum fallback)
             escapeCsvField(e.paidBy.name),
             escapeCsvField(miParte),
             escapeCsvField(e.notes),

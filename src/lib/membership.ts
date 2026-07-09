@@ -18,6 +18,27 @@ export async function getGroupMembers(groupId: string): Promise<User[]> {
     return memberships.map((m) => m.user);
 }
 
+/**
+ * Resolves the user's primary group: the groupId of their single ACTIVE
+ * membership (today the model is 1 user : 1 group, so "primary" == "only").
+ *
+ * This is the Phase 4 replacement for every SELECTOR read of `user.coupleId`
+ * ("which group am I in?"). Writes keep dual-writing `User.coupleId` until the
+ * gated column drop. Costs exactly one indexed query ([userId] index on
+ * Membership); call it once per request handler and pass the id down.
+ *
+ * Deterministic if the 1:1 invariant is ever relaxed: oldest joinedAt wins,
+ * groupId as tiebreak (mirrors getGroupMembers ordering discipline).
+ */
+export async function getPrimaryGroup(userId: string): Promise<string | null> {
+    const membership = await prisma.membership.findFirst({
+        where: { userId, status: "ACTIVE" },
+        orderBy: [{ joinedAt: "asc" }, { groupId: "asc" }],
+        select: { groupId: true },
+    });
+    return membership?.groupId ?? null;
+}
+
 /** Fetch a single membership (for role/status checks). */
 export function getMembership(groupId: string, userId: string) {
     return prisma.membership.findUnique({

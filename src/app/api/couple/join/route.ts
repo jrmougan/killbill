@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { getPrimaryGroup } from '@/lib/membership';
 
 export async function POST(request: Request) {
     try {
@@ -11,12 +12,10 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { code } = body;
 
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { coupleId: true }
-        });
-
-        if (user?.coupleId) {
+        // Phase 4 selector switch: "am I already in a group?" reads the
+        // Membership layer. The transactional re-check below stays on coupleId
+        // (write-side TOCTOU guard) until the gated User.coupleId drop.
+        if (await getPrimaryGroup(userId)) {
             return NextResponse.json({ error: 'Ya perteneces a una pareja' }, { status: 400 });
         }
 

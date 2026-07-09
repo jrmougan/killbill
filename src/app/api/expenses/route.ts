@@ -3,7 +3,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { toCents } from '@/lib/currency';
 import { calculateSplitAmounts, hasExclusiveReceiptItems } from '@/lib/splits';
-import { getGroupMembers } from '@/lib/membership';
+import { getGroupMembers, getPrimaryGroup } from '@/lib/membership';
 import { resolveCategoryId } from '@/lib/category-db';
 import { buildReceiptLineItems } from '@/lib/receipt';
 import { postExpenseLedger } from '@/lib/ledger';
@@ -18,22 +18,20 @@ export async function GET(request: Request) {
         if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const userId = session.userId as string;
 
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-        });
-
         const { searchParams } = new URL(request.url);
         const scope = searchParams.get('scope') === 'personal' ? 'personal' : 'shared';
 
+        // Phase 4 selector switch: my group comes from the Membership layer.
         // Shared scope needs a couple; personal scope works for any user.
-        if (scope === 'shared' && !user?.coupleId) {
+        const groupId = scope === 'shared' ? await getPrimaryGroup(userId) : null;
+        if (scope === 'shared' && !groupId) {
             return NextResponse.json({ expenses: [], nextCursor: null });
         }
 
         // Personal expenses belong to the caller only; shared ones to the couple.
         const where = scope === 'personal'
             ? { ownerId: userId, visibility: 'PERSONAL' as const }
-            : { coupleId: user!.coupleId!, visibility: 'SHARED' as const };
+            : { coupleId: groupId!, visibility: 'SHARED' as const };
 
         // Parse limit with sane default and bounds
         const parsedLimit = parseInt(searchParams.get('limit') ?? '', 10);
@@ -91,12 +89,14 @@ export async function POST(request: Request) {
         const user = await prisma.user.findUnique({
             where: { id: userId },
         });
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
         // Personal expenses are a private ledger and never touch the couple; shared
-        // expenses require a couple (existing behaviour).
+        // expenses require a couple (existing behaviour). Phase 4 selector switch:
+        // the caller's group is resolved via the Membership layer once per request.
         const isPersonalExpense = isPersonal === true || visibilityInput === 'PERSONAL';
-        if (!isPersonalExpense && !user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
-        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const groupId = isPersonalExpense ? null : await getPrimaryGroup(userId);
+        if (!isPersonalExpense && !groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
         // Validate description is a non-empty string (missing/empty previously 500'd at the DB layer).
         if (typeof description !== 'string' || description.trim().length === 0) {
@@ -113,8 +113,8 @@ export async function POST(request: Request) {
         // userId/beneficiaryId actually belongs to the caller's couple (prevents IDOR).
         // Members come from the Membership layer (ACTIVE, ordered) — split order
         // must match. Personal expenses have no couple, so there are no members.
-        const coupleMembers = (!isPersonalExpense && user.coupleId)
-            ? (await getGroupMembers(user.coupleId)).map(m => ({ id: m.id }))
+        const coupleMembers = (!isPersonalExpense && groupId)
+            ? (await getGroupMembers(groupId)).map(m => ({ id: m.id }))
             : [];
         const memberIds = new Set(coupleMembers.map(m => m.id));
 
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
         // group, so they resolve to the system category.
         const categoryId = await resolveCategoryId(
             normalizedCategory,
-            isPersonalExpense ? null : user.coupleId,
+            isPersonalExpense ? null : groupId,
         );
 
         const expenseData: Prisma.ExpenseUncheckedCreateInput = {
@@ -162,7 +162,7 @@ export async function POST(request: Request) {
             paidById,
             ownerId: userId,
             visibility: isPersonalExpense ? 'PERSONAL' : 'SHARED',
-            coupleId: isPersonalExpense ? null : user.coupleId,
+            coupleId: isPersonalExpense ? null : groupId,
             receiptUrl: receiptUrl || null,
             receiptData: receiptData || undefined, // Prisma Json handling
             notes: notes || null,
@@ -249,7 +249,7 @@ export async function POST(request: Request) {
                         notes: notes || null,
                         interval: normalizedInterval,
                         nextRunDate: nextRecurringDate,
-                        coupleId: isPersonalExpense ? null : user.coupleId,
+                        coupleId: isPersonalExpense ? null : groupId,
                         ownerId: userId,
                         paidById,
                     },

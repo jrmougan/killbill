@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { calculateBalances } from "@/lib/finance";
 import { getCategoryById } from "@/lib/categories";
+import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { ReceiptItem } from "@/types";
 import { AnalyticsClient } from "./client";
 
@@ -43,7 +44,7 @@ export default async function AnalyticsPage() {
                 visibility: "SHARED",
                 date: { gte: twelveMonthsAgo },
             },
-            include: { splits: true },
+            include: { splits: true, ...CATEGORY_REF_SELECT },
             orderBy: { date: "asc" },
         }),
         prisma.settlement.findMany({
@@ -86,9 +87,10 @@ export default async function AnalyticsPage() {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const currentMonthExpenses = allExpenses.filter(e => new Date(e.date) >= startOfMonth);
 
+    // Phase 4 read-switch: group by the relational Category key (enum fallback).
     const categoryMap: Record<string, { amount: number; count: number }> = {};
     for (const e of currentMonthExpenses) {
-        const cat = e.category || "other";
+        const cat = categoryKeyOf(e);
         if (!categoryMap[cat]) categoryMap[cat] = { amount: 0, count: 0 };
         categoryMap[cat].amount += toEuros(e.amount);
         categoryMap[cat].count += 1;
@@ -161,8 +163,8 @@ export default async function AnalyticsPage() {
         .map(e => ({
             id: e.id,
             description: e.description,
-            category: e.category,
-            categoryLabel: getCategoryById(e.category).label,
+            category: categoryKeyOf(e),
+            categoryLabel: getCategoryById(categoryKeyOf(e)).label,
             amount: parseFloat(toEuros(e.amount).toFixed(2)),
             date: new Date(e.date).toLocaleDateString("es-ES", { day: "2-digit", month: "short" }),
         }));
