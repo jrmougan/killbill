@@ -38,7 +38,7 @@ export async function GET(request: Request) {
         where: scope === 'personal'
             ? { ownerId: userId, ...periodOverlap }
             : { coupleId: groupId!, ...periodOverlap },
-        orderBy: { category: 'asc' },
+        orderBy: { categoryId: 'asc' },
         include: CATEGORY_REF_SELECT,
     });
 
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
         where: scope === 'personal'
             ? { ownerId: userId, visibility: 'PERSONAL', date: { gte: monthStart, lt: monthEnd } }
             : { coupleId: groupId!, visibility: 'SHARED', date: { gte: monthStart, lt: monthEnd } },
-        select: { category: true, amount: true, ...CATEGORY_REF_SELECT },
+        select: { amount: true, ...CATEGORY_REF_SELECT },
     });
 
     // Phase 4 read-switch: spend-by-category keys on the relational Category

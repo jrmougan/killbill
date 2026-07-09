@@ -7,17 +7,6 @@ datasource db {
   provider = "mysql"
 }
 
-enum ExpenseCategory {
-  shopping
-  food
-  rent
-  utilities
-  transport
-  entertainment
-  health
-  other
-}
-
 enum RecurringInterval {
   weekly
   monthly
@@ -84,7 +73,6 @@ model Couple {
   code      String    @unique // For invites
   createdAt DateTime  @default(now())
 
-  members     User[]
   memberships Membership[]
   expenses    Expense[]
   settlements Settlement[]
@@ -106,11 +94,8 @@ model User {
   isAdmin   Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  // Couple support (one user, one couple) — kept as the source of truth in
-  // Phase 1; Membership is added alongside (rename/drop deferred to Phase 2).
-  coupleId String?
-  couple   Couple? @relation(fields: [coupleId], references: [id])
-
+  // Phase 5 contract: User.coupleId dropped — Membership is the sole membership
+  // source (getPrimaryGroup / getGroupMembers).
   memberships Membership[]
 
   expensesPaid  Expense[] @relation("Payer")
@@ -210,15 +195,12 @@ model Expense {
   description String
   amount      Int
   date        DateTime @default(now())
-  category    ExpenseCategory @default(other)
-
-  // Relational category (Phase 2b). Nullable + dual-written alongside the enum,
-  // which remains the source of truth until the read-switch/contract step.
+  // Relational category (Phase 2b) — the sole category source after the Phase 5
+  // contract dropped the ExpenseCategory enum column.
   categoryId  String?
   categoryRef Category? @relation(fields: [categoryId], references: [id])
 
   receiptUrl  String?
-  receiptData Json?
 
   visibility  ExpenseVisibility @default(SHARED)
 
@@ -226,10 +208,7 @@ model Expense {
   // have no splits, and pre-Phase-2 rows are backfilled best-effort.
   splitStrategy SplitStrategy?
 
-  notes               String?
-  isRecurring         Boolean   @default(false)
-  recurringInterval   RecurringInterval?
-  nextRecurringDate   DateTime?
+  notes String?
 
   paidById String
   paidBy   User   @relation("Payer", fields: [paidById], references: [id], onDelete: Cascade)
@@ -314,7 +293,6 @@ model RecurringSeries {
 
   description String
   amount      Int
-  category    ExpenseCategory @default(other)
 
   categoryId  String?
   categoryRef Category? @relation(fields: [categoryId], references: [id])
@@ -514,12 +492,9 @@ model LedgerEntry {
 
 model Budget {
   id       String          @id @default(cuid())
-  // Phase 5 (stop-dual-write): legacy enum/month columns are no longer written;
-  // nullable so the writers can omit them. The category+period source of truth is
-  // categoryId + periodStart/periodEnd.
-  category ExpenseCategory?
+  // Phase 5 contract: the legacy enum `category` and `month` columns were dropped.
+  // The category+period source of truth is categoryId + periodStart/periodEnd.
   amount   Int             // limite en centavos
-  month    DateTime? // legacy; nullable once WS3 stops writing it
 
   // Phase 2e: explicit half-open [periodStart, periodEnd) range. periodStart is
   // now NOT NULL — a key part of the categoryId+periodStart uniques.

@@ -29,7 +29,7 @@ export default async function BudgetPage() {
                 // Phase 4/5: select by half-open [periodStart, periodEnd) overlap
                 // with the current month (same as the GET route), not `month`.
                 where: { coupleId: coupleId!, periodStart: { lt: monthEnd }, periodEnd: { gt: monthStart } },
-                orderBy: { category: "asc" },
+                orderBy: { categoryId: "asc" },
                 include: CATEGORY_REF_SELECT,
             }),
             prisma.expense.findMany({
@@ -38,7 +38,7 @@ export default async function BudgetPage() {
                     visibility: "SHARED",
                     date: { gte: monthStart, lt: monthEnd },
                 },
-                select: { category: true, amount: true, ...CATEGORY_REF_SELECT },
+                select: { amount: true, ...CATEGORY_REF_SELECT },
             }),
         ])
         : [[], []] as const;
