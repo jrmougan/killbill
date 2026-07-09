@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getGroupMembers } from "@/lib/membership";
+import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { calculateBalances } from "@/lib/finance";
@@ -20,19 +20,11 @@ export default async function AnalyticsPage() {
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-            couple: {
-                include: { members: true },
-            },
-        },
-    });
+    // Phase 5 (WS1): resolve the group + members via the Membership layer.
+    const groupId = await getPrimaryGroup(userId);
+    if (!groupId) redirect("/dashboard");
 
-    if (!user || !user.couple) redirect("/dashboard");
-
-    const couple = user.couple;
-    const members = await getGroupMembers(couple.id);
+    const members = await getGroupMembers(groupId);
 
     const now = new Date();
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
@@ -40,7 +32,7 @@ export default async function AnalyticsPage() {
     const [allExpenses, allSettlements] = await Promise.all([
         prisma.expense.findMany({
             where: {
-                coupleId: couple.id,
+                coupleId: groupId,
                 visibility: "SHARED",
                 date: { gte: twelveMonthsAgo },
             },
@@ -49,7 +41,7 @@ export default async function AnalyticsPage() {
         }),
         prisma.settlement.findMany({
             where: {
-                coupleId: couple.id,
+                coupleId: groupId,
                 date: { gte: twelveMonthsAgo },
             },
             orderBy: { date: "asc" },

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { resolveMyDebts, getLastSettlementDate } from "@/lib/finance";
 import { getGroupBalances } from "@/lib/ledger-read";
-import { getGroupMembers } from "@/lib/membership";
+import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
 import { calculateSplitAmounts } from "@/lib/splits";
 import { toEuros } from "@/lib/currency";
 import { SettleClient } from "./client";
@@ -15,39 +15,29 @@ export default async function SettlePage() {
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-            couple: {
-                include: {
-                    members: true
-                }
-            }
-        }
-    });
-
-    if (!user || !user.couple) {
+    // Phase 5 (WS1): resolve the group + members via the Membership layer.
+    const groupId = await getPrimaryGroup(userId);
+    if (!groupId) {
         return redirect("/dashboard");
     }
 
-    const { couple } = user;
-    const members = await getGroupMembers(couple.id);
+    const members = await getGroupMembers(groupId);
 
     // Fetch shared expenses for couple with splits (personal expenses never affect debts).
     const rawExpenses = await prisma.expense.findMany({
-        where: { coupleId: couple.id, visibility: "SHARED" },
+        where: { coupleId: groupId, visibility: "SHARED" },
         include: { splits: true },
     });
 
     // Fetch Settlements for couple
     const settlements = await prisma.settlement.findMany({
-        where: { coupleId: couple.id },
+        where: { coupleId: groupId },
     });
 
     // Debts resolve from ledger-sourced balances (proven == calculateBalances by
     // reconcile-ledger.ts). resolveMyDebts is the same greedy matching algorithm,
     // now fed the ledger balances instead of a fresh calculateBalances pass.
-    const balances = await getGroupBalances(couple.id);
+    const balances = await getGroupBalances(groupId);
     const myDebtsMap = resolveMyDebts(balances, userId);
 
     // Format for client - convert cents to euros

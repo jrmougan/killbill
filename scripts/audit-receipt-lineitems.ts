@@ -38,7 +38,7 @@
  * Run:  npx tsx scripts/audit-receipt-lineitems.ts [--fix] [--strict]
  */
 import { prisma } from '../src/lib/db';
-import { getGroupMembers } from '../src/lib/membership';
+import { getGroupMembers, getPrimaryGroup } from '../src/lib/membership';
 import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from '../src/lib/splits';
 import { buildReceiptLineItems, type ReceiptLineInput } from '../src/lib/receipt';
 
@@ -124,8 +124,8 @@ async function main() {
     async function ownerCoupleId(ownerId: string | null): Promise<string | null> {
         if (!ownerId) return null;
         if (!ownerCoupleCache.has(ownerId)) {
-            const owner = await prisma.user.findUnique({ where: { id: ownerId }, select: { coupleId: true } });
-            ownerCoupleCache.set(ownerId, owner?.coupleId ?? null);
+            // Phase 5 (WS1): resolve the owner's group via the Membership layer.
+            ownerCoupleCache.set(ownerId, await getPrimaryGroup(ownerId));
         }
         return ownerCoupleCache.get(ownerId) ?? null;
     }

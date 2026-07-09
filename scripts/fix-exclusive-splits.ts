@@ -90,9 +90,11 @@ async function main() {
             continue;
         }
 
-        // Get member names
+        // Get member names via the Membership layer (Phase 5 WS1: no User.coupleId read).
         const [members] = await conn.query<MemberRow[]>(
-            `SELECT id, name FROM User WHERE coupleId = ?`,
+            `SELECT u.id, u.name FROM User u
+               JOIN Membership m ON m.userId = u.id
+              WHERE m.groupId = ? AND m.status = 'ACTIVE'`,
             [expense.coupleId]
         );
 

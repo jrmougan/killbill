@@ -44,15 +44,17 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
 
         let couple = null;
         if (!invite) {
-            couple = await prisma.couple.findUnique({
-                where: { code: inviteCode },
-                include: { members: true },
-            });
+            couple = await prisma.couple.findUnique({ where: { code: inviteCode } });
 
             if (!couple) {
                 return { error: 'Código de invitación inválido' };
             }
-            if (couple.members.length >= 2) {
+            // Phase 5 (WS1): the cap-of-2 check counts ACTIVE memberships, not
+            // users-by-coupleId.
+            const memberCount = await prisma.membership.count({
+                where: { groupId: couple.id, status: 'ACTIVE' },
+            });
+            if (memberCount >= 2) {
                 return { error: 'Esta pareja ya está completa' };
             }
         } else {
@@ -79,7 +81,10 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
         const user = await prisma.$transaction(async (tx) => {
             let existingMemberCount = 0;
             if (coupleId) {
-                existingMemberCount = await tx.user.count({ where: { coupleId } });
+                // Phase 5 (WS1): count ACTIVE memberships, not users-by-coupleId.
+                existingMemberCount = await tx.membership.count({
+                    where: { groupId: coupleId, status: 'ACTIVE' },
+                });
                 if (existingMemberCount >= 2) throw new Error('COUPLE_FULL');
             }
 

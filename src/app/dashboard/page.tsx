@@ -12,7 +12,7 @@ import { redirect } from "next/navigation";
 import { getLastSettlementDate } from "@/lib/finance";
 import { getGroupBalances } from "@/lib/ledger-read";
 import { materializeDueRecurringExpenses, materializeDueRecurringExpensesForOwner } from "@/lib/recurring";
-import { getGroupMembers } from "@/lib/membership";
+import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
 import { ScopeSegment } from "@/components/nav/scope-segment";
 import { normalizeScope } from "@/lib/scope";
 import { toEuros, formatEuros } from "@/lib/currency";
@@ -36,24 +36,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // or 'personal' (private only). Read from ?scope= so it survives navigation.
     const scope = normalizeScope((await searchParams).scope);
 
-    // Fetch User with couple and partner
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-            couple: {
-                include: {
-                    members: true,
-                },
-            },
-        },
-    });
+    // Fetch the user for display; resolve the group via the Membership layer
+    // (Phase 5 WS1: no longer via the user.couple relation).
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const groupId = await getPrimaryGroup(userId);
 
     if (!user) {
         return <div className="p-10 text-center">Usuario no encontrado. <Link href="/login" className="underline">Login de nuevo</Link></div>;
     }
 
     // No couple - show onboarding
-    if (!user.couple) {
+    if (!groupId) {
         return (
             <div className="flex flex-col h-full min-h-screen p-4 space-y-6">
                 <header className="flex justify-between items-center pt-2">
@@ -83,12 +76,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         <form action={async () => {
                             'use server';
                             const code = randomBytes(3).toString('hex').toUpperCase();
-                            await prisma.couple.create({
-                                data: {
-                                    name: "Nuestra Pareja",
-                                    code,
-                                    members: { connect: { id: userId } }
-                                }
+                            // Phase 5 (WS1): create the OWNER Membership alongside the
+                            // couple so the creator is resolvable via the Membership
+                            // layer (previously this path wrote only User.coupleId and
+                            // no Membership, stranding the creator once reads switch).
+                            await prisma.$transaction(async (tx) => {
+                                const created = await tx.couple.create({
+                                    data: {
+                                        name: "Nuestra Pareja",
+                                        code,
+                                        members: { connect: { id: userId } },
+                                    },
+                                });
+                                await tx.membership.create({
+                                    data: { groupId: created.id, userId, role: 'OWNER', status: 'ACTIVE' },
+                                });
                             });
                             redirect("/dashboard");
                         }}>
@@ -110,8 +112,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         );
     }
 
-    // Couple exists - show normal dashboard
-    const couple = user.couple;
+    // Couple exists - show normal dashboard. Load the group entity by id
+    // (getPrimaryGroup already proved membership).
+    const couple = await prisma.couple.findUnique({ where: { id: groupId } });
+    if (!couple) {
+        return <div className="p-10 text-center">Pareja no encontrada. <Link href="/login" className="underline">Login de nuevo</Link></div>;
+    }
     const members = await getGroupMembers(couple.id);
     const partner = members.find(m => m.id !== userId);
     const usersMap = members.reduce<Record<string, User>>((acc, u) => ({ ...acc, [u.id]: u }), {});

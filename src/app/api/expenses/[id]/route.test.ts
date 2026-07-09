@@ -4,8 +4,11 @@ const mockGetSession = vi.fn();
 const mockExpenseFindUnique = vi.fn();
 const mockExpenseDelete = vi.fn();
 const mockTxSeriesUpdate = vi.fn();
+const mockGetGroupMembers = vi.fn();
 
 vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
+// Phase 5 (WS1): DELETE authz resolves members via the Membership layer.
+vi.mock('@/lib/membership', () => ({ getGroupMembers: (...a: unknown[]) => mockGetGroupMembers(...a) }));
 vi.mock('@/lib/db', () => {
     const expense = {
         findUnique: (...a: unknown[]) => mockExpenseFindUnique(...a),
@@ -34,13 +37,12 @@ function req() {
 // A shared expense owned by u1 (creator), scoped to couple c1 with members u1,u2.
 function sharedExpense(overrides = {}) {
     return {
-        id: 'e1', visibility: 'SHARED', ownerId: 'u1', paidById: 'u1',
-        couple: { members: [{ id: 'u1' }, { id: 'u2' }] },
+        id: 'e1', visibility: 'SHARED', ownerId: 'u1', paidById: 'u1', coupleId: 'c1',
         ...overrides,
     };
 }
 function personalExpense(overrides = {}) {
-    return { id: 'e1', visibility: 'PERSONAL', ownerId: 'u1', paidById: 'u1', couple: null, ...overrides };
+    return { id: 'e1', visibility: 'PERSONAL', ownerId: 'u1', paidById: 'u1', coupleId: null, ...overrides };
 }
 
 describe('DELETE /api/expenses/[id] — authorization', () => {
@@ -49,8 +51,10 @@ describe('DELETE /api/expenses/[id] — authorization', () => {
         mockExpenseFindUnique.mockReset();
         mockExpenseDelete.mockReset();
         mockTxSeriesUpdate.mockReset();
+        mockGetGroupMembers.mockReset();
         mockExpenseDelete.mockResolvedValue({});
         mockTxSeriesUpdate.mockResolvedValue({});
+        mockGetGroupMembers.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
     });
 
     it('401 without a session', async () => {
@@ -76,9 +80,10 @@ describe('DELETE /api/expenses/[id] — authorization', () => {
 
     it('403 for an EX-member who still owns a shared expense (unlinked)', async () => {
         // u1 created the expense (ownerId=u1) but has left the couple, so the
-        // members list no longer includes u1. isOwner must NOT grant access.
+        // Membership member list no longer includes u1. isOwner must NOT grant access.
         mockGetSession.mockResolvedValue({ userId: 'u1' });
-        mockExpenseFindUnique.mockResolvedValue(sharedExpense({ couple: { members: [{ id: 'u2' }] } }));
+        mockGetGroupMembers.mockResolvedValue([{ id: 'u2' }]);
+        mockExpenseFindUnique.mockResolvedValue(sharedExpense());
         const res = await DELETE(req(), { params });
         expect(res.status).toBe(403);
         expect(mockExpenseDelete).not.toHaveBeenCalled();

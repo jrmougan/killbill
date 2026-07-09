@@ -23,7 +23,7 @@ export async function DELETE(
         // Get expense and verify ownership
         const expense = await prisma.expense.findUnique({
             where: { id },
-            include: { couple: { include: { members: true } }, series: true }
+            include: { series: true }
         });
 
         if (!expense) {
@@ -31,9 +31,11 @@ export async function DELETE(
         }
 
         // Personal expenses are authorized by ownership; shared ones strictly by
-        // current couple membership (an ex-member who still "owns" a shared expense
-        // must NOT be able to mutate the couple's data after unlinking).
-        const isMember = expense.couple?.members.some(m => m.id === userId) ?? false;
+        // current couple membership via the Membership layer (Phase 5 WS1) — an
+        // ex-member who still "owns" a shared expense must NOT be able to mutate the
+        // couple's data after unlinking.
+        const delMembers = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
+        const isMember = delMembers.some(m => m.id === userId);
         const authorized = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
         if (!authorized) {
             return NextResponse.json({ error: "No autorizado" }, { status: 403 });
@@ -79,26 +81,29 @@ export async function PATCH(
         // Get expense and verify ownership
         const expense = await prisma.expense.findUnique({
             where: { id },
-            include: { couple: { include: { members: true } }, series: true, ...RECEIPT_LINES_SELECT }
+            include: { series: true, ...RECEIPT_LINES_SELECT }
         });
 
         if (!expense) {
             return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
         }
 
+        // Members via the Membership layer (ACTIVE, ordered) — backs BOTH the authz
+        // check and split remainder-cent allocation / ledger re-post, so everything
+        // matches POST/reconcile exactly (Phase 5 WS1: no couple.members reverse
+        // relation).
+        const members = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
+        const partner = members.find(m => m.id !== expense.paidById);
+
         // Personal expenses are authorized by ownership; shared ones strictly by
-        // current couple membership (see DELETE above).
-        const isMember = expense.couple?.members.some(m => m.id === userId) ?? false;
+        // current couple membership (an ex-member who still "owns" a shared expense
+        // must NOT be able to mutate the couple's data after unlinking).
+        const isMember = members.some(m => m.id === userId);
         const authorized = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
         if (!authorized) {
             return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
-        // Members via the Membership layer (ACTIVE, ordered) so split remainder-cent
-        // allocation AND the ledger re-post below match POST/reconcile exactly.
-        // (The couple.members include still backs the isMember authz check above.)
-        const members = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
-        const partner = members.find(m => m.id !== expense.paidById);
         const memberIds = new Set(members.map(m => m.id));
 
         // Validate description (when provided) is a non-empty string; an empty one previously 500'd at the DB layer.

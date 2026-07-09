@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ExpensesListClient } from "./client";
 import { getSession } from "@/lib/auth";
-import { getGroupMembers } from "@/lib/membership";
+import { getGroupMembers, getPrimaryGroup } from "@/lib/membership";
 import { toEuros } from "@/lib/currency";
 import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
 
@@ -13,34 +13,24 @@ export default async function ExpensesListPage() {
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-            couple: {
-                include: {
-                    members: true
-                }
-            }
-        }
-    });
-
-    if (!user || !user.couple) {
+    // Phase 5 (WS1): resolve the group + members via the Membership layer.
+    const groupId = await getPrimaryGroup(userId);
+    if (!groupId) {
         return redirect("/dashboard");
     }
 
-    const { couple } = user;
-    const members = await getGroupMembers(couple.id);
+    const members = await getGroupMembers(groupId);
 
     // Fetch all expenses
     const rawExpenses = await prisma.expense.findMany({
-        where: { coupleId: couple.id, visibility: "SHARED" },
+        where: { coupleId: groupId, visibility: "SHARED" },
         include: { splits: true, ...CATEGORY_REF_SELECT },
         orderBy: { date: "desc" },
     });
 
     // Fetch all settlements
     const rawSettlements = await prisma.settlement.findMany({
-        where: { coupleId: couple.id },
+        where: { coupleId: groupId },
         include: { fromUser: true, toUser: true },
         orderBy: { date: "desc" },
     });

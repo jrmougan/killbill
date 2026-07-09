@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getPrimaryGroup } from "@/lib/membership";
+import { getPrimaryGroup, getGroupMembers } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
@@ -20,7 +20,6 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
             where: { id },
             include: {
                 splits: true,
-                couple: { include: { members: true } },
                 tags: { include: { tag: true } },
                 series: true,
                 ...RECEIPT_LINES_SELECT,
@@ -31,8 +30,12 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
 
     if (!expense) redirect("/dashboard");
 
+    // Phase 5 (WS1): couple membership comes from the Membership layer, not the
+    // expense.couple.members reverse relation.
+    const members = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
+
     // Personal expenses are editable only by their owner; shared ones by couple members.
-    const isMember = expense.couple?.members.some((m) => m.id === userId) ?? false;
+    const isMember = members.some((m) => m.id === userId);
     const canEdit = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
     if (!canEdit) redirect("/dashboard");
 
@@ -40,7 +43,7 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
         ? await prisma.tag.findMany({ where: { coupleId: groupId } })
         : [];
 
-    const partner = expense.couple?.members.find((m) => m.id !== userId) ?? null;
+    const partner = members.find((m) => m.id !== userId) ?? null;
 
     // Detect initial split mode from current splits
     let initialSplitMode: "shared" | "solo" | "custom" = "shared";

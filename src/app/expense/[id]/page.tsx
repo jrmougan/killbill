@@ -8,6 +8,7 @@ import { getSession } from "@/lib/auth";
 import { formatCurrency, formatEuros } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
+import { getGroupMembers } from "@/lib/membership";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -24,11 +25,6 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     user: true
                 }
             },
-            couple: {
-                include: {
-                    members: true
-                }
-            },
             tags: {
                 include: {
                     tag: true
@@ -40,6 +36,10 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
     if (!expense) redirect("/dashboard");
 
+    // Phase 5 (WS1): couple membership comes from the Membership layer, not the
+    // expense.couple.members reverse relation of User.coupleId.
+    const members = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
+
     // Phase 4 read-switch: the ReceiptLineItem table (cents) is the read source
     // for the receipt breakdown; receiptItemsView maps rows -> the euro DTO the
     // markup already renders (toEuros(toCents(x))==x keeps every sum identical).
@@ -47,7 +47,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
     // Privacy: a personal expense is only visible to its owner; a shared one to
     // members of its couple.
-    const isCoupleMember = expense.couple?.members.some(m => m.id === userId) ?? false;
+    const isCoupleMember = members.some(m => m.id === userId);
     const canView = expense.visibility === "PERSONAL"
         ? expense.ownerId === userId
         : isCoupleMember;
@@ -55,7 +55,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
     const isPersonal = expense.visibility === "PERSONAL";
     const isMe = userId === expense.paidById;
-    const partner = expense.couple?.members.find(m => m.id !== expense.paidById);
+    const partner = members.find(m => m.id !== expense.paidById);
 
     return (
         <div className="flex flex-col min-h-screen p-3 sm:p-4 space-y-6 max-w-md mx-auto relative pb-24 w-full overflow-x-hidden">

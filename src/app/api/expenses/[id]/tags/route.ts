@@ -1,16 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { getGroupMembers } from '@/lib/membership';
 
 async function getExpenseAndVerifyMembership(expenseId: string, userId: string) {
-    const expense = await prisma.expense.findUnique({
-        where: { id: expenseId },
-        include: { couple: { include: { members: true } } },
-    });
+    const expense = await prisma.expense.findUnique({ where: { id: expenseId } });
     if (!expense) return { expense: null, authorized: false };
-    // Personal: owner-only. Shared: current couple membership only (no lingering
-    // owner access after unlinking).
-    const isMember = expense.couple?.members.some((m) => m.id === userId) ?? false;
+    // Personal: owner-only. Shared: current couple membership via the Membership
+    // layer (Phase 5 WS1) — no lingering owner access after unlinking.
+    const members = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
+    const isMember = members.some((m) => m.id === userId);
     const authorized = expense.visibility === 'PERSONAL' ? expense.ownerId === userId : isMember;
     return { expense, authorized };
 }
