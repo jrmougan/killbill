@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
+import { resolveCategoryId } from '@/lib/category-db';
+import { postExpenseLedger } from '@/lib/ledger';
 
 function uniqueEmail(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}@test.com`;
@@ -172,7 +174,7 @@ export async function POST(request: Request) {
         data: {
           description: 'Test Expense',
           amount: 10000, // 100€ in cents
-          category: 'other',
+          categoryId: await resolveCategoryId('other'),
           paidById: userA.id,
           ownerId: userA.id,
           coupleId: couple.id,
@@ -183,6 +185,15 @@ export async function POST(request: Request) {
             ],
           },
         },
+      });
+
+      // The dashboard/settle read balances from the double-entry ledger (phase 3+),
+      // so a seeded shared expense must post its ledger transaction too.
+      await postExpenseLedger(prisma, {
+        expenseId: expense.id, groupId: couple.id, amount: 10000, paidById: userA.id,
+        occurredAt: expense.date,
+        splits: [{ userId: userA.id, amount: 5000 }, { userId: userB.id, amount: 5000 }],
+        members: [{ id: userA.id }, { id: userB.id }],
       });
 
       return NextResponse.json({
@@ -230,11 +241,11 @@ export async function POST(request: Request) {
       });
 
       // 100€ expense paid by userA
-      await prisma.expense.create({
+      const pendingExpense = await prisma.expense.create({
         data: {
           description: 'Test Expense',
           amount: 10000,
-          category: 'other',
+          categoryId: await resolveCategoryId('other'),
           paidById: userA.id,
           ownerId: userA.id,
           coupleId: couple.id,
@@ -246,8 +257,15 @@ export async function POST(request: Request) {
           },
         },
       });
+      await postExpenseLedger(prisma, {
+        expenseId: pendingExpense.id, groupId: couple.id, amount: 10000, paidById: userA.id,
+        occurredAt: pendingExpense.date,
+        splits: [{ userId: userA.id, amount: 5000 }, { userId: userB.id, amount: 5000 }],
+        members: [{ id: userA.id }, { id: userB.id }],
+      });
 
-      // Settlement of 50€ from B → A, PENDING
+      // Settlement of 50€ from B → A, PENDING (pending settlements do NOT post to
+      // the ledger; only confirmed ones affect balances).
       const settlement = await prisma.settlement.create({
         data: {
           amount: 5000, // 50€ in cents
@@ -294,7 +312,7 @@ export async function POST(request: Request) {
         data: {
           description: 'Shared Expense',
           amount: 10000,
-          category: 'other',
+          categoryId: await resolveCategoryId('other'),
           paidById: userA.id,
           ownerId: userA.id,
           visibility: 'SHARED',
@@ -307,13 +325,19 @@ export async function POST(request: Request) {
           },
         },
       });
+      await postExpenseLedger(prisma, {
+        expenseId: sharedExpense.id, groupId: couple.id, amount: 10000, paidById: userA.id,
+        occurredAt: sharedExpense.date,
+        splits: [{ userId: userA.id, amount: 5000 }, { userId: userB.id, amount: 5000 }],
+        members: [{ id: userA.id }, { id: userB.id }],
+      });
 
       // ...and a PERSONAL expense owned by userA (private, no couple, no splits).
       const personalExpense = await prisma.expense.create({
         data: {
           description: 'Personal Expense',
           amount: 50000, // 500€
-          category: 'health',
+          categoryId: await resolveCategoryId('health'),
           paidById: userA.id,
           ownerId: userA.id,
           visibility: 'PERSONAL',
