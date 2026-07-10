@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { MAX_GROUP_MEMBERS, ACTIVE_GROUP_COOKIE } from '@/lib/membership';
 
 export async function POST(request: Request) {
     try {
@@ -11,15 +13,8 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { code } = body;
 
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            select: { coupleId: true }
-        });
-
-        if (user?.coupleId) {
-            return NextResponse.json({ error: 'Ya perteneces a una pareja' }, { status: 400 });
-        }
-
+        // F4 (multi-group): a user may belong to several groups, so there is no
+        // blanket "already in a group" block — only a per-group idempotency guard.
         const couple = await prisma.couple.findUnique({
             where: { code: code.toUpperCase() },
             select: { id: true }
@@ -31,30 +26,45 @@ export async function POST(request: Request) {
         // TOCTOU window where two users could join simultaneously and exceed the cap of 2.
         try {
             await prisma.$transaction(async (tx) => {
-                const fresh = await tx.user.findUnique({ where: { id: userId }, select: { coupleId: true } });
-                if (fresh?.coupleId) throw new Error('ALREADY_IN_COUPLE');
+                // Phase 5 (WS1 write-stop): the TOCTOU guards read the Membership
+                // layer and the Membership row is the sole write (User.coupleId is
+                // no longer written).
+                const existing = await tx.membership.findFirst({
+                    where: { userId, groupId: couple.id, status: 'ACTIVE' },
+                    select: { id: true },
+                });
+                if (existing) throw new Error('ALREADY_IN_COUPLE');
 
-                const memberCount = await tx.user.count({ where: { coupleId: couple.id } });
-                if (memberCount >= 2) throw new Error('COUPLE_FULL');
+                const memberCount = await tx.membership.count({
+                    where: { groupId: couple.id, status: 'ACTIVE' },
+                });
+                if (memberCount >= MAX_GROUP_MEMBERS) throw new Error('COUPLE_FULL');
 
-                await tx.user.update({
-                    where: { id: userId },
-                    data: { coupleId: couple.id }
+                // Upsert handles a previous LEFT rejoin.
+                await tx.membership.upsert({
+                    where: { groupId_userId: { groupId: couple.id, userId } },
+                    create: { groupId: couple.id, userId, role: 'MEMBER', status: 'ACTIVE' },
+                    update: { status: 'ACTIVE', leftAt: null },
                 });
             });
         } catch (e) {
             if (e instanceof Error && e.message === 'ALREADY_IN_COUPLE') {
-                return NextResponse.json({ error: 'Ya perteneces a una pareja' }, { status: 400 });
+                return NextResponse.json({ error: 'Ya estás en este grupo' }, { status: 400 });
             }
             if (e instanceof Error && e.message === 'COUPLE_FULL') {
-                return NextResponse.json({ error: 'Esta pareja ya está completa' }, { status: 400 });
+                return NextResponse.json({ error: 'Este grupo ya está completo' }, { status: 400 });
             }
             throw e;
         }
 
-        return NextResponse.json({ success: true });
+        // F4: make the just-joined group the active one.
+        (await cookies()).set(ACTIVE_GROUP_COOKIE, couple.id, {
+            httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 365,
+        });
+
+        return NextResponse.json({ success: true, couple: { id: couple.id } });
     } catch (error) {
-        console.error('Error al unirse a la pareja:', error);
-        return NextResponse.json({ error: 'Error al unirse a la pareja' }, { status: 500 });
+        console.error('Error al unirse al grupo:', error);
+        return NextResponse.json({ error: 'Error al unirse al grupo' }, { status: 500 });
     }
 }

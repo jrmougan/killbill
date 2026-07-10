@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
+import { resolveCategoryId } from '@/lib/category-db';
+import { postExpenseLedger } from '@/lib/ledger';
 
 function uniqueEmail(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}@test.com`;
@@ -105,7 +107,6 @@ export async function POST(request: Request) {
           email: emailA,
           password: hashedPassword,
           avatar: '👤',
-          coupleId: couple.id,
         },
       });
 
@@ -115,8 +116,14 @@ export async function POST(request: Request) {
           email: emailB,
           password: hashedPassword,
           avatar: '👤',
-          coupleId: couple.id,
         },
+      });
+
+      await prisma.membership.createMany({
+        data: [
+          { groupId: couple.id, userId: userA.id, role: 'OWNER', status: 'ACTIVE' },
+          { groupId: couple.id, userId: userB.id, role: 'MEMBER', status: 'ACTIVE' },
+        ],
       });
 
       return NextResponse.json({
@@ -143,7 +150,6 @@ export async function POST(request: Request) {
           email: emailA,
           password: hashedPassword,
           avatar: '👤',
-          coupleId: couple.id,
         },
       });
 
@@ -153,8 +159,14 @@ export async function POST(request: Request) {
           email: emailB,
           password: hashedPassword,
           avatar: '👤',
-          coupleId: couple.id,
         },
+      });
+
+      await prisma.membership.createMany({
+        data: [
+          { groupId: couple.id, userId: userA.id, role: 'OWNER', status: 'ACTIVE' },
+          { groupId: couple.id, userId: userB.id, role: 'MEMBER', status: 'ACTIVE' },
+        ],
       });
 
       // 100€ expense paid by userA, split 50/50 (amounts in cents)
@@ -162,8 +174,9 @@ export async function POST(request: Request) {
         data: {
           description: 'Test Expense',
           amount: 10000, // 100€ in cents
-          category: 'other',
+          categoryId: await resolveCategoryId('other'),
           paidById: userA.id,
+          ownerId: userA.id,
           coupleId: couple.id,
           splits: {
             create: [
@@ -172,6 +185,15 @@ export async function POST(request: Request) {
             ],
           },
         },
+      });
+
+      // The dashboard/settle read balances from the double-entry ledger (phase 3+),
+      // so a seeded shared expense must post its ledger transaction too.
+      await postExpenseLedger(prisma, {
+        expenseId: expense.id, groupId: couple.id, amount: 10000, paidById: userA.id,
+        occurredAt: expense.date,
+        splits: [{ userId: userA.id, amount: 5000 }, { userId: userB.id, amount: 5000 }],
+        members: [{ id: userA.id }, { id: userB.id }],
       });
 
       return NextResponse.json({
@@ -199,7 +221,6 @@ export async function POST(request: Request) {
           email: emailA,
           password: hashedPassword,
           avatar: '👤',
-          coupleId: couple.id,
         },
       });
 
@@ -209,17 +230,24 @@ export async function POST(request: Request) {
           email: emailB,
           password: hashedPassword,
           avatar: '👤',
-          coupleId: couple.id,
         },
       });
 
+      await prisma.membership.createMany({
+        data: [
+          { groupId: couple.id, userId: userA.id, role: 'OWNER', status: 'ACTIVE' },
+          { groupId: couple.id, userId: userB.id, role: 'MEMBER', status: 'ACTIVE' },
+        ],
+      });
+
       // 100€ expense paid by userA
-      await prisma.expense.create({
+      const pendingExpense = await prisma.expense.create({
         data: {
           description: 'Test Expense',
           amount: 10000,
-          category: 'other',
+          categoryId: await resolveCategoryId('other'),
           paidById: userA.id,
+          ownerId: userA.id,
           coupleId: couple.id,
           splits: {
             create: [
@@ -229,8 +257,15 @@ export async function POST(request: Request) {
           },
         },
       });
+      await postExpenseLedger(prisma, {
+        expenseId: pendingExpense.id, groupId: couple.id, amount: 10000, paidById: userA.id,
+        occurredAt: pendingExpense.date,
+        splits: [{ userId: userA.id, amount: 5000 }, { userId: userB.id, amount: 5000 }],
+        members: [{ id: userA.id }, { id: userB.id }],
+      });
 
-      // Settlement of 50€ from B → A, PENDING
+      // Settlement of 50€ from B → A, PENDING (pending settlements do NOT post to
+      // the ledger; only confirmed ones affect balances).
       const settlement = await prisma.settlement.create({
         data: {
           amount: 5000, // 50€ in cents
@@ -247,6 +282,93 @@ export async function POST(request: Request) {
         userB: { email: emailB, password: PASSWORD, id: userB.id },
         coupleId: couple.id,
         settlementId: settlement.id,
+      });
+    }
+
+    if (scenario === 'couple-with-personal-expense') {
+      const emailA = uniqueEmail('userA');
+      const emailB = uniqueEmail('userB');
+
+      const couple = await prisma.couple.create({
+        data: { name: 'Personal Couple', code: randomCode() },
+      });
+
+      const userA = await prisma.user.create({
+        data: { name: 'User A', email: emailA, password: hashedPassword, avatar: '👤' },
+      });
+      const userB = await prisma.user.create({
+        data: { name: 'User B', email: emailB, password: hashedPassword, avatar: '👤' },
+      });
+
+      await prisma.membership.createMany({
+        data: [
+          { groupId: couple.id, userId: userA.id, role: 'OWNER', status: 'ACTIVE' },
+          { groupId: couple.id, userId: userB.id, role: 'MEMBER', status: 'ACTIVE' },
+        ],
+      });
+
+      // A shared expense (100€, 50/50) so the couple balance is non-trivial...
+      const sharedExpense = await prisma.expense.create({
+        data: {
+          description: 'Shared Expense',
+          amount: 10000,
+          categoryId: await resolveCategoryId('other'),
+          paidById: userA.id,
+          ownerId: userA.id,
+          visibility: 'SHARED',
+          coupleId: couple.id,
+          splits: {
+            create: [
+              { userId: userA.id, amount: 5000 },
+              { userId: userB.id, amount: 5000 },
+            ],
+          },
+        },
+      });
+      await postExpenseLedger(prisma, {
+        expenseId: sharedExpense.id, groupId: couple.id, amount: 10000, paidById: userA.id,
+        occurredAt: sharedExpense.date,
+        splits: [{ userId: userA.id, amount: 5000 }, { userId: userB.id, amount: 5000 }],
+        members: [{ id: userA.id }, { id: userB.id }],
+      });
+
+      // ...and a PERSONAL expense owned by userA (private, no couple, no splits).
+      const personalExpense = await prisma.expense.create({
+        data: {
+          description: 'Personal Expense',
+          amount: 50000, // 500€
+          categoryId: await resolveCategoryId('health'),
+          paidById: userA.id,
+          ownerId: userA.id,
+          visibility: 'PERSONAL',
+          coupleId: null,
+        },
+      });
+
+      // A personal budget for userA (health category).
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      // Phase 5 (stop-dual-write): Budget keys on categoryId + periodStart (the
+      // enum/month columns are no longer written). Resolve the system category.
+      const healthCat = await prisma.category.findFirst({ where: { groupId: null, key: 'health' } });
+      const personalBudget = await prisma.budget.create({
+        data: {
+          categoryId: healthCat!.id,
+          amount: 60000,
+          periodStart: monthStart,
+          periodEnd: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+          periodType: 'MONTH',
+          ownerId: userA.id,
+        },
+      });
+
+      return NextResponse.json({
+        userA: { email: emailA, password: PASSWORD, id: userA.id },
+        userB: { email: emailB, password: PASSWORD, id: userB.id },
+        coupleId: couple.id,
+        sharedExpenseId: sharedExpense.id,
+        personalExpenseId: personalExpense.id,
+        personalBudgetId: personalBudget.id,
       });
     }
 

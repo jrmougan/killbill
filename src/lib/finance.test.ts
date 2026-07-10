@@ -1,5 +1,26 @@
 import { describe, it, expect } from 'vitest';
-import { calculateBalances, getMyDebts, getLastSettlementDate } from './finance';
+import { calculateBalances, getMyDebts, getLastSettlementDate, resolveMyDebts } from './finance';
+
+describe('resolveMyDebts (pure boundary — fed ledger or finance balances)', () => {
+    it('matches getMyDebts when fed calculateBalances output', () => {
+        const users = [{ id: 'a' }, { id: 'b' }];
+        const expenses = [{ paidById: 'a', amount: 2000, splits: [{ userId: 'a', amount: 1000 }, { userId: 'b', amount: 1000 }] }];
+        const viaGetMyDebts = getMyDebts(users, expenses, [], 'b');
+        const viaResolve = resolveMyDebts(calculateBalances(users, expenses, [], 'b'), 'b');
+        expect(viaResolve).toEqual(viaGetMyDebts);
+    });
+
+    it('resolves who I owe from a raw balances map', () => {
+        // b owes 1000, a is owed 1000 → b owes a 1000.
+        expect(resolveMyDebts({ a: 1000, b: -1000 }, 'b')).toEqual({ a: 1000 });
+        // a is a creditor → owes nobody.
+        expect(resolveMyDebts({ a: 1000, b: -1000 }, 'a')).toEqual({});
+    });
+
+    it('treats sub-cent balances as settled (dead-band)', () => {
+        expect(resolveMyDebts({ a: 0, b: 0 }, 'b')).toEqual({});
+    });
+});
 
 describe('finance utilities', () => {
     const users = [
@@ -106,6 +127,26 @@ describe('finance utilities', () => {
             // This means Alice is now owed only 30, and Bob owes only 30. Correct.
             expect(balances['user1']).toBe(30);
             expect(balances['user2']).toBe(-30);
+        });
+
+        it('ignores personal expenses when they are filtered out before balancing', () => {
+            // The dashboard/analytics/settle queries pass only SHARED expenses to
+            // calculateBalances. A personal expense (owned by one user, no split)
+            // must never reach it — otherwise it would skew the couple balance.
+            const allExpenses = [
+                { id: 'shared1', paidById: 'user1', amount: 100, visibility: 'SHARED' as const },
+                // Personal: user2 spent 500 on themselves — must not touch the balance.
+                { id: 'personal1', paidById: 'user2', amount: 500, visibility: 'PERSONAL' as const },
+            ];
+            const sharedOnly = allExpenses.filter(e => e.visibility === 'SHARED');
+            const settlements: { fromUserId: string; toUserId: string; amount: number }[] = [];
+
+            const balances = calculateBalances(users, sharedOnly, settlements, 'user1');
+
+            // Only the 100 shared expense counts: Alice +50, Bob -50.
+            // The 500 personal expense is invisible to the couple balance.
+            expect(balances['user1']).toBe(50);
+            expect(balances['user2']).toBe(-50);
         });
     });
 

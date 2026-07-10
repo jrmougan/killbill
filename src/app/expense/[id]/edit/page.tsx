@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { getActiveGroup, getGroupMembers } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
-import { ReceiptItem } from "@/types";
+import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
+import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { EditExpenseClient } from "./client";
 
 export default async function EditExpensePage({ params }: { params: Promise<{ id: string }> }) {
@@ -11,28 +13,39 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    const [expense, user] = await Promise.all([
+    // Phase 4 selector switch: the caller's group comes from the Membership
+    // layer (the expense's own couple.members include remains until the gated
+    // User.coupleId / Couple.members contract drop).
+    const [expense, groupId] = await Promise.all([
         prisma.expense.findUnique({
             where: { id },
             include: {
                 splits: true,
-                couple: { include: { members: true } },
                 tags: { include: { tag: true } },
+                series: true,
+                ...RECEIPT_LINES_SELECT,
+                ...CATEGORY_REF_SELECT,
             },
         }),
-        prisma.user.findUnique({ where: { id: userId } }),
+        getActiveGroup(userId),
     ]);
 
     if (!expense) redirect("/dashboard");
 
-    const isMember = expense.couple.members.some((m) => m.id === userId);
-    if (!isMember) redirect("/dashboard");
+    // Phase 5 (WS1): couple membership comes from the Membership layer, not the
+    // expense.couple.members reverse relation.
+    const members = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
 
-    const allTags = user?.coupleId
-        ? await prisma.tag.findMany({ where: { coupleId: user.coupleId } })
+    // Personal expenses are editable only by their owner; shared ones by couple members.
+    const isMember = members.some((m) => m.id === userId);
+    const canEdit = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
+    if (!canEdit) redirect("/dashboard");
+
+    const allTags = groupId
+        ? await prisma.tag.findMany({ where: { coupleId: groupId } })
         : [];
 
-    const partner = expense.couple.members.find((m) => m.id !== userId) ?? null;
+    const partner = members.find((m) => m.id !== userId) ?? null;
 
     // Detect initial split mode from current splits
     let initialSplitMode: "shared" | "solo" | "custom" = "shared";
@@ -67,18 +80,21 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
             expenseId={id}
             userId={userId}
             partner={partner ? { id: partner.id, name: partner.name } : null}
+            members={members.map((m) => ({ id: m.id, name: m.name }))}
+            initialPaidById={expense.paidById}
             initialAmount={toEuros(expense.amount)}
             initialDescription={expense.description}
-            initialCategory={expense.category}
+            initialCategory={categoryKeyOf(expense)}
             initialSplitMode={initialSplitMode}
             initialMyPercent={initialMyPercent}
-            initialReceiptItems={(expense.receiptData as unknown as ReceiptItem[]) ?? []}
+            initialReceiptItems={receiptItemsView(expense.lineItems)}
             initialReceiptUrl={expense.receiptUrl ?? null}
             initialNotes={expense.notes ?? ""}
-            initialIsRecurring={expense.isRecurring ?? false}
-            initialRecurringInterval={(expense.recurringInterval as "weekly" | "monthly" | "yearly") ?? "monthly"}
+            initialIsRecurring={!!(expense.seriesId && expense.series?.templateId === expense.id && expense.series?.isActive)}
+            initialRecurringInterval={(expense.series?.interval as "weekly" | "monthly" | "yearly") ?? "monthly"}
             initialTagIds={expense.tags.map((t) => t.tagId)}
             allTags={allTags}
+            isPersonal={expense.visibility === "PERSONAL"}
         />
     );
 }

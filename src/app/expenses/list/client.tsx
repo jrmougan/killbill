@@ -87,7 +87,7 @@ export function ExpensesListClient({ items, usersMap }: ExpensesListClientProps)
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-24">
             <header className="flex items-center gap-4 pt-2">
                 <Link href="/dashboard">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
@@ -110,7 +110,7 @@ export function ExpensesListClient({ items, usersMap }: ExpensesListClientProps)
                     <span className="text-muted-foreground">
                         {filteredItems.length} resultado{filteredItems.length !== 1 ? "s" : ""}
                     </span>
-                    <span className="font-bold text-primary">
+                    <span className="font-mono font-semibold tracking-[-0.02em] text-primary">
                         {new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(totalFiltered)}
                     </span>
                 </div>
@@ -148,9 +148,9 @@ export function ExpensesListClient({ items, usersMap }: ExpensesListClientProps)
 
                             return (
                                 <Link href={`/settle/${item.id}`} key={item.id}>
-                                    <GlassCard className="p-4 flex items-center justify-between border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/10 transition-all border-l-4">
+                                    <GlassCard className="p-4 flex items-center justify-between border-[color:var(--accent-border)] bg-[var(--accent-tint)] hover:bg-[var(--surface-raised-hex)] transition-all border-l-4 border-l-[color:var(--accent-hex)]">
                                         <div className="flex items-center gap-3 min-w-0">
-                                            <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center text-xl shrink-0">
+                                            <div className="h-10 w-10 rounded-full bg-[var(--accent-tint)] flex items-center justify-center text-xl shrink-0">
                                                 🤝
                                             </div>
                                             <div className="min-w-0">
@@ -164,10 +164,10 @@ export function ExpensesListClient({ items, usersMap }: ExpensesListClientProps)
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-lg font-mono font-bold text-blue-400">
+                                            <p className="text-lg font-mono font-semibold tracking-[-0.02em] text-primary">
                                                 {formatEuros(item.amount)}
                                             </p>
-                                            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">
+                                            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[var(--accent-tint)] text-primary">
                                                 {item.status ? getSettlementStatusLabel(item.status) : ""}
                                             </span>
                                         </div>

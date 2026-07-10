@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { getUserGroups, getActiveGroup } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { SettingsClient } from "./settings-client";
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Ajustes · EQUIL - Finanzas en Pareja",
-    description: "Configura tu perfil y tu pareja en EQUIL.",
+    title: "Ajustes · EQUIL - Finanzas Compartidas",
+    description: "Configura tu perfil y tu grupo en EQUIL.",
 };
 
 export default async function SettingsPage() {
@@ -14,18 +15,14 @@ export default async function SettingsPage() {
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-            couple: {
-                include: {
-                    members: true
-                }
-            }
-        }
-    });
-
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) redirect("/login");
+
+    // F4 (multi-group): resolve ALL the user's ACTIVE groups + the active one.
+    const [groups, activeGroupId] = await Promise.all([
+        getUserGroups(userId),
+        getActiveGroup(userId),
+    ]);
 
     return (
         <SettingsClient
@@ -35,16 +32,14 @@ export default async function SettingsPage() {
                 email: user.email || "",
                 avatar: user.avatar || "👤"
             }}
-            couple={user.couple ? {
-                id: user.couple.id,
-                name: user.couple.name || "Nuestra Pareja",
-                code: user.couple.code,
-                members: user.couple.members.map(m => ({
-                    id: m.id,
-                    name: m.name,
-                    avatar: m.avatar || "👤"
-                }))
-            } : null}
+            groups={groups.map(g => ({
+                id: g.id,
+                name: g.name ?? "Mi grupo",
+                code: g.code,
+                memberCount: g.memberCount,
+                isActive: g.id === activeGroupId,
+            }))}
+            activeGroupId={activeGroupId}
         />
     );
 }

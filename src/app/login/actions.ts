@@ -5,6 +5,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { signToken } from '@/lib/auth';
+import { MAX_GROUP_MEMBERS } from '@/lib/membership';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import type { AuthState } from '@/lib/auth-types';
 
@@ -43,22 +44,32 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
             return { error: 'Credenciales incorrectas' };
         }
 
-        // Handle couple invite (explicit + safe): only join when the user has no
-        // couple yet, the code is valid, and the couple still has room. Done
-        // atomically so two concurrent joins can't overfill the couple.
-        if (inviteCode && !user.coupleId) {
+        // Handle couple invite (explicit + safe): join the invited group when the
+        // code is valid and the group still has room. F4 (multi-group): joining is
+        // allowed even if the user already belongs to other groups; only a
+        // per-group idempotency guard applies. Done atomically.
+        if (inviteCode) {
             const couple = await prisma.couple.findUnique({
                 where: { code: inviteCode },
-                include: { members: true },
+                select: { id: true },
             });
 
-            if (couple && couple.members.length < 2) {
+            if (couple) {
                 await prisma.$transaction(async (tx) => {
-                    const memberCount = await tx.user.count({ where: { coupleId: couple.id } });
-                    if (memberCount >= 2) return;
-                    await tx.user.updateMany({
-                        where: { id: user.id, coupleId: null },
-                        data: { coupleId: couple.id },
+                    const existing = await tx.membership.findFirst({
+                        where: { userId: user.id, groupId: couple.id, status: 'ACTIVE' },
+                        select: { id: true },
+                    });
+                    if (existing) return;
+                    const memberCount = await tx.membership.count({
+                        where: { groupId: couple.id, status: 'ACTIVE' },
+                    });
+                    if (memberCount >= MAX_GROUP_MEMBERS) return;
+                    // Upsert handles a previous LEFT rejoin.
+                    await tx.membership.upsert({
+                        where: { groupId_userId: { groupId: couple.id, userId: user.id } },
+                        create: { groupId: couple.id, userId: user.id, role: 'MEMBER', status: 'ACTIVE' },
+                        update: { status: 'ACTIVE', leftAt: null },
                     });
                 });
             }

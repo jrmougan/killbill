@@ -19,28 +19,29 @@ test.describe('Couple - Create', () => {
     await apiContext.dispose();
   });
 
-  test('user without couple sees onboarding screen with "Crear Pareja" button', async ({ page }) => {
+  test('user without a group sees the personal home with a "Crear un grupo" action', async ({ page }) => {
     await loginAs(page, user);
     await expect(page).toHaveURL(/\/dashboard/);
 
-    // The onboarding shows a "Crear Pareja" button
-    const createCoupleBtn = page.getByRole('button', { name: /Crear Pareja/i });
-    await expect(createCoupleBtn).toBeVisible({ timeout: 10000 });
+    // A group-less user is fully usable in the personal home (no onboarding wall);
+    // creating a group is a non-blocking action ("Crear un grupo") plus a join card.
+    const createGroupBtn = page.getByRole('button', { name: /Crear un grupo/i });
+    await expect(createGroupBtn).toBeVisible({ timeout: 10000 });
   });
 
-  test('clicking "Crear Pareja" changes UI to show couple dashboard', async ({ page }) => {
+  test('clicking "Crear un grupo" changes UI to show the group dashboard', async ({ page }) => {
     await loginAs(page, user);
     await expect(page).toHaveURL(/\/dashboard/);
 
-    const createCoupleBtn = page.getByRole('button', { name: /Crear Pareja/i });
-    await expect(createCoupleBtn).toBeVisible({ timeout: 10000 });
+    const createGroupBtn = page.getByRole('button', { name: /Crear un grupo/i });
+    await expect(createGroupBtn).toBeVisible({ timeout: 10000 });
 
     // Submitting the form triggers a server action that creates the couple and
     // redirects. Wait for that POST to fully complete before touching the page so
     // we never abort the in-flight action (a premature reload/navigation does).
     await Promise.all([
       page.waitForResponse((r) => r.request().method() === 'POST', { timeout: 15000 }),
-      createCoupleBtn.click(),
+      createGroupBtn.click(),
     ]);
 
     // The client-side RSC refresh after the redirect is racy under CI load (single
@@ -50,9 +51,9 @@ test.describe('Couple - Create', () => {
     // navigation renders the couple view deterministically.
     await page.goto('/dashboard');
 
-    // Couple view rendered: the "Tu balance" card exists only once the user has a
-    // couple, and the onboarding button is gone.
+    // Group view rendered: the "Tu balance" card exists only once the user has a
+    // group, and the create-group action is gone.
     await expect(page.getByText(/Tu balance/i)).toBeVisible({ timeout: 15000 });
-    await expect(page.getByRole('button', { name: /Crear Pareja/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Crear un grupo/i })).toHaveCount(0);
   });
 });

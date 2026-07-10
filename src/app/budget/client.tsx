@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Pencil, Plus, Check, X } from "lucide-react";
@@ -21,22 +21,25 @@ interface BudgetEntry {
     percentage: number;
 }
 
+type BudgetScope = "shared" | "personal";
+
 interface BudgetClientProps {
     budgetData: BudgetEntry[];
     monthLabel: string;
+    hasCouple?: boolean;
 }
 
 function ProgressBar({ percentage }: { percentage: number }) {
     const clamped = Math.min(percentage, 100);
     const colorClass =
         percentage > 100
-            ? "bg-red-500"
+            ? "bg-[color:var(--negative)]"
             : percentage >= 80
-            ? "bg-yellow-400"
-            : "bg-emerald-500";
+            ? "bg-[#C9A227]"
+            : "bg-[color:var(--positive)]";
 
     return (
-        <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+        <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
             <div
                 className={`h-full rounded-full transition-all duration-500 ${colorClass}`}
                 style={{ width: `${clamped}%` }}
@@ -45,8 +48,10 @@ function ProgressBar({ percentage }: { percentage: number }) {
     );
 }
 
-export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
+export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: BudgetClientProps) {
     const router = useRouter();
+    const [scope, setScope] = useState<BudgetScope>(hasCouple ? "shared" : "personal");
+    const [data, setData] = useState<BudgetEntry[]>(budgetData);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
     const [addingCategory, setAddingCategory] = useState<string | null>(null);
@@ -54,7 +59,25 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const budgetedCategories = new Set(budgetData.map((b) => b.budget.category));
+    // Reload the current scope's budgets from the API (personal or shared).
+    const reload = useCallback(async (s: BudgetScope) => {
+        const res = await fetch(`/api/budget?scope=${s}`);
+        const json = res.ok ? await res.json() : { budgets: [] };
+        setData(json.budgets ?? []);
+    }, []);
+
+    // The server pre-renders the SHARED budgets; only refetch when the scope
+    // actually changes (skip the initial shared render).
+    const didMount = useRef(false);
+    useEffect(() => {
+        if (!didMount.current) {
+            didMount.current = true;
+            if (scope === "shared") return; // already have server data
+        }
+        reload(scope);
+    }, [scope, reload]);
+
+    const budgetedCategories = new Set(data.map((b) => b.budget.category));
     const unbudgetedCategories = getAllCategories().filter(
         (cat) => !budgetedCategories.has(cat.id)
     );
@@ -71,8 +94,9 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
             await fetch("/api/budget", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ category: entry.budget.category, amount }),
+                body: JSON.stringify({ category: entry.budget.category, amount, scope }),
             });
+            await reload(scope);
             router.refresh();
         } finally {
             setSaving(false);
@@ -93,8 +117,9 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
             await fetch("/api/budget", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ category: categoryId, amount }),
+                body: JSON.stringify({ category: categoryId, amount, scope }),
             });
+            await reload(scope);
             router.refresh();
         } finally {
             setSaving(false);
@@ -104,10 +129,10 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
     };
 
     return (
-        <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-10">
+        <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-24">
             <header className="flex items-center gap-4 pt-2">
                 <Link href="/settings">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
@@ -117,7 +142,23 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                 </div>
             </header>
 
-            {budgetData.length === 0 && unbudgetedCategories.length === getAllCategories().length ? (
+            {hasCouple && (
+                <div className="flex gap-1.5 p-1 rounded-xl bg-secondary border border-[color:var(--line)]">
+                    {([["shared", "Común"], ["personal", "Personal"]] as const).map(([key, label]) => (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => { setScope(key); setEditingId(null); setAddingCategory(null); setError(null); }}
+                            aria-pressed={scope === key}
+                            className={`flex-1 h-10 rounded-lg text-sm font-semibold transition-all ${scope === key ? "bg-primary text-white shadow" : "text-muted-foreground"}`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {data.length === 0 && unbudgetedCategories.length === getAllCategories().length ? (
                 <GlassCard className="p-8 text-center space-y-3">
                     <div className="text-5xl">📊</div>
                     <h2 className="text-lg font-bold">Sin presupuestos aún</h2>
@@ -127,9 +168,9 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                 </GlassCard>
             ) : null}
 
-            {budgetData.length > 0 && (
+            {data.length > 0 && (
                 <section className="space-y-3">
-                    {budgetData.map((entry) => {
+                    {data.map((entry) => {
                         const cat = CATEGORIES[entry.budget.category];
                         const Icon = cat?.icon;
                         const isEditing = editingId === entry.budget.id;
@@ -138,8 +179,8 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                             <GlassCard key={entry.budget.id} className="p-4 space-y-3">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${cat?.bgColor ?? "bg-white/10"}`}>
-                                            {Icon && <Icon className={`h-5 w-5 ${cat?.color ?? "text-white"}`} />}
+                                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${cat?.bgColor ?? "bg-secondary"}`}>
+                                            {Icon && <Icon className={`h-5 w-5 ${cat?.color ?? "text-foreground"}`} />}
                                         </div>
                                         <div>
                                             <p className="font-semibold text-sm">{cat?.label ?? entry.budget.category}</p>
@@ -166,7 +207,7 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                                                 <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="h-8 w-8 text-emerald-400 hover:text-emerald-300"
+                                                    className="h-8 w-8 text-[color:var(--positive)] hover:opacity-80"
                                                     onClick={() => handleSaveEdit(entry)}
                                                     disabled={saving}
                                                 >
@@ -175,19 +216,19 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                                                 <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="h-8 w-8 text-muted-foreground hover:text-white"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                                     onClick={() => { setEditingId(null); setEditValue(""); setError(null); }}
                                                 >
                                                     <X className="h-4 w-4" />
                                                 </Button>
                                             </div>
-                                            {error && <p className="text-xs text-red-400">{error}</p>}
+                                            {error && <p className="text-xs text-destructive">{error}</p>}
                                         </div>
                                     ) : (
                                         <Button
                                             size="icon"
                                             variant="ghost"
-                                            className="h-8 w-8 text-muted-foreground hover:text-white"
+                                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                             onClick={() => {
                                                 setEditingId(entry.budget.id);
                                                 setEditValue(entry.budget.amount.toString());
@@ -252,7 +293,7 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                                                 <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="h-8 w-8 text-emerald-400 hover:text-emerald-300"
+                                                    className="h-8 w-8 text-[color:var(--positive)] hover:opacity-80"
                                                     onClick={() => handleAddBudget(cat.id)}
                                                     disabled={saving}
                                                 >
@@ -261,19 +302,19 @@ export function BudgetClient({ budgetData, monthLabel }: BudgetClientProps) {
                                                 <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="h-8 w-8 text-muted-foreground hover:text-white"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                                     onClick={() => { setAddingCategory(null); setAddValue(""); setError(null); }}
                                                 >
                                                     <X className="h-4 w-4" />
                                                 </Button>
                                             </div>
-                                            {error && <p className="text-xs text-red-400">{error}</p>}
+                                            {error && <p className="text-xs text-destructive">{error}</p>}
                                         </div>
                                     ) : (
                                         <Button
                                             size="icon"
                                             variant="ghost"
-                                            className="h-8 w-8 text-muted-foreground hover:text-white"
+                                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                             onClick={() => {
                                                 setAddingCategory(cat.id);
                                                 setAddValue("");

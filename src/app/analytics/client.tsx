@@ -19,17 +19,25 @@ import Link from "next/link";
 import { ArrowLeft, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { formatEuros } from "@/lib/currency";
 
-// Category hex colors aligned with CATEGORIES in src/lib/categories.ts
+// Category hex colors aligned with the warm-light category catalog.
 const CATEGORY_COLORS: Record<string, string> = {
-    food: "#fb923c",        // orange-400
-    shopping: "#f472b6",    // pink-400
-    rent: "#60a5fa",        // blue-400
-    utilities: "#facc15",   // yellow-400
-    transport: "#4ade80",   // green-400
-    entertainment: "#c084fc", // purple-400
-    health: "#f87171",      // red-400
-    other: "#9ca3af",       // gray-400
+    food: "#D9713C",
+    shopping: "#A85C8A",
+    rent: "#3F6F52",
+    utilities: "#C9A227",
+    transport: "#3E6E8E",
+    entertainment: "#5B7A9E",
+    health: "#C0554E",
+    other: "#8B8477",
 };
+
+// Warm-light chart palette (hex literals for Recharts SVG props).
+const ACCENT_HEX = "#BD5D3A";
+const POSITIVE_HEX = "#3F6F52";
+const NEGATIVE_HEX = "#C0554E";
+const NEUTRAL_HEX = "#8B8477";
+const GRID_STROKE = "rgba(139,132,119,0.22)";
+const AXIS_TICK = "#8B8477";
 
 interface MonthlySpending {
     month: string;
@@ -81,7 +89,7 @@ interface Props {
     topItems: TopItem[];
 }
 
-const glassCard = "bg-white/5 border border-white/10 rounded-xl backdrop-blur-md p-4";
+const glassCard = "bg-card border border-[color:var(--line)] rounded-2xl p-4";
 
 function StatCard({
     label,
@@ -94,18 +102,18 @@ function StatCard({
 }) {
     return (
         <div className={glassCard}>
-            <p className="text-[11px] uppercase tracking-widest text-white/40 mb-1">{label}</p>
-            <p className="text-xl font-mono font-bold text-white truncate">{value}</p>
-            {sub && <p className="text-[11px] text-white/40 mt-0.5">{sub}</p>}
+            <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground mb-1">{label}</p>
+            <p className="text-xl font-mono font-semibold tracking-[-0.02em] text-foreground truncate">{value}</p>
+            {sub && <p className="text-[11px] text-[color:var(--ink-3)] mt-0.5">{sub}</p>}
         </div>
     );
 }
 
 const chartTooltipStyle = {
-    backgroundColor: "rgba(0,0,0,0.85)",
-    border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: "8px",
-    color: "#fff",
+    backgroundColor: "var(--surface-hex)",
+    border: "1px solid var(--line)",
+    borderRadius: "12px",
+    color: "var(--ink)",
     fontSize: 12,
 };
 
@@ -123,7 +131,7 @@ export function AnalyticsClient({
             : 0;
 
     const balanceColor =
-        lastBalance > 0 ? "#4ade80" : lastBalance < 0 ? "#f87171" : "#9ca3af";
+        lastBalance > 0 ? POSITIVE_HEX : lastBalance < 0 ? NEGATIVE_HEX : NEUTRAL_HEX;
 
     return (
         <div className="flex flex-col min-h-screen p-4 pb-24 space-y-6">
@@ -131,15 +139,15 @@ export function AnalyticsClient({
             <header className="flex items-center gap-3 pt-2">
                 <Link
                     href="/dashboard"
-                    className="h-9 w-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-colors"
+                    className="h-9 w-9 rounded-full bg-card border border-[color:var(--line)] flex items-center justify-center hover:bg-secondary transition-colors"
                 >
-                    <ArrowLeft className="h-4 w-4 text-white/70" />
+                    <ArrowLeft className="h-4 w-4 text-muted-foreground" />
                 </Link>
                 <div>
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
+                    <h1 className="text-2xl font-bold text-foreground">
                         Análisis
                     </h1>
-                    <p className="text-xs text-white/40">Últimos 6 meses</p>
+                    <p className="text-xs text-muted-foreground">Últimos 6 meses</p>
                 </div>
             </header>
 
@@ -172,34 +180,34 @@ export function AnalyticsClient({
 
             {/* Monthly bar chart */}
             <section className={glassCard}>
-                <h2 className="text-sm font-semibold text-white/70 mb-4">Gasto mensual</h2>
+                <h2 className="text-sm font-semibold text-foreground mb-4">Gasto mensual</h2>
                 <ResponsiveContainer width="100%" height={240}>
                     <BarChart data={monthlySpending} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                        <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
                         <XAxis
                             dataKey="month"
-                            tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }}
+                            tick={{ fill: AXIS_TICK, fontSize: 11 }}
                             axisLine={false}
                             tickLine={false}
                         />
                         <YAxis
-                            tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }}
+                            tick={{ fill: AXIS_TICK, fontSize: 11 }}
                             axisLine={false}
                             tickLine={false}
                         />
                         <Tooltip
                             contentStyle={chartTooltipStyle}
-                            cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                            cursor={{ fill: "rgba(139,132,119,0.12)" }}
                             formatter={(v) => formatEuros(Number(v))}
                         />
                         <Legend
                             verticalAlign="top"
                             height={24}
-                            wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}
-                            formatter={(value) => value === "total" ? "Total pareja" : "Mi parte"}
+                            wrapperStyle={{ fontSize: 11, color: AXIS_TICK }}
+                            formatter={(value) => value === "total" ? "Total grupo" : "Mi parte"}
                         />
-                        <Bar dataKey="total" name="total" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="myShare" name="myShare" fill="#06b6d4" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="total" name="total" fill={ACCENT_HEX} radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="myShare" name="myShare" fill={POSITIVE_HEX} radius={[4, 4, 0, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
             </section>
@@ -207,7 +215,7 @@ export function AnalyticsClient({
             {/* Category pie chart */}
             {categoryBreakdown.length > 0 ? (
                 <section className={glassCard}>
-                    <h2 className="text-sm font-semibold text-white/70 mb-4">Por categoría (este mes)</h2>
+                    <h2 className="text-sm font-semibold text-foreground mb-4">Por categoría (este mes)</h2>
                     <div className="flex flex-col sm:flex-row items-center gap-4">
                         <ResponsiveContainer width="100%" height={180}>
                             <PieChart>
@@ -224,7 +232,7 @@ export function AnalyticsClient({
                                     {categoryBreakdown.map((item) => (
                                         <Cell
                                             key={item.category}
-                                            fill={CATEGORY_COLORS[item.category] ?? "#9ca3af"}
+                                            fill={CATEGORY_COLORS[item.category] ?? NEUTRAL_HEX}
                                         />
                                     ))}
                                 </Pie>
@@ -242,11 +250,11 @@ export function AnalyticsClient({
                                     <span className="flex items-center gap-2">
                                         <span
                                             className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                                            style={{ backgroundColor: CATEGORY_COLORS[item.category] ?? "#9ca3af" }}
+                                            style={{ backgroundColor: CATEGORY_COLORS[item.category] ?? NEUTRAL_HEX }}
                                         />
-                                        <span className="text-white/70">{item.label}</span>
+                                        <span className="text-[color:var(--body-ink)]">{item.label}</span>
                                     </span>
-                                    <span className="font-mono text-white/80">{formatEuros(item.amount)}</span>
+                                    <span className="font-mono font-semibold tracking-[-0.02em] text-foreground">{formatEuros(item.amount)}</span>
                                 </li>
                             ))}
                         </ul>
@@ -254,16 +262,16 @@ export function AnalyticsClient({
                 </section>
             ) : (
                 <section className={`${glassCard} text-center py-8`}>
-                    <p className="text-white/30 text-sm">Sin gastos este mes</p>
+                    <p className="text-[color:var(--ink-3)] text-sm">Sin gastos este mes</p>
                 </section>
             )}
 
             {/* Balance evolution line chart */}
             <section className={glassCard}>
                 <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-sm font-semibold text-white/70">Evolución del balance</h2>
+                    <h2 className="text-sm font-semibold text-foreground">Evolución del balance</h2>
                     <span
-                        className="flex items-center gap-1 text-xs font-mono font-bold"
+                        className="flex items-center gap-1 text-xs font-mono font-semibold tracking-[-0.02em]"
                         style={{ color: balanceColor }}
                     >
                         {lastBalance > 0 ? (
@@ -279,16 +287,16 @@ export function AnalyticsClient({
                 {balanceEvolution.length > 1 ? (
                     <ResponsiveContainer width="100%" height={180}>
                         <LineChart data={balanceEvolution} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
                             <XAxis
                                 dataKey="date"
-                                tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
+                                tick={{ fill: AXIS_TICK, fontSize: 10 }}
                                 axisLine={false}
                                 tickLine={false}
                                 interval="preserveStartEnd"
                             />
                             <YAxis
-                                tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }}
+                                tick={{ fill: AXIS_TICK, fontSize: 11 }}
                                 axisLine={false}
                                 tickLine={false}
                             />
@@ -307,33 +315,33 @@ export function AnalyticsClient({
                         </LineChart>
                     </ResponsiveContainer>
                 ) : (
-                    <p className="text-white/30 text-sm text-center py-8">Sin suficientes datos</p>
+                    <p className="text-[color:var(--ink-3)] text-sm text-center py-8">Sin suficientes datos</p>
                 )}
             </section>
 
             {/* Top 5 expenses */}
             <section className="space-y-3">
-                <h2 className="text-sm font-semibold text-white/70 ml-1">Top gastos del mes</h2>
+                <h2 className="text-sm font-semibold text-foreground ml-1">Top gastos del mes</h2>
                 {top5Expenses.length === 0 ? (
                     <div className={`${glassCard} text-center py-8`}>
-                        <p className="text-white/30 text-sm">Sin gastos este mes</p>
+                        <p className="text-[color:var(--ink-3)] text-sm">Sin gastos este mes</p>
                     </div>
                 ) : (
                     top5Expenses.map((expense, idx) => (
                         <div
                             key={expense.id}
-                            className="bg-white/5 border border-white/10 rounded-xl backdrop-blur-md p-4 flex items-center gap-3"
+                            className="bg-card border border-[color:var(--line-2)] rounded-[14px] p-4 flex items-center gap-3"
                         >
-                            <span className="text-lg font-mono font-bold text-white/20 w-5 text-center flex-shrink-0">
+                            <span className="text-lg font-mono font-semibold text-[color:var(--ink-3)] w-5 text-center flex-shrink-0">
                                 {idx + 1}
                             </span>
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-white truncate">{expense.description}</p>
-                                <p className="text-[11px] text-white/40 mt-0.5">
+                                <p className="text-sm font-semibold text-foreground truncate">{expense.description}</p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
                                     {expense.categoryLabel} · {expense.date}
                                 </p>
                             </div>
-                            <span className="text-base font-mono font-bold text-white flex-shrink-0">
+                            <span className="text-base font-mono font-semibold tracking-[-0.02em] text-foreground flex-shrink-0">
                                 {formatEuros(expense.amount)}
                             </span>
                         </div>
@@ -344,8 +352,8 @@ export function AnalyticsClient({
             {/* Top products from receipt breakdowns */}
             {topItems.length > 0 && (
                 <section className={glassCard}>
-                    <h2 className="text-sm font-semibold text-white/70 mb-1">Top productos (últimos 3 meses)</h2>
-                    <p className="text-[11px] text-white/30 mb-4">Basado en los desgloses de tickets escaneados</p>
+                    <h2 className="text-sm font-semibold text-foreground mb-1">Top productos (últimos 3 meses)</h2>
+                    <p className="text-[11px] text-[color:var(--ink-3)] mb-4">Basado en los desgloses de tickets escaneados</p>
                     <div className="space-y-3">
                         {(() => {
                             const maxTotal = topItems[0]?.total ?? 1;
@@ -353,21 +361,21 @@ export function AnalyticsClient({
                                 <div key={item.name} className="space-y-1">
                                     <div className="flex items-center justify-between text-xs">
                                         <span className="flex items-center gap-2 min-w-0">
-                                            <span className="text-white/20 font-mono w-4 flex-shrink-0">{idx + 1}</span>
-                                            <span className="text-white/80 truncate font-medium">{item.name}</span>
+                                            <span className="text-[color:var(--ink-3)] font-mono w-4 flex-shrink-0">{idx + 1}</span>
+                                            <span className="text-[color:var(--body-ink)] truncate font-medium">{item.name}</span>
                                         </span>
-                                        <span className="font-mono font-bold text-white flex-shrink-0 ml-2">
+                                        <span className="font-mono font-semibold tracking-[-0.02em] text-foreground flex-shrink-0 ml-2">
                                             {formatEuros(item.total)}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                        <div className="flex-1 h-1.5 bg-secondary rounded-full overflow-hidden">
                                             <div
-                                                className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-500"
+                                                className="h-full rounded-full bg-primary"
                                                 style={{ width: `${(item.total / maxTotal) * 100}%` }}
                                             />
                                         </div>
-                                        <span className="text-[10px] text-white/30 flex-shrink-0 w-20 text-right">
+                                        <span className="text-[10px] text-[color:var(--ink-3)] flex-shrink-0 w-20 text-right">
                                             {item.count}× · {formatEuros(item.avgPrice)}/u
                                         </span>
                                     </div>

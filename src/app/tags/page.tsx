@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { getActiveGroup } from "@/lib/membership";
+import { NoGroupState } from "@/components/ui/no-group-state";
 import { redirect } from "next/navigation";
 import { TagsClient } from "./client";
 
@@ -10,15 +12,12 @@ export default async function TagsPage() {
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: { couple: true },
-    });
-
-    if (!user?.couple) redirect("/dashboard");
+    // Phase 5 (WS1): resolve the group via the Membership layer.
+    const groupId = await getActiveGroup(userId);
+    if (!groupId) return <NoGroupState title="Etiquetas del grupo" />;
 
     const tags = await prisma.tag.findMany({
-        where: { coupleId: user.couple.id },
+        where: { coupleId: groupId },
         orderBy: { name: "asc" },
     });
 

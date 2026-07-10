@@ -54,8 +54,8 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
             <div className="flex items-center gap-4 justify-center">
                 {/* Current Avatar Preview */}
                 <div className="relative group">
-                    <div className="h-24 w-24 rounded-full bg-gradient-to-tr from-primary to-purple-500 p-[3px] shadow-xl">
-                        <div className="h-full w-full rounded-full bg-black flex items-center justify-center overflow-hidden relative">
+                    <div className="h-24 w-24 rounded-full bg-primary p-[3px] shadow-[0_12px_28px_-8px_rgba(189,93,58,0.35)]">
+                        <div className="h-full w-full rounded-full bg-secondary flex items-center justify-center overflow-hidden relative">
                             {isInternalImage ? (
                                 // oxlint-disable-next-line nextjs/no-img-element
                                 <img src={currentAvatar} alt="Avatar" className="h-full w-full object-cover" />
@@ -68,12 +68,12 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
             </div>
 
             {/* Selector Tabs */}
-            <div className="flex p-1 bg-white/5 rounded-lg">
+            <div className="flex p-1 bg-secondary rounded-lg">
                 <button
                     onClick={() => setMode("EMOJI")}
                     className={cn(
                         "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all",
-                        mode === "EMOJI" ? "bg-primary/20 text-primary shadow-sm" : "text-muted-foreground hover:bg-white/5"
+                        mode === "EMOJI" ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:bg-card"
                     )}
                 >
                     <Smile className="h-4 w-4" /> Emojis
@@ -82,7 +82,7 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
                     onClick={() => setMode("IMAGE")}
                     className={cn(
                         "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all",
-                        mode === "IMAGE" ? "bg-primary/20 text-primary shadow-sm" : "text-muted-foreground hover:bg-white/5"
+                        mode === "IMAGE" ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:bg-card"
                     )}
                 >
                     <ImageIcon className="h-4 w-4" /> Imagen
@@ -90,7 +90,7 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
             </div>
 
             {/* Content Area */}
-            <div className="min-h-[180px] p-4 bg-black/20 rounded-xl border border-white/5">
+            <div className="min-h-[180px] p-4 bg-secondary rounded-xl border border-[color:var(--line)]">
                 {mode === "EMOJI" && (
                     <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
                         <div className="grid grid-cols-7 gap-2">
@@ -99,15 +99,15 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
                                     key={emoji}
                                     onClick={() => onAvatarChange(emoji)}
                                     className={cn(
-                                        "h-8 w-8 flex items-center justify-center rounded-full text-xl hover:bg-white/10 transition-colors",
-                                        currentAvatar === emoji && "bg-primary/20 ring-1 ring-primary"
+                                        "h-8 w-8 flex items-center justify-center rounded-full text-xl hover:bg-card transition-colors",
+                                        currentAvatar === emoji && "bg-[var(--accent-tint)] ring-1 ring-[color:var(--accent-border)]"
                                     )}
                                 >
                                     {emoji}
                                 </button>
                             ))}
                         </div>
-                        <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+                        <div className="flex items-center gap-2 pt-2 border-t border-[color:var(--line)]">
                             <span className="text-xs text-muted-foreground whitespace-nowrap">O escribe uno:</span>
                             <Input
                                 value={customEmoji}
@@ -116,7 +116,7 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
                                     setCustomEmoji(v);
                                     if (/\p{Extended_Pictographic}/u.test(v)) onAvatarChange(v);
                                 }}
-                                className="h-8 bg-transparent border-white/10 text-center"
+                                className="h-8 bg-card border-[color:var(--line)] text-center"
                                 placeholder="🚀"
                             />
                         </div>
@@ -134,7 +134,7 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
                         />
                         <Button
                             variant="secondary"
-                            className="h-auto py-8 px-8 border-dashed border-2 border-white/20 bg-transparent hover:bg-white/5 flex flex-col gap-2"
+                            className="h-auto py-8 px-8 border-dashed border-2 border-[color:var(--line-strong)] bg-transparent hover:bg-card flex flex-col gap-2"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={isUploading}
                         >

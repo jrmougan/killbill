@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { getActiveGroup, getGroupMembers } from '@/lib/membership';
 import { toCents } from '@/lib/currency';
 
 export async function POST(request: Request) {
@@ -26,15 +27,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Invalid method' }, { status: 400 });
         }
 
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-            include: { couple: { include: { members: true } } }
-        });
+        // Phase 4 selector switch: group + members come from the Membership layer
+        // (was user.coupleId + couple.members include).
+        const coupleId = await getActiveGroup(userId);
+        if (!coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
-        if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
-        const coupleId = user.coupleId as string;
-
-        const isMember = user.couple?.members.some((m) => m.id === toUserId) ?? false;
+        const members = await getGroupMembers(coupleId);
+        const isMember = members.some((m) => m.id === toUserId);
         if (!isMember) {
             return NextResponse.json({ error: 'toUserId is not a member of your couple' }, { status: 403 });
         }

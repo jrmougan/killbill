@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { getActiveGroup } from '@/lib/membership';
+import { postSettlementLedger } from '@/lib/ledger';
 
 export async function PATCH(
     request: Request,
@@ -25,12 +27,10 @@ export async function PATCH(
 
     if (!settlement) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Enforce Couple Context
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-    });
+    // Enforce Couple Context (Phase 4 selector switch: Membership layer).
+    const groupId = await getActiveGroup(userId);
 
-    if (settlement.coupleId !== user?.coupleId) {
+    if (settlement.coupleId !== groupId) {
         return NextResponse.json({ error: 'Settlement does not belong to your couple' }, { status: 403 });
     }
 
@@ -53,9 +53,26 @@ export async function PATCH(
     }
 
     try {
-        const updated = await prisma.settlement.update({
-            where: { id },
-            data: { status }
+        const updated = await prisma.$transaction(async (tx) => {
+            const u = await tx.settlement.update({
+                where: { id },
+                data: { status }
+            });
+            // Phase 3 dual-write: PENDING->CONFIRMED is the moment the settlement
+            // enters the balance, so post its ledger transaction here. REJECTED
+            // posts nothing (representation-by-absence), matching
+            // effectiveSettlements = status === 'CONFIRMED' in finance/dashboard.
+            if (status === 'CONFIRMED') {
+                await postSettlementLedger(tx, {
+                    id: u.id,
+                    coupleId: u.coupleId,
+                    amount: u.amount,
+                    fromUserId: u.fromUserId,
+                    toUserId: u.toUserId,
+                    date: u.date,
+                });
+            }
+            return u;
         });
         return NextResponse.json({ success: true, settlement: updated });
     } catch (e) {

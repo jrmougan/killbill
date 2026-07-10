@@ -50,20 +50,20 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
 
     return (
         <section className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
-            <h2 className="text-lg font-bold ml-1 flex items-center gap-2">
+            <h2 className="text-lg font-bold ml-1 flex items-center gap-2 text-foreground">
                 <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
                 </span>
                 Confirmar Pagos
             </h2>
 
             <div className="space-y-3">
                 {settlements.map((s) => (
-                    <GlassCard key={s.id} className="p-4 border-blue-500/30 bg-blue-500/10 shadow-lg shadow-blue-500/5">
+                    <GlassCard key={s.id} className="p-4 border border-[color:var(--accent-border)] bg-[var(--accent-tint)]">
                         <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center text-xl overflow-hidden">
+                                <div className="h-10 w-10 rounded-full bg-[var(--accent-tint)] flex items-center justify-center text-xl overflow-hidden text-primary font-bold">
                                     {isAvatarUrl(s.fromUser.avatar) ? (
                                         // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
                                         <img src={s.fromUser.avatar!} alt={s.fromUser.name} className="h-full w-full object-cover" />
@@ -72,7 +72,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
                                     )}
                                 </div>
                                 <div>
-                                    <p className="font-bold text-sm">
+                                    <p className="font-bold text-sm text-foreground">
                                         {s.fromUser.name} te ha pagado
                                     </p>
                                     <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">
@@ -81,7 +81,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
                                 </div>
                             </div>
                             <div className="text-right">
-                                <span className="text-2xl font-mono font-bold text-blue-400 leading-none block">
+                                <span className="text-2xl font-mono font-bold text-[color:var(--positive)] leading-none block">
                                     {toEuros(s.amount).toFixed(2)}€
                                 </span>
                             </div>
@@ -89,7 +89,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
 
                         <div className="flex gap-2">
                             <Button
-                                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-11"
+                                className="flex-1 bg-primary hover:bg-primary/90 text-white font-bold h-11"
                                 onClick={() => handleStatusUpdate(s.id, "CONFIRMED")}
                                 disabled={loadingIds.includes(s.id)}
                             >
@@ -97,7 +97,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
                             </Button>
                             <Button
                                 variant="ghost"
-                                className="bg-red-500/10 hover:bg-red-500/20 text-red-400 h-11 px-4"
+                                className="bg-[var(--negative-tint)] hover:bg-[var(--negative-tint)] text-destructive h-11 px-4"
                                 onClick={() => handleStatusUpdate(s.id, "REJECTED")}
                                 disabled={loadingIds.includes(s.id)}
                             >

@@ -16,10 +16,9 @@ export async function PATCH(
     const body = await request.json();
     const { method } = body;
 
-    const settlement = await prisma.settlement.findUnique({
-        where: { id },
-        include: { couple: { include: { members: true } } }
-    });
+    // Phase 5 (WS1): authz is by settlement.fromUserId; the couple.members
+    // over-fetch (a User.coupleId reverse-relation read) was dead — dropped.
+    const settlement = await prisma.settlement.findUnique({ where: { id } });
 
     if (!settlement) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 

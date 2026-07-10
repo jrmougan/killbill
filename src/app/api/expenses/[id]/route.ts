@@ -2,7 +2,12 @@ import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { toCents } from "@/lib/currency";
-import { calculateSplitAmounts, type ReceiptItemForSplit } from "@/lib/splits";
+import { calculateSplitAmounts, calculateSplitAmountsFromLines, hasExclusiveReceiptItems, hasExclusiveReceiptLines, type ReceiptItemForSplit } from "@/lib/splits";
+import { RECEIPT_LINES_SELECT, linesForSplit } from "@/lib/receipt-read";
+import { resolveCategoryId } from "@/lib/category-db";
+import { buildReceiptLineItems } from "@/lib/receipt";
+import { getGroupMembers } from "@/lib/membership";
+import { postExpenseLedger } from "@/lib/ledger";
 import { Prisma } from "@/generated/prisma/client";
 
 export async function DELETE(
@@ -18,22 +23,39 @@ export async function DELETE(
         // Get expense and verify ownership
         const expense = await prisma.expense.findUnique({
             where: { id },
-            include: { couple: { include: { members: true } } }
+            include: { series: true }
         });
 
         if (!expense) {
             return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
         }
 
-        // Check if user is part of the couple
-        const isMember = expense.couple.members.some(m => m.id === userId);
-        if (!isMember) {
+        // Personal expenses are authorized by ownership; shared ones strictly by
+        // current couple membership via the Membership layer (Phase 5 WS1) — an
+        // ex-member who still "owns" a shared expense must NOT be able to mutate the
+        // couple's data after unlinking.
+        const delMembers = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
+        const isMember = delMembers.some(m => m.id === userId);
+        const authorized = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
+        if (!authorized) {
             return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
-        // Delete expense (splits will cascade delete)
-        await prisma.expense.delete({
-            where: { id }
+        // Delete expense (splits cascade; the ledger Transaction cascades via FK).
+        // Phase 4 (recurring-sync): deleting a recurring TEMPLATE must stop its
+        // series or the series-driven materializer keeps firing with no template.
+        // Deactivate (don't delete) so already-materialized instances keep their
+        // seriesId lineage (series deletion would SetNull them). Phase 5: the
+        // template is identified by series.templateId === this expense (not the
+        // retired isRecurring column); instances never deactivate the series.
+        await prisma.$transaction(async (tx) => {
+            if (expense.seriesId && expense.series?.templateId === expense.id) {
+                await tx.recurringSeries.update({
+                    where: { id: expense.seriesId },
+                    data: { isActive: false },
+                });
+            }
+            await tx.expense.delete({ where: { id } });
         });
 
         return NextResponse.json({ success: true });
@@ -54,27 +76,48 @@ export async function PATCH(
         const userId = session.userId as string;
 
         const body = await request.json();
-        const { description, amount, category, splitWithPartner, receiptItems, notes, isRecurring, recurringInterval, customSplits } = body;
+        const { description, amount, category, splitWithPartner, receiptItems, notes, isRecurring, recurringInterval, customSplits, paidById: paidByIdInput } = body;
 
         // Get expense and verify ownership
         const expense = await prisma.expense.findUnique({
             where: { id },
-            include: { couple: { include: { members: true } } }
+            include: { series: true, ...RECEIPT_LINES_SELECT }
         });
 
         if (!expense) {
             return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
         }
 
-        // Check if user is part of the couple
-        const isMember = expense.couple.members.some(m => m.id === userId);
-        if (!isMember) {
+        // Members via the Membership layer (ACTIVE, ordered) — backs BOTH the authz
+        // check and split remainder-cent allocation / ledger re-post, so everything
+        // matches POST/reconcile exactly (Phase 5 WS1: no couple.members reverse
+        // relation).
+        const members = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
+        // `partner` (the non-payer, for the 2-member split fallbacks) is recomputed
+        // below against the EFFECTIVE payer once a payer change is validated.
+        let partner = members.find(m => m.id !== expense.paidById);
+
+        // Personal expenses are authorized by ownership; shared ones strictly by
+        // current couple membership (an ex-member who still "owns" a shared expense
+        // must NOT be able to mutate the couple's data after unlinking).
+        const isMember = members.some(m => m.id === userId);
+        const authorized = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
+        if (!authorized) {
             return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
 
-        const members = expense.couple.members;
-        const partner = members.find(m => m.id !== expense.paidById);
         const memberIds = new Set(members.map(m => m.id));
+
+        // Payer change (F5, N-way): accept a new payer when it's a current member.
+        // The ledger re-post below reads updated.paidById, so changing it re-attributes
+        // who fronted the money without touching the split shares.
+        if (paidByIdInput !== undefined && (typeof paidByIdInput !== 'string' || !memberIds.has(paidByIdInput))) {
+            return NextResponse.json({ error: 'Payer is not a member of your group' }, { status: 400 });
+        }
+        const effectivePaidById = typeof paidByIdInput === 'string' && memberIds.has(paidByIdInput)
+            ? paidByIdInput
+            : expense.paidById;
+        partner = members.find(m => m.id !== effectivePaidById);
 
         // Validate description (when provided) is a non-empty string; an empty one previously 500'd at the DB layer.
         if (description !== undefined && (typeof description !== 'string' || description.trim().length === 0)) {
@@ -114,9 +157,14 @@ export async function PATCH(
             }
         }
 
-        // Recalculate nextRecurringDate if recurring settings changed
-        const resolvedIsRecurring = isRecurring ?? expense.isRecurring;
-        const resolvedInterval = recurringInterval !== undefined ? recurringInterval : expense.recurringInterval;
+        // Recalculate nextRecurringDate if recurring settings changed.
+        // Phase 5 (stop-dual-write): pre-state comes from the linked series (this
+        // expense is the TEMPLATE iff series.templateId === its id), not the retired
+        // Expense.isRecurring/recurringInterval columns.
+        const wasTemplate = !!(expense.seriesId && expense.series?.templateId === expense.id);
+        const wasRecurring = wasTemplate && (expense.series?.isActive ?? false);
+        const resolvedIsRecurring = isRecurring ?? wasRecurring;
+        const resolvedInterval = recurringInterval !== undefined ? recurringInterval : (expense.series?.interval ?? null);
         let nextRecurringDate: Date | null | undefined = undefined;
         if (isRecurring !== undefined || recurringInterval !== undefined) {
             if (resolvedIsRecurring && resolvedInterval) {
@@ -138,13 +186,17 @@ export async function PATCH(
         const updateData: Prisma.ExpenseUncheckedUpdateInput = {
             description: description ?? expense.description,
             amount: amountCents,
-            category: category ?? expense.category,
-            receiptData: receiptItems ?? expense.receiptData,
+            // Phase 5 (WS5): enum category no longer written; categoryId is synced below.
         };
         if (notes !== undefined) updateData.notes = notes;
-        if (isRecurring !== undefined) updateData.isRecurring = isRecurring;
-        if (recurringInterval !== undefined) updateData.recurringInterval = recurringInterval;
-        if (nextRecurringDate !== undefined) updateData.nextRecurringDate = nextRecurringDate;
+        if (paidByIdInput !== undefined) updateData.paidById = effectivePaidById;
+        // Phase 5 (stop-dual-write): Expense.isRecurring/recurringInterval/
+        // nextRecurringDate are no longer written; the schedule is mirrored to the
+        // RecurringSeries in the series-sync block below (using the resolved locals).
+        // Keep the relational Category in sync when the enum category changes (Phase 2b).
+        if (category !== undefined && category !== null) {
+            updateData.categoryId = await resolveCategoryId(category, expense.coupleId);
+        }
 
         // Recalculate splits if split mode changed, amount changed, receiptItems changed, or customSplits provided
         const shouldRecalcSplits = splitWithPartner !== undefined || amount !== undefined || receiptItems !== undefined || customSplits !== undefined;
@@ -157,6 +209,23 @@ export async function PATCH(
             isSplitWithPartner = splitWithPartner !== undefined
                 ? splitWithPartner
                 : existingSplits.length === 2;
+        }
+
+        // Keep the persisted split strategy in sync when splits are recalculated.
+        if (shouldRecalcSplits && partner) {
+            if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
+                updateData.splitStrategy = 'CUSTOM';
+            } else if (isSplitWithPartner) {
+                // Body branch: request receipt (euro floats). Fallback branch
+                // (receiptItems===undefined, e.g. amount-only edit): the PERSISTED
+                // ReceiptLineItem rows are the read source (Phase 4 read-switch).
+                const itemized = receiptItems !== undefined
+                    ? hasExclusiveReceiptItems(receiptItems)
+                    : hasExclusiveReceiptLines(expense.lineItems);
+                updateData.splitStrategy = itemized ? 'ITEMIZED' : 'EQUAL';
+            } else {
+                updateData.splitStrategy = 'EXCLUSIVE';
+            }
         }
 
         // Update the expense and rewrite its splits atomically so a failure mid-way
@@ -179,8 +248,12 @@ export async function PATCH(
                         }))
                     });
                 } else if (isSplitWithPartner) {
-                    const currentReceiptData = (receiptItems ?? expense.receiptData) as ReceiptItemForSplit[] | null;
-                    const splits = calculateSplitAmounts(amountCents, currentReceiptData, members);
+                    // Body branch: split from the request receipt (euro floats,
+                    // unchanged create-time path). Fallback branch: split from the
+                    // PERSISTED ReceiptLineItem rows (cents-native, Phase 4 switch).
+                    const splits = receiptItems !== undefined
+                        ? calculateSplitAmounts(amountCents, receiptItems as ReceiptItemForSplit[] | null, members)
+                        : calculateSplitAmountsFromLines(amountCents, linesForSplit(expense.lineItems), members);
                     await tx.split.createMany({
                         data: splits.map(s => ({ expenseId: id, userId: s.userId, amount: s.amount }))
                     });
@@ -189,6 +262,110 @@ export async function PATCH(
                         data: { expenseId: id, userId: partner.id, amount: amountCents }
                     });
                 }
+            }
+
+            // Rewrite the relational receipt line items when the receipt changes
+            // (the source of truth; the legacy receiptData JSON column is no longer
+            // written — Phase 5 stop-dual-write).
+            if (receiptItems !== undefined) {
+                await tx.receiptLineItem.deleteMany({ where: { expenseId: id } });
+                const lines = buildReceiptLineItems(receiptItems, memberIds);
+                if (lines.length > 0) {
+                    await tx.receiptLineItem.createMany({
+                        data: lines.map(l => ({ ...l, expenseId: id })),
+                    });
+                }
+            }
+
+            // Phase 4: keep the ledger in sync on edit. amount/splits may have just
+            // changed; re-post so Σ LedgerEntry stays == calculateBalances (reconcile
+            // invariant). postExpenseLedger upserts on dedupeKey 'expense:<id>' and
+            // rebuilds entries, so this is idempotent/self-healing. PERSONAL posts
+            // nothing. Guard: only re-post when the fresh splits sum to the amount —
+            // in a degenerate solo couple splits aren't recalculated on an amount
+            // edit, and posting a non-zero-sum txn would (correctly) throw.
+            if (updated.visibility === 'SHARED' && updated.coupleId) {
+                const freshSplits = await tx.split.findMany({
+                    where: { expenseId: id },
+                    select: { userId: true, amount: true },
+                });
+                const splitSum = freshSplits.reduce((a, s) => a + s.amount, 0);
+                if (splitSum === updated.amount) {
+                    await postExpenseLedger(tx, {
+                        expenseId: id,
+                        groupId: updated.coupleId,
+                        amount: updated.amount,
+                        paidById: updated.paidById,
+                        occurredAt: updated.date,
+                        splits: freshSplits,
+                        members,
+                    });
+                }
+            }
+
+            // Phase 4/5 (recurring-sync + stop-dual-write): keep the linked
+            // RecurringSeries in lockstep with the template Expense, in the SAME
+            // transaction, using the resolved recurrence LOCALS (the Expense
+            // recurrence columns are no longer written). A template is the expense
+            // with series.templateId === its id (captured in wasTemplate/wasRecurring).
+            if (updated.seriesId) {
+                if (!resolvedIsRecurring) {
+                    // Deactivate ONLY on a genuine template toggle-off (pre-state was
+                    // recurring). Editing a materialized INSTANCE (wasRecurring false)
+                    // never touches the series. Deactivate, never delete —
+                    // Expense.seriesId is onDelete:SetNull, so deleting the series
+                    // would orphan instance lineage; isActive=false is reversible.
+                    if (wasRecurring) {
+                        await tx.recurringSeries.update({
+                            where: { id: updated.seriesId },
+                            data: { isActive: false },
+                        });
+                    }
+                } else {
+                    // Template still recurring: mirror its scalars to the series.
+                    // NOTE (non-gating risk): a materialized instance PATCHed to
+                    // isRecurring=true also lands here — a rare, user-driven edge a
+                    // future pass should create a fresh series for (or reject).
+                    await tx.recurringSeries.update({
+                        where: { id: updated.seriesId },
+                        data: {
+                            description: updated.description,
+                            amount: updated.amount,
+                            categoryId: updated.categoryId, // Phase 5 (WS5): enum category no longer mirrored
+                            splitStrategy: updated.splitStrategy,
+                            notes: updated.notes,
+                            isActive: true, // re-activate when recurring is toggled back ON
+                            // interval/nextRunDate are NOT NULL on the series; only
+                            // mirror when the resolved locals actually carry values
+                            // (an amount-only edit leaves both untouched).
+                            ...(resolvedInterval ? { interval: resolvedInterval } : {}),
+                            ...(nextRecurringDate ? { nextRunDate: nextRecurringDate } : {}),
+                        },
+                    });
+                }
+            } else if (resolvedIsRecurring && resolvedInterval && nextRecurringDate) {
+                // Toggle ON for an expense that never had a series: create + link it
+                // (POST already creates series). templateId points at this expense.
+                const series = await tx.recurringSeries.create({
+                    data: {
+                        description: updated.description,
+                        amount: updated.amount,
+                        categoryId: updated.categoryId, // Phase 5 (WS5): enum category no longer written
+                        visibility: updated.visibility,
+                        splitStrategy: updated.splitStrategy,
+                        notes: updated.notes,
+                        interval: resolvedInterval,
+                        nextRunDate: nextRecurringDate,
+                        coupleId: updated.coupleId,
+                        ownerId: updated.ownerId,
+                        paidById: updated.paidById,
+                        currency: updated.currency,
+                        minorUnit: updated.minorUnit,
+                        isActive: true,
+                        templateId: id,
+                    },
+                });
+                await tx.expense.update({ where: { id }, data: { seriesId: series.id } });
             }
 
             return updated;

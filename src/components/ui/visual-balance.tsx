@@ -34,7 +34,7 @@ function Pan({
             )}
         >
             <motion.div
-                className="w-[50px] h-[50px] rounded-full bg-[hsl(var(--surface-raised))] border border-white/[0.08] flex items-center justify-center overflow-hidden text-lg font-bold"
+                className="w-[50px] h-[50px] rounded-full bg-secondary border border-[color:var(--line)] flex items-center justify-center overflow-hidden text-lg font-bold"
                 style={{ color }}
                 animate={{ rotate: -tilt }} // counter-rotate so the face stays upright
                 transition={{ type: "spring", stiffness: 60, damping: 15 }}
@@ -61,8 +61,8 @@ export function VisualBalance({ balance, user1, user2, className }: VisualBalanc
     return (
         <div className={cn("relative flex items-center justify-center h-[150px]", className)}>
             {/* Pivot base + post */}
-            <div className="absolute bottom-4 w-10 h-[3px] rounded-full bg-white/[0.12]" />
-            <div className="absolute bottom-4 w-[2px] h-[108px] bg-white/[0.1]" />
+            <div className="absolute bottom-4 w-10 h-[3px] rounded-full bg-[color:var(--line-strong)]" />
+            <div className="absolute bottom-4 w-[2px] h-[108px] bg-[color:var(--line)]" />
 
             <motion.div
                 className="relative w-[236px] h-[84px] flex items-center justify-center"
@@ -70,14 +70,14 @@ export function VisualBalance({ balance, user1, user2, className }: VisualBalanc
                 transition={{ type: "spring", stiffness: 60, damping: 15 }}
             >
                 {/* Beam */}
-                <div className="w-full h-[2px] rounded-full bg-white/[0.16]" />
+                <div className="w-full h-[2px] rounded-full bg-[color:var(--line-strong)]" />
 
-                <Pan user={user1} color="var(--color-primary, #7c3aed)" tilt={tilt} side="left" />
-                <Pan user={user2} color="#34d399" tilt={tilt} side="right" />
+                <Pan user={user1} color="var(--accent-hex)" tilt={tilt} side="left" />
+                <Pan user={user2} color="var(--positive)" tilt={tilt} side="right" />
             </motion.div>
 
             {/* Centre pivot dot */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[7px] w-[7px] rounded-full bg-white/[0.45]" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[7px] w-[7px] rounded-full bg-[color:var(--ink-3)]" />
         </div>
     );
 }

@@ -65,7 +65,7 @@ export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
                 {search && (
                     <button
                         onClick={() => handleSearchChange("")}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     >
                         <X className="h-4 w-4" />
                     </button>
@@ -98,7 +98,7 @@ export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
                         variant="ghost"
                         size="sm"
                         onClick={clearFilters}
-                        className="text-muted-foreground hover:text-white"
+                        className="text-muted-foreground hover:text-foreground"
                     >
                         Limpiar
                     </Button>
@@ -122,7 +122,7 @@ export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
                                         "px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5",
                                         selectedCategories.includes(cat.id)
                                             ? "bg-primary text-white"
-                                            : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-white"
+                                            : "bg-secondary text-muted-foreground hover:bg-[var(--surface-raised-hex)] hover:text-foreground"
                                     )}
                                 >
                                     <span>{cat.emoji}</span>
@@ -151,7 +151,7 @@ export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
                                         "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
                                         dateRange === range.id
                                             ? "bg-primary text-white"
-                                            : "bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-white"
+                                            : "bg-secondary text-muted-foreground hover:bg-[var(--surface-raised-hex)] hover:text-foreground"
                                     )}
                                 >
                                     {range.label}

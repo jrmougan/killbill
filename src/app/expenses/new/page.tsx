@@ -16,8 +16,8 @@ import { formatEuros, parseAmountInput, formatAmountInput } from "@/lib/currency
 
 type Step = "amount" | "details";
 type ScanState = "idle" | "scanning" | "done";
-type SplitChoice = "equal" | "me" | "partner" | "custom";
-type PaidBy = "me" | "partner";
+type SplitChoice = "equal" | "me" | "partner" | "custom" | "amounts";
+type ExpenseType = "shared" | "personal";
 type RecurringInterval = "weekly" | "monthly" | "yearly";
 
 // ReceiptItem with a stable client-side id used as the React key for editable rows.
@@ -67,10 +67,17 @@ export default function NewExpensePage() {
     const [loading, setLoading] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
 
-    // Split / payer
-    const [paidBy, setPaidBy] = useState<PaidBy>("me");
+    // Personal (private ledger) vs shared (couple) expense
+    const [expenseType, setExpenseType] = useState<ExpenseType>("shared");
+
+    // Split / payer. Phase "decouple" F5: the payer is any group member (N-way),
+    // not just me/partner. Defaults to the current user once loaded.
+    const [paidById, setPaidById] = useState<string>("");
     const [split, setSplit] = useState<SplitChoice>("equal");
     const [myPercent, setMyPercent] = useState(50);
+    // Per-member custom amounts (euro strings keyed by userId), used by the
+    // "amounts" split mode for groups of >2 where percentages don't scale.
+    const [memberAmounts, setMemberAmounts] = useState<Record<string, string>>({});
     const [members, setMembers] = useState<{ id: string; name: string; avatar: string | null }[]>([]);
     const [userId, setUserId] = useState<string | null>(null);
 
@@ -99,6 +106,9 @@ export default function NewExpensePage() {
     const partner = members.find((m) => m.id !== userId);
     const partnerName = partner?.name || "pareja";
     const partnerPercent = 100 - myPercent;
+    // 2-member groups keep the "me vs partner" split modes; larger groups use the
+    // N-way equal split (backend handles both). Custom %/per-item are 2-member-only.
+    const isTwoMember = members.length === 2;
 
     // es-ES users type the decimal separator as a comma; normalise before parsing
     const amountNum = parseAmountInput(amount);
@@ -107,6 +117,14 @@ export default function NewExpensePage() {
     const previewMyCents = Math.round((previewAmountCents * myPercent) / 100);
     const myAmount = previewMyCents / 100;
     const partnerAmount = (previewAmountCents - previewMyCents) / 100;
+
+    // Per-member custom amounts (cents) for the N>2 "amounts" split mode.
+    const memberAmountsCents = members.reduce<Record<string, number>>((acc, m) => {
+        acc[m.id] = Math.round(parseAmountInput(memberAmounts[m.id] || "") * 100) || 0;
+        return acc;
+    }, {});
+    const memberAmountsSum = Object.values(memberAmountsCents).reduce((a, b) => a + b, 0);
+    const memberAmountsRemaining = previewAmountCents - memberAmountsSum;
 
     const hasItemAssignments = receiptItems.length > 0;
     const itemSplitMyAmount = receiptItems.reduce((acc, item) => {
@@ -120,12 +138,20 @@ export default function NewExpensePage() {
         return acc;
     }, 0);
 
+    // Preselect the expense type from ?type=personal (linked from the /personal
+    // ledger) without useSearchParams so the page stays statically renderable.
+    useEffect(() => {
+        if (new URLSearchParams(window.location.search).get("type") === "personal") {
+            setExpenseType("personal");
+        }
+    }, []);
+
     useEffect(() => {
         fetch("/api/couple")
             .then((res) => res.json())
             .then((data) => {
                 if (data.couple) setMembers(data.couple.members);
-                if (data.userId) setUserId(data.userId);
+                if (data.userId) { setUserId(data.userId); setPaidById(data.userId); }
             })
             .catch((err) => console.error("Failed to fetch couple", err));
     }, []);
@@ -349,14 +375,20 @@ export default function NewExpensePage() {
             setFormError("Añade un concepto para el gasto.");
             return;
         }
-        if (split === "custom" && myPercent + partnerPercent !== 100) {
-            setFormError("Los porcentajes deben sumar 100%.");
-            return;
-        }
-        const needsPartner = split === "partner" || paidBy === "partner";
-        if (needsPartner && !partner) {
-            setFormError("Necesitas una pareja configurada para esta opción.");
-            return;
+        const isPersonal = expenseType === "personal";
+        if (!isPersonal) {
+            if (isTwoMember && split === "custom" && myPercent + partnerPercent !== 100) {
+                setFormError("Los porcentajes deben sumar 100%.");
+                return;
+            }
+            if (!isTwoMember && split === "amounts" && memberAmountsRemaining !== 0) {
+                setFormError("Los importes por miembro deben sumar el total.");
+                return;
+            }
+            if (members.length === 0) {
+                setFormError("Necesitas un grupo configurado para un gasto compartido.");
+                return;
+            }
         }
 
         setLoading(true);
@@ -382,7 +414,6 @@ export default function NewExpensePage() {
                 amount: amountNum,
                 description,
                 category,
-                paidById: paidBy === "me" ? userId : partner?.id,
                 receiptUrl: uploadedUrl,
                 receiptData: receiptItems.length > 0
                     ? receiptItems.map(({ description, quantity, price, total, assignedTo }) => ({
@@ -394,24 +425,47 @@ export default function NewExpensePage() {
                 recurringInterval: isRecurring ? recurringInterval : undefined,
             };
 
-            if (hasItemAssignments && userId && partner) {
-                const myCents = Math.round(itemSplitMyAmount * 100);
-                bodyPayload.customSplits = [
-                    { userId, amount: myCents },
-                    { userId: partner.id, amount: amountCents - myCents },
-                ];
-            } else if (split === "custom" && userId && partner) {
-                const myCents = Math.round((amountCents * myPercent) / 100);
-                bodyPayload.customSplits = [
-                    { userId, amount: myCents },
-                    { userId: partner.id, amount: amountCents - myCents },
-                ];
-            } else if (split === "me" && userId) {
-                bodyPayload.beneficiaryId = userId;
-            } else if (split === "partner" && partner) {
-                bodyPayload.beneficiaryId = partner.id;
+            if (isPersonal) {
+                // Personal expense: private, no payer/split — the API owns it to the caller.
+                bodyPayload.visibility = "PERSONAL";
+            } else {
+                // N-way payer: any member (defaults to me).
+                bodyPayload.paidById = paidById || userId;
+
+                // Larger groups can split by explicit per-member amounts; otherwise
+                // they fall through to the N-way equal split (no customSplits → the
+                // API divides equally among ALL members).
+                if (!isTwoMember && split === "amounts") {
+                    bodyPayload.customSplits = members.map((m) => ({
+                        userId: m.id,
+                        amount: memberAmountsCents[m.id] || 0,
+                    }));
+                }
+
+                // The custom %, per-item and beneficiary modes are 2-member-only;
+                // larger groups always use the N-way equal split (no customSplits →
+                // the API divides equally among ALL members).
+                if (isTwoMember && userId && partner) {
+                    if (hasItemAssignments) {
+                        const myCents = Math.round(itemSplitMyAmount * 100);
+                        bodyPayload.customSplits = [
+                            { userId, amount: myCents },
+                            { userId: partner.id, amount: amountCents - myCents },
+                        ];
+                    } else if (split === "custom") {
+                        const myCents = Math.round((amountCents * myPercent) / 100);
+                        bodyPayload.customSplits = [
+                            { userId, amount: myCents },
+                            { userId: partner.id, amount: amountCents - myCents },
+                        ];
+                    } else if (split === "me") {
+                        bodyPayload.beneficiaryId = userId;
+                    } else if (split === "partner") {
+                        bodyPayload.beneficiaryId = partner.id;
+                    }
+                    // split === "equal" → no beneficiary/customSplits → equal split
+                }
             }
-            // split === "equal" → no beneficiary/customSplits → API splits equally
 
             const res = await fetch("/api/expenses", {
                 method: "POST",
@@ -424,7 +478,7 @@ export default function NewExpensePage() {
                 if (selectedTagIds.length > 0 && data.expenseId) {
                     await applyTagsToExpense(data.expenseId);
                 }
-                router.push("/dashboard");
+                router.push(isPersonal ? "/dashboard?scope=personal" : "/dashboard");
                 router.refresh();
             } else {
                 const errData = await res.json().catch(() => null);
@@ -444,12 +498,34 @@ export default function NewExpensePage() {
 
     const amountDisplay = amount === "" ? "0" : amount;
 
-    const splitOptions: { key: SplitChoice; label: string; hint: string }[] = [
-        { key: "equal", label: "Mitad y mitad", hint: "50% · 50%" },
-        { key: "me", label: "Pagué por mí", hint: "100% Yo" },
-        { key: "partner", label: `Favor para ${partnerName}`, hint: `100% ${partnerName}` },
-        { key: "custom", label: "Personalizado", hint: "Ajustar %" },
-    ];
+    // Selecting per-member amounts seeds each member with an equal share (largest
+    // remainder first) so the user only nudges the deltas from a valid baseline.
+    const selectSplit = (key: SplitChoice) => {
+        setSplit(key);
+        if (key === "amounts" && members.length > 0 && previewAmountCents > 0) {
+            const base = Math.floor(previewAmountCents / members.length);
+            let remainder = previewAmountCents - base * members.length;
+            const seeded: Record<string, string> = {};
+            for (const m of members) {
+                const cents = base + (remainder > 0 ? 1 : 0);
+                if (remainder > 0) remainder--;
+                seeded[m.id] = formatAmountInput(cents / 100);
+            }
+            setMemberAmounts(seeded);
+        }
+    };
+
+    const splitOptions: { key: SplitChoice; label: string; hint: string }[] = isTwoMember
+        ? [
+            { key: "equal", label: "Mitad y mitad", hint: "50% · 50%" },
+            { key: "me", label: "Pagué por mí", hint: "100% Yo" },
+            { key: "partner", label: `Favor para ${partnerName}`, hint: `100% ${partnerName}` },
+            { key: "custom", label: "Personalizado", hint: "Ajustar %" },
+          ]
+        : [
+            { key: "equal", label: "A partes iguales", hint: `Entre ${members.length} miembros` },
+            { key: "amounts", label: "Importes por miembro", hint: "Ajustar por persona" },
+          ];
 
     return (
         <div className="flex flex-col min-h-screen max-w-md mx-auto relative">
@@ -466,7 +542,7 @@ export default function NewExpensePage() {
             <header className="flex items-center justify-between px-4 pt-3 pb-1">
                 {step === "amount" ? (
                     <Link href="/dashboard" aria-label="Volver al inicio">
-                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
                             <X className="h-5 w-5" />
                         </Button>
                     </Link>
@@ -475,7 +551,7 @@ export default function NewExpensePage() {
                         variant="ghost"
                         size="icon"
                         aria-label="Volver al importe"
-                        className="h-10 w-10 rounded-full hover:bg-white/10"
+                        className="h-10 w-10 rounded-full hover:bg-secondary"
                         onClick={() => setStep("amount")}
                     >
                         <ArrowLeft className="h-5 w-5" />
@@ -510,7 +586,7 @@ export default function NewExpensePage() {
                                     aria-label="Importe en euros"
                                     className={cn(
                                         "w-full max-w-[260px] bg-transparent text-center font-mono text-6xl font-bold tracking-tight focus:outline-none p-0",
-                                        amountValid ? "text-foreground" : "text-muted-foreground/40 placeholder:text-muted-foreground/40"
+                                        amountValid ? "text-foreground" : "text-[color:var(--ink-3)] placeholder:text-[color:var(--ink-3)]"
                                     )}
                                 />
                                 <span className="font-mono text-3xl font-bold text-muted-foreground ml-1">€</span>
@@ -519,14 +595,14 @@ export default function NewExpensePage() {
                             <button
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
-                                className="mt-7 inline-flex items-center gap-2 rounded-xl bg-white/5 border border-white/10 px-4 py-2.5 text-sm font-semibold text-muted-foreground hover:border-white/20 hover:text-foreground transition-colors active:scale-95"
+                                className="mt-7 inline-flex items-center gap-2 rounded-xl bg-card border border-[color:var(--line)] px-4 py-2.5 text-sm font-semibold text-muted-foreground hover:border-[color:var(--accent-border)] hover:text-foreground transition-colors active:scale-95"
                             >
                                 <Camera className="h-4 w-4" />
                                 Escanear recibo
                             </button>
 
                             {ocrError && (
-                                <div role="alert" className="mt-4 flex items-center gap-2 rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-2.5 text-xs text-red-300 animate-in fade-in">
+                                <div role="alert" className="mt-4 flex items-center gap-2 rounded-xl bg-[var(--negative-tint)] border border-[color:var(--negative)]/30 px-3 py-2.5 text-xs text-destructive animate-in fade-in">
                                     <AlertCircle className="h-4 w-4 flex-shrink-0" />
                                     <span className="flex-1">{ocrError}</span>
                                     {receiptFile && (
@@ -546,7 +622,7 @@ export default function NewExpensePage() {
                                     type="button"
                                     aria-label={k === "⌫" ? "Borrar" : k === "," ? "Coma decimal" : k}
                                     onClick={() => pressKey(k)}
-                                    className="h-[60px] rounded-2xl bg-white/5 border border-white/5 font-mono text-2xl font-medium flex items-center justify-center transition-all active:scale-95 active:bg-white/10 [@media(hover:hover)]:hover:bg-white/[0.08]"
+                                    className="h-[60px] rounded-2xl bg-card border border-[color:var(--line)] font-mono text-2xl font-medium flex items-center justify-center transition-all active:scale-95 active:bg-secondary [@media(hover:hover)]:hover:bg-secondary"
                                 >
                                     {k === "⌫" ? <Delete className="h-6 w-6" /> : k}
                                 </button>
@@ -554,7 +630,7 @@ export default function NewExpensePage() {
                         </div>
 
                         {formError && (
-                            <div role="alert" className="mb-3 flex items-center gap-2 rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-2.5 text-sm text-red-300 animate-in fade-in">
+                            <div role="alert" className="mb-3 flex items-center gap-2 rounded-xl bg-[var(--negative-tint)] border border-[color:var(--negative)]/30 px-3 py-2.5 text-sm text-destructive animate-in fade-in">
                                 <AlertCircle className="h-4 w-4 flex-shrink-0" />
                                 <span>{formError}</span>
                             </div>
@@ -604,7 +680,7 @@ export default function NewExpensePage() {
                             <label className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground flex items-center gap-2">
                                 Categoría
                                 {categoryAutoDetected && (
-                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/20 text-primary normal-case tracking-normal">✨ Auto</span>
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--accent-tint)] text-primary normal-case tracking-normal">✨ Auto</span>
                                 )}
                             </label>
                             <div className="grid grid-cols-4 gap-2">
@@ -616,7 +692,7 @@ export default function NewExpensePage() {
                                         aria-pressed={category === cat.id}
                                         className={cn(
                                             "flex flex-col items-center gap-1 py-2.5 rounded-xl border transition-all active:scale-95",
-                                            category === cat.id ? "bg-primary/10 border-primary" : "bg-white/5 border-white/5 hover:bg-white/10"
+                                            category === cat.id ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)]" : "bg-card border-[color:var(--line)] hover:bg-secondary"
                                         )}
                                     >
                                         <span className="text-xl">{cat.emoji}</span>
@@ -626,23 +702,52 @@ export default function NewExpensePage() {
                             </div>
                         </div>
 
-                        {/* Who paid */}
+                        {/* Personal vs shared */}
                         <fieldset className="space-y-2 border-0 p-0 m-0">
-                            <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">¿Quién pagó?</legend>
-                            <div className="flex gap-1.5 p-1 rounded-xl bg-white/5 border border-white/5">
-                                {([["me", "Yo"], ["partner", partnerName]] as const).map(([key, label]) => (
+                            <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">Tipo de gasto</legend>
+                            <div className="flex gap-1.5 p-1 rounded-xl bg-secondary border border-[color:var(--line)]">
+                                {([["shared", "Común", "Se reparte con el grupo"], ["personal", "Personal", "Privado, solo para ti"]] as const).map(([key, label, hint]) => (
                                     <button
                                         key={key}
                                         type="button"
-                                        disabled={key === "partner" && !partner}
-                                        onClick={() => setPaidBy(key)}
-                                        aria-pressed={paidBy === key}
+                                        onClick={() => setExpenseType(key)}
+                                        aria-pressed={expenseType === key}
+                                        data-testid={`expense-type-${key}`}
                                         className={cn(
-                                            "flex-1 h-11 rounded-lg text-sm font-semibold transition-all active:scale-[0.98] disabled:opacity-40",
-                                            paidBy === key ? "bg-primary text-white shadow" : "text-muted-foreground"
+                                            "flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold transition-all active:scale-[0.98]",
+                                            expenseType === key ? "bg-primary text-white shadow" : "text-muted-foreground"
                                         )}
+                                        title={hint}
                                     >
                                         {label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground/70 px-1">
+                                {expenseType === "personal"
+                                    ? "Solo tú lo verás. No afecta a los balances del grupo."
+                                    : "Se reparte con el grupo y cuenta en los balances."}
+                            </p>
+                        </fieldset>
+
+                        {/* Who paid + how to split — only for shared expenses */}
+                        {expenseType === "shared" && (
+                        <>
+                        <fieldset className="space-y-2 border-0 p-0 m-0">
+                            <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">¿Quién pagó?</legend>
+                            <div className="flex flex-wrap gap-1.5 p-1 rounded-xl bg-secondary border border-[color:var(--line)]">
+                                {members.map((m) => (
+                                    <button
+                                        key={m.id}
+                                        type="button"
+                                        onClick={() => setPaidById(m.id)}
+                                        aria-pressed={paidById === m.id}
+                                        className={cn(
+                                            "flex-1 min-w-[72px] h-11 rounded-lg text-sm font-semibold transition-all active:scale-[0.98]",
+                                            paidById === m.id ? "bg-primary text-white shadow" : "text-muted-foreground"
+                                        )}
+                                    >
+                                        {m.id === userId ? "Yo" : m.name}
                                     </button>
                                 ))}
                             </div>
@@ -660,12 +765,12 @@ export default function NewExpensePage() {
                                             key={o.key}
                                             type="button"
                                             disabled={disabled}
-                                            onClick={() => setSplit(o.key)}
+                                            onClick={() => selectSplit(o.key)}
                                             aria-pressed={sel}
                                             aria-label={o.label}
                                             className={cn(
                                                 "flex items-center justify-between w-full px-4 py-3 rounded-xl border transition-all active:scale-[0.99] disabled:opacity-40",
-                                                sel ? "bg-primary/10 border-primary" : "bg-white/5 border-white/5 hover:bg-white/10"
+                                                sel ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)]" : "bg-card border-[color:var(--line)] hover:bg-secondary"
                                             )}
                                         >
                                             <span className="text-left">
@@ -674,7 +779,7 @@ export default function NewExpensePage() {
                                             </span>
                                             <span className={cn(
                                                 "h-[18px] w-[18px] rounded-full border-2 flex-shrink-0 transition-all",
-                                                sel ? "border-primary bg-primary shadow-[inset_0_0_0_3px_var(--color-background)]" : "border-white/20"
+                                                sel ? "border-primary bg-primary shadow-[inset_0_0_0_3px_var(--surface-hex)]" : "border-[color:var(--line-strong)]"
                                             )} />
                                         </button>
                                     );
@@ -682,7 +787,7 @@ export default function NewExpensePage() {
                             </div>
 
                             {split === "custom" && partner && (
-                                <div className="space-y-3 animate-in fade-in duration-200 bg-white/5 rounded-xl p-4 mt-1">
+                                <div className="space-y-3 animate-in fade-in duration-200 bg-secondary rounded-xl p-4 mt-1">
                                     <div className="flex items-center gap-3">
                                         <div className="flex-1 space-y-1">
                                             <label htmlFor="my-percent" className="text-xs text-muted-foreground">Yo</label>
@@ -695,7 +800,7 @@ export default function NewExpensePage() {
                                                     max={100}
                                                     value={myPercent}
                                                     onChange={(e) => setMyPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                                    className="w-16 bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-primary/50"
+                                                    className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-[color:var(--accent-border)]"
                                                 />
                                                 <span className="text-sm text-muted-foreground">%</span>
                                             </div>
@@ -712,7 +817,7 @@ export default function NewExpensePage() {
                                                     max={100}
                                                     value={partnerPercent}
                                                     onChange={(e) => setMyPercent(100 - Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                                    className="w-16 bg-black/30 border border-white/10 rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-primary/50"
+                                                    className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-[color:var(--accent-border)]"
                                                 />
                                                 <span className="text-sm text-muted-foreground">%</span>
                                             </div>
@@ -725,14 +830,50 @@ export default function NewExpensePage() {
                                     )}
                                 </div>
                             )}
+
+                            {split === "amounts" && !isTwoMember && (
+                                <div className="space-y-2 animate-in fade-in duration-200 bg-secondary rounded-xl p-4 mt-1">
+                                    {members.map((m) => (
+                                        <div key={m.id} className="flex items-center justify-between gap-3">
+                                            <label htmlFor={`amount-${m.id}`} className="text-sm text-muted-foreground truncate">
+                                                {m.id === userId ? "Yo" : m.name}
+                                            </label>
+                                            <div className="flex items-center gap-1.5">
+                                                <input
+                                                    id={`amount-${m.id}`}
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={memberAmounts[m.id] ?? ""}
+                                                    onChange={(e) => setMemberAmounts((prev) => ({ ...prev, [m.id]: e.target.value }))}
+                                                    placeholder="0,00"
+                                                    className="w-24 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:outline-none focus:border-[color:var(--accent-border)]"
+                                                />
+                                                <span className="text-sm text-muted-foreground">€</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className={cn(
+                                        "text-xs text-center pt-1 border-t border-[color:var(--line)] mt-1",
+                                        memberAmountsRemaining === 0 ? "text-[color:var(--positive)]" : "text-destructive"
+                                    )}>
+                                        {memberAmountsRemaining === 0
+                                            ? "Cuadra con el total ✓"
+                                            : memberAmountsRemaining > 0
+                                                ? `Faltan ${formatEuros(memberAmountsRemaining / 100)}`
+                                                : `Te pasas ${formatEuros(Math.abs(memberAmountsRemaining) / 100)}`}
+                                    </div>
+                                </div>
+                            )}
                         </fieldset>
+                        </>
+                        )}
 
                         {/* Advanced (collapsible): notes, tags, recurring, item breakdown */}
                         <div className="space-y-2">
                             <button
                                 type="button"
                                 onClick={() => setAdvancedOpen((p) => !p)}
-                                className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-sm font-medium"
+                                className="w-full flex items-center justify-between p-3 rounded-xl bg-card border border-[color:var(--line)] hover:bg-secondary transition-colors text-sm font-medium"
                             >
                                 <span className="flex items-center gap-2">
                                     <SlidersHorizontal className="h-4 w-4 text-primary" />
@@ -760,7 +901,7 @@ export default function NewExpensePage() {
                                             <p className="text-xs text-muted-foreground px-1">Escanea un ticket o añade productos para repartir por persona.</p>
                                         ) : (
                                             <>
-                                                <div className="rounded-xl border border-white/10 overflow-hidden bg-black/20 divide-y divide-white/5">
+                                                <div className="rounded-xl border border-[color:var(--line)] overflow-hidden bg-card divide-y divide-[color:var(--line-2)]">
                                                     {receiptItems.map((item, idx) => (
                                                         <div key={item._uid} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 p-2 items-center">
                                                             <input
@@ -789,24 +930,28 @@ export default function NewExpensePage() {
                                                                 />
                                                             </div>
                                                             <div className="font-mono font-bold text-xs w-14 text-right flex-shrink-0">{item.total.toFixed(2)}</div>
-                                                            <div className="flex items-center flex-shrink-0 rounded-lg overflow-hidden border border-white/10 text-[11px] font-bold">
+                                                            {expenseType === "shared" && isTwoMember && (
+                                                            <div className="flex items-center flex-shrink-0 rounded-lg overflow-hidden border border-[color:var(--line)] text-[11px] font-bold">
                                                                 <button type="button" onClick={() => setItemAssignment(idx, null)} aria-pressed={item.assignedTo === null} aria-label="Compartido 50/50"
-                                                                    className={cn("px-2.5 py-2 transition-colors", item.assignedTo === null ? "bg-primary text-white" : "text-muted-foreground hover:bg-white/10")} title="Compartido (50/50)">½</button>
+                                                                    className={cn("px-2.5 py-2 transition-colors", item.assignedTo === null ? "bg-primary text-white" : "text-muted-foreground hover:bg-secondary")} title="Compartido (50/50)">½</button>
                                                                 <button type="button" onClick={() => setItemAssignment(idx, userId)} aria-pressed={item.assignedTo === userId} aria-label="Solo mío"
-                                                                    className={cn("px-2.5 py-2 border-l border-white/10 transition-colors", item.assignedTo === userId ? "bg-blue-500/30 text-blue-300" : "text-muted-foreground hover:bg-white/10")} title="Solo mío">Yo</button>
+                                                                    className={cn("px-2.5 py-2 border-l border-[color:var(--line)] transition-colors", item.assignedTo === userId ? "bg-[var(--accent-tint)] text-primary" : "text-muted-foreground hover:bg-secondary")} title="Solo mío">Yo</button>
                                                                 <button type="button" onClick={() => setItemAssignment(idx, partner?.id || null)} aria-pressed={item.assignedTo === partner?.id && item.assignedTo !== null} aria-label={`Solo ${partnerName}`}
-                                                                    className={cn("px-2.5 py-2 border-l border-white/10 transition-colors", item.assignedTo === partner?.id && item.assignedTo !== null ? "bg-pink-500/30 text-pink-300" : "text-muted-foreground hover:bg-white/10")} title={`Solo ${partnerName}`}>{partner?.name?.charAt(0).toUpperCase() ?? "P"}</button>
+                                                                    className={cn("px-2.5 py-2 border-l border-[color:var(--line)] transition-colors", item.assignedTo === partner?.id && item.assignedTo !== null ? "bg-secondary text-[color:var(--ink-2)]" : "text-muted-foreground hover:bg-secondary")} title={`Solo ${partnerName}`}>{partner?.name?.charAt(0).toUpperCase() ?? "P"}</button>
                                                             </div>
-                                                            <button type="button" onClick={() => removeItem(idx)} aria-label={`Eliminar producto ${idx + 1}`} className="text-muted-foreground hover:text-red-400 p-2 flex-shrink-0">
+                                                            )}
+                                                            <button type="button" onClick={() => removeItem(idx)} aria-label={`Eliminar producto ${idx + 1}`} className="text-muted-foreground hover:text-destructive p-2 flex-shrink-0">
                                                                 <Trash2 className="h-4 w-4" />
                                                             </button>
                                                         </div>
                                                     ))}
                                                 </div>
-                                                <div className="text-xs px-2 py-2 bg-white/5 rounded-lg space-y-1">
-                                                    <div className="flex justify-between font-semibold text-blue-300"><span>Tu parte:</span><span>{formatEuros(itemSplitMyAmount)}</span></div>
-                                                    <div className="flex justify-between font-semibold text-pink-300"><span>{partnerName}:</span><span>{formatEuros(itemSplitPartnerAmount)}</span></div>
+                                                {expenseType === "shared" && isTwoMember && (
+                                                <div className="text-xs px-2 py-2 bg-secondary rounded-lg space-y-1">
+                                                    <div className="flex justify-between font-semibold text-primary"><span>Tu parte:</span><span className="font-mono">{formatEuros(itemSplitMyAmount)}</span></div>
+                                                    <div className="flex justify-between font-semibold text-[color:var(--ink-2)]"><span>{partnerName}:</span><span className="font-mono">{formatEuros(itemSplitPartnerAmount)}</span></div>
                                                 </div>
+                                                )}
                                             </>
                                         )}
                                     </div>
@@ -824,9 +969,9 @@ export default function NewExpensePage() {
                                                 onChange={(e) => setNotes(e.target.value.slice(0, 500))}
                                                 placeholder="Añade una nota opcional..."
                                                 rows={3}
-                                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50 resize-none placeholder:text-muted-foreground/50 transition-colors"
+                                                className="w-full bg-card border border-[color:var(--line)] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[color:var(--accent-border)] resize-none placeholder:text-[color:var(--ink-3)] transition-colors"
                                             />
-                                            <span className={cn("absolute bottom-2 right-3 text-[10px]", notes.length >= 480 ? "text-yellow-400" : "text-muted-foreground/50")}>
+                                            <span className={cn("absolute bottom-2 right-3 text-[10px]", notes.length >= 480 ? "text-destructive" : "text-[color:var(--ink-3)]")}>
                                                 {notes.length}/500
                                             </span>
                                         </div>
@@ -837,7 +982,7 @@ export default function NewExpensePage() {
                                         <label className="text-sm font-medium flex items-center gap-2">
                                             <Tag className="h-4 w-4 text-primary" /> Etiquetas
                                             {selectedTagIds.length > 0 && (
-                                                <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold">{selectedTagIds.length}</span>
+                                                <span className="text-xs bg-[var(--accent-tint)] text-primary px-1.5 py-0.5 rounded-full font-bold">{selectedTagIds.length}</span>
                                             )}
                                         </label>
                                         {tags.length > 0 && (
@@ -846,7 +991,7 @@ export default function NewExpensePage() {
                                                     const isSelected = selectedTagIds.includes(tag.id);
                                                     return (
                                                         <button key={tag.id} type="button" onClick={() => toggleTag(tag.id)} aria-pressed={isSelected}
-                                                            className={cn("px-3 py-1 rounded-full text-xs font-semibold border transition-all", isSelected ? "border-transparent text-white scale-105" : "border-white/10 text-muted-foreground bg-white/5 hover:bg-white/10")}
+                                                            className={cn("px-3 py-1 rounded-full text-xs font-semibold border transition-all", isSelected ? "border-transparent text-white scale-105" : "border-[color:var(--line)] text-muted-foreground bg-card hover:bg-secondary")}
                                                             style={isSelected ? { backgroundColor: tag.color, borderColor: tag.color } : {}}>
                                                             {tag.name}
                                                         </button>
@@ -861,12 +1006,12 @@ export default function NewExpensePage() {
                                         ) : (
                                             <div className="space-y-3 animate-in fade-in duration-200">
                                                 <input type="text" value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="Nombre de la etiqueta" aria-label="Nombre de la etiqueta"
-                                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary/50"
+                                                    className="w-full bg-card border border-[color:var(--line)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[color:var(--accent-border)]"
                                                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreateTag(); } }} />
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     {TAG_PRESET_COLORS.map((color) => (
                                                         <button key={color} type="button" aria-label={`Color ${color}`} aria-pressed={newTagColor === color} onClick={() => setNewTagColor(color)}
-                                                            className={cn("h-8 w-8 rounded-full border-2 transition-transform", newTagColor === color ? "border-white scale-110" : "border-transparent")}
+                                                            className={cn("h-8 w-8 rounded-full border-2 transition-transform", newTagColor === color ? "border-foreground scale-110" : "border-transparent")}
                                                             style={{ backgroundColor: color }} />
                                                     ))}
                                                 </div>
@@ -886,11 +1031,11 @@ export default function NewExpensePage() {
                                             <span className="text-sm font-medium flex items-center gap-2">
                                                 <RefreshCw className="h-4 w-4 text-primary" /> Recurrente
                                                 {isRecurring && (
-                                                    <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold capitalize">{recurringIntervalLabel[recurringInterval]}</span>
+                                                    <span className="text-xs bg-[var(--accent-tint)] text-primary px-1.5 py-0.5 rounded-full font-bold capitalize">{recurringIntervalLabel[recurringInterval]}</span>
                                                 )}
                                             </span>
                                             <button type="button" role="switch" aria-checked={isRecurring} aria-label="¿Es un gasto recurrente?" onClick={() => setIsRecurring((p) => !p)}
-                                                className={cn("relative h-6 w-11 rounded-full transition-colors", isRecurring ? "bg-primary" : "bg-white/10")}>
+                                                className={cn("relative h-6 w-11 rounded-full transition-colors", isRecurring ? "bg-primary" : "bg-secondary border border-[color:var(--line)]")}>
                                                 <span className={cn("absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform", isRecurring && "translate-x-5")} />
                                             </button>
                                         </div>
@@ -901,7 +1046,7 @@ export default function NewExpensePage() {
                                                     const icons = { weekly: "📅", monthly: "🗓️", yearly: "🔄" };
                                                     return (
                                                         <button key={interval} type="button" onClick={() => setRecurringInterval(interval)} aria-pressed={recurringInterval === interval}
-                                                            className={cn("py-3 rounded-xl border text-center transition-all text-sm font-medium", recurringInterval === interval ? "bg-primary/20 border-primary text-primary" : "border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10")}>
+                                                            className={cn("py-3 rounded-xl border text-center transition-all text-sm font-medium", recurringInterval === interval ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)] text-primary" : "border-[color:var(--line)] bg-card text-muted-foreground hover:bg-secondary")}>
                                                             <span className="block text-lg mb-1">{icons[interval]}</span>
                                                             {labels[interval]}
                                                         </button>
@@ -917,7 +1062,7 @@ export default function NewExpensePage() {
                         {/* Sticky submit */}
                         <div className="sticky bottom-0 -mx-4 px-4 pt-6 pb-4 mt-auto bg-gradient-to-t from-background via-background to-transparent space-y-3">
                             {formError && (
-                                <div role="alert" className="flex items-center gap-2 rounded-xl bg-red-500/10 border border-red-500/30 px-3 py-2.5 text-sm text-red-300 animate-in fade-in slide-in-from-bottom-2">
+                                <div role="alert" className="flex items-center gap-2 rounded-xl bg-[var(--negative-tint)] border border-[color:var(--negative)]/30 px-3 py-2.5 text-sm text-destructive animate-in fade-in slide-in-from-bottom-2">
                                     <AlertCircle className="h-4 w-4 flex-shrink-0" />
                                     <span>{formError}</span>
                                 </div>
@@ -939,21 +1084,21 @@ export default function NewExpensePage() {
 
             {/* ============ SCAN OVERLAY ============ */}
             {scanState !== "idle" && (
-                <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
+                <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-md flex flex-col items-center justify-center p-8 animate-in fade-in duration-200">
                     <button type="button" onClick={discardScan} aria-label="Cerrar escáner" className="absolute top-12 right-6 text-muted-foreground p-1 active:scale-90">
                         <X className="h-6 w-6" />
                     </button>
 
                     {scanState === "scanning" && (
                         <output aria-live="polite" className="flex flex-col items-center">
-                            <div className="relative w-[200px] h-[260px] rounded-xl overflow-hidden bg-black/40 border border-white/10 shadow-2xl">
+                            <div className="relative w-[200px] h-[260px] rounded-xl overflow-hidden bg-secondary border border-[color:var(--line)] shadow-2xl">
                                 {receiptPreview ? (
                                     // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded receipt of unknown dimensions
                                     <img src={receiptPreview} alt="Ticket en escaneo" className="w-full h-full object-cover opacity-80" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center"><Camera className="h-10 w-10 text-muted-foreground" /></div>
                                 )}
-                                <div className="absolute left-0 right-0 h-0.5 bg-primary shadow-[0_0_14px_2px_var(--color-primary,#7c3aed)] animate-equil-scan" />
+                                <div className="absolute left-0 right-0 h-0.5 bg-primary shadow-[0_0_14px_2px_var(--accent-hex)] animate-equil-scan" />
                             </div>
                             <div className="flex items-center gap-2.5 mt-6 text-muted-foreground">
                                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -965,8 +1110,8 @@ export default function NewExpensePage() {
                     {scanState === "done" && pendingOcr && (
                         <div className="w-full max-w-[320px] animate-in fade-in duration-200">
                             <div className="flex flex-col items-center">
-                                <div className="h-12 w-12 rounded-full bg-emerald-400/10 border border-emerald-400/30 flex items-center justify-center">
-                                    <Check className="h-6 w-6 text-emerald-400" />
+                                <div className="h-12 w-12 rounded-full bg-[var(--positive-tint)] border border-[color:var(--positive)]/30 flex items-center justify-center">
+                                    <Check className="h-6 w-6 text-[color:var(--positive)]" />
                                 </div>
                                 <h3 className="text-lg font-bold mt-3.5">Recibo detectado</h3>
                                 <p className="text-sm text-muted-foreground">
@@ -974,7 +1119,7 @@ export default function NewExpensePage() {
                                 </p>
                             </div>
                             {pendingOcr.items.length > 0 && (
-                                <div className="mt-5 rounded-xl bg-white/5 border border-white/10 p-2 max-h-52 overflow-y-auto">
+                                <div className="mt-5 rounded-xl bg-card border border-[color:var(--line)] p-2 max-h-52 overflow-y-auto">
                                     {pendingOcr.items.slice(0, 8).map((it, i) => (
                                         <div key={i} className="flex justify-between px-3 py-2 text-sm">
                                             <span className="text-muted-foreground truncate mr-2">{it.description || "Producto"}</span>

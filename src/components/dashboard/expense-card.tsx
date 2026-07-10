@@ -2,17 +2,19 @@
 
 import { Expense, User } from "@/types";
 import Link from "next/link";
+import { Lock } from "lucide-react";
 import { getCategoryById } from "@/lib/categories";
 
 interface ExpenseCardProps {
     expense: Expense;
     paidByUser: User;
     allUsers?: Record<string, User>;
+    isPersonal?: boolean;
 }
 
 // Minimalist recent-expense row (EQUIL - Flujo de Gastos redesign):
 // flat surface, category emoji in a neutral rounded square, "{quién} pagó · {badge}".
-export function ExpenseCard({ expense, paidByUser, allUsers }: ExpenseCardProps) {
+export function ExpenseCard({ expense, paidByUser, allUsers, isPersonal = false }: ExpenseCardProps) {
     const category = getCategoryById(expense.category);
 
     // Determine beneficiary info
@@ -31,17 +33,28 @@ export function ExpenseCard({ expense, paidByUser, allUsers }: ExpenseCardProps)
 
     return (
         <Link href={`/expense/${expense.id}`}>
-            <div className="flex items-center gap-[13px] p-[13px] rounded-2xl bg-[hsl(var(--surface))] border border-white/5 cursor-pointer transition-all duration-150 hover:border-white/[0.14] active:scale-[0.99] min-w-0">
-                <div className="w-[42px] h-[42px] rounded-[11px] flex items-center justify-center text-xl shrink-0 bg-[hsl(var(--surface-raised))] border border-white/5">
+            <div className="flex items-center gap-[13px] p-[13px] rounded-2xl bg-card border border-[color:var(--line-2)] cursor-pointer transition-all duration-150 hover:border-[color:var(--accent-border)] active:scale-[0.99] min-w-0">
+                <div
+                    className="w-[42px] h-[42px] rounded-[11px] flex items-center justify-center text-xl shrink-0"
+                    style={{ backgroundColor: `${category.hex}20` }}
+                >
                     {category.emoji}
                 </div>
 
                 <div className="flex-1 min-w-0">
                     <h3 className="font-semibold truncate text-[15px] text-foreground">{expense.description}</h3>
                     <div className="flex items-center gap-[7px] mt-[3px] min-w-0">
-                        <span className="text-[11px] text-muted-foreground truncate">{paidByUser.name} pagó</span>
-                        <span className="h-[2px] w-[2px] rounded-full bg-white/20 shrink-0" />
-                        <span className="text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">{beneficiaryText}</span>
+                        {isPersonal ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">
+                                <Lock className="h-3 w-3" /> Personal
+                            </span>
+                        ) : (
+                            <>
+                                <span className="text-[11px] text-muted-foreground truncate">{paidByUser.name} pagó</span>
+                                <span className="h-[2px] w-[2px] rounded-full bg-[color:var(--ink-3)] shrink-0" />
+                                <span className="text-[11px] text-muted-foreground shrink-0 whitespace-nowrap">{beneficiaryText}</span>
+                            </>
+                        )}
                     </div>
                 </div>
 

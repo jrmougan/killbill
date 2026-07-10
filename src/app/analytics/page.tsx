@@ -1,10 +1,13 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { getGroupMembers, getActiveGroup } from "@/lib/membership";
+import { NoGroupState } from "@/components/ui/no-group-state";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { calculateBalances } from "@/lib/finance";
 import { getCategoryById } from "@/lib/categories";
-import { ReceiptItem } from "@/types";
+import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
 import { AnalyticsClient } from "./client";
 
 export const dynamic = "force-dynamic";
@@ -18,19 +21,11 @@ export default async function AnalyticsPage() {
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-            couple: {
-                include: { members: true },
-            },
-        },
-    });
+    // Phase 5 (WS1): resolve the group + members via the Membership layer.
+    const groupId = await getActiveGroup(userId);
+    if (!groupId) return <NoGroupState title="Análisis de grupo" />;
 
-    if (!user || !user.couple) redirect("/dashboard");
-
-    const couple = user.couple;
-    const members = couple.members;
+    const members = await getGroupMembers(groupId);
 
     const now = new Date();
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
@@ -38,15 +33,16 @@ export default async function AnalyticsPage() {
     const [allExpenses, allSettlements] = await Promise.all([
         prisma.expense.findMany({
             where: {
-                coupleId: couple.id,
+                coupleId: groupId,
+                visibility: "SHARED",
                 date: { gte: twelveMonthsAgo },
             },
-            include: { splits: true },
+            include: { splits: true, ...CATEGORY_REF_SELECT, ...RECEIPT_LINES_SELECT },
             orderBy: { date: "asc" },
         }),
         prisma.settlement.findMany({
             where: {
-                coupleId: couple.id,
+                coupleId: groupId,
                 date: { gte: twelveMonthsAgo },
             },
             orderBy: { date: "asc" },
@@ -84,9 +80,10 @@ export default async function AnalyticsPage() {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const currentMonthExpenses = allExpenses.filter(e => new Date(e.date) >= startOfMonth);
 
+    // Phase 4 read-switch: group by the relational Category key (enum fallback).
     const categoryMap: Record<string, { amount: number; count: number }> = {};
     for (const e of currentMonthExpenses) {
-        const cat = e.category || "other";
+        const cat = categoryKeyOf(e);
         if (!categoryMap[cat]) categoryMap[cat] = { amount: 0, count: 0 };
         categoryMap[cat].amount += toEuros(e.amount);
         categoryMap[cat].count += 1;
@@ -159,8 +156,8 @@ export default async function AnalyticsPage() {
         .map(e => ({
             id: e.id,
             description: e.description,
-            category: e.category,
-            categoryLabel: getCategoryById(e.category).label,
+            category: categoryKeyOf(e),
+            categoryLabel: getCategoryById(categoryKeyOf(e)).label,
             amount: parseFloat(toEuros(e.amount).toFixed(2)),
             date: new Date(e.date).toLocaleDateString("es-ES", { day: "2-digit", month: "short" }),
         }));
@@ -171,8 +168,8 @@ export default async function AnalyticsPage() {
 
     const itemMap: Record<string, { total: number; count: number }> = {};
     for (const e of recentExpenses) {
-        const items = e.receiptData as unknown as ReceiptItem[] | null;
-        if (!items || !Array.isArray(items)) continue;
+        const items = receiptItemsView(e.lineItems);
+        if (items.length === 0) continue;
         for (const item of items) {
             const key = item.description.trim().toLowerCase();
             if (!key) continue;

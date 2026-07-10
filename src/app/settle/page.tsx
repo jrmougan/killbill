@@ -1,8 +1,12 @@
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { getMyDebts, getLastSettlementDate } from "@/lib/finance";
+import { resolveMyDebts, getLastSettlementDate } from "@/lib/finance";
+import { getGroupBalances } from "@/lib/ledger-read";
+import { getGroupMembers, getActiveGroup } from "@/lib/membership";
+import { NoGroupState } from "@/components/ui/no-group-state";
 import { calculateSplitAmounts } from "@/lib/splits";
 import { toEuros } from "@/lib/currency";
+import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { SettleClient } from "./client";
 import { getSession } from "@/lib/auth";
 
@@ -13,46 +17,30 @@ export default async function SettlePage() {
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-            couple: {
-                include: {
-                    members: true
-                }
-            }
-        }
-    });
-
-    if (!user || !user.couple) {
-        return redirect("/dashboard");
+    // Phase 5 (WS1): resolve the group + members via the Membership layer.
+    const groupId = await getActiveGroup(userId);
+    if (!groupId) {
+        return <NoGroupState title="Liquidar deudas" />;
     }
 
-    const { couple } = user;
-    const members = couple.members;
+    const members = await getGroupMembers(groupId);
 
-    // Fetch Expenses for couple with splits
+    // Fetch shared expenses for couple with splits (personal expenses never affect debts).
     const rawExpenses = await prisma.expense.findMany({
-        where: { coupleId: couple.id },
-        include: { splits: true },
+        where: { coupleId: groupId, visibility: "SHARED" },
+        include: { splits: true, ...CATEGORY_REF_SELECT },
     });
 
     // Fetch Settlements for couple
     const settlements = await prisma.settlement.findMany({
-        where: { coupleId: couple.id },
+        where: { coupleId: groupId },
     });
 
-    // Only confirmed settlements count towards debt calculation.
-    // Pending settlements must not reduce debt before the receiver confirms.
-    const effectiveSettlements = settlements.filter(s => s.status === "CONFIRMED");
-
-    // Calculate My Debts (High Level)
-    const myDebtsMap = getMyDebts(
-        members,
-        rawExpenses.map(e => ({ paidById: e.paidById, amount: e.amount, splits: e.splits.map(s => ({ userId: s.userId, amount: s.amount })) })),
-        effectiveSettlements,
-        userId
-    );
+    // Debts resolve from ledger-sourced balances (proven == calculateBalances by
+    // reconcile-ledger.ts). resolveMyDebts is the same greedy matching algorithm,
+    // now fed the ledger balances instead of a fresh calculateBalances pass.
+    const balances = await getGroupBalances(groupId);
+    const myDebtsMap = resolveMyDebts(balances, userId);
 
     // Format for client - convert cents to euros
     const debts = Object.entries(myDebtsMap).map(([targetId, amountCents]) => {
@@ -92,7 +80,7 @@ export default async function SettlePage() {
                 amount: toEuros(e.amount), // Convert to euros
                 myAmount: toEuros(myAmountCents), // Convert to euros
                 date: e.date.toISOString(),
-                category: e.category,
+                category: categoryKeyOf(e),
                 paidBy: e.paidById
             };
         })

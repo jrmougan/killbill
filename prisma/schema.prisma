@@ -7,17 +7,6 @@ datasource db {
   provider = "mysql"
 }
 
-enum ExpenseCategory {
-  shopping
-  food
-  rent
-  utilities
-  transport
-  entertainment
-  health
-  other
-}
-
 enum RecurringInterval {
   weekly
   monthly
@@ -36,17 +25,63 @@ enum SettlementMethod {
   TRANSFER
 }
 
+enum ExpenseVisibility {
+  PERSONAL
+  SHARED
+}
+
+// How an expense's Split rows were derived. Persisted so an expense can be
+// re-edited/audited without re-guessing intent. Null for PERSONAL expenses
+// (never split) and legacy rows not yet backfilled.
+enum SplitStrategy {
+  EQUAL     // divided evenly among ACTIVE members
+  CUSTOM    // explicit per-user amounts supplied by the client
+  EXCLUSIVE // 100% charged to a single beneficiary
+  ITEMIZED  // derived from receipt line items (common part split + exclusive items)
+}
+
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+// Phase 2e: semantics of a Budget's period so a MONTH budget and a CUSTOM budget
+// covering the same range stay distinguishable. Every legacy budget is a month.
+enum BudgetPeriodType {
+  MONTH
+  WEEK
+  YEAR
+  CUSTOM
+}
+
+// Phase 3: kind of economic event a LedgerTransaction records.
+enum LedgerTxnKind {
+  EXPENSE
+  SETTLEMENT
+}
+
+enum MembershipStatus {
+  ACTIVE
+  LEFT
+  REMOVED
+}
+
 model Couple {
   id        String    @id @default(cuid())
   name      String?
   code      String    @unique // For invites
   createdAt DateTime  @default(now())
 
-  members     User[]
+  memberships Membership[]
   expenses    Expense[]
   settlements Settlement[]
   tags        Tag[]
   budgets     Budget[]
+  categories  Category[]
+  recurringSeries RecurringSeries[]
+  accounts           Account[]
+  ledgerTransactions LedgerTransaction[]
 }
 
 model User {
@@ -59,16 +94,25 @@ model User {
   isAdmin   Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  // Couple support (one user, one couple)
-  coupleId String?
-  couple   Couple? @relation(fields: [coupleId], references: [id])
+  // Phase 5 contract: User.coupleId dropped — Membership is the sole membership
+  // source (getPrimaryGroup / getGroupMembers).
+  memberships Membership[]
 
-  expensesPaid Expense[] @relation("Payer")
-  splits       Split[]
+  expensesPaid  Expense[] @relation("Payer")
+  expensesOwned Expense[] @relation("Owner")
+  splits        Split[]
+  receiptLines  ReceiptLineItem[] @relation("ReceiptLineAssignee")
+
+  recurringSeriesOwned RecurringSeries[] @relation("RecurringSeriesOwner")
+  recurringSeriesPaid  RecurringSeries[] @relation("RecurringSeriesPayer")
+
+  accounts Account[]
 
   settlementsPaid     Settlement[] @relation("SettlementPayer")
   settlementsReceived Settlement[] @relation("SettlementReceiver")
-  
+
+  personalBudgets Budget[] @relation("PersonalBudget")
+
   inviteCodesCreated InviteCode[] @relation("InviteCreator")
   inviteCodeUsed     InviteCode?  @relation("InviteUser")
 }
@@ -89,35 +133,218 @@ model InviteCode {
   usedBy   User?   @relation("InviteUser", fields: [usedById], references: [id])
 }
 
+// Many-to-many membership layer added in Phase 1 alongside the one-user-one-couple
+// model. groupId == Couple.id for now (FK to Couple until the Phase 2 rename to Group).
+model Membership {
+  id       String @id @default(cuid())
+
+  groupId  String
+  group    Couple @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role     MembershipRole   @default(MEMBER)
+  status   MembershipStatus @default(ACTIVE)
+
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@index([groupId, status])
+}
+
+// Category metadata + membership, replacing the fixed ExpenseCategory enum.
+// System categories have groupId = null (global, available to everyone incl.
+// personal expenses); a set groupId makes it a group-custom category. Icons are
+// stored as a lucide component name (mapped to a component in categories.ts).
+model Category {
+  id        String  @id @default(cuid())
+  key       String  // stable slug; matches ExpenseCategory for system rows
+  label     String
+  labelEn   String
+  emoji     String
+  icon      String  // lucide-react component name
+  color     String  // tailwind text-* class (system rows)
+  bgColor   String  // tailwind bg-* class (system rows)
+  hex       String
+  sortOrder Int     @default(0)
+  isSystem  Boolean @default(false)
+
+  groupId String?
+  group   Couple? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  expenses Expense[]
+  budgets  Budget[]
+  recurringSeries RecurringSeries[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, key])
+  @@index([groupId])
+}
+
 model Expense {
   id          String   @id @default(cuid())
   description String
   amount      Int
   date        DateTime @default(now())
-  category    ExpenseCategory @default(other)
+  // Relational category (Phase 2b) — the sole category source after the Phase 5
+  // contract dropped the ExpenseCategory enum column.
+  categoryId  String?
+  categoryRef Category? @relation(fields: [categoryId], references: [id])
 
   receiptUrl  String?
-  receiptData Json?
 
-  notes               String?
-  isRecurring         Boolean   @default(false)
-  recurringInterval   RecurringInterval?
-  nextRecurringDate   DateTime?
+  visibility  ExpenseVisibility @default(SHARED)
+
+  // How `splits` were derived (see SplitStrategy). Nullable: PERSONAL expenses
+  // have no splits, and pre-Phase-2 rows are backfilled best-effort.
+  splitStrategy SplitStrategy?
+
+  notes String?
+
+  // Bank CSV import (Phase "decouple" F2): content fingerprint of an imported
+  // row (sha256 of ownerId|date|amountCents|description) — unique so re-importing
+  // the same statement never duplicates. NULL for manually-created expenses.
+  importFingerprint String? @unique
 
   paidById String
   paidBy   User   @relation("Payer", fields: [paidById], references: [id], onDelete: Cascade)
 
-  coupleId String
-  couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  // Owner of the "book" this expense belongs to (always set). For shared
+  // expenses this defaults to the creator; for personal expenses it is the
+  // only user who can see it.
+  ownerId String
+  owner   User   @relation("Owner", fields: [ownerId], references: [id], onDelete: Cascade)
 
-  splits Split[]
-  tags   ExpenseTag[]
+  // Personal expenses have no couple; shared ones are scoped to a Couple.
+  coupleId String?
+  couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+
+  splits      Split[]
+  tags        ExpenseTag[]
+  lineItems   ReceiptLineItem[]
+  ledgerTransactions LedgerTransaction[]
 
   settlementId String?
   settlement   Settlement? @relation(fields: [settlementId], references: [id])
 
+  // Phase 2d: link generated instances (and the original template) to their
+  // recurring series. Nullable + dual-written; recurrence source of truth stays
+  // on the Expense.* fields above this phase.
+  seriesId String?
+  series   RecurringSeries? @relation("SeriesInstances", fields: [seriesId], references: [id], onDelete: SetNull)
+
+  // Phase 5 (stop-dual-write): the durable pointer from a series to its TEMPLATE
+  // expense, replacing the isRecurring discriminator the materializer used to key on.
+  templateForSeries RecurringSeries? @relation("SeriesTemplate")
+
+  currency  String   @default("EUR")
+  minorUnit Int      @default(2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([coupleId])
   @@index([paidById])
+  @@index([ownerId])
+  @@index([ownerId, visibility])
+  @@index([categoryId])
+  @@index([seriesId])
+}
+
+// Relational receipt line items (Phase 2c), replacing the Expense.receiptData
+// JSON blob. Money is stored in integer cents here — unlike the legacy JSON,
+// which stored euro floats — bringing receipts in line with the rest of the app.
+// Dual-written alongside receiptData until the read-switch/contract step.
+model ReceiptLineItem {
+  id          String @id @default(cuid())
+
+  expenseId String
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  description String
+  quantity    Float @default(1) // may be fractional (weighed goods)
+  unitPrice   Int   // unit price in cents
+  lineTotal   Int   // line total in cents (can be negative, e.g. promotions)
+  position    Int   @default(0) // preserves receipt order
+
+  // Exclusive assignment: the user this line is charged 100% to (null = shared).
+  assignedToId String?
+  assignedTo   User?   @relation("ReceiptLineAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expenseId])
+  @@index([assignedToId])
+}
+
+// Phase 2d: the recurring RULE/TEMPLATE, separated from the generated instances.
+// Recurrence currently lives on Expense (isRecurring/recurringInterval/
+// nextRecurringDate), which conflates template and instance. This model holds the
+// rule + template values; generated instances (and the original template) point
+// back via Expense.seriesId. Additive + dual-written — the Expense.* recurrence
+// fields stay the source of truth this phase (read-switch deferred).
+model RecurringSeries {
+  id          String @id @default(cuid())
+
+  description String
+  amount      Int
+
+  categoryId  String?
+  categoryRef Category? @relation(fields: [categoryId], references: [id])
+
+  visibility    ExpenseVisibility @default(SHARED)
+  splitStrategy SplitStrategy?
+  notes         String?
+
+  interval    RecurringInterval
+  nextRunDate DateTime
+
+  // Phase 4 (recurring-sync): deactivation instead of deletion — deleting a
+  // series would SetNull instance.seriesId (losing lineage). isActive=false
+  // stops materialization; toggling the template recurring back ON re-activates.
+  isActive Boolean @default(true)
+
+  coupleId String?
+  couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+
+  ownerId String
+  owner   User   @relation("RecurringSeriesOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  paidById String
+  paidBy   User   @relation("RecurringSeriesPayer", fields: [paidById], references: [id], onDelete: Cascade)
+
+  currency  String @default("EUR")
+  minorUnit Int    @default(2)
+
+  // Materialized instances of this series (Expense.seriesId back-relation).
+  expenses Expense[] @relation("SeriesInstances")
+
+  // Phase 5 (stop-dual-write): durable pointer to the TEMPLATE expense. The
+  // materializer copies money scalars + splits/tags from it; identifying the
+  // template no longer needs Expense.isRecurring. Nullable+unique (one template
+  // per series); FK SetNull so deleting the template clears the pointer.
+  templateId String?  @unique
+  template   Expense? @relation("SeriesTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([coupleId])
+  @@index([ownerId])
+  @@index([paidById])
+  @@index([categoryId])
+  @@index([nextRunDate])
+  @@index([isActive, nextRunDate])
 }
 
 model Split {
@@ -129,6 +356,9 @@ model Split {
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([expenseId, userId])
   @@index([expenseId])
@@ -154,7 +384,14 @@ model Settlement {
   status SettlementStatus @default(PENDING)
   method SettlementMethod @default(CASH)
 
+  currency  String   @default("EUR")
+  minorUnit Int      @default(2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   expenses Expense[]
+  ledgerTransactions LedgerTransaction[]
 
   @@index([coupleId])
   @@index([fromUserId])
@@ -169,6 +406,9 @@ model Tag {
   couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
   expenses ExpenseTag[]
 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@unique([name, coupleId])
   @@index([coupleId])
 }
@@ -182,14 +422,112 @@ model ExpenseTag {
   @@id([expenseId, tagId])
 }
 
+// Phase 3: double-entry ledger — an auditable shadow of finance.ts. Every economic
+// event that moves a group balance becomes ONE balanced LedgerTransaction whose
+// per-member LedgerEntry rows are net deltas summing to zero. A member's running
+// entry-sum reproduces calculateBalances[member] exactly (integer cents). finance.ts
+// stays the sole source of truth this phase (read-switch deferred).
+model Account {
+  id        String   @id @default(cuid())
+
+  groupId   String
+  group     Couple   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  entries   LedgerEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+model LedgerTransaction {
+  id           String        @id @default(cuid())
+
+  groupId      String
+  group        Couple        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  kind         LedgerTxnKind
+
+  // Idempotency key: 'expense:<id>' | 'settlement:<id>:confirm'. Backfill and
+  // dual-write upsert on it, so events self-heal instead of double-posting.
+  dedupeKey    String        @unique
+
+  amount       Int           // gross magnitude in cents (audit/display only)
+  postedAt     DateTime      // economic date (expense.date / settlement.date)
+
+  expenseId    String?
+  expense      Expense?      @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  settlementId String?
+  settlement   Settlement?   @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  entries      LedgerEntry[]
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([groupId, kind])
+  @@index([expenseId])
+  @@index([settlementId])
+}
+
+model LedgerEntry {
+  id            String            @id @default(cuid())
+
+  transactionId String
+  transaction   LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  accountId     String
+  account       Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  amount        Int               // signed cents: + = member is owed, - = member owes
+
+  createdAt     DateTime          @default(now())
+
+  @@unique([transactionId, accountId])
+  @@index([transactionId])
+  @@index([accountId])
+}
+
 model Budget {
   id       String          @id @default(cuid())
-  category ExpenseCategory
+  // Phase 5 contract: the legacy enum `category` and `month` columns were dropped.
+  // The category+period source of truth is categoryId + periodStart/periodEnd.
   amount   Int             // limite en centavos
-  month    DateTime // primer dia del mes al que aplica
-  coupleId String
-  couple   Couple   @relation(fields: [coupleId], references: [id], onDelete: Cascade)
 
-  @@unique([category, month, coupleId])
+  // Phase 2e: explicit half-open [periodStart, periodEnd) range. periodStart is
+  // now NOT NULL — a key part of the categoryId+periodStart uniques.
+  periodStart DateTime
+  periodEnd   DateTime?
+  periodType  BudgetPeriodType @default(MONTH)
+
+  // Relational category (Phase 2b) — now the sole category source (NOT NULL).
+  categoryId  String
+  categoryRef Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  // A budget is either shared (coupleId set) or personal (ownerId set).
+  coupleId String?
+  couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+
+  ownerId String?
+  owner   User?   @relation("PersonalBudget", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  currency  String   @default("EUR")
+  minorUnit Int      @default(2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([categoryId, periodStart, coupleId])
+  @@unique([categoryId, periodStart, ownerId])
   @@index([coupleId])
+  @@index([ownerId])
+  @@index([categoryId])
+  @@index([periodStart])
 }

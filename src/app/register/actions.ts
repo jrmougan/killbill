@@ -5,6 +5,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { signToken } from '@/lib/auth';
+import { MAX_GROUP_MEMBERS } from '@/lib/membership';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import type { AuthState } from '@/lib/auth-types';
 
@@ -44,16 +45,18 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
 
         let couple = null;
         if (!invite) {
-            couple = await prisma.couple.findUnique({
-                where: { code: inviteCode },
-                include: { members: true },
-            });
+            couple = await prisma.couple.findUnique({ where: { code: inviteCode } });
 
             if (!couple) {
                 return { error: 'Código de invitación inválido' };
             }
-            if (couple.members.length >= 2) {
-                return { error: 'Esta pareja ya está completa' };
+            // Phase 5 (WS1): the cap-of-2 check counts ACTIVE memberships, not
+            // users-by-coupleId.
+            const memberCount = await prisma.membership.count({
+                where: { groupId: couple.id, status: 'ACTIVE' },
+            });
+            if (memberCount >= MAX_GROUP_MEMBERS) {
+                return { error: 'Este grupo ya está completo' };
             }
         } else {
             if (invite.usedById) {
@@ -77,9 +80,13 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
         const inviteId = invite?.id;
         const coupleId = couple?.id;
         const user = await prisma.$transaction(async (tx) => {
+            let existingMemberCount = 0;
             if (coupleId) {
-                const memberCount = await tx.user.count({ where: { coupleId } });
-                if (memberCount >= 2) throw new Error('COUPLE_FULL');
+                // Phase 5 (WS1): count ACTIVE memberships, not users-by-coupleId.
+                existingMemberCount = await tx.membership.count({
+                    where: { groupId: coupleId, status: 'ACTIVE' },
+                });
+                if (existingMemberCount >= MAX_GROUP_MEMBERS) throw new Error('COUPLE_FULL');
             }
 
             const created = await tx.user.create({
@@ -88,9 +95,22 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
                     email,
                     password: hashedPassword,
                     avatar: '👤',
-                    coupleId: couple?.id || undefined,
+                    // Phase 5 (WS1 write-stop): no User.coupleId — the Membership
+                    // create below is the sole group linkage.
                 },
             });
+
+            // Dual-write the Membership (OWNER if first in the couple, else MEMBER).
+            if (coupleId) {
+                await tx.membership.create({
+                    data: {
+                        groupId: coupleId,
+                        userId: created.id,
+                        role: existingMemberCount === 0 ? 'OWNER' : 'MEMBER',
+                        status: 'ACTIVE',
+                    },
+                });
+            }
 
             if (inviteId) {
                 const consumed = await tx.inviteCode.updateMany({
@@ -118,7 +138,7 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
             return { error: 'Este código ya fue utilizado' };
         }
         if (error instanceof Error && error.message === 'COUPLE_FULL') {
-            return { error: 'Esta pareja ya está completa' };
+            return { error: 'Este grupo ya está completo' };
         }
         console.error('Registration Error:', error);
         return { error: 'Algo salió mal. Inténtalo de nuevo.' };

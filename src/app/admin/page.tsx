@@ -111,12 +111,12 @@ export default function AdminPage() {
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-24">
             <header className="flex items-center gap-4 pt-2">
                 <Link href="/dashboard">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
                 <div className="flex-1">
-                    <h1 className="text-xl font-bold">Panel de Admin</h1>
+                    <h1 className="text-xl font-bold text-foreground">Panel de Admin</h1>
                     <p className="text-xs text-muted-foreground">Gestionar invitaciones</p>
                 </div>
             </header>
@@ -124,11 +124,11 @@ export default function AdminPage() {
             {/* Stats */}
             <div className="grid grid-cols-2 gap-3">
                 <GlassCard className="p-4 text-center">
-                    <p className="text-2xl font-bold text-primary">{unusedInvites.length}</p>
+                    <p className="text-2xl font-mono font-bold text-primary">{unusedInvites.length}</p>
                     <p className="text-xs text-muted-foreground">Disponibles</p>
                 </GlassCard>
                 <GlassCard className="p-4 text-center">
-                    <p className="text-2xl font-bold text-green-400">{usedInvites.length}</p>
+                    <p className="text-2xl font-mono font-bold text-[color:var(--positive)]">{usedInvites.length}</p>
                     <p className="text-xs text-muted-foreground">Usadas</p>
                 </GlassCard>
             </div>
@@ -149,7 +149,7 @@ export default function AdminPage() {
                         <GlassCard key={invite.id} className="p-4">
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="font-mono font-bold text-lg">{invite.code}</p>
+                                    <p className="font-mono font-bold text-lg text-foreground">{invite.code}</p>
                                     <p className="text-xs text-muted-foreground">
                                         Expira: {invite.expiresAt
                                             ? new Date(invite.expiresAt).toLocaleDateString()
@@ -163,14 +163,14 @@ export default function AdminPage() {
                                         onClick={() => copyCode(invite.code, invite.id)}
                                     >
                                         {copiedId === invite.id
-                                            ? <Check className="h-4 w-4 text-green-400" />
+                                            ? <Check className="h-4 w-4 text-[color:var(--positive)]" />
                                             : <Copy className="h-4 w-4" />}
                                     </Button>
                                     <Button
                                         variant="ghost"
                                         size="icon"
                                         onClick={() => deleteInvite(invite.id)}
-                                        className="text-red-400 hover:text-red-300"
+                                        className="text-destructive hover:opacity-80"
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
@@ -190,11 +190,11 @@ export default function AdminPage() {
                     {usedInvites.map(invite => (
                         <GlassCard key={invite.id} className="p-4 opacity-60">
                             <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-green-400/20 flex items-center justify-center">
-                                    <Users className="h-5 w-5 text-green-400" />
+                                <div className="h-10 w-10 rounded-full bg-[var(--positive-tint)] flex items-center justify-center">
+                                    <Users className="h-5 w-5 text-[color:var(--positive)]" />
                                 </div>
                                 <div className="flex-1">
-                                    <p className="font-medium">{invite.usedBy?.name}</p>
+                                    <p className="font-medium text-foreground">{invite.usedBy?.name}</p>
                                     <p className="text-xs text-muted-foreground">{invite.usedBy?.email}</p>
                                 </div>
                                 <p className="text-xs text-muted-foreground font-mono">{invite.code}</p>

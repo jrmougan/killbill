@@ -1,17 +1,19 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
+import { getActiveGroup } from '@/lib/membership';
 
 export async function GET() {
     const session = await getSession();
     if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user?.coupleId) return NextResponse.json({ tags: [] });
+    // Phase 4 selector switch: resolve my group via the Membership layer.
+    const groupId = await getActiveGroup(userId);
+    if (!groupId) return NextResponse.json({ tags: [] });
 
     const tags = await prisma.tag.findMany({
-        where: { coupleId: user.coupleId },
+        where: { coupleId: groupId },
         orderBy: { name: 'asc' },
     });
 
@@ -24,8 +26,8 @@ export async function POST(request: Request) {
         if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const userId = session.userId as string;
 
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (!user?.coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+        const groupId = await getActiveGroup(userId);
+        if (!groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
         const body = await request.json();
         const { name, color } = body;
@@ -36,7 +38,7 @@ export async function POST(request: Request) {
             data: {
                 name,
                 color: color || '#8b5cf6',
-                coupleId: user.coupleId,
+                coupleId: groupId,
             },
         });
 

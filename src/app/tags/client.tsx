@@ -100,11 +100,11 @@ export function TagsClient({ initialTags }: TagsClientProps) {
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-10">
             <header className="flex items-center gap-4 pt-2">
                 <Link href="/settings">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-white/10">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
-                <h1 className="text-xl font-bold">Etiquetas</h1>
+                <h1 className="text-xl font-bold text-foreground">Etiquetas</h1>
             </header>
 
             <GlassCard className="p-4 space-y-4">
@@ -130,7 +130,7 @@ export function TagsClient({ initialTags }: TagsClientProps) {
                                 className="h-8 w-8 rounded-full border-2 transition-all flex items-center justify-center"
                                 style={{
                                     backgroundColor: color,
-                                    borderColor: newColor === color ? "white" : "transparent",
+                                    borderColor: newColor === color ? "var(--ink)" : "transparent",
                                 }}
                                 aria-label={COLOR_NAMES[color] ?? color}
                             >
@@ -149,13 +149,13 @@ export function TagsClient({ initialTags }: TagsClientProps) {
                     <Plus className="h-4 w-4" /> Crear etiqueta
                 </Button>
 
-                {error && <p className="text-sm text-red-400">{error}</p>}
+                {error && <p className="text-sm text-destructive">{error}</p>}
             </GlassCard>
 
             {tags.length === 0 ? (
                 <GlassCard className="p-8 text-center space-y-3">
                     <div className="text-5xl">🏷️</div>
-                    <h2 className="text-lg font-bold">Sin etiquetas aún</h2>
+                    <h2 className="text-lg font-bold text-foreground">Sin etiquetas aún</h2>
                     <p className="text-sm text-muted-foreground">
                         Crea tags para organizar vuestros gastos
                     </p>
@@ -172,18 +172,18 @@ export function TagsClient({ initialTags }: TagsClientProps) {
                         {tags.map((tag) => (
                             <div
                                 key={tag.id}
-                                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-white/5"
+                                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[color:var(--line)] bg-card"
                             >
                                 <div
                                     className="h-3 w-3 rounded-full flex-shrink-0"
                                     style={{ backgroundColor: tag.color }}
                                 />
-                                <span className="text-sm font-semibold">{tag.name}</span>
+                                <span className="text-sm font-semibold text-foreground">{tag.name}</span>
                                 <button
                                     type="button"
                                     onClick={() => handleDelete(tag)}
                                     disabled={deleting === tag.id}
-                                    className="ml-1 text-muted-foreground hover:text-red-400 transition-colors disabled:opacity-50"
+                                    className="ml-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
                                     aria-label={`Eliminar tag ${tag.name}`}
                                 >
                                     <X className="h-3.5 w-3.5" />

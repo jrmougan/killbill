@@ -2,6 +2,8 @@ import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { SettlementHistoryClient } from "./client";
 import { getSession } from "@/lib/auth";
+import { getActiveGroup } from "@/lib/membership";
+import { NoGroupState } from "@/components/ui/no-group-state";
 
 export const dynamic = 'force-dynamic';
 
@@ -10,16 +12,14 @@ export default async function SettlementHistoryPage() {
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { coupleId: true }
-    });
+    // Phase 4 selector switch: resolve my group via the Membership layer.
+    const groupId = await getActiveGroup(userId);
 
-    if (!user?.coupleId) redirect("/dashboard");
+    if (!groupId) return <NoGroupState title="Historial de liquidaciones" />;
 
     const settlements = await prisma.settlement.findMany({
         where: {
-            coupleId: user.coupleId
+            coupleId: groupId
         },
         include: {
             fromUser: true,

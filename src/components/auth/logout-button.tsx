@@ -34,7 +34,7 @@ export function LogoutButton({ className, showText = true }: LogoutButtonProps) 
             size={showText ? undefined : "icon"}
             onClick={handleLogout}
             disabled={loading}
-            className={className || "text-muted-foreground hover:text-white"}
+            className={className || "text-muted-foreground hover:text-foreground"}
         >
             <LogOut className="h-5 w-5 mr-2" />
             {showText && "Cerrar Sesión"}

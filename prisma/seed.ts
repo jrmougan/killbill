@@ -30,8 +30,33 @@ const adapter = new PrismaMariaDb({
 
 const prisma = new PrismaClient({ adapter });
 
+// The 8 system categories (groupId=null). Their `key` mirrors ExpenseCategory
+// 1:1. Seeded here so a fresh DB (CI/e2e + local) has them — required since
+// Phase 5 made Budget.categoryId NOT NULL (an unseeded Category table would make
+// budget writes and the couple-with-budget seed unsatisfiable).
+const SYSTEM_CATEGORIES = [
+    { key: 'shopping', label: 'Compras', labelEn: 'shopping', emoji: '🛍️', icon: 'ShoppingBag', color: 'text-pink-400', bgColor: 'bg-pink-400/20', hex: '#f472b6' },
+    { key: 'food', label: 'Comida', labelEn: 'food', emoji: '🍕', icon: 'Coffee', color: 'text-orange-400', bgColor: 'bg-orange-400/20', hex: '#fb923c' },
+    { key: 'rent', label: 'Alquiler', labelEn: 'rent', emoji: '🏠', icon: 'Home', color: 'text-blue-400', bgColor: 'bg-blue-400/20', hex: '#60a5fa' },
+    { key: 'utilities', label: 'Recibos', labelEn: 'utilities', emoji: '💡', icon: 'Lightbulb', color: 'text-yellow-400', bgColor: 'bg-yellow-400/20', hex: '#facc15' },
+    { key: 'transport', label: 'Transporte', labelEn: 'transport', emoji: '🚗', icon: 'TramFront', color: 'text-green-400', bgColor: 'bg-green-400/20', hex: '#4ade80' },
+    { key: 'entertainment', label: 'Ocio', labelEn: 'entertainment', emoji: '🎬', icon: 'Clapperboard', color: 'text-purple-400', bgColor: 'bg-purple-400/20', hex: '#c084fc' },
+    { key: 'health', label: 'Salud', labelEn: 'health', emoji: '💊', icon: 'Heart', color: 'text-red-400', bgColor: 'bg-red-400/20', hex: '#f87171' },
+    { key: 'other', label: 'Otro', labelEn: 'other', emoji: '📦', icon: 'Receipt', color: 'text-gray-400', bgColor: 'bg-gray-400/20', hex: '#9ca3af' },
+];
+
 async function main() {
     console.log('🌱 Seeding database...');
+
+    // Idempotent system-category seed (MySQL doesn't enforce UNIQUE across NULL
+    // groupId, so guard by hand). No-op when they already exist.
+    for (let i = 0; i < SYSTEM_CATEGORIES.length; i++) {
+        const c = SYSTEM_CATEGORIES[i];
+        const existing = await prisma.category.findFirst({ where: { groupId: null, key: c.key } });
+        if (!existing) {
+            await prisma.category.create({ data: { ...c, sortOrder: i, isSystem: true, groupId: null } });
+        }
+    }
 
     // Hash password
     // Admin credentials are overridable via env so non-local environments don't

@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/db';
+import { getGroupMembers } from '@/lib/membership';
+import { postExpenseLedger } from '@/lib/ledger';
 
 /**
  * Returns a NEW Date advanced by one period from `base`.
@@ -22,40 +24,68 @@ export function addInterval(base: Date, interval: string): Date {
 // Safety cap on catch-up iterations per source expense to avoid runaway loops.
 const MAX_CATCHUP_ITERATIONS = 60;
 
+import type { Prisma } from '@/generated/prisma/client';
+
 /**
- * Lazily materializes any due recurring expenses for a couple.
- *
- * For each recurring source expense whose `nextRecurringDate` is in the past,
- * every missed period is caught up: an instance is created for each scheduled
- * occurrence until `nextRecurringDate` moves into the future.
- *
- * Each iteration is concurrency-safe via a conditional-advance guard: the source
- * date is advanced with an `updateMany` conditioned on the value we read, so only
- * one runner wins. If another runner already advanced it, we stop looping that
- * expense.
- *
+ * Lazily materializes any due recurring expenses for a couple (shared expenses).
  * @returns total number of expense instances created across all source expenses.
  */
 export async function materializeDueRecurringExpenses(coupleId: string): Promise<number> {
-    const dueExpenses = await prisma.expense.findMany({
+    return materializeDueRecurring({ coupleId, visibility: 'SHARED' });
+}
+
+/**
+ * Lazily materializes any due recurring PERSONAL expenses for a single user.
+ * Personal recurring sources have coupleId=null and are never picked up by the
+ * couple-scoped runner, so the personal ledger view triggers this instead.
+ */
+export async function materializeDueRecurringExpensesForOwner(ownerId: string): Promise<number> {
+    return materializeDueRecurring({ ownerId, visibility: 'PERSONAL' });
+}
+
+/**
+ * Core catch-up loop shared by the couple and owner scopes.
+ *
+ * Phase 4 (recurring-sync) read-switch: the schedule now lives on
+ * RecurringSeries (nextRunDate / interval / isActive) — due series are found
+ * there, NOT via Expense.isRecurring/nextRecurringDate. The linked template
+ * Expense (isRecurring=true, seriesId=series.id) still provides the money
+ * scalars and the splits/tags to copy: template.amount together with the
+ * template's own splits is zero-sum by construction, so a stale series.amount
+ * can never produce a non-balancing ledger post.
+ *
+ * Concurrency guard moved to series.nextRunDate: each occurrence is claimed
+ * with a conditional updateMany on the value we read, so only one runner wins.
+ * The template's legacy Expense.nextRecurringDate advances in lockstep
+ * (dual-write kept until the recurrence-field drop).
+ *
+ * A due series without a live template (should not happen — DELETE deactivates
+ * the series) is skipped, never materialized blind.
+ *
+ * @returns total number of expense instances created across all due series.
+ */
+async function materializeDueRecurring(scope: Prisma.RecurringSeriesWhereInput): Promise<number> {
+    const dueSeries = await prisma.recurringSeries.findMany({
         where: {
-            coupleId,
-            isRecurring: true,
-            nextRecurringDate: { lte: new Date() },
-        },
-        include: {
-            splits: true,
-            tags: true,
+            ...scope,
+            isActive: true,
+            nextRunDate: { lte: new Date() },
         },
     });
 
     let created = 0;
 
-    for (const expense of dueExpenses) {
-        const interval = expense.recurringInterval;
-        if (!interval) continue;
+    for (const series of dueSeries) {
+        // Phase 5 (stop-dual-write): identify the template via the durable
+        // series.templateId pointer, not Expense.isRecurring (no longer written).
+        if (!series.templateId) continue; // no template pointer — skip safely
+        const template = await prisma.expense.findUnique({
+            where: { id: series.templateId },
+            include: { splits: true, tags: true },
+        });
+        if (!template) continue; // template deleted (FK SetNull'd) — skip safely
 
-        let current = expense.nextRecurringDate as Date | null;
+        let current: Date | null = series.nextRunDate;
         let iterations = 0;
 
         // Catch up every missed period until the next occurrence is in the future.
@@ -67,52 +97,76 @@ export async function materializeDueRecurringExpenses(coupleId: string): Promise
             iterations++;
 
             const occurrence = current;
-            const advancedDate = addInterval(occurrence, interval);
+            const advancedDate = addInterval(occurrence, series.interval);
 
-            // Create the new instance and advance the source date atomically, guarding
-            // against concurrent invocations double-creating: the update is conditional
-            // on nextRecurringDate still being the value we read, so only one runner wins.
             const result = await prisma.$transaction(async (tx) => {
-                const advanced = await tx.expense.updateMany({
-                    where: { id: expense.id, nextRecurringDate: occurrence },
-                    data: { nextRecurringDate: advancedDate },
+                // Claim this occurrence: conditional on nextRunDate still being the
+                // value we read, so concurrent runners can't double-create.
+                const advanced = await tx.recurringSeries.updateMany({
+                    where: { id: series.id, nextRunDate: occurrence },
+                    data: { nextRunDate: advancedDate },
                 });
 
-                // Another concurrent run already advanced this expense — stop here.
+                // Another concurrent run already advanced this series — stop here.
                 if (advanced.count === 0) return false;
 
-                await tx.expense.create({
+                const instance = await tx.expense.create({
                     data: {
-                        description: expense.description,
-                        amount: expense.amount,
-                        category: expense.category,
-                        paidById: expense.paidById,
-                        coupleId: expense.coupleId,
-                        notes: expense.notes ?? null,
+                        description: template.description,
+                        amount: template.amount,
+                        // Phase 5 (WS5): enum category no longer written; inherit only
+                        // the relational categoryId (Phase 2b).
+                        categoryId: template.categoryId,
+                        paidById: template.paidById,
+                        ownerId: template.ownerId,
+                        visibility: template.visibility,
+                        splitStrategy: template.splitStrategy, // inherit intent from the template
+                        coupleId: template.coupleId,
+                        seriesId: series.id,
+                        notes: template.notes ?? null,
                         date: occurrence, // the scheduled occurrence date, not now
-                        isRecurring: false, // only the source stays recurring
-                        splits: expense.splits.length > 0
+                        splits: template.splits.length > 0
                             ? {
-                                  create: expense.splits.map((s) => ({
+                                  create: template.splits.map((s) => ({
                                       userId: s.userId,
                                       amount: s.amount,
                                   })),
                               }
                             : undefined,
-                        tags: expense.tags.length > 0
+                        tags: template.tags.length > 0
                             ? {
-                                  create: expense.tags.map((t) => ({
+                                  create: template.tags.map((t) => ({
                                       tagId: t.tagId,
                                   })),
                               }
                             : undefined,
                     },
+                    include: { splits: true },
                 });
+
+                // Phase 3 dual-write: a materialized SHARED instance is an ordinary
+                // expense finance.ts counts, so post its ledger transaction in the
+                // same tx. If the copied splits don't balance (only possible when
+                // the template itself is inconsistent), postTransaction throws and
+                // the WHOLE occurrence rolls back (claim included) — reconcile
+                // stays green and callers already try/catch + log.
+                if (instance.visibility === 'SHARED' && instance.coupleId) {
+                    const members = (await getGroupMembers(instance.coupleId)).map((m) => ({ id: m.id }));
+                    await postExpenseLedger(tx, {
+                        expenseId: instance.id,
+                        groupId: instance.coupleId,
+                        amount: instance.amount,
+                        paidById: instance.paidById,
+                        occurredAt: instance.date,
+                        splits: instance.splits.map((s) => ({ userId: s.userId, amount: s.amount })),
+                        members,
+                    });
+                }
 
                 return true;
             });
 
-            if (!result) break; // lost the race; another runner is handling this expense
+            if (!result) break; // lost the race; another runner is handling this series
 
             created++;
             current = advancedDate;

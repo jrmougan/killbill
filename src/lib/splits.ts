@@ -10,6 +10,21 @@ interface CoupleMMember {
 }
 
 /**
+ * True when a receipt assigns at least one line item exclusively to a member
+ * (i.e. the split is ITEMIZED rather than a plain EQUAL division). Tolerates any
+ * JSON shape: a bare item array, or an object wrapping an `items` array.
+ */
+export function hasExclusiveReceiptItems(receiptData: unknown): boolean {
+    if (!receiptData) return false;
+    const items = Array.isArray(receiptData)
+        ? receiptData
+        : Array.isArray((receiptData as { items?: unknown }).items)
+            ? (receiptData as { items: unknown[] }).items
+            : null;
+    return items?.some((it) => it && typeof it === 'object' && (it as ReceiptItemForSplit).assignedTo) ?? false;
+}
+
+/**
  * Calculate split amounts (in cents) for a couple expense,
  * accounting for exclusive items assigned to a specific partner.
  *
@@ -50,9 +65,11 @@ export function calculateSplitAmounts(
         }
     }
 
-    // Split the common part 50/50
-    const commonBase = Math.floor(commonTotalCents / 2);
-    const commonRemainder = commonTotalCents - (commonBase * 2);
+    // Split the common part equally among all members (N-way; behaviour-identical
+    // for a 2-person couple, correct for groups >2).
+    const n = coupleMembers.length;
+    const commonBase = Math.floor(commonTotalCents / n);
+    const commonRemainder = commonTotalCents - (commonBase * n);
 
     // Build split amounts
     const splits = coupleMembers.map((m, i) => ({
@@ -67,6 +84,76 @@ export function calculateSplitAmounts(
     const diff = amountCents - splitsSum;
     if (diff !== 0) {
         splits[0].amount += diff;
+    }
+
+    return splits;
+}
+
+/** A persisted ReceiptLineItem row narrowed to the columns the split needs (CENTS). */
+export interface ReceiptLineForSplit {
+    lineTotal: number;             // CENTS (already converted at write time)
+    assignedToId?: string | null;  // exclusive assignee userId; null = shared
+}
+
+/**
+ * Cents-native twin of hasExclusiveReceiptItems for PERSISTED ReceiptLineItem
+ * rows. True when any row carries a non-null assignedToId (drives ITEMIZED vs
+ * EQUAL). Byte-parity with the JSON fn over the same persisted receipt is proven
+ * by audit gate G2b.
+ */
+export function hasExclusiveReceiptLines(
+    lines: ReceiptLineForSplit[] | null | undefined,
+): boolean {
+    return lines?.some((l) => l.assignedToId) ?? false;
+}
+
+/**
+ * Cents-native twin of calculateSplitAmounts for PERSISTED ReceiptLineItem rows.
+ * Identical algorithm, but sums lineTotal (already cents) directly instead of
+ * toCents(item.total). Byte-identical to the euro fn over the same persisted
+ * receipt because lineTotal == toCents(json.total) (buildReceiptLineItems);
+ * audit gate G2 proves this across all live receipts.
+ */
+export function calculateSplitAmountsFromLines(
+    amountCents: number,
+    lines: ReceiptLineForSplit[] | null | undefined,
+    coupleMembers: CoupleMMember[],
+): { userId: string; amount: number }[] {
+    const hasExclusiveItems = lines?.some((l) => l.assignedToId) ?? false;
+
+    if (!hasExclusiveItems || !lines || coupleMembers.length < 2) {
+        const baseAmount = Math.floor(amountCents / coupleMembers.length);
+        const remainder = amountCents - (baseAmount * coupleMembers.length);
+        return coupleMembers.map((m, i) => ({
+            userId: m.id,
+            amount: baseAmount + (i < remainder ? 1 : 0),
+        }));
+    }
+
+    let commonTotalCents = 0;
+    const exclusiveByUser: Record<string, number> = {};
+
+    for (const line of lines) {
+        if (line.assignedToId) {
+            exclusiveByUser[line.assignedToId] = (exclusiveByUser[line.assignedToId] || 0) + line.lineTotal;
+        } else {
+            commonTotalCents += line.lineTotal;
+        }
+    }
+
+    const n = coupleMembers.length;
+    const commonBase = Math.floor(commonTotalCents / n);
+    const commonRemainder = commonTotalCents - (commonBase * n);
+
+    const splits = coupleMembers.map((m, i) => ({
+        userId: m.id,
+        amount: commonBase + (i < commonRemainder ? 1 : 0) + (exclusiveByUser[m.id] || 0),
+    }));
+
+    const splitsSum2 = splits.reduce((acc, s) => acc + s.amount, 0);
+    const diff2 = amountCents - splitsSum2;
+    if (diff2 !== 0) {
+        splits[0].amount += diff2;
     }
 
     return splits;
