@@ -188,4 +188,22 @@ describe('PATCH /api/expenses/[id] — payer change (N-way)', () => {
         expect(res.status).toBe(200);
         expect(mockExpenseUpdate.mock.calls[0][0].data.paidById).toBeUndefined();
     });
+
+    it('removes the receipt image when receiptUrl is null', async () => {
+        const res = await PATCH(patchReq({ receiptUrl: null }), { params });
+        expect(res.status).toBe(200);
+        expect(mockExpenseUpdate.mock.calls[0][0].data.receiptUrl).toBeNull();
+    });
+
+    it('sets a new receipt image when receiptUrl is a string', async () => {
+        const res = await PATCH(patchReq({ receiptUrl: '/uploads/new.jpg' }), { params });
+        expect(res.status).toBe(200);
+        expect(mockExpenseUpdate.mock.calls[0][0].data.receiptUrl).toBe('/uploads/new.jpg');
+    });
+
+    it('leaves the receipt untouched when receiptUrl is omitted', async () => {
+        const res = await PATCH(patchReq({ notes: 'x' }), { params });
+        expect(res.status).toBe(200);
+        expect('receiptUrl' in mockExpenseUpdate.mock.calls[0][0].data).toBe(false);
+    });
 });

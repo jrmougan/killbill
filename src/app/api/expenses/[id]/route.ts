@@ -76,7 +76,7 @@ export async function PATCH(
         const userId = session.userId as string;
 
         const body = await request.json();
-        const { description, amount, category, splitWithPartner, receiptItems, notes, isRecurring, recurringInterval, customSplits, paidById: paidByIdInput } = body;
+        const { description, amount, category, splitWithPartner, receiptItems, notes, isRecurring, recurringInterval, customSplits, paidById: paidByIdInput, receiptUrl } = body;
 
         // Get expense and verify ownership
         const expense = await prisma.expense.findUnique({
@@ -189,6 +189,9 @@ export async function PATCH(
             // Phase 5 (WS5): enum category no longer written; categoryId is synced below.
         };
         if (notes !== undefined) updateData.notes = notes;
+        // Receipt image: a string sets/replaces it, null removes it (the edit UI's
+        // "remove receipt" action). undefined leaves it untouched.
+        if (receiptUrl !== undefined) updateData.receiptUrl = receiptUrl;
         if (paidByIdInput !== undefined) updateData.paidById = effectivePaidById;
         // Phase 5 (stop-dual-write): Expense.isRecurring/recurringInterval/
         // nextRecurringDate are no longer written; the schedule is mirrored to the

@@ -285,6 +285,9 @@ export function EditExpenseClient({
                     }))
                     : undefined,
                 notes: notes.trim() || null,
+                // Persist the receipt image: the resolved URL (a freshly-uploaded one,
+                // the existing one, or null when the user removed it via the ✕).
+                receiptUrl: uploadedUrl,
                 isRecurring,
                 recurringInterval: isRecurring ? recurringInterval : undefined,
             };
