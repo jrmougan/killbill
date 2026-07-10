@@ -11,34 +11,35 @@
 -- Idempotent: the seed only inserts a system category when its (groupId=NULL, key)
 -- row is absent (MySQL treats NULLs as distinct in the unique index, so a plain
 -- ON DUPLICATE KEY would not dedupe system rows); the backfill only touches rows
--- whose categoryId is still NULL.
+-- whose categoryId is still NULL. Uses `SELECT ... FROM DUAL WHERE NOT EXISTS`
+-- (no derived table) so repeated literal values like 'shopping' don't collide.
 
 -- 1) Seed the 8 system categories (groupId NULL, isSystem 1). UUID()-based ids are
 --    fine — FKs only need a stable unique id; the app resolves categories by key.
 INSERT INTO `Category` (`id`,`key`,`label`,`labelEn`,`emoji`,`icon`,`color`,`bgColor`,`hex`,`sortOrder`,`isSystem`,`groupId`,`createdAt`,`updatedAt`)
-SELECT * FROM (SELECT UUID(),'shopping','Compras','shopping','🛍️','ShoppingBag','text-pink-400','bg-pink-400/20','#f472b6',0,1,NULL,NOW(3),NOW(3)) t
-WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='shopping');
+SELECT UUID(),'shopping','Compras','shopping','🛍️','ShoppingBag','text-pink-400','bg-pink-400/20','#f472b6',0,1,NULL,NOW(3),NOW(3)
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='shopping');
 INSERT INTO `Category` (`id`,`key`,`label`,`labelEn`,`emoji`,`icon`,`color`,`bgColor`,`hex`,`sortOrder`,`isSystem`,`groupId`,`createdAt`,`updatedAt`)
-SELECT * FROM (SELECT UUID(),'food','Comida','food','🍕','Coffee','text-orange-400','bg-orange-400/20','#fb923c',1,1,NULL,NOW(3),NOW(3)) t
-WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='food');
+SELECT UUID(),'food','Comida','food','🍕','Coffee','text-orange-400','bg-orange-400/20','#fb923c',1,1,NULL,NOW(3),NOW(3)
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='food');
 INSERT INTO `Category` (`id`,`key`,`label`,`labelEn`,`emoji`,`icon`,`color`,`bgColor`,`hex`,`sortOrder`,`isSystem`,`groupId`,`createdAt`,`updatedAt`)
-SELECT * FROM (SELECT UUID(),'rent','Alquiler','rent','🏠','Home','text-blue-400','bg-blue-400/20','#60a5fa',2,1,NULL,NOW(3),NOW(3)) t
-WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='rent');
+SELECT UUID(),'rent','Alquiler','rent','🏠','Home','text-blue-400','bg-blue-400/20','#60a5fa',2,1,NULL,NOW(3),NOW(3)
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='rent');
 INSERT INTO `Category` (`id`,`key`,`label`,`labelEn`,`emoji`,`icon`,`color`,`bgColor`,`hex`,`sortOrder`,`isSystem`,`groupId`,`createdAt`,`updatedAt`)
-SELECT * FROM (SELECT UUID(),'utilities','Recibos','utilities','💡','Lightbulb','text-yellow-400','bg-yellow-400/20','#facc15',3,1,NULL,NOW(3),NOW(3)) t
-WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='utilities');
+SELECT UUID(),'utilities','Recibos','utilities','💡','Lightbulb','text-yellow-400','bg-yellow-400/20','#facc15',3,1,NULL,NOW(3),NOW(3)
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='utilities');
 INSERT INTO `Category` (`id`,`key`,`label`,`labelEn`,`emoji`,`icon`,`color`,`bgColor`,`hex`,`sortOrder`,`isSystem`,`groupId`,`createdAt`,`updatedAt`)
-SELECT * FROM (SELECT UUID(),'transport','Transporte','transport','🚗','TramFront','text-green-400','bg-green-400/20','#4ade80',4,1,NULL,NOW(3),NOW(3)) t
-WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='transport');
+SELECT UUID(),'transport','Transporte','transport','🚗','TramFront','text-green-400','bg-green-400/20','#4ade80',4,1,NULL,NOW(3),NOW(3)
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='transport');
 INSERT INTO `Category` (`id`,`key`,`label`,`labelEn`,`emoji`,`icon`,`color`,`bgColor`,`hex`,`sortOrder`,`isSystem`,`groupId`,`createdAt`,`updatedAt`)
-SELECT * FROM (SELECT UUID(),'entertainment','Ocio','entertainment','🎬','Clapperboard','text-purple-400','bg-purple-400/20','#c084fc',5,1,NULL,NOW(3),NOW(3)) t
-WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='entertainment');
+SELECT UUID(),'entertainment','Ocio','entertainment','🎬','Clapperboard','text-purple-400','bg-purple-400/20','#c084fc',5,1,NULL,NOW(3),NOW(3)
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='entertainment');
 INSERT INTO `Category` (`id`,`key`,`label`,`labelEn`,`emoji`,`icon`,`color`,`bgColor`,`hex`,`sortOrder`,`isSystem`,`groupId`,`createdAt`,`updatedAt`)
-SELECT * FROM (SELECT UUID(),'health','Salud','health','💊','Heart','text-red-400','bg-red-400/20','#f87171',6,1,NULL,NOW(3),NOW(3)) t
-WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='health');
+SELECT UUID(),'health','Salud','health','💊','Heart','text-red-400','bg-red-400/20','#f87171',6,1,NULL,NOW(3),NOW(3)
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='health');
 INSERT INTO `Category` (`id`,`key`,`label`,`labelEn`,`emoji`,`icon`,`color`,`bgColor`,`hex`,`sortOrder`,`isSystem`,`groupId`,`createdAt`,`updatedAt`)
-SELECT * FROM (SELECT UUID(),'other','Otro','other','📦','Receipt','text-gray-400','bg-gray-400/20','#9ca3af',7,1,NULL,NOW(3),NOW(3)) t
-WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='other');
+SELECT UUID(),'other','Otro','other','📦','Receipt','text-gray-400','bg-gray-400/20','#9ca3af',7,1,NULL,NOW(3),NOW(3)
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `Category` WHERE `groupId` IS NULL AND `key`='other');
 
 -- 2) Backfill categoryId from the legacy `category` ENUM (still present pre-phase5).
 UPDATE `Expense` e

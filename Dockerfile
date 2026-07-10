@@ -85,5 +85,9 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Ejecutamos server.js (que está dentro de la carpeta standalone que copiamos a la raíz)
-CMD ["node", "server.js"]
+# Arranque: aplicar migraciones pendientes (desde /prisma-tools, que trae el CLI
+# de Prisma + las migraciones) y SOLO si tienen éxito, ejecutar el servidor. Si
+# `migrate deploy` falla, el proceso muere y el contenedor no arranca — Coolify
+# mantiene el contenedor anterior vivo (sin caída) hasta que se corrija. Un no-op
+# rápido cuando no hay migraciones pendientes.
+CMD ["sh", "-c", "cd /prisma-tools && ./node_modules/.bin/prisma migrate deploy && cd /app && exec node server.js"]
