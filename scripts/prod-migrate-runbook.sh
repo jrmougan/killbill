@@ -129,6 +129,23 @@ npx tsx scripts/backfill-ledger.ts
 reconcile
 
 # ---------------------------------------------------------------------------
+# EXPAND + BACKFILL are done and reconciled. Everything applied so far is
+# ADDITIVE and BACKWARD-COMPATIBLE with the app currently running on prod
+# (categoryId is nullable+backfilled, the ledger is only read by the NEW app).
+#
+# You now have two safe ways forward:
+#   (a) ZERO-DOWNTIME: stop here, merge to main so Coolify deploys the NEW image
+#       and runs `prisma migrate deploy` for the remaining migrations — safe now
+#       because the backfills are done and check-constraints were pre-validated.
+#       (Then this script's remaining steps are unnecessary.)
+#   (b) ALL OUT-OF-BAND: continue now to apply the tightening + irreversible drops
+#       yourself, then merge (Coolify's migrate deploy becomes a no-op). This
+#       changes the schema UNDER the currently-running old app, so do it in a
+#       low-traffic / maintenance window and merge promptly afterwards.
+# ---------------------------------------------------------------------------
+confirm "Continue with option (b) — apply phase-4 tightening + phase-5 drops out-of-band NOW? (Ctrl-C to stop here and use option (a).)"
+
+# ---------------------------------------------------------------------------
 # 3. Phase-4 tightening (constraints + budget unique swap — now safe)
 # ---------------------------------------------------------------------------
 for m in \
