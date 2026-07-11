@@ -25,7 +25,9 @@ export default async function TagsPage() {
         id: t.id,
         name: t.name,
         color: t.color,
-        coupleId: t.coupleId,
+        // coupleId es ahora nullable (tags personales, Fase 0); aquí filtramos por
+        // coupleId === groupId, así que es siempre este grupo.
+        coupleId: t.coupleId ?? groupId,
     }));
 
     return <TagsClient initialTags={tagData} />;
