@@ -12,28 +12,48 @@ import { signMcpToken } from "@/lib/jwt";
  */
 
 const DEFAULT_TTL_DAYS = 90;
+const MAX_TTL_DAYS = 365;
+
+function getMcpTokenTtlDays(value: string | undefined): number {
+  if (!value || !/^\d+$/.test(value)) return DEFAULT_TTL_DAYS;
+
+  const ttlDays = Number(value);
+  return ttlDays > 0 && ttlDays <= MAX_TTL_DAYS ? ttlDays : DEFAULT_TTL_DAYS;
+}
 
 export async function POST() {
   const session = await getSession();
   if (!session?.userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (session.kind !== undefined) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
-  const ttlDaysRaw = Number(process.env.MCP_TOKEN_TTL_DAYS);
-  const ttlDays = Number.isFinite(ttlDaysRaw) && ttlDaysRaw > 0 ? ttlDaysRaw : DEFAULT_TTL_DAYS;
+  const ttlDays = getMcpTokenTtlDays(process.env.MCP_TOKEN_TTL_DAYS);
 
-  const token = await signMcpToken(
-    {
-      userId: session.userId,
-      email: session.email,
-      isAdmin: session.isAdmin,
-    },
-    ttlDays,
-  );
+  try {
+    const token = await signMcpToken(
+      {
+        userId: session.userId,
+        email: session.email,
+        isAdmin: session.isAdmin,
+      },
+      ttlDays,
+    );
 
-  return NextResponse.json({
-    token,
-    expiresInDays: ttlDays,
-    expiresAt: new Date(Date.now() + ttlDays * 86_400_000).toISOString(),
-  });
+    return NextResponse.json(
+      {
+        token,
+        expiresInDays: ttlDays,
+        expiresAt: new Date(Date.now() + ttlDays * 86_400_000).toISOString(),
+      },
+      {
+        status: 201,
+        headers: { "Cache-Control": "private, no-store" },
+      },
+    );
+  } catch {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
