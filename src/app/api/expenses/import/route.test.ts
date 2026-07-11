@@ -5,7 +5,11 @@ const mockFindMany = vi.fn();
 const mockCreateMany = vi.fn();
 
 vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
-vi.mock('@/lib/category-db', () => ({ resolveCategoryId: vi.fn().mockResolvedValue('cat-other') }));
+vi.mock('@/lib/category-db', () => ({
+    resolveCategoryId: vi.fn().mockResolvedValue('cat-other'),
+    // Effective personal set for u1: the 8 system keys are always present.
+    getEffectiveCategories: vi.fn().mockResolvedValue([{ key: 'other' }, { key: 'food' }, { key: 'transport' }]),
+}));
 vi.mock('@/lib/db', () => ({
     prisma: {
         expense: {
@@ -60,6 +64,24 @@ describe('POST /api/expenses/import', () => {
         expect(data[0].amount).toBe(2492);
         expect(data[0].importFingerprint).toMatch(/^[a-f0-9]{64}$/); // sha256 hex
         expect(data[0].date).toBeInstanceOf(Date);
+    });
+
+    it('400s on an unknown defaultCategory (no silent fallback to other)', async () => {
+        const res = await POST(req({ rows: [row()], defaultCategory: 'nope' }));
+        expect(res.status).toBe(400);
+        expect(mockCreateMany).not.toHaveBeenCalled();
+    });
+
+    it('400s on an unknown per-row category', async () => {
+        const res = await POST(req({ rows: [row({ category: 'ghost' })] }));
+        expect(res.status).toBe(400);
+        expect(mockCreateMany).not.toHaveBeenCalled();
+    });
+
+    it('accepts a valid defaultCategory from the effective set', async () => {
+        const res = await POST(req({ rows: [row()], defaultCategory: 'transport' }));
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({ created: 1, skipped: 0 });
     });
 
     it('dedups repeats WITHIN the batch (same content = one insert)', async () => {

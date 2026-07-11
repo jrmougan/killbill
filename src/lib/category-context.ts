@@ -38,3 +38,8 @@ export function categoriesEndpoint(ctx: CategoryContext): string {
         ? `/api/spaces/${ctx.groupId}/categories`
         : `/api/me/categories`;
 }
+
+/** Endpoint that duplicates a category (system or custom) into the context (Fase 6). */
+export function duplicateCategoryEndpoint(ctx: CategoryContext): string {
+    return `${categoriesEndpoint(ctx)}/duplicate`;
+}

@@ -31,6 +31,21 @@ export function categoryKeyOf(row: CategoryKeyed): string {
     return row.categoryRef?.key ?? row.category ?? "other";
 }
 
+/** A row whose relational category was selected WITH its human label (Fase 6 export). */
+export interface CategoryLabeled {
+    category?: string | null;
+    categoryRef?: { key: string; label?: string | null } | null;
+}
+
+/**
+ * Effective human label of a row (DB-driven): the relational category's `label`
+ * when present, else its key, else the enum fallback, else 'other'. Used by the
+ * CSV export so custom categories surface their real name instead of the raw key.
+ */
+export function categoryLabelOf(row: CategoryLabeled): string {
+    return row.categoryRef?.label ?? row.categoryRef?.key ?? row.category ?? "other";
+}
+
 /**
  * Prisma `select` fragment for the full visual metadata of a Category row. The
  * DB column is `icon` (a lucide component NAME); `toCategoryMeta` renames it to

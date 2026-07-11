@@ -189,6 +189,79 @@ export async function createCategoryForScope(scope: CategoryWriteScope, input: C
     });
 }
 
+/** Append a suffix to a label, keeping within MAX_LABEL_LEN (trims the base if needed). */
+function withCopySuffix(base: string, suffix: string): string {
+    const combined = `${base} ${suffix}`;
+    if (combined.length <= MAX_LABEL_LEN) return combined;
+    const room = Math.max(0, MAX_LABEL_LEN - suffix.length - 1);
+    return `${base.slice(0, room).trimEnd()} ${suffix}`.slice(0, MAX_LABEL_LEN);
+}
+
+/**
+ * Derive a unique, non-reserved custom key from a source key by appending
+ * '-copia' (then '-copia-2', '-copia-3'…) until it's free within the scope. The
+ * '-copia' suffix guarantees the result is never one of the 8 reserved system
+ * keys, so duplicating a SYSTEM category honours decision #1 for free.
+ */
+function deriveCopyKey(sourceKey: string, taken: ReadonlySet<string>): string {
+    const clamp = (k: string) => k.slice(0, 40);
+    const isFree = (k: string) => KEY_RE.test(k) && !RESERVED_SYSTEM_KEYS.has(k) && !taken.has(k);
+    const base = clamp(`${sourceKey}-copia`);
+    if (isFree(base)) return base;
+    for (let n = 2; n < 1000; n++) {
+        const cand = clamp(`${sourceKey}-copia-${n}`);
+        if (isFree(cand)) return cand;
+    }
+    return clamp(`${sourceKey}-${Date.now().toString(36)}`);
+}
+
+/**
+ * Duplicate an existing category (a SYSTEM row or an in-scope custom) into a new
+ * custom of this scope (Fase 6). Copies emoji/icon/hex VERBATIM — a system hex
+ * may sit outside the closed palette, so it is deliberately NOT re-validated —
+ * and derives a fresh non-reserved key plus a "(copia)" label.
+ * - source not found → 404; source not visible in this context → 400.
+ * - isSystem forced false; color/bgColor empty; scoped by groupId|ownerId.
+ */
+export async function duplicateCategoryForScope(scope: CategoryWriteScope, sourceId: unknown) {
+    if (typeof sourceId !== "string" || sourceId.length === 0) {
+        throw new CategoryError(400, "SOURCE_REQUIRED", "Falta la categoría de origen");
+    }
+    const source = await prisma.category.findUnique({ where: { id: sourceId } });
+    if (!source) {
+        throw new CategoryError(404, "SOURCE_NOT_FOUND", "La categoría de origen no existe");
+    }
+    // Visible here = a system row, or a custom of this same scope.
+    const isSystemRow = source.isSystem && source.groupId === null && source.ownerId === null;
+    const inScope = scope.kind === "group"
+        ? source.groupId === scope.groupId
+        : source.ownerId === scope.ownerId;
+    if (!isSystemRow && !inScope) {
+        throw new CategoryError(400, "SOURCE_OUT_OF_SCOPE", "La categoría de origen no es válida en este contexto");
+    }
+
+    const scoped = await prisma.category.findMany({ where: scopeWhere(scope), select: { key: true } });
+    const taken = new Set(scoped.map((c) => c.key));
+    const key = deriveCopyKey(source.key, taken);
+    const sortOrder = await nextSortOrder(prisma, scope);
+
+    return prisma.category.create({
+        data: {
+            key,
+            label: withCopySuffix(source.label, "(copia)"),
+            labelEn: withCopySuffix(source.labelEn, "(copy)"),
+            emoji: source.emoji,
+            icon: source.icon, // already a valid registry name (system seed / prior create).
+            color: "",
+            bgColor: "",
+            hex: source.hex, // copied as-is (a system hex may be outside the palette).
+            sortOrder,
+            isSystem: false, // FORCED.
+            ...scopeOwnership(scope),
+        },
+    });
+}
+
 /** Load a custom category and assert it is editable in this scope (not system, in scope). */
 async function loadEditable(db: Db, scope: CategoryWriteScope, id: string) {
     const cat = await db.category.findUnique({ where: { id } });

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
     categoryKeyOf,
+    categoryLabelOf,
     mergeCategories,
     categoryMetaMap,
     toCategoryMeta,
@@ -93,6 +94,21 @@ describe("categoryKeyOf", () => {
         // A group-custom Category can carry any key; once categoryId points at it,
         // the TABLE is the source of truth, not the enum snapshot.
         expect(categoryKeyOf({ category: "other", categoryRef: { key: "mascotas" } })).toBe("mascotas");
+    });
+});
+
+describe("categoryLabelOf (Fase 6 export)", () => {
+    it("prefers the relational label (custom names surface, not raw keys)", () => {
+        expect(categoryLabelOf({ categoryRef: { key: "mascotas", label: "Mascotas" } })).toBe("Mascotas");
+    });
+
+    it("falls back to the relational key when no label was selected", () => {
+        expect(categoryLabelOf({ categoryRef: { key: "food" } })).toBe("food");
+    });
+
+    it("falls back to the enum, then 'other', when there is no relational category", () => {
+        expect(categoryLabelOf({ category: "rent", categoryRef: null })).toBe("rent");
+        expect(categoryLabelOf({ categoryRef: null })).toBe("other");
     });
 });
 

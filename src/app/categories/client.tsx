@@ -9,6 +9,7 @@ import {
     Trash2,
     ChevronUp,
     ChevronDown,
+    Copy,
     Loader2,
     Info,
     X,
@@ -23,6 +24,7 @@ import {
     type CategoryContext,
     type CategoryListItem,
     categoriesEndpoint,
+    duplicateCategoryEndpoint,
 } from "@/lib/category-context";
 
 type Scope = "shared" | "personal";
@@ -80,6 +82,7 @@ export function CategoriesClient({
     const [editing, setEditing] = useState<CategoryListItem | null | undefined>(undefined); // undefined = closed, null = create
     const [deleting, setDeleting] = useState<CategoryListItem | null>(null);
     const [reordering, setReordering] = useState(false);
+    const [duplicating, setDuplicating] = useState<string | null>(null);
 
     const customList = categories.filter((c) => !c.isSystem);
 
@@ -113,6 +116,24 @@ export function CategoriesClient({
             await reload();
         } finally {
             setReordering(false);
+        }
+    };
+
+    // Duplicate any category (system or custom) into an editable custom of this
+    // context (Fase 6). The server derives a fresh non-reserved key + "(copia)"
+    // label and copies emoji/icon/color.
+    const duplicate = async (id: string) => {
+        if (duplicating) return;
+        setDuplicating(id);
+        try {
+            const res = await fetch(duplicateCategoryEndpoint(context), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sourceId: id }),
+            });
+            if (res.ok) await reload();
+        } finally {
+            setDuplicating(null);
         }
     };
 
@@ -201,46 +222,63 @@ export function CategoriesClient({
                                     </div>
                                 </div>
 
-                                {canManage && !cat.isSystem && (
+                                {canManage && (
                                     <div className="flex items-center gap-0.5 shrink-0">
-                                        <div className="flex flex-col">
-                                            <button
-                                                type="button"
-                                                onClick={() => move(cat.id, -1)}
-                                                disabled={!canMoveUp || reordering}
-                                                aria-label={`Subir ${cat.label}`}
-                                                className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-                                            >
-                                                <ChevronUp className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => move(cat.id, 1)}
-                                                disabled={!canMoveDown || reordering}
-                                                aria-label={`Bajar ${cat.label}`}
-                                                className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-                                            >
-                                                <ChevronDown className="h-4 w-4" />
-                                            </button>
-                                        </div>
+                                        {!cat.isSystem && (
+                                            <>
+                                                <div className="flex flex-col">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => move(cat.id, -1)}
+                                                        disabled={!canMoveUp || reordering}
+                                                        aria-label={`Subir ${cat.label}`}
+                                                        className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+                                                    >
+                                                        <ChevronUp className="h-4 w-4" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => move(cat.id, 1)}
+                                                        disabled={!canMoveDown || reordering}
+                                                        aria-label={`Bajar ${cat.label}`}
+                                                        className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+                                                    >
+                                                        <ChevronDown className="h-4 w-4" />
+                                                    </button>
+                                                </div>
+                                                <Button
+                                                    size="icon"
+                                                    variant="ghost"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                    onClick={() => setEditing(cat)}
+                                                    aria-label={`Editar ${cat.label}`}
+                                                >
+                                                    <Pencil className="h-4 w-4" />
+                                                </Button>
+                                            </>
+                                        )}
                                         <Button
                                             size="icon"
                                             variant="ghost"
-                                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                            onClick={() => setEditing(cat)}
-                                            aria-label={`Editar ${cat.label}`}
+                                            className="h-8 w-8 text-muted-foreground hover:text-foreground disabled:opacity-40"
+                                            onClick={() => duplicate(cat.id)}
+                                            disabled={duplicating !== null}
+                                            aria-label={`Duplicar ${cat.label}`}
+                                            title="Duplicar"
                                         >
-                                            <Pencil className="h-4 w-4" />
+                                            {duplicating === cat.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
                                         </Button>
-                                        <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                            onClick={() => setDeleting(cat)}
-                                            aria-label={`Borrar ${cat.label}`}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        {!cat.isSystem && (
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                                onClick={() => setDeleting(cat)}
+                                                aria-label={`Borrar ${cat.label}`}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        )}
                                     </div>
                                 )}
                             </GlassCard>

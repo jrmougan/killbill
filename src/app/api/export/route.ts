@@ -5,7 +5,7 @@ import { getActiveGroup } from '@/lib/membership';
 import { toEuros } from '@/lib/currency';
 import { Prisma } from '@/generated/prisma/client';
 import { escapeCsvField } from '@/lib/csv';
-import { categoryKeyOf, CATEGORY_REF_SELECT } from '@/lib/category-read';
+import { categoryLabelOf, CATEGORY_REF_SELECT } from '@/lib/category-read';
 
 export async function GET(request: Request) {
     const ctx = await getSessionCtx();
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
             escapeCsvField(fecha),
             escapeCsvField(e.description),
             escapeCsvField(importe),
-            escapeCsvField(categoryKeyOf(e)), // relational Category key (enum fallback)
+            escapeCsvField(categoryLabelOf(e)), // DB-driven Category label (custom names surface, not raw keys)
             escapeCsvField(e.paidBy.name),
             escapeCsvField(miParte),
             escapeCsvField(e.notes),

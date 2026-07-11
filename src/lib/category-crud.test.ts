@@ -39,6 +39,7 @@ import {
     updateCategoryForScope,
     deleteCategoryForScope,
     reorderCategoriesForScope,
+    duplicateCategoryForScope,
     slugifyKey,
     CategoryError,
     RESERVED_SYSTEM_KEYS,
@@ -272,6 +273,71 @@ describe("deleteCategoryForScope — reassignment", () => {
         const err = await expectError(() => deleteCategoryForScope(GROUP, "del", "foreign"));
         expect(err.status).toBe(400);
         expect(err.code).toBe("TARGET_OUT_OF_SCOPE");
+    });
+});
+
+describe("duplicateCategoryForScope", () => {
+    const systemFood = {
+        id: "sys-food", key: "food", label: "Comida", labelEn: "Food",
+        emoji: "🍔", icon: "Utensils", hex: "#f59e0b", // system hex may be outside the closed palette
+        isSystem: true, groupId: null, ownerId: null,
+    };
+
+    it("duplicates a SYSTEM category into the scope with a derived non-reserved key", async () => {
+        mCat.findUnique.mockResolvedValueOnce(systemFood); // source
+        mCat.findMany.mockResolvedValueOnce([]); // no scoped custom → nothing taken
+        mCat.aggregate.mockResolvedValue({ _max: { sortOrder: 3 } });
+        mCat.create.mockResolvedValue({ id: "dup1" });
+
+        await duplicateCategoryForScope(GROUP, "sys-food");
+
+        const data = mCat.create.mock.calls[0][0].data;
+        expect(data.key).toBe("food-copia"); // not reserved (decision #1 honoured for free)
+        expect(RESERVED_SYSTEM_KEYS.has(data.key)).toBe(false);
+        expect(data.label).toBe("Comida (copia)");
+        expect(data.labelEn).toBe("Food (copy)");
+        expect(data.emoji).toBe("🍔");
+        expect(data.icon).toBe("Utensils"); // copied verbatim
+        expect(data.hex).toBe("#f59e0b"); // NOT re-validated against the palette
+        expect(data.isSystem).toBe(false); // forced
+        expect(data.groupId).toBe("c1");
+        expect(data.ownerId).toBeNull();
+        expect(data.sortOrder).toBe(4);
+    });
+
+    it("bumps the copy suffix when '-copia' is already taken in the scope", async () => {
+        mCat.findUnique.mockResolvedValueOnce(systemFood);
+        mCat.findMany.mockResolvedValueOnce([{ key: "food-copia" }]);
+        mCat.aggregate.mockResolvedValue({ _max: { sortOrder: 0 } });
+        mCat.create.mockResolvedValue({ id: "dup2" });
+
+        await duplicateCategoryForScope(GROUP, "sys-food");
+        expect(mCat.create.mock.calls[0][0].data.key).toBe("food-copia-2");
+    });
+
+    it("404s when the source category does not exist", async () => {
+        mCat.findUnique.mockResolvedValueOnce(null);
+        const err = await expectError(() => duplicateCategoryForScope(GROUP, "ghost"));
+        expect(err.status).toBe(404);
+        expect(err.code).toBe("SOURCE_NOT_FOUND");
+        expect(mCat.create).not.toHaveBeenCalled();
+    });
+
+    it("400s when the source is a custom of another scope", async () => {
+        mCat.findUnique.mockResolvedValueOnce({
+            id: "foreign", key: "x", label: "X", labelEn: "X", emoji: "❓", icon: "Receipt", hex: "#8b5cf6",
+            isSystem: false, groupId: "other-group", ownerId: null,
+        });
+        const err = await expectError(() => duplicateCategoryForScope(GROUP, "foreign"));
+        expect(err.status).toBe(400);
+        expect(err.code).toBe("SOURCE_OUT_OF_SCOPE");
+        expect(mCat.create).not.toHaveBeenCalled();
+    });
+
+    it("400s when no sourceId is given", async () => {
+        const err = await expectError(() => duplicateCategoryForScope(GROUP, ""));
+        expect(err.status).toBe(400);
+        expect(err.code).toBe("SOURCE_REQUIRED");
     });
 });
 
