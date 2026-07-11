@@ -414,7 +414,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 })()}
             </section>
 
-            {couple && coupleWaiting && <InviteCard code={couple.code} />}
+            {couple && coupleWaiting && <InviteCard spaceId={couple.id} />}
             </>
             )}
 

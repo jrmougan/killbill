@@ -63,10 +63,8 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
 
-    // Join-group form
+    // Join-group form — routes to the consent screen (no silent join).
     const [joinCode, setJoinCode] = useState("");
-    const [joining, setJoining] = useState(false);
-    const [joinError, setJoinError] = useState<string | null>(null);
 
     const handleSaveProfile = async () => {
         setIsSaving(true);
@@ -137,28 +135,16 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
         }
     };
 
-    const handleJoin = async () => {
-        setJoining(true);
-        setJoinError(null);
-        try {
-            const res = await fetch("/api/couple/join", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ code: joinCode }),
-            });
-            const data = await res.json();
-            if (res.ok) {
-                if (data.couple?.id) await setActiveGroup(data.couple.id);
-                setJoinCode("");
-                router.refresh();
-            } else {
-                setJoinError(data.error || "Código inválido");
-            }
-        } catch (_err) {
-            setJoinError("Error de conexión");
-        } finally {
-            setJoining(false);
-        }
+    // Route to the public consent screen `/i/[token]` instead of joining
+    // silently: the user confirms the join there and sees any error (expired,
+    // revoked, exhausted, SPACE_FULL, archived). Accepts a pasted `/i/…` link or
+    // a raw code/token (the consent page falls back to the classic Couple.code).
+    const handleJoin = () => {
+        const raw = joinCode.trim();
+        if (!raw) return;
+        const match = raw.match(/\/i\/([^/?#\s]+)/);
+        const token = match ? decodeURIComponent(match[1]) : raw;
+        router.push(`/i/${encodeURIComponent(token)}`);
     };
 
     const copyCode = (code: string, id: string) => {
@@ -333,22 +319,20 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
                     <GlassCard className="rounded-[16px] bg-card border border-[color:var(--line)] p-4 space-y-3">
                         <div className="flex items-center gap-2">
                             <LogIn className="h-4 w-4 text-primary" />
-                            <h3 className="text-[13px] font-bold text-foreground">Unirse con código</h3>
+                            <h3 className="text-[13px] font-bold text-foreground">Unirse con enlace o código</h3>
                         </div>
                         <Input
                             value={joinCode}
-                            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                            placeholder="Código de invitación"
+                            onChange={(e) => setJoinCode(e.target.value)}
+                            placeholder="Enlace o código de invitación"
                             className="h-[50px] rounded-xl bg-card border border-[color:var(--line)] text-foreground px-[15px] font-mono tracking-tighter focus:border-[color:var(--accent-border)]"
                         />
-                        {joinError && <p className="text-destructive text-xs">{joinError}</p>}
                         <Button
                             className="w-full h-[52px] rounded-[13px] bg-primary text-white font-semibold"
                             onClick={handleJoin}
-                            isLoading={joining}
                             disabled={!joinCode.trim()}
                         >
-                            <LogIn className="h-4 w-4 mr-2" /> Unirse
+                            <LogIn className="h-4 w-4 mr-2" /> Continuar
                         </Button>
                     </GlassCard>
                 </section>

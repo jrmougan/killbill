@@ -6,31 +6,32 @@ import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import { Heart } from "lucide-react";
 
+/**
+ * "Join a group" card (Fase 2). It no longer joins silently via
+ * /api/couple/join — instead it routes to the public consent screen `/i/[token]`
+ * where the user EXPLICITLY confirms the join (and sees any error: expired,
+ * revoked, exhausted, SPACE_FULL, archived). Accepts either a pasted `/i/…`
+ * invite link or a raw code/token; both resolve on the consent page (which falls
+ * back to the legacy classic `Couple.code`). No membership write happens here.
+ */
+
+/** Pull the token out of a pasted `/i/<token>` URL, or return the raw input. */
+function extractToken(raw: string): string {
+    const trimmed = raw.trim();
+    const match = trimmed.match(/\/i\/([^/?#\s]+)/);
+    if (match) return decodeURIComponent(match[1]);
+    return trimmed;
+}
+
 export function JoinGroupCard() {
-    const [code, setCode] = useState("");
-    const [loading, setLoading] = useState(false);
+    const [value, setValue] = useState("");
     const router = useRouter();
 
-    const handleJoin = async (e: React.FormEvent) => {
+    const handleContinue = (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
-        try {
-            const res = await fetch("/api/couple/join", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ code }),
-            });
-            if (res.ok) {
-                router.refresh();
-            } else {
-                const data = await res.json();
-                alert(data.error || "Código inválido");
-            }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
+        const token = extractToken(value);
+        if (!token) return;
+        router.push(`/i/${encodeURIComponent(token)}`);
     };
 
     return (
@@ -39,15 +40,15 @@ export function JoinGroupCard() {
                 <Heart className="h-4 w-4" />
                 <span className="text-xs font-bold uppercase tracking-wider text-primary">Unirse a un grupo</span>
             </div>
-            <form onSubmit={handleJoin} className="flex gap-2">
+            <form onSubmit={handleContinue} className="flex gap-2">
                 <Input
-                    placeholder="Código de invitación"
-                    value={code}
-                    onChange={e => setCode(e.target.value)}
+                    placeholder="Enlace o código de invitación"
+                    value={value}
+                    onChange={e => setValue(e.target.value)}
                     className="bg-card border-[color:var(--line)]"
                 />
-                <Button type="submit" size="sm" isLoading={loading} className="px-6 font-bold">
-                    Unirse
+                <Button type="submit" size="sm" className="px-6 font-bold" disabled={!value.trim()}>
+                    Continuar
                 </Button>
             </form>
         </div>

@@ -86,7 +86,7 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
 
             <section className="space-y-3">
                 <h2 className="text-[13px] font-bold uppercase tracking-wider text-muted-foreground px-1">Invitaciones</h2>
-                <InviteManager spaceId={space.id} type={space.type} initialCode={space.code} canManage={canManage} />
+                <InviteManager spaceId={space.id} type={space.type} status={space.status} initialCode={space.code} canManage={canManage} />
             </section>
 
             {canManage && (

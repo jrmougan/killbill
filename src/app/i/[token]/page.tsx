@@ -106,6 +106,14 @@ export default async function InviteConsentPage({
                     </Link>
                 </div>
             )}
+
+            {resolved.ok && (
+                <p className="text-[11px] leading-relaxed text-muted-foreground text-center max-w-xs">
+                    Al unirte, las demás personas del espacio verán tu nombre y los gastos que
+                    registres. No compartimos tus datos con terceros. Puedes salir del espacio cuando
+                    quieras desde Ajustes.
+                </p>
+            )}
         </div>
     );
 }
