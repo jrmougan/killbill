@@ -58,7 +58,6 @@ export function ListsClient({ groupId, initialGroupLists, initialPersonalLists }
                     sortOrder: list.sortOrder,
                     itemCount: 0,
                     checkedCount: 0,
-                    totalCents: 0,
                 };
                 if (isPersonal) setPersonalLists((prev) => [...prev, summary]);
                 else setGroupLists((prev) => [...prev, summary]);

@@ -1,11 +1,10 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { getGroupMembers } from "@/lib/membership";
 import { getListWithItems } from "@/lib/list-read";
 import { MembershipStatus } from "@/generated/prisma/enums";
 import type { ListWriteScope } from "@/lib/list-crud";
-import { ListDetailClient, type DetailMember } from "./client";
+import { ListDetailClient } from "./client";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +21,6 @@ export default async function ListDetailPage({ params }: { params: Promise<{ lis
     if (!raw) redirect("/lists");
 
     let scope: ListWriteScope;
-    let members: DetailMember[] = [];
     if (raw.groupId) {
         // Group list: caller must be an ACTIVE member of the owning group.
         const membership = await prisma.membership.findUnique({
@@ -30,7 +28,6 @@ export default async function ListDetailPage({ params }: { params: Promise<{ lis
         });
         if (!membership || membership.status !== MembershipStatus.ACTIVE) redirect("/lists");
         scope = { kind: "group", groupId: raw.groupId };
-        members = (await getGroupMembers(raw.groupId)).map((m) => ({ id: m.id, name: m.name }));
     } else if (raw.ownerId === userId) {
         scope = { kind: "owner", ownerId: userId };
     } else {
@@ -45,10 +42,9 @@ export default async function ListDetailPage({ params }: { params: Promise<{ lis
         name: i.name,
         quantity: i.quantity,
         unit: i.unit,
-        priceCents: i.priceCents,
         note: i.note,
+        aisle: i.aisle,
         checked: i.checked,
-        linked: i.linkedExpenseId !== null,
     }));
 
     const isGroup = scope.kind === "group";
@@ -62,8 +58,6 @@ export default async function ListDetailPage({ params }: { params: Promise<{ lis
             items={items}
             isGroup={isGroup}
             groupId={groupId}
-            members={members}
-            currentUserId={userId}
         />
     );
 }

@@ -1,7 +1,7 @@
 import { prisma } from "./db";
 import type { ListWriteScope } from "./list-crud";
 
-/** A list summary for the index view: counts + the total of its checked, priced items. */
+/** A list summary for the index view: counts of items and how many are checked. */
 export interface ListSummary {
     id: string;
     name: string;
@@ -9,8 +9,6 @@ export interface ListSummary {
     sortOrder: number;
     itemCount: number;
     checkedCount: number;
-    /** Sum (cents) of checked items that carry a price. */
-    totalCents: number;
 }
 
 function scopeWhere(scope: ListWriteScope): { groupId: string } | { ownerId: string } {
@@ -22,21 +20,16 @@ export async function getListsForScope(scope: ListWriteScope): Promise<ListSumma
     const lists = await prisma.shoppingList.findMany({
         where: scopeWhere(scope),
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-        include: { items: { select: { checked: true, priceCents: true } } },
+        include: { items: { select: { checked: true } } },
     });
-    return lists.map((l) => {
-        const checked = l.items.filter((i) => i.checked);
-        const totalCents = checked.reduce((s, i) => s + (i.priceCents ?? 0), 0);
-        return {
-            id: l.id,
-            name: l.name,
-            description: l.description,
-            sortOrder: l.sortOrder,
-            itemCount: l.items.length,
-            checkedCount: checked.length,
-            totalCents,
-        };
-    });
+    return lists.map((l) => ({
+        id: l.id,
+        name: l.name,
+        description: l.description,
+        sortOrder: l.sortOrder,
+        itemCount: l.items.length,
+        checkedCount: l.items.filter((i) => i.checked).length,
+    }));
 }
 
 /** A single list with its items (ordered), or null if missing / out of scope. */

@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock the Prisma singleton + the finance primitives the bridge reuses. Defined
-// via vi.hoisted so the vi.mock factories (hoisted above imports) can reference them.
-const { mList, mItem, mExpense, mTransaction } = vi.hoisted(() => {
+// Mock the Prisma singleton. $transaction only needs the array form here (reorder);
+// the list→expense bridge (and its finance primitives) was removed.
+const { mList, mItem, mTransaction } = vi.hoisted(() => {
     const mList = {
         findUnique: vi.fn(), findMany: vi.fn(), aggregate: vi.fn(),
         create: vi.fn(), update: vi.fn(), deleteMany: vi.fn(),
@@ -11,36 +11,17 @@ const { mList, mItem, mExpense, mTransaction } = vi.hoisted(() => {
         findUnique: vi.fn(), findMany: vi.fn(), aggregate: vi.fn(),
         create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), deleteMany: vi.fn(),
     };
-    const mExpense = { create: vi.fn() };
-    // $transaction supports BOTH forms: callback (checkout) and array (reorder).
-    const mTransaction = vi.fn((arg: unknown) => {
-        if (typeof arg === "function") {
-            return (arg as (tx: unknown) => unknown)({ expense: mExpense, shoppingListItem: mItem });
-        }
-        return Promise.all(arg as Promise<unknown>[]);
-    });
-    return { mList, mItem, mExpense, mTransaction };
+    const mTransaction = vi.fn((arg: unknown) => Promise.all(arg as Promise<unknown>[]));
+    return { mList, mItem, mTransaction };
 });
 
 vi.mock("./db", () => ({
     prisma: {
         shoppingList: mList,
         shoppingListItem: mItem,
-        expense: mExpense,
         $transaction: (a: unknown) => mTransaction(a),
     },
 }));
-
-const { mGetGroupMembers, mResolveCategoryId, mCalculateSplitAmounts, mPostExpenseLedger } = vi.hoisted(() => ({
-    mGetGroupMembers: vi.fn(),
-    mResolveCategoryId: vi.fn(),
-    mCalculateSplitAmounts: vi.fn(),
-    mPostExpenseLedger: vi.fn(),
-}));
-vi.mock("./membership", () => ({ getGroupMembers: (id: string) => mGetGroupMembers(id) }));
-vi.mock("./category-db", () => ({ resolveCategoryId: (k: string, s: unknown) => mResolveCategoryId(k, s) }));
-vi.mock("./splits", () => ({ calculateSplitAmounts: (...a: unknown[]) => mCalculateSplitAmounts(...a) }));
-vi.mock("./ledger", () => ({ postExpenseLedger: (...a: unknown[]) => mPostExpenseLedger(...a) }));
 
 import {
     createListForScope,
@@ -52,7 +33,7 @@ import {
     setItemChecked,
     deleteItemForScope,
     reorderItemsForScope,
-    checkoutList,
+    clearCheckedForScope,
     ListError,
     type ListWriteScope,
 } from "./list-crud";
@@ -61,7 +42,6 @@ const GROUP: ListWriteScope = { kind: "group", groupId: "g1" };
 const OWNER: ListWriteScope = { kind: "owner", ownerId: "u1" };
 
 const groupList = { id: "l1", name: "Mercadona", groupId: "g1", ownerId: null };
-const ownerList = { id: "lp", name: "Farmacia", groupId: null, ownerId: "u1" };
 
 async function expectError(fn: () => Promise<unknown>): Promise<ListError> {
     try {
@@ -76,14 +56,9 @@ async function expectError(fn: () => Promise<unknown>): Promise<ListError> {
 beforeEach(() => {
     [mList.findUnique, mList.findMany, mList.aggregate, mList.create, mList.update, mList.deleteMany,
      mItem.findUnique, mItem.findMany, mItem.aggregate, mItem.create, mItem.update, mItem.updateMany, mItem.deleteMany,
-     mExpense.create, mTransaction, mGetGroupMembers, mResolveCategoryId, mCalculateSplitAmounts, mPostExpenseLedger]
+     mTransaction]
         .forEach((m) => m.mockReset());
-    mTransaction.mockImplementation((arg: unknown) => {
-        if (typeof arg === "function") {
-            return (arg as (tx: unknown) => unknown)({ expense: mExpense, shoppingListItem: mItem });
-        }
-        return Promise.all(arg as Promise<unknown>[]);
-    });
+    mTransaction.mockImplementation((arg: unknown) => Promise.all(arg as Promise<unknown>[]));
 });
 
 describe("createListForScope", () => {
@@ -157,24 +132,42 @@ describe("deleteListForScope — idempotent", () => {
 });
 
 describe("createItemForScope", () => {
-    it("adds an item (sortOrder=max+1, only name required)", async () => {
+    it("adds an item (sortOrder=max+1, only name required; no price field)", async () => {
         mList.findUnique.mockResolvedValue(groupList);
         mItem.aggregate.mockResolvedValue({ _max: { sortOrder: 2 } });
         mItem.create.mockResolvedValue({ id: "i1" });
-        await createItemForScope(GROUP, "l1", { name: "leche" });
+        await createItemForScope(GROUP, "l1", { name: "pilas" });
         const data = mItem.create.mock.calls[0][0].data;
         expect(data.listId).toBe("l1");
-        expect(data.name).toBe("leche");
+        expect(data.name).toBe("pilas");
         expect(data.sortOrder).toBe(3);
         expect(data.quantity).toBeNull();
-        expect(data.priceCents).toBeNull();
+        expect("priceCents" in data).toBe(false);
+        // "pilas" matches no aisle keyword → null (auto-assign never forces "otros").
+        expect(data.aisle).toBeNull();
     });
 
-    it("rejects a negative price with 400", async () => {
+    it("auto-assigns an aisle from the name", async () => {
         mList.findUnique.mockResolvedValue(groupList);
-        const err = await expectError(() => createItemForScope(GROUP, "l1", { name: "leche", priceCents: -5 }));
+        mItem.aggregate.mockResolvedValue({ _max: { sortOrder: 0 } });
+        mItem.create.mockResolvedValue({ id: "i2" });
+        await createItemForScope(GROUP, "l1", { name: "Leche entera" });
+        expect(mItem.create.mock.calls[0][0].data.aisle).toBe("lacteos");
+    });
+
+    it("honours an explicit valid aisle over auto-assign", async () => {
+        mList.findUnique.mockResolvedValue(groupList);
+        mItem.aggregate.mockResolvedValue({ _max: { sortOrder: 0 } });
+        mItem.create.mockResolvedValue({ id: "i3" });
+        await createItemForScope(GROUP, "l1", { name: "Leche", aisle: "otros" });
+        expect(mItem.create.mock.calls[0][0].data.aisle).toBe("otros");
+    });
+
+    it("rejects an invalid aisle with 400", async () => {
+        mList.findUnique.mockResolvedValue(groupList);
+        const err = await expectError(() => createItemForScope(GROUP, "l1", { name: "x", aisle: "nope" }));
         expect(err.status).toBe(400);
-        expect(err.code).toBe("INVALID_PRICE");
+        expect(err.code).toBe("INVALID_AISLE");
     });
 
     it("rejects a non-integer quantity with 400", async () => {
@@ -186,16 +179,25 @@ describe("createItemForScope", () => {
 });
 
 describe("updateItemForScope — field edit", () => {
-    it("updates editable fields of an in-scope item", async () => {
+    it("updates editable fields of an in-scope item (name/quantity/unit/aisle)", async () => {
         mList.findUnique.mockResolvedValue(groupList);
         mItem.findUnique.mockResolvedValue({ id: "i1", listId: "l1" });
         mItem.update.mockResolvedValue({ id: "i1" });
-        await updateItemForScope(GROUP, "l1", "i1", { name: "pan", priceCents: 120, quantity: 2, unit: "ud" });
+        await updateItemForScope(GROUP, "l1", "i1", { name: "pan", quantity: 2, unit: "ud", aisle: "panaderia" });
         const data = mItem.update.mock.calls[0][0].data;
         expect(data.name).toBe("pan");
-        expect(data.priceCents).toBe(120);
         expect(data.quantity).toBe(2);
         expect(data.unit).toBe("ud");
+        expect(data.aisle).toBe("panaderia");
+        expect("priceCents" in data).toBe(false);
+    });
+
+    it("clears the aisle when passed empty", async () => {
+        mList.findUnique.mockResolvedValue(groupList);
+        mItem.findUnique.mockResolvedValue({ id: "i1", listId: "l1" });
+        mItem.update.mockResolvedValue({ id: "i1" });
+        await updateItemForScope(GROUP, "l1", "i1", { aisle: "" });
+        expect(mItem.update.mock.calls[0][0].data.aisle).toBeNull();
     });
 
     it("400s when there is nothing to update", async () => {
@@ -249,6 +251,30 @@ describe("setItemChecked — idempotent toggle", () => {
     });
 });
 
+describe("clearCheckedForScope — vaciar comprados", () => {
+    it("deletes the checked items of an in-scope list and returns the count", async () => {
+        mList.findUnique.mockResolvedValue(groupList);
+        mItem.deleteMany.mockResolvedValue({ count: 3 });
+        const res = await clearCheckedForScope(GROUP, "l1");
+        expect(res).toEqual({ cleared: 3 });
+        expect(mItem.deleteMany).toHaveBeenCalledWith({ where: { listId: "l1", checked: true } });
+    });
+
+    it("is idempotent (cleared:0 when nothing was checked)", async () => {
+        mList.findUnique.mockResolvedValue(groupList);
+        mItem.deleteMany.mockResolvedValue({ count: 0 });
+        const res = await clearCheckedForScope(GROUP, "l1");
+        expect(res).toEqual({ cleared: 0 });
+    });
+
+    it("403s when the list belongs to another scope (no delete)", async () => {
+        mList.findUnique.mockResolvedValue({ ...groupList, groupId: "other" });
+        const err = await expectError(() => clearCheckedForScope(GROUP, "l1"));
+        expect(err.status).toBe(403);
+        expect(mItem.deleteMany).not.toHaveBeenCalled();
+    });
+});
+
 describe("deleteItemForScope — idempotent", () => {
     it("404s when nothing was deleted", async () => {
         mList.findUnique.mockResolvedValue(groupList);
@@ -285,84 +311,5 @@ describe("reorderListsForScope", () => {
         const res = await reorderListsForScope(GROUP, ["y", "x"]);
         expect(res).toEqual({ reordered: 2 });
         expect(mList.update).toHaveBeenNthCalledWith(1, { where: { id: "y" }, data: { sortOrder: 1 } });
-    });
-});
-
-describe("checkoutList — group bridge", () => {
-    const items = [
-        { id: "i1", priceCents: 300, linkedExpenseId: null },
-        { id: "i2", priceCents: 200, linkedExpenseId: null },
-    ];
-
-    it("400s when there are no eligible (checked+priced+unlinked) items", async () => {
-        mList.findUnique.mockResolvedValue(groupList);
-        mItem.findMany.mockResolvedValue([]);
-        const err = await expectError(() => checkoutList(GROUP, "l1", { actorUserId: "u1", category: "food" }));
-        expect(err.status).toBe(400);
-        expect(err.code).toBe("NOTHING_TO_CHECKOUT");
-    });
-
-    it("creates ONE shared expense, posts the ledger and seals linkedExpenseId", async () => {
-        mList.findUnique.mockResolvedValue(groupList);
-        mItem.findMany.mockResolvedValue(items);
-        mResolveCategoryId.mockResolvedValue("cat1");
-        mGetGroupMembers.mockResolvedValue([{ id: "u1" }, { id: "u2" }]);
-        mCalculateSplitAmounts.mockReturnValue([
-            { userId: "u1", amount: 250 },
-            { userId: "u2", amount: 250 },
-        ]);
-        mExpense.create.mockResolvedValue({
-            id: "e1", amount: 500, paidById: "u1", date: new Date(),
-            splits: [{ userId: "u1", amount: 250 }, { userId: "u2", amount: 250 }],
-        });
-        mItem.updateMany.mockResolvedValue({ count: 2 });
-
-        const res = await checkoutList(GROUP, "l1", { actorUserId: "u1", category: "food" });
-        expect(res).toEqual({ expenseId: "e1", itemCount: 2, amountCents: 500 });
-
-        const created = mExpense.create.mock.calls[0][0].data;
-        expect(created.amount).toBe(500);
-        expect(created.visibility).toBe("SHARED");
-        expect(created.coupleId).toBe("g1");
-        expect(created.categoryId).toBe("cat1");
-        expect(created.paidById).toBe("u1");
-        expect(created.splitStrategy).toBe("EQUAL");
-        expect(mPostExpenseLedger).toHaveBeenCalledOnce();
-        // Sealing is guarded on linkedExpenseId:null (idempotent).
-        const seal = mItem.updateMany.mock.calls[0][0];
-        expect(seal.where).toEqual({ id: { in: ["i1", "i2"] }, linkedExpenseId: null });
-        expect(seal.data).toEqual({ linkedExpenseId: "e1" });
-    });
-
-    it("honours an explicit member payer, falls back to the actor otherwise", async () => {
-        mList.findUnique.mockResolvedValue(groupList);
-        mItem.findMany.mockResolvedValue(items);
-        mResolveCategoryId.mockResolvedValue("cat1");
-        mGetGroupMembers.mockResolvedValue([{ id: "u1" }, { id: "u2" }]);
-        mCalculateSplitAmounts.mockReturnValue([{ userId: "u1", amount: 500 }]);
-        mExpense.create.mockResolvedValue({ id: "e2", amount: 500, paidById: "u2", date: new Date(), splits: [] });
-        mItem.updateMany.mockResolvedValue({ count: 2 });
-
-        await checkoutList(GROUP, "l1", { actorUserId: "u1", paidById: "u2", category: "food" });
-        expect(mExpense.create.mock.calls[0][0].data.paidById).toBe("u2");
-    });
-});
-
-describe("checkoutList — personal bridge", () => {
-    it("creates a PERSONAL expense (no split, no ledger) and seals items", async () => {
-        mList.findUnique.mockResolvedValue(ownerList);
-        mItem.findMany.mockResolvedValue([{ id: "p1", priceCents: 700, linkedExpenseId: null }]);
-        mResolveCategoryId.mockResolvedValue("catP");
-        mExpense.create.mockResolvedValue({ id: "ep", amount: 700, date: new Date() });
-        mItem.updateMany.mockResolvedValue({ count: 1 });
-
-        const res = await checkoutList(OWNER, "lp", { actorUserId: "u1", category: "health" });
-        expect(res).toEqual({ expenseId: "ep", itemCount: 1, amountCents: 700 });
-        const created = mExpense.create.mock.calls[0][0].data;
-        expect(created.visibility).toBe("PERSONAL");
-        expect(created.coupleId).toBeNull();
-        expect(created.ownerId).toBe("u1");
-        expect(created.splits).toBeUndefined();
-        expect(mPostExpenseLedger).not.toHaveBeenCalled();
     });
 });

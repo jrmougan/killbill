@@ -5,25 +5,24 @@ import { Check, Pencil, Trash2, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { formatCurrency, parseAmountInput, toCents, formatAmountInput, toEuros } from "@/lib/currency";
+import { AISLES, getAisle } from "@/lib/aisles";
 
 export interface ShoppingItem {
     id: string;
     name: string;
     quantity: number | null;
     unit: string | null;
-    priceCents: number | null;
     note: string | null;
+    aisle: string | null;
     checked: boolean;
-    linked: boolean;
 }
 
 export interface ItemPatch {
     name?: string;
     quantity?: number | null;
     unit?: string | null;
-    priceCents?: number | null;
     note?: string | null;
+    aisle?: string | null;
 }
 
 interface ShoppingItemRowProps {
@@ -34,32 +33,31 @@ interface ShoppingItemRowProps {
     onDelete: () => void;
 }
 
-/** A single list row: idempotent checkbox toggle, meta, "en gasto" badge, inline edit + delete. */
+/** A single list row: idempotent checkbox toggle, aisle badge, meta, inline edit + delete. */
 export function ShoppingItemRow({ item, busy, onToggle, onSave, onDelete }: ShoppingItemRowProps) {
     const [editing, setEditing] = useState(false);
     const [name, setName] = useState(item.name);
-    const [price, setPrice] = useState(item.priceCents != null ? formatAmountInput(toEuros(item.priceCents)) : "");
     const [quantity, setQuantity] = useState(item.quantity != null ? String(item.quantity) : "");
     const [unit, setUnit] = useState(item.unit ?? "");
     const [note, setNote] = useState(item.note ?? "");
+    const [aisle, setAisle] = useState(item.aisle ?? "");
     const [saving, setSaving] = useState(false);
 
+    const aisleMeta = getAisle(item.aisle);
     const meta: string[] = [];
     if (item.quantity != null) meta.push(`${item.quantity}${item.unit ? ` ${item.unit}` : ""}`);
     else if (item.unit) meta.push(item.unit);
-    if (item.priceCents != null) meta.push(formatCurrency(item.priceCents));
 
     const handleSave = async () => {
         if (saving) return;
         setSaving(true);
-        const trimmedPrice = price.trim();
         const trimmedQty = quantity.trim();
         const patch: ItemPatch = {
             name: name.trim(),
-            priceCents: trimmedPrice === "" ? null : toCents(parseAmountInput(trimmedPrice)),
-            quantity: trimmedQty === "" ? null : Math.trunc(parseAmountInput(trimmedQty)),
+            quantity: trimmedQty === "" ? null : Math.trunc(Number(trimmedQty.replace(",", "."))),
             unit: unit.trim() === "" ? null : unit.trim(),
             note: note.trim() === "" ? null : note.trim(),
+            aisle: aisle === "" ? null : aisle,
         };
         const ok = await onSave(patch);
         setSaving(false);
@@ -74,9 +72,19 @@ export function ShoppingItemRow({ item, busy, onToggle, onSave, onDelete }: Shop
                     <Input value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="Cantidad" inputMode="numeric" />
                     <Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Unidad (ud/kg…)" />
                 </div>
-                <div className="flex gap-2">
-                    <Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="Precio €" inputMode="decimal" />
-                </div>
+                <select
+                    value={aisle}
+                    onChange={(e) => setAisle(e.target.value)}
+                    aria-label="Pasillo"
+                    className="w-full h-10 rounded-md border border-[color:var(--line-strong)] bg-background px-3 text-sm text-foreground"
+                >
+                    <option value="">Sin pasillo</option>
+                    {AISLES.map((a) => (
+                        <option key={a.key} value={a.key}>
+                            {a.emoji} {a.label}
+                        </option>
+                    ))}
+                </select>
                 <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Nota (opcional)" />
                 <div className="flex gap-2 justify-end">
                     <Button variant="ghost" size="sm" onClick={() => setEditing(false)} className="gap-1">
@@ -108,12 +116,8 @@ export function ShoppingItemRow({ item, busy, onToggle, onSave, onDelete }: Shop
 
             <div className="flex-1 min-w-0">
                 <p className={cn("text-sm font-medium truncate", item.checked ? "line-through text-muted-foreground" : "text-foreground")}>
+                    {aisleMeta && <span className="mr-1.5" title={aisleMeta.label} aria-label={aisleMeta.label}>{aisleMeta.emoji}</span>}
                     {item.name}
-                    {item.linked && (
-                        <span className="ml-2 px-1.5 py-px rounded bg-secondary text-[10px] font-semibold text-muted-foreground align-middle">
-                            en gasto
-                        </span>
-                    )}
                 </p>
                 {(meta.length > 0 || item.note) && (
                     <p className="text-[11px] text-muted-foreground truncate">

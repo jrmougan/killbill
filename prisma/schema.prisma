@@ -342,8 +342,6 @@ model Expense {
   tags        ExpenseTag[]
   lineItems   ReceiptLineItem[]
   ledgerTransactions LedgerTransaction[]
-  // Items de lista de la compra materializados en este gasto (puente lista→gasto).
-  shoppingItems ShoppingListItem[] @relation("ShoppingItemExpense")
 
   settlementId String?
   settlement   Settlement? @relation(fields: [settlementId], references: [id])
@@ -688,10 +686,11 @@ model ShoppingList {
   @@index([ownerId])
 }
 
-// Item de una lista de la compra. Importes en CÉNTIMOS (Int). El item NACE SIN
-// categoryId: la categoría se elige una sola vez en el puente lista→gasto. SIN
-// @@unique en (listId,name): permite añadir el mismo producto dos veces y evita
-// P2002 en alta paralela.
+// Item de una lista de la compra. Herramienta de PLANIFICACIÓN de la compra
+// física (el gasto lo contabiliza el OCR del ticket, no la lista). SIN @@unique en
+// (listId,name): permite añadir el mismo producto dos veces y evita P2002 en alta
+// paralela. `aisle` es una categoría OPCIONAL por PASILLO del súper (auto-asignada
+// por nombre), ortogonal a las categorías de gasto: organiza el recorrido físico.
 model ShoppingListItem {
   id     String       @id @default(cuid())
   listId String
@@ -700,24 +699,18 @@ model ShoppingListItem {
   name       String
   quantity   Int?    // opcional
   unit       String? // libre en v1 (ud/kg/g/L/pack); no enum todavía
-  priceCents Int?    // céntimos; puente hacia Expense.amount
   note       String? // nota opcional a nivel de item
+  aisle      String? // clave de pasillo del súper (vocabulario en src/lib/aisles.ts); nullable, auto-asignada
 
   checked     Boolean   @default(false)
   checkedById String?
   checkedBy   User?     @relation("ShoppingItemChecker", fields: [checkedById], references: [id], onDelete: SetNull)
   checkedAt   DateTime?
 
-  // Idempotencia del puente lista→gasto: item consumido queda sellado; SetNull si
-  // se borra el gasto (auditoría/enlace financiero no bloquea ni se pierde).
-  linkedExpenseId String?
-  linkedExpense   Expense? @relation("ShoppingItemExpense", fields: [linkedExpenseId], references: [id], onDelete: SetNull)
-
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([listId])
-  @@index([linkedExpenseId])
   @@index([checkedById])
 }

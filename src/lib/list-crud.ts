@@ -1,28 +1,28 @@
 /**
- * Shared CRUD + validation for shopping lists and their items (Listas fase 1).
+ * Shared CRUD + validation for shopping lists and their items.
  *
  * Both the space API (`/api/spaces/[id]/lists/...`) and the personal API
  * (`/api/me/lists/...`) reuse this module: the routes only own AUTHORIZATION
  * (requireSpaceAccess vs getSessionCtx), while all validation, scope/XOR
- * enforcement, sortOrder allocation, the idempotent toggle and the list→expense
- * bridge live here — one place, one behaviour. Mirrors `category-crud.ts`.
+ * enforcement, sortOrder allocation and the idempotent toggle live here — one
+ * place, one behaviour. Mirrors `category-crud.ts`.
+ *
+ * The list is a PLANNING tool for the physical shop (what's missing, who grabs
+ * it, in which aisle order, ticked off together in near-real-time). The expense
+ * itself is materialized by the receipt OCR, NOT by the list — there is no
+ * list→expense bridge.
  *
  * Scope decisions (owner-fixed, see the task brief):
  *  - A list is of a GROUP (`groupId`) or PERSONAL (`ownerId`) — XOR, discriminated.
  *  - Any ACTIVE member may create/edit/delete lists AND items (no role gate); the
  *    space writability gate lives in the route (requireSpaceAccess). GUEST out of v1.
- *  - Items are born WITHOUT a category; the category is chosen once in the bridge.
  *  - `checked` toggles via a condition-by-id updateMany (never read-modify-write),
  *    so two shoppers marking the same item can never corrupt state.
- *  - The bridge materializes ONE Expense reusing the finance primitives
- *    (resolveCategoryId + calculateSplitAmounts + postExpenseLedger); idempotency
- *    is sealed by stamping `linkedExpenseId`, so already-linked items are excluded.
+ *  - `aisle` (supermarket aisle) is an OPTIONAL per-item category, auto-assigned
+ *    from the name and validated against the aisle vocabulary (see ./aisles).
  */
 import { prisma } from "./db";
-import { getGroupMembers } from "./membership";
-import { resolveCategoryId } from "./category-db";
-import { calculateSplitAmounts } from "./splits";
-import { postExpenseLedger } from "./ledger";
+import { normalizeAisle, autoAssignAisle } from "./aisles";
 
 const MAX_LIST_NAME = 60;
 const MAX_DESCRIPTION = 200;
@@ -30,7 +30,6 @@ const MAX_ITEM_NAME = 80;
 const MAX_UNIT = 20;
 const MAX_NOTE = 200;
 const MAX_QUANTITY = 100000;
-const MAX_PRICE_CENTS = 100000000; // 1_000_000.00 €
 
 /**
  * Write scope for a list mutation. XOR by construction (discriminated union): a
@@ -64,19 +63,10 @@ export interface ItemCreateInput {
     name?: unknown;
     quantity?: unknown;
     unit?: unknown;
-    priceCents?: unknown;
     note?: unknown;
+    aisle?: unknown;
 }
 export type ItemPatchInput = ItemCreateInput;
-
-export interface CheckoutInput {
-    /** The user performing the checkout (payer default; owner of the expense book). */
-    actorUserId: string;
-    /** Optional explicit payer (group lists only) — must be an ACTIVE member. */
-    paidById?: unknown;
-    /** Category key chosen once for the materialized expense. */
-    category?: unknown;
-}
 
 /** Prisma `where` fragment selecting the rows of a scope. */
 function scopeWhere(scope: ListWriteScope): { groupId: string } | { ownerId: string } {
@@ -133,13 +123,17 @@ function validateQuantity(raw: unknown): number | null {
     return raw;
 }
 
-/** Optional non-negative integer price in CENTS → int or null. */
-function validatePriceCents(raw: unknown): number | null {
+/**
+ * Optional aisle key. `null` clears it; a non-empty string must be a valid aisle
+ * key (validated + normalized against the aisle vocabulary). Empty/undefined ⇒
+ * left untouched at the caller (create resolves it, patch skips it).
+ */
+function validateAisle(raw: unknown): string | null {
     if (raw === undefined || raw === null || raw === "") return null;
-    if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 0 || raw > MAX_PRICE_CENTS) {
-        throw new ListError(400, "INVALID_PRICE", "El precio debe ser un entero de céntimos no negativo");
-    }
-    return raw;
+    if (typeof raw !== "string") throw new ListError(400, "INVALID_AISLE", "Pasillo no válido");
+    const key = normalizeAisle(raw);
+    if (!key) throw new ListError(400, "INVALID_AISLE", "Pasillo no válido");
+    return key;
 }
 
 // ── loaders (scope enforcement) ───────────────────────────────────────────────
@@ -227,11 +221,12 @@ export async function createItemForScope(scope: ListWriteScope, listId: string, 
     const name = validateItemName(input.name);
     const quantity = validateQuantity(input.quantity);
     const unit = validateOptionalText(input.unit, MAX_UNIT, "INVALID_UNIT");
-    const priceCents = validatePriceCents(input.priceCents);
     const note = validateOptionalText(input.note, MAX_NOTE, "INVALID_NOTE");
+    // Aisle: honour an explicit valid key, else auto-assign from the name (nullable).
+    const aisle = input.aisle !== undefined ? validateAisle(input.aisle) : autoAssignAisle(name);
     const sortOrder = await nextItemSortOrder(listId);
     return prisma.shoppingListItem.create({
-        data: { listId, name, quantity, unit, priceCents, note, sortOrder },
+        data: { listId, name, quantity, unit, note, aisle, sortOrder },
     });
 }
 
@@ -246,7 +241,7 @@ async function loadItemInScope(scope: ListWriteScope, listId: string, itemId: st
     return item;
 }
 
-/** Edit an item's non-checked fields (name/quantity/unit/priceCents/note). */
+/** Edit an item's non-checked fields (name/quantity/unit/note/aisle). */
 export async function updateItemForScope(
     scope: ListWriteScope,
     listId: string,
@@ -258,14 +253,14 @@ export async function updateItemForScope(
         name?: string;
         quantity?: number | null;
         unit?: string | null;
-        priceCents?: number | null;
         note?: string | null;
+        aisle?: string | null;
     } = {};
     if (patch.name !== undefined) data.name = validateItemName(patch.name);
     if (patch.quantity !== undefined) data.quantity = validateQuantity(patch.quantity);
     if (patch.unit !== undefined) data.unit = validateOptionalText(patch.unit, MAX_UNIT, "INVALID_UNIT");
-    if (patch.priceCents !== undefined) data.priceCents = validatePriceCents(patch.priceCents);
     if (patch.note !== undefined) data.note = validateOptionalText(patch.note, MAX_NOTE, "INVALID_NOTE");
+    if (patch.aisle !== undefined) data.aisle = validateAisle(patch.aisle);
     if (Object.keys(data).length === 0) {
         throw new ListError(400, "NOTHING_TO_UPDATE", "Nada que actualizar");
     }
@@ -322,110 +317,14 @@ export async function reorderItemsForScope(scope: ListWriteScope, listId: string
     return { reordered: orderedIds.length };
 }
 
-// ── bridge: list → expense (checkout) ─────────────────────────────────────────
-
-function validateCategoryKey(raw: unknown): string {
-    if (typeof raw !== "string" || raw.trim().length === 0) {
-        throw new ListError(400, "INVALID_CATEGORY", "La categoría es obligatoria");
-    }
-    return raw.trim();
-}
-
 /**
- * Materialize the checked, priced, not-yet-linked items of a list into ONE
- * Expense, reusing the finance primitives (no balance re-implementation):
- *  - GROUP list → SHARED expense split EQUALLY among ACTIVE members + ledger.
- *  - PERSONAL list → PERSONAL expense (no split, no ledger).
- *
- * Idempotency: `linkedExpenseId` is stamped in the SAME transaction (updateMany
- * guarded on `linkedExpenseId:null`), so a retry never double-posts and already
- * linked items are excluded from future conversions.
+ * "Vaciar comprados": DELETE the checked items of a list to recycle the weekly
+ * list without recreating it. A scoped deleteMany (list asserted in scope first)
+ * — the owner-fixed decision is to DELETE the checked rows, not just uncheck them.
+ * Idempotent: returns the count removed (0 when nothing was checked).
  */
-export async function checkoutList(scope: ListWriteScope, listId: string, input: CheckoutInput) {
-    const list = await loadListInScope(scope, listId);
-    const category = validateCategoryKey(input.category);
-
-    const items = await prisma.shoppingListItem.findMany({
-        where: { listId, checked: true, linkedExpenseId: null, priceCents: { gt: 0 } },
-        orderBy: { sortOrder: "asc" },
-    });
-    if (items.length === 0) {
-        throw new ListError(400, "NOTHING_TO_CHECKOUT", "No hay artículos comprados con precio para convertir");
-    }
-    const amountCents = items.reduce((sum, i) => sum + (i.priceCents ?? 0), 0);
-    const itemIds = items.map((i) => i.id);
-
-    if (scope.kind === "group") {
-        const categoryId = await resolveCategoryId(category, { groupId: scope.groupId });
-        if (!categoryId) throw new ListError(400, "INVALID_CATEGORY", "Categoría no válida");
-
-        const members = (await getGroupMembers(scope.groupId)).map((m) => ({ id: m.id }));
-        if (members.length === 0) throw new ListError(400, "NO_MEMBERS", "El espacio no tiene miembros activos");
-        const memberIds = new Set(members.map((m) => m.id));
-
-        // Payer defaults to the actor; only honour an explicit id that is a member.
-        const paidById = typeof input.paidById === "string" && memberIds.has(input.paidById)
-            ? input.paidById
-            : input.actorUserId;
-
-        const splits = calculateSplitAmounts(amountCents, null, members);
-
-        const expense = await prisma.$transaction(async (tx) => {
-            const created = await tx.expense.create({
-                data: {
-                    description: list.name,
-                    amount: amountCents,
-                    categoryId,
-                    paidById,
-                    ownerId: input.actorUserId,
-                    createdById: input.actorUserId,
-                    visibility: "SHARED",
-                    coupleId: scope.groupId,
-                    splitStrategy: "EQUAL",
-                    splits: { create: splits.map((s) => ({ userId: s.userId, amount: s.amount })) },
-                },
-                include: { splits: true },
-            });
-            await postExpenseLedger(tx, {
-                expenseId: created.id,
-                groupId: scope.groupId,
-                amount: created.amount,
-                paidById: created.paidById,
-                occurredAt: created.date,
-                splits: created.splits.map((s) => ({ userId: s.userId, amount: s.amount })),
-                members,
-            });
-            await tx.shoppingListItem.updateMany({
-                where: { id: { in: itemIds }, linkedExpenseId: null },
-                data: { linkedExpenseId: created.id },
-            });
-            return created;
-        });
-        return { expenseId: expense.id, itemCount: items.length, amountCents };
-    }
-
-    // Personal list → PERSONAL expense (owner only), no split, no ledger.
-    const categoryId = await resolveCategoryId(category, { ownerId: scope.ownerId });
-    if (!categoryId) throw new ListError(400, "INVALID_CATEGORY", "Categoría no válida");
-
-    const expense = await prisma.$transaction(async (tx) => {
-        const created = await tx.expense.create({
-            data: {
-                description: list.name,
-                amount: amountCents,
-                categoryId,
-                paidById: scope.ownerId,
-                ownerId: scope.ownerId,
-                createdById: scope.ownerId,
-                visibility: "PERSONAL",
-                coupleId: null,
-            },
-        });
-        await tx.shoppingListItem.updateMany({
-            where: { id: { in: itemIds }, linkedExpenseId: null },
-            data: { linkedExpenseId: created.id },
-        });
-        return created;
-    });
-    return { expenseId: expense.id, itemCount: items.length, amountCents };
+export async function clearCheckedForScope(scope: ListWriteScope, listId: string) {
+    await loadListInScope(scope, listId);
+    const res = await prisma.shoppingListItem.deleteMany({ where: { listId, checked: true } });
+    return { cleared: res.count };
 }

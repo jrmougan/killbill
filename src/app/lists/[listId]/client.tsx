@@ -1,21 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Receipt } from "lucide-react";
+import { ArrowLeft, Trash2, ScanLine } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
-import { formatCurrency } from "@/lib/currency";
-import type { CategoryContext } from "@/lib/category-context";
 import { AddItemInput } from "@/components/shopping/add-item-input";
 import { ShoppingItemRow, type ShoppingItem, type ItemPatch } from "@/components/shopping/shopping-item-row";
-import { CheckoutSheet } from "@/components/shopping/checkout-sheet";
-
-export interface DetailMember {
-    id: string;
-    name: string;
-}
+import { ReconcileSheet, type ReconcileMatch } from "@/components/shopping/reconcile-sheet";
+import { AISLES, getAisle } from "@/lib/aisles";
 
 interface ListDetailClientProps {
     listId: string;
@@ -24,28 +18,42 @@ interface ListDetailClientProps {
     items: ShoppingItem[];
     isGroup: boolean;
     groupId: string | null;
-    members: DetailMember[];
-    currentUserId: string;
 }
 
-export function ListDetailClient({
-    listId,
-    name,
-    description,
-    items: initialItems,
-    isGroup,
-    groupId,
-    members,
-    currentUserId,
-}: ListDetailClientProps) {
+/** Near-live poll of the detail (§5: no realtime). Refreshes only when visible. */
+const POLL_MS = 6000;
+
+const AISLE_ORDER = new Map(AISLES.map((a) => [a.key, a.sortOrder]));
+
+/** Group items by aisle, ordered by the aisle layout; null-aisle group last. */
+function groupByAisle(items: ShoppingItem[]): { key: string | null; items: ShoppingItem[] }[] {
+    const groups = new Map<string | null, ShoppingItem[]>();
+    for (const it of items) {
+        const key = it.aisle && getAisle(it.aisle) ? it.aisle : null;
+        const bucket = groups.get(key);
+        if (bucket) bucket.push(it);
+        else groups.set(key, [it]);
+    }
+    return [...groups.entries()]
+        .map(([key, its]) => ({ key, items: its }))
+        .sort((a, b) => {
+            const oa = a.key ? (AISLE_ORDER.get(a.key) ?? 100) : 1000;
+            const ob = b.key ? (AISLE_ORDER.get(b.key) ?? 100) : 1000;
+            return oa - ob;
+        });
+}
+
+export function ListDetailClient({ listId, name, description, items: initialItems, isGroup, groupId }: ListDetailClientProps) {
     const router = useRouter();
     const [items, setItems] = useState<ShoppingItem[]>(initialItems);
     const [busyId, setBusyId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [checkoutOpen, setCheckoutOpen] = useState(false);
+    const [reconciling, setReconciling] = useState(false);
+    const [matches, setMatches] = useState<ReconcileMatch[] | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Keep local state in sync when the server re-renders (another member's change
-    // arrives via router.refresh / focus refresh).
+    // arrives via router.refresh / focus / poll).
     useEffect(() => {
         setItems(initialItems);
     }, [initialItems]);
@@ -54,23 +62,26 @@ export function ListDetailClient({
         () => (isGroup ? `/api/spaces/${groupId}/lists/${listId}` : `/api/me/lists/${listId}`),
         [isGroup, groupId, listId],
     );
-    const categoryContext: CategoryContext = useMemo(
-        () => (isGroup && groupId ? { kind: "shared", groupId } : { kind: "personal" }),
-        [isGroup, groupId],
-    );
 
-    // Refresh from the server when the tab regains focus (no realtime; §5 accepted).
+    // Refresh on focus + a light poll while the tab is visible (near-live collab).
     useEffect(() => {
-        const onFocus = () => router.refresh();
-        window.addEventListener("focus", onFocus);
-        return () => window.removeEventListener("focus", onFocus);
+        const refresh = () => {
+            if (document.visibilityState === "visible") router.refresh();
+        };
+        window.addEventListener("focus", refresh);
+        const timer = setInterval(refresh, POLL_MS);
+        return () => {
+            window.removeEventListener("focus", refresh);
+            clearInterval(timer);
+        };
     }, [router]);
 
-    const eligible = items.filter((i) => i.checked && !i.linked && (i.priceCents ?? 0) > 0);
-    const checkoutTotal = eligible.reduce((s, i) => s + (i.priceCents ?? 0), 0);
+    const checkedCount = items.filter((i) => i.checked).length;
+    const grouped = useMemo(() => groupByAisle(items), [items]);
+    const showAisleHeaders = grouped.length > 1 || (grouped[0]?.key != null);
 
     const handleAdd = useCallback(
-        async (input: { name: string; priceCents: number | null }): Promise<boolean> => {
+        async (input: { name: string }): Promise<boolean> => {
             setError(null);
             try {
                 const res = await fetch(`${apiBase}/items`, {
@@ -91,10 +102,9 @@ export function ListDetailClient({
                         name: item.name,
                         quantity: item.quantity ?? null,
                         unit: item.unit ?? null,
-                        priceCents: item.priceCents ?? null,
                         note: item.note ?? null,
+                        aisle: item.aisle ?? null,
                         checked: false,
-                        linked: false,
                     },
                 ]);
                 router.refresh();
@@ -111,7 +121,6 @@ export function ListDetailClient({
         async (item: ShoppingItem, checked: boolean) => {
             setBusyId(item.id);
             setError(null);
-            // Optimistic.
             setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, checked } : i)));
             try {
                 const res = await fetch(`${apiBase}/items/${item.id}`, {
@@ -158,8 +167,8 @@ export function ListDetailClient({
                                   name: updated.name,
                                   quantity: updated.quantity ?? null,
                                   unit: updated.unit ?? null,
-                                  priceCents: updated.priceCents ?? null,
                                   note: updated.note ?? null,
+                                  aisle: updated.aisle ?? null,
                               }
                             : i,
                     ),
@@ -195,6 +204,56 @@ export function ListDetailClient({
         [apiBase, router],
     );
 
+    const handleClearChecked = useCallback(async () => {
+        if (!window.confirm("¿Vaciar los comprados? Se borrarán los artículos marcados (la lista se conserva).")) return;
+        setError(null);
+        try {
+            const res = await fetch(`${apiBase}/clear-checked`, { method: "POST" });
+            if (res.ok) {
+                setItems((prev) => prev.filter((i) => !i.checked));
+                router.refresh();
+            } else {
+                setError("No se pudieron vaciar los comprados.");
+            }
+        } catch {
+            setError("No se pudieron vaciar los comprados.");
+        }
+    }, [apiBase, router]);
+
+    const handleReceiptPicked = useCallback(
+        async (file: File) => {
+            setReconciling(true);
+            setError(null);
+            try {
+                const form = new FormData();
+                form.append("image", file);
+                const res = await fetch(`${apiBase}/reconcile`, { method: "POST", body: form });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    setError(data.error ?? "No se pudo analizar el ticket.");
+                    return;
+                }
+                setMatches(data.matches ?? []);
+            } catch {
+                setError("No se pudo analizar el ticket.");
+            } finally {
+                setReconciling(false);
+            }
+        },
+        [apiBase],
+    );
+
+    const confirmMatches = useCallback(
+        async (ids: string[]) => {
+            setMatches(null);
+            for (const id of ids) {
+                const item = items.find((i) => i.id === id);
+                if (item && !item.checked) await handleToggle(item, true);
+            }
+        },
+        [items, handleToggle],
+    );
+
     return (
         <div className="flex flex-col min-h-screen p-4 space-y-5 max-w-md mx-auto pb-28">
             <header className="flex items-center gap-4 pt-2">
@@ -221,46 +280,76 @@ export function ListDetailClient({
                     <p className="text-sm text-muted-foreground">Añade artículos escribiendo arriba.</p>
                 </GlassCard>
             ) : (
-                <section className="space-y-2">
-                    {items.map((item) => (
-                        <ShoppingItemRow
-                            key={item.id}
-                            item={item}
-                            busy={busyId === item.id}
-                            onToggle={(checked) => handleToggle(item, checked)}
-                            onSave={(patch) => handleSave(item, patch)}
-                            onDelete={() => handleDelete(item)}
-                        />
-                    ))}
+                <section className="space-y-4">
+                    {grouped.map((group) => {
+                        const meta = group.key ? getAisle(group.key) : undefined;
+                        return (
+                            <div key={group.key ?? "__none__"} className="space-y-2">
+                                {showAisleHeaders && (
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground px-1">
+                                        {meta ? `${meta.emoji} ${meta.label}` : "Sin pasillo"}
+                                    </p>
+                                )}
+                                {group.items.map((item) => (
+                                    <ShoppingItemRow
+                                        key={item.id}
+                                        item={item}
+                                        busy={busyId === item.id}
+                                        onToggle={(checked) => handleToggle(item, checked)}
+                                        onSave={(patch) => handleSave(item, patch)}
+                                        onDelete={() => handleDelete(item)}
+                                    />
+                                ))}
+                            </div>
+                        );
+                    })}
                 </section>
             )}
 
-            {eligible.length > 0 && (
+            {/* Hidden receipt picker for OCR reconciliation. */}
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleReceiptPicked(file);
+                    e.target.value = "";
+                }}
+            />
+
+            {(items.some((i) => !i.checked) || checkedCount > 0) && (
                 <div className="fixed bottom-0 inset-x-0 p-4 bg-gradient-to-t from-background via-background to-transparent">
-                    <div className="max-w-md mx-auto">
-                        <Button className="w-full gap-2" onClick={() => setCheckoutOpen(true)}>
-                            <Receipt className="h-4 w-4" />
-                            Convertir en gasto · {formatCurrency(checkoutTotal)}
-                        </Button>
+                    <div className="max-w-md mx-auto flex gap-2">
+                        {items.some((i) => !i.checked) && (
+                            <Button
+                                variant="secondary"
+                                className="flex-1 gap-2"
+                                onClick={() => fileInputRef.current?.click()}
+                                isLoading={reconciling}
+                            >
+                                <ScanLine className="h-4 w-4" />
+                                Reconciliar con ticket
+                            </Button>
+                        )}
+                        {checkedCount > 0 && (
+                            <Button variant="ghost" className="gap-2 text-muted-foreground" onClick={handleClearChecked}>
+                                <Trash2 className="h-4 w-4" />
+                                Vaciar comprados ({checkedCount})
+                            </Button>
+                        )}
                     </div>
                 </div>
             )}
 
-            <CheckoutSheet
-                open={checkoutOpen}
-                onClose={() => setCheckoutOpen(false)}
-                listName={name}
-                items={eligible}
-                totalCents={checkoutTotal}
-                members={isGroup ? members : []}
-                currentUserId={currentUserId}
-                categoryContext={categoryContext}
-                endpoint={`${apiBase}/checkout`}
-                onDone={() => {
-                    setCheckoutOpen(false);
-                    router.refresh();
-                }}
-            />
+            {matches !== null && (
+                <ReconcileSheet
+                    matches={matches}
+                    onCancel={() => setMatches(null)}
+                    onConfirm={confirmMatches}
+                />
+            )}
         </div>
     );
 }
