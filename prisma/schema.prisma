@@ -120,6 +120,7 @@ model Couple {
   accounts           Account[]
   ledgerTransactions LedgerTransaction[]
   groupInvites       GroupInvite[]
+  shoppingLists      ShoppingList[]
 
   @@index([status, expiresAt])
 }
@@ -197,6 +198,13 @@ model User {
 
   // Categorías personales (modo INDIVIDUAL): XOR con groupId, patrón Tag/Budget.
   personalCategories Category[] @relation("PersonalCategory")
+
+  // Listas de la compra: personales (ownerId), creadas por (createdById) e items
+  // marcados como comprados por este usuario (checkedById). Auditoría con SetNull;
+  // Cascade solo en personales (borrar usuario arrastra sus listas personales).
+  personalShoppingLists ShoppingList[]     @relation("PersonalShoppingList")
+  createdShoppingLists  ShoppingList[]     @relation("ShoppingListCreator")
+  checkedShoppingItems  ShoppingListItem[] @relation("ShoppingItemChecker")
 }
 
 model InviteCode {
@@ -647,4 +655,62 @@ model Budget {
   @@index([ownerId])
   @@index([categoryId])
   @@index([periodStart])
+}
+
+// Lista de la compra. XOR grupo/personal (patrón Category/Tag): una lista es de
+// grupo (groupId set) o personal (ownerId set). Ambos nullable para admitir
+// listas personales sin migración destructiva. SIN @@unique en name: duplicados
+// ('Mercadona' x2) son legítimos y evitan P2002 en alta concurrente.
+model ShoppingList {
+  id          String  @id @default(cuid())
+  name        String
+  description String? // nota opcional a nivel de lista
+  sortOrder   Int     @default(0)
+
+  groupId String?
+  group   Couple? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  ownerId String?
+  owner   User?   @relation("PersonalShoppingList", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // Auditoría (patrón createdBy/SetNull); la baja de usuario nunca borra la lista.
+  createdById String?
+  createdBy   User?   @relation("ShoppingListCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items ShoppingListItem[]
+
+  @@index([groupId])
+  @@index([ownerId])
+}
+
+// Item de una lista de la compra. Herramienta de PLANIFICACIÓN de la compra
+// física (el gasto lo contabiliza el OCR del ticket, no la lista). SIN @@unique en
+// (listId,name): permite añadir el mismo producto dos veces y evita P2002 en alta
+// paralela. `aisle` es una categoría OPCIONAL por PASILLO del súper (auto-asignada
+// por nombre), ortogonal a las categorías de gasto: organiza el recorrido físico.
+model ShoppingListItem {
+  id     String       @id @default(cuid())
+  listId String
+  list   ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  name       String
+  quantity   Int?    // opcional
+  unit       String? // libre en v1 (ud/kg/g/L/pack); no enum todavía
+  note       String? // nota opcional a nivel de item
+  aisle      String? // clave de pasillo del súper (vocabulario en src/lib/aisles.ts); nullable, auto-asignada
+
+  checked     Boolean   @default(false)
+  checkedById String?
+  checkedBy   User?     @relation("ShoppingItemChecker", fields: [checkedById], references: [id], onDelete: SetNull)
+  checkedAt   DateTime?
+
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listId])
+  @@index([checkedById])
 }

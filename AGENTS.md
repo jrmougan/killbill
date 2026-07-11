@@ -77,6 +77,16 @@ Categories live in the `Category` table on three levels: **system** (8 seeded ro
 - **CRUD**: `/api/spaces/[id]/categories` (OWNER/ADMIN only) and `/api/me/categories` (session-scoped) share `category-crud.ts`. Reserved system keys → 400; delete **requires** an explicit reassignment target (no orphan/silent `other`) and a Budget period collision on the target aborts with **409**. `…/categories/duplicate` clones a system/custom row into a new custom.
 - **Manual step**: system categories must be seeded (`prisma db seed`); the `add_category_owner` migration is additive (nullable `ownerId` column + indexes + FK only).
 
+### Shopping lists (listas de la compra)
+
+`ShoppingList` + `ShoppingListItem` (migration `add_shopping_lists` creates them; `remove_list_bridge_add_aisle` prunes the bridge and adds `aisle` — expand/contract). A list is **group** (`groupId`) or **personal** (`ownerId`) — XOR discriminated; items are lightweight (name required, optional `quantity`/`unit`/`note`/`aisle`) and carry **no `categoryId`**.
+
+**A list is a PLANNING tool only — it NEVER generates an expense.** There is no list→expense bridge: no `checkoutList`, no `linkedExpenseId`, no `priceCents`, no `CheckoutSheet`. The spend is materialized by the receipt **OCR** (`/api/ocr` → `ocr_parser.ts`), which is the single source of truth for the money; the list just tracks what's missing, who grabs it and in which aisle order, ticked off together in near-real-time. All validation, scope/XOR enforcement, sortOrder allocation and the idempotent `checked` toggle (condition-by-id `updateMany`, never read-modify-write) live in `src/lib/list-crud.ts` (reads in `list-read.ts`, error mapping in `list-http.ts`); routes own only authorization.
+
+**Aisle** (`aisle`, nullable): an OPTIONAL per-item supermarket-aisle key, **orthogonal to the 8 expense categories** — it organizes the physical walk through the shop, it does NOT classify spend and never touches the expense `CategoryPicker`. Its own static vocabulary (slug + emoji + `sortOrder` + keywords) lives in `src/lib/aisles.ts`; `autoAssignAisle(name)` best-effort assigns it from the item name (accent-folded keyword match, longest keyword wins, unmatched stays `null` — never forced to "otros"), and an explicit value is validated via `normalizeAisle`.
+
+Routes: space `/api/spaces/[id]/lists/**` (authorized via `requireSpaceAccess`, `allowGuest:false`, writability blocks SETTLING/ARCHIVED) and personal `/api/me/lists/**` (session-scoped by `ownerId`), each with `…/[listId]/clear-checked` (deletes the checked items to recycle the weekly list). `clear-checked`/item routes all re-assert the list belongs to the scope (`getListWithItems`/`loadListInScope`) after the space-access gate. UI under `/lists` (índice Común/Personal + detalle) — `/lists` is proxy-protected.
+
 ### OCR flow
 
 Receipt image uploaded → stored via `/api/upload` → path sent to `/api/ocr` → `ocr_parser.ts` calls Gemini Vision API → returns structured JSON (items + amounts) for user confirmation before saving.

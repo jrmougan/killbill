@@ -16,6 +16,7 @@ import {
     PieChart,
     Tag,
     Shapes,
+    ShoppingCart,
     Download,
     Plus,
     LogIn,
@@ -358,6 +359,10 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
                             <Link href="/categories" className="flex items-center gap-3 w-full h-14 px-4 bg-card border border-[color:var(--line)] rounded-xl hover:bg-secondary transition-colors">
                                 <Shapes className="h-5 w-5 text-muted-foreground" />
                                 <span className="font-medium text-sm text-foreground">Categorías</span>
+                            </Link>
+                            <Link href="/lists" className="flex items-center gap-3 w-full h-14 px-4 bg-card border border-[color:var(--line)] rounded-xl hover:bg-secondary transition-colors">
+                                <ShoppingCart className="h-5 w-5 text-muted-foreground" />
+                                <span className="font-medium text-sm text-foreground">Listas de la compra</span>
                             </Link>
                             <a href="/api/export" download className="flex items-center gap-3 w-full h-14 px-4 bg-card border border-[color:var(--line)] rounded-xl hover:bg-secondary transition-colors">
                                 <Download className="h-5 w-5 text-muted-foreground" />

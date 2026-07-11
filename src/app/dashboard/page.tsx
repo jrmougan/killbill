@@ -4,7 +4,7 @@ import { ExpenseCard } from "@/components/dashboard/expense-card";
 import { User, Expense } from "@/types";
 import { InviteCard } from "@/components/dashboard/invite-card";
 import { JoinGroupCard } from "@/components/dashboard/join-group-card";
-import { Plus, Heart, ArrowLeftRight, Lock } from "lucide-react";
+import { Plus, Heart, ArrowLeftRight, Lock, ShoppingCart, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
@@ -451,6 +451,25 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
             {couple && coupleWaiting && <InviteCard spaceId={couple.id} />}
             </>
+            )}
+
+            {!isGuest && (
+            <section className="space-y-3">
+                <h2 className="text-[13px] font-semibold tracking-[0.04em] uppercase text-muted-foreground">Accesos rápidos</h2>
+                <Link
+                    href="/lists"
+                    className="flex items-center gap-3 w-full h-14 px-4 bg-card border border-[color:var(--line)] rounded-xl hover:bg-secondary transition-colors"
+                >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary shrink-0">
+                        <ShoppingCart className="h-5 w-5 text-primary" />
+                    </span>
+                    <span className="flex flex-col min-w-0">
+                        <span className="text-[15px] font-medium leading-tight">Listas de la compra</span>
+                        <span className="text-[13px] text-muted-foreground leading-tight">Planifica tu compra</span>
+                    </span>
+                    <ChevronRight className="ml-auto h-5 w-5 text-muted-foreground shrink-0" />
+                </Link>
+            </section>
             )}
 
             <section className="space-y-3">
