@@ -91,6 +91,30 @@ Routes: space `/api/spaces/[id]/lists/**` (authorized via `requireSpaceAccess`, 
 
 Receipt image uploaded → stored via `/api/upload` → path sent to `/api/ocr` → `ocr_parser.ts` calls Gemini Vision API → returns structured JSON (items + amounts) for user confirmation before saving.
 
+### MCP server (Model Context Protocol)
+
+The app exposes an MCP endpoint at `POST /api/mcp` (Streamable HTTP transport) so external AI agents (Hermes Agent, Claude Desktop, etc.) can interact with Kill Bill programmatically.
+
+**Architecture**: The MCP endpoint is served by the existing Next.js standalone process — no second process or Docker changes. Auth is `Authorization: Bearer <jwt>` validated via the same `JWT_SECRET` used for browser sessions (`src/lib/mcp-auth.ts` `validateBearerToken`). Guest tokens are rejected. Each MCP session creates an `McpServer` instance (`src/mcp/server.ts` `createServer`) that wraps the raw JWT in an `InternalApiClient` (`src/mcp/internal-client.ts`) — this client injects the JWT as the `session_token` cookie on internal HTTP calls to the existing API routes, so **every tool reuses the full authorization stack** (`requireSpaceAccess`, role gates, space-policy) with zero duplication. The transport is `WebStandardStreamableHTTPServerTransport` (Web-standard `Request`/`Response`, native to Next.js route handlers). Module-level `Map<Mcp-Session-Id, {server, transport}>` stores stateful sessions.
+
+**Token issuance**: `POST /api/me/mcp-token` (requires normal session cookie auth) issues a 90-day JWT with `kind:'mcp'` (`signMcpToken` in `jwt.ts`). TTL configurable via `MCP_TOKEN_TTL_DAYS` env var.
+
+**Tool modules** (`src/mcp/tools/`): each exports a `ToolRegistrar` function that registers tools on the `McpServer`. Tool inputs are validated with Zod (raw shapes, not `z.object()`); outputs are JSON content blocks. Tool `inputSchema` fields use `.describe()` for agent UX. Tools are wired in the `registrars` array in `src/mcp/server.ts`.
+
+- `finance.ts` — `list_spaces`, `get_balance`, `list_expenses`, `create_expense`, `update_expense`, `delete_expense`, `create_settlement`, `confirm_settlement`. Monetary inputs in euros (floats); `customSplits` amounts are converted to cents via `toCents` before posting to the API.
+- `budget-shopping.ts` — `get_budgets`, `get_categories`, `list_shopping_lists`, `create_shopping_list`, `add_shopping_item`, `check_shopping_item`, `clear_checked_items`. Space-vs-personal routing is driven by whether `groupId` is provided.
+- `ocr.ts` — `parse_receipt` accepts base64 image data, forwards to `/api/ocr` as multipart form.
+- `resources-prompts.ts` — Resources `kb://spaces` and `kb://budget-summary`; Prompts `monthly_report`, `settle_up_guide`, `shopping_trip`.
+
+**Hermes Agent config** (`~/.hermes/config.yaml`):
+```yaml
+mcp_servers:
+  killbill:
+    url: "https://finanzas.mougan.es/api/mcp"
+    headers:
+      Authorization: "Bearer <jwt from POST /api/me/mcp-token>"
+```
+
 ### Deployment
 
 GitHub Actions (`.github/workflows/deploy.yml`) on push to `main`: runs the e2e + unit/lint gates, builds a Docker image, pushes it to GHCR (`ghcr.io/jrmougan/killbill`), then triggers a **Coolify** webhook that pulls the new image and redeploys. Migrations run from the **container's start command** (`Dockerfile` `CMD`): `prisma migrate deploy` from the bundled `/prisma-tools` (Prisma CLI + `prisma/migrations`) executes before `node server.js`, so pending migrations auto-apply on every deploy and the server only starts if they succeed (a failed migration leaves the previous container serving). Coolify itself has no pre/post-deploy command. The container runs behind **Traefik** (host `finanzas.mougan.es`) and connects to a dedicated **MySQL 8.0** database (`killbill-mysql-8`, user in `mysql_native_password` — the `@prisma/adapter-mariadb` driver needs it) over the `coolify` Docker network. The production environment must set `JWT_SECRET` and `GEMINI_API_KEY` (auth fails loudly without `JWT_SECRET`).

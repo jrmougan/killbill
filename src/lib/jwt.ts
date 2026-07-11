@@ -87,6 +87,20 @@ export async function refreshGuestToken(payload: JWTPayload): Promise<string | n
     );
 }
 
+/**
+ * Sign an MCP access token — a longer-lived JWT (default 90 days) carrying
+ * `kind: 'mcp'` so it can be distinguished from browser session tokens.
+ * Issued by POST /api/me/mcp-token for use as a Bearer credential by external
+ * agent clients (e.g. Hermes Agent).
+ */
+export async function signMcpToken(payload: JWTPayload, ttlDays = 90): Promise<string> {
+    return await new SignJWT({ ...payload, kind: 'mcp' })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setIssuedAt()
+        .setExpirationTime(`${ttlDays}d`)
+        .sign(getKey());
+}
+
 export async function verifyToken(token: string) {
     try {
         const { payload } = await jwtVerify(token, getKey(), {
