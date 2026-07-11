@@ -67,6 +67,16 @@ Login → bcryptjs password check → JWT signed with `jose` → stored as HttpO
 2. `finance.ts` calculates each user's net balance: `amount paid − fair share of splits ± settlements`
 3. Settlement records zero out debts between specific users
 
+### Category system
+
+Categories live in the `Category` table on three levels: **system** (8 seeded rows, `isSystem=true`, `groupId=null`+`ownerId=null`), **space** (custom rows scoped by `groupId`, for shared/couple spaces), and **personal** (custom rows scoped by `ownerId`, for INDIVIDUAL mode). A custom row *shadows* the system row with the same `key`; the effective set of a context is `system ∪ context-custom` (merge in `category-read.ts`, DB fetch in `category-db.ts` via `getEffectiveCategories`/`resolveCategoryId`). Space and personal customs never leak across scopes — resolution queries one discriminant at a time.
+
+- **No whitelists**: `/api/expenses` and `/api/budget` validate the category key against the effective set via `resolveCategoryId` — an unknown key is a **400**, never silently coerced to `other`.
+- **Icons**: `Category.icon` stores a lucide component *name* (string). `ICON_REGISTRY` (`category-icons.ts`) is the single string→component resolver (`getIconComponent`, `isValidIconName`); the 8 system icon names must stay registered (guarded by `category-icons.test.ts`).
+- **Colors**: rendered inline from `hex` (never a dynamic tailwind class — the JIT purges those). Writes must pass the closed palette check (`isValidCategoryHex`).
+- **CRUD**: `/api/spaces/[id]/categories` (OWNER/ADMIN only) and `/api/me/categories` (session-scoped) share `category-crud.ts`. Reserved system keys → 400; delete **requires** an explicit reassignment target (no orphan/silent `other`) and a Budget period collision on the target aborts with **409**. `…/categories/duplicate` clones a system/custom row into a new custom.
+- **Manual step**: system categories must be seeded (`prisma db seed`); the `add_category_owner` migration is additive (nullable `ownerId` column + indexes + FK only).
+
 ### OCR flow
 
 Receipt image uploaded → stored via `/api/upload` → path sent to `/api/ocr` → `ocr_parser.ts` calls Gemini Vision API → returns structured JSON (items + amounts) for user confirmation before saving.
