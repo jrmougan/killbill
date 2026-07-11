@@ -66,7 +66,7 @@ describe("validateBearerToken", () => {
     expect(result).toBeNull();
   });
 
-  it("returns identity for a valid registered-user token", async () => {
+  it("returns null for a regular browser token", async () => {
     mockVerifyToken.mockResolvedValue({
       userId: "user-123",
       email: "test@test.com",
@@ -75,11 +75,7 @@ describe("validateBearerToken", () => {
     const result = await validateBearerToken(
       makeRequest({ authorization: "Bearer valid.jwt.token" }),
     );
-    expect(result).toEqual({
-      userId: "user-123",
-      email: "test@test.com",
-      isAdmin: true,
-    });
+    expect(result).toBeNull();
   });
 
   it("returns identity for an MCP-kind token", async () => {
@@ -99,17 +95,13 @@ describe("validateBearerToken", () => {
     });
   });
 
-  it("handles missing email and isAdmin gracefully", async () => {
+  it("returns null for a token without an MCP kind", async () => {
     mockVerifyToken.mockResolvedValue({
       userId: "user-789",
     });
     const result = await validateBearerToken(
       makeRequest({ authorization: "Bearer minimal.jwt.token" }),
     );
-    expect(result).toEqual({
-      userId: "user-789",
-      email: undefined,
-      isAdmin: false,
-    });
+    expect(result).toBeNull();
   });
 });

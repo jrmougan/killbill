@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,8 @@ import {
     Plus,
     LogIn,
     LogOut,
+    KeyRound,
+    X,
 } from "lucide-react";
 import Link from "next/link";
 import { LogoutButton } from "@/components/auth/logout-button";
@@ -51,6 +53,12 @@ interface SettingsClientProps {
     activeGroupId: string | null;
 }
 
+type McpToken = {
+    value: string;
+    expiresAt: string;
+    expiresInDays: number;
+};
+
 export function SettingsClient({ user, groups }: SettingsClientProps) {
     const router = useRouter();
     const [name, setName] = useState(user.name);
@@ -67,6 +75,24 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
 
     // Join-group form — routes to the consent screen (no silent join).
     const [joinCode, setJoinCode] = useState("");
+    const [mcpModalOpen, setMcpModalOpen] = useState(false);
+    const [mcpToken, setMcpToken] = useState<McpToken | null>(null);
+    const [generatingMcpToken, setGeneratingMcpToken] = useState(false);
+    const [mcpError, setMcpError] = useState<string | null>(null);
+    const [mcpCopied, setMcpCopied] = useState(false);
+    const mcpRequestRef = useRef<AbortController | null>(null);
+
+    const closeMcpModal = () => {
+        mcpRequestRef.current?.abort();
+        mcpRequestRef.current = null;
+        setMcpModalOpen(false);
+        setMcpToken(null);
+        setMcpError(null);
+        setMcpCopied(false);
+        setGeneratingMcpToken(false);
+    };
+
+    useEffect(() => () => mcpRequestRef.current?.abort(), []);
 
     const handleSaveProfile = async () => {
         setIsSaving(true);
@@ -154,6 +180,46 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
         setCopiedId(id);
         setTimeout(() => setCopiedId(null), 2000);
     };
+
+    const generateMcpToken = async () => {
+        const controller = new AbortController();
+        mcpRequestRef.current = controller;
+        setGeneratingMcpToken(true);
+        setMcpError(null);
+        try {
+            const res = await fetch("/api/me/mcp-token", { method: "POST", signal: controller.signal });
+            const data = await res.json().catch(() => null);
+            if (mcpRequestRef.current !== controller) return;
+            if (!res.ok || typeof data?.token !== "string" || !data.token || typeof data?.expiresAt !== "string" || Number.isNaN(new Date(data.expiresAt).getTime()) || !Number.isInteger(data?.expiresInDays) || data.expiresInDays <= 0) {
+                setMcpError(data?.error || "No se pudo generar el token. Inténtalo de nuevo.");
+                return;
+            }
+            setMcpToken({ value: data.token, expiresAt: data.expiresAt, expiresInDays: data.expiresInDays });
+        } catch {
+            if (mcpRequestRef.current !== controller) return;
+            setMcpError("Error de conexión. Inténtalo de nuevo.");
+        } finally {
+            if (mcpRequestRef.current === controller) {
+                mcpRequestRef.current = null;
+                setGeneratingMcpToken(false);
+            }
+        }
+    };
+
+    const copyMcpToken = async () => {
+        if (!mcpToken) return;
+        try {
+            await navigator.clipboard.writeText(mcpToken.value);
+            setMcpCopied(true);
+            setTimeout(() => setMcpCopied(false), 2000);
+        } catch {
+            setMcpError("No se pudo copiar el token. Selecciónalo y cópialo manualmente.");
+        }
+    };
+
+    const mcpConfig = mcpToken
+        ? `mcp_servers:\n  killbill:\n    url: "${typeof window === "undefined" ? "/api/mcp" : `${window.location.origin}/api/mcp`}"\n    headers:\n      Authorization: "Bearer ${mcpToken.value}"`
+        : "";
 
     return (
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto relative pb-24">
@@ -372,6 +438,35 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
                     </section>
                 )}
 
+                {/* MCP access is personal and available whether or not the user has a group. */}
+                <section className="space-y-4">
+                    <div className="flex items-center gap-2 px-1">
+                        <KeyRound className="h-5 w-5 text-primary" />
+                        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Acceso MCP</h2>
+                    </div>
+
+                    <GlassCard className="p-4 space-y-3">
+                        <div className="flex items-start gap-3">
+                            <div className="h-9 w-9 rounded-xl bg-[var(--accent-tint)] flex items-center justify-center shrink-0">
+                                <KeyRound className="h-4 w-4 text-primary" />
+                            </div>
+                            <div className="space-y-1 min-w-0">
+                                <h3 className="text-sm font-bold text-foreground">Conecta Hermes Agent</h3>
+                                <p className="text-xs leading-relaxed text-muted-foreground">
+                                    Genera un token para que Hermes Agent pueda acceder a tu cuenta durante el periodo configurado.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-start gap-2 rounded-xl bg-[var(--negative-tint)] border border-[color:var(--line)] px-3 py-2.5 text-xs text-foreground">
+                            <ShieldAlert className="h-4 w-4 text-destructive shrink-0 mt-px" />
+                            <span>Trátalo como una contraseña: quien tenga este token podrá acceder a tu cuenta.</span>
+                        </div>
+                        <Button className="w-full gap-2" onClick={() => setMcpModalOpen(true)}>
+                            <KeyRound className="h-4 w-4" /> Generar token MCP
+                        </Button>
+                    </GlassCard>
+                </section>
+
                 {/* Account Section */}
                 <section className="space-y-4">
                     <div className="flex items-center gap-2 px-1">
@@ -389,6 +484,58 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">EQUIL App v1.0.0 Beta</p>
                 <p className="text-[10px] text-[color:var(--ink-3)]">Hecho con ❤️ para compartir gastos</p>
             </footer>
+
+            {mcpModalOpen && (
+                <div className="fixed inset-0 bg-[color:var(--ink)]/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-200">
+                    <div className="bg-card border border-[color:var(--line)] rounded-t-2xl sm:rounded-2xl p-5 max-w-md w-full max-h-[90vh] overflow-y-auto space-y-4 animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+                        <div className="flex justify-end -mb-2">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={closeMcpModal} aria-label="Cerrar">
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+
+                        {mcpToken ? (
+                            <>
+                                <div className="space-y-1">
+                                    <h2 className="text-base font-bold text-foreground">Guarda tu token ahora</h2>
+                                    <p className="text-sm text-muted-foreground">Solo se muestra una vez. Caduca en {mcpToken.expiresInDays} días, el {new Date(mcpToken.expiresAt).toLocaleDateString("es-ES", { dateStyle: "long" })}.</p>
+                                </div>
+                                <div className="rounded-xl bg-secondary border border-[color:var(--line)] p-3 space-y-2">
+                                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Token MCP</p>
+                                    <code className="block select-all break-all text-xs font-mono text-foreground">{mcpToken.value}</code>
+                                </div>
+                                <Button variant="secondary" className="w-full gap-2" onClick={copyMcpToken}>
+                                    {mcpCopied ? <Check className="h-4 w-4 text-[color:var(--positive)]" /> : <Copy className="h-4 w-4" />}
+                                    {mcpCopied ? "Token copiado" : "Copiar token"}
+                                </Button>
+                                {mcpError && <p className="text-xs text-destructive">{mcpError}</p>}
+                                <div className="rounded-xl bg-secondary border border-[color:var(--line)] p-3 space-y-2">
+                                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">~/.hermes/config.yaml</p>
+                                    <pre className="select-all whitespace-pre-wrap break-all text-[11px] leading-relaxed font-mono text-foreground">{mcpConfig}</pre>
+                                </div>
+                                <Button className="w-full" onClick={closeMcpModal}>He terminado</Button>
+                            </>
+                        ) : (
+                            <>
+                                <div className="space-y-2">
+                                    <h2 className="text-base font-bold text-foreground">¿Generar token para Hermes Agent?</h2>
+                                    <p className="text-sm leading-relaxed text-muted-foreground">
+                                        El token dará acceso a tu cuenta durante el periodo configurado. Se mostrará una sola vez.
+                                    </p>
+                                    <p className="text-sm font-medium text-foreground">
+                                        Cerrar este diálogo no revoca el token una vez generado.
+                                    </p>
+                                </div>
+                                {mcpError && <p className="text-xs text-destructive">{mcpError}</p>}
+                                <div className="flex gap-3 pt-1">
+                                    <Button variant="secondary" className="flex-1" onClick={closeMcpModal}>Cancelar</Button>
+                                    <Button className="flex-1" onClick={generateMcpToken} isLoading={generatingMcpToken}>Generar</Button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

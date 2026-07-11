@@ -5,7 +5,7 @@ import { verifyToken } from "@/lib/jwt";
  *
  * Extracts a JWT from the `Authorization: Bearer …` header and validates it
  * using the same `JWT_SECRET` and `verifyToken` used for browser sessions.
- * Guest tokens are rejected — guests are too restricted for programmatic access.
+ * Only dedicated MCP tokens are accepted; browser and guest tokens are rejected.
  */
 
 export type McpIdentity = {
@@ -24,8 +24,7 @@ export async function validateBearerToken(request: Request): Promise<McpIdentity
   const payload = await verifyToken(token);
   if (!payload?.userId || typeof payload.userId !== "string") return null;
 
-  // Guest tokens are rejected for MCP — they're short-lived and restricted.
-  if (payload.kind === "guest") return null;
+  if (payload.kind !== "mcp") return null;
 
   return {
     userId: payload.userId,
