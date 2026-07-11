@@ -116,7 +116,7 @@ export async function POST(request: Request) {
 
         // Dual-write the relational Category (Phase 2b). Personal budgets have no
         // group, so they resolve to the system category.
-        const categoryId = await resolveCategoryId(category, scope === 'personal' ? null : groupId);
+        const categoryId = await resolveCategoryId(category, scope === 'personal' ? { ownerId: userId } : { groupId });
         // Phase 5 (stop-dual-write): categoryId is now the NOT NULL unique key. An
         // unresolvable (e.g. unseeded) category must fail cleanly, not throw a
         // Prisma NOT-NULL error at upsert time.

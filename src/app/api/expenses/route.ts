@@ -168,7 +168,7 @@ export async function POST(request: Request) {
         // group, so they resolve to the system category.
         const categoryId = await resolveCategoryId(
             normalizedCategory,
-            isPersonalExpense ? null : groupId,
+            isPersonalExpense ? { ownerId: userId } : { groupId },
         );
 
         const expenseData: Prisma.ExpenseUncheckedCreateInput = {

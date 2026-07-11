@@ -196,7 +196,10 @@ export async function PATCH(
         // RecurringSeries in the series-sync block below (using the resolved locals).
         // Keep the relational Category in sync when the enum category changes (Phase 2b).
         if (category !== undefined && category !== null) {
-            updateData.categoryId = await resolveCategoryId(category, expense.coupleId);
+            updateData.categoryId = await resolveCategoryId(
+                category,
+                expense.coupleId ? { groupId: expense.coupleId } : { ownerId: expense.ownerId },
+            );
         }
 
         // Recalculate splits when a split-affecting field changes. `splitWithPartner`

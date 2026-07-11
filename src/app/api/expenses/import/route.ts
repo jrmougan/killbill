@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     const categoryCache = new Map<string, string | null>();
     async function categoryIdFor(key: string): Promise<string | null> {
         const k = key || 'other';
-        if (!categoryCache.has(k)) categoryCache.set(k, await resolveCategoryId(k, null));
+        if (!categoryCache.has(k)) categoryCache.set(k, await resolveCategoryId(k, { ownerId: userId }));
         return categoryCache.get(k) ?? null;
     }
 
