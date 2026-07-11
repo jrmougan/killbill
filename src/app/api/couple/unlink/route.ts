@@ -54,11 +54,28 @@ export async function POST(request: Request) {
             });
 
             if (remainingMembers === 0) {
-                // Delete in dependency order before removing the couple
-                await tx.split.deleteMany({ where: { expense: { coupleId } } });
-                await tx.expense.deleteMany({ where: { coupleId } });
-                await tx.settlement.deleteMany({ where: { coupleId } });
-                await tx.couple.delete({ where: { id: coupleId } });
+                // Fase 1: the last member leaving no longer hard-deletes history.
+                // If the space has any Expense/Settlement, ARCHIVE it (read-only
+                // "recuerdo del viaje", indefinite retention). Only a completely
+                // empty space is physically removed.
+                const [expenseCount, settlementCount] = await Promise.all([
+                    tx.expense.count({ where: { coupleId } }),
+                    tx.settlement.count({ where: { coupleId } }),
+                ]);
+                const hasHistory = expenseCount > 0 || settlementCount > 0;
+
+                if (hasHistory) {
+                    await tx.couple.update({
+                        where: { id: coupleId },
+                        data: { status: 'ARCHIVED', archivedAt: new Date() },
+                    });
+                } else {
+                    // Empty space: safe to remove entirely (in dependency order).
+                    await tx.split.deleteMany({ where: { expense: { coupleId } } });
+                    await tx.expense.deleteMany({ where: { coupleId } });
+                    await tx.settlement.deleteMany({ where: { coupleId } });
+                    await tx.couple.delete({ where: { id: coupleId } });
+                }
             }
         });
 

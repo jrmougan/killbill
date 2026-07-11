@@ -23,6 +23,11 @@ export async function GET(_request: Request) {
     return NextResponse.json({ couple: { ...couple, members }, userId });
 }
 
+/**
+ * @deprecated Fase 1: use POST /api/spaces with an explicit `type` instead. This
+ * endpoint is kept as an alias that always creates a COUPLE-typed space so old
+ * clients keep working.
+ */
 export async function POST(request: Request) {
     const session = await getSession();
     if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -44,6 +49,9 @@ export async function POST(request: Request) {
             data: {
                 name: name || "Mi grupo",
                 code: code,
+                // Deprecated alias: always a COUPLE (also the column default).
+                type: 'COUPLE',
+                createdById: userId,
             }
         });
         await tx.membership.create({
