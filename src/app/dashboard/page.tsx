@@ -24,6 +24,10 @@ import { isAvatarUrl } from "@/lib/avatar";
 import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
 import { MemberBalanceList } from "@/components/ui/member-balance-list";
 import { PendingSettlements } from "@/components/dashboard/pending-settlements";
+import { SpaceStatusBanner } from "@/components/space/space-status-banner";
+import { GuestBanner } from "@/components/guest/guest-banner";
+import { spaceTypeMeta } from "@/lib/space-ui";
+import { SpaceType } from "@/generated/prisma/enums";
 import { randomBytes } from "crypto";
 
 export const dynamic = 'force-dynamic';
@@ -32,6 +36,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const session = await getSession();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
+    // A GUEST session (Fase 3) is caged to a single EPHEMERAL space and has NO
+    // personal economy: force the shared lens, hide the personal tile/import/CSV
+    // and lock the space switcher. Detection is by the JWT `kind` claim only, so
+    // this stays correct even if EPHEMERAL_SPACES_ENABLED is later turned off
+    // (an already-open guest session keeps rendering; upgraded ones are normal).
+    const isGuest = session.kind === "guest";
 
     // Fetch the user for display; resolve the ACTIVE group via the Membership
     // layer (F4: honours the group-switcher cookie, else the primary group).
@@ -46,7 +56,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // 'personal' (private only). A user with NO group has only the personal lens —
     // the app is fully usable solo, with an optional "create/join a group" CTA
     // instead of a blocking onboarding wall.
-    const scope = groupId ? normalizeScope((await searchParams).scope) : "personal";
+    const scope = isGuest ? "comun" : groupId ? normalizeScope((await searchParams).scope) : "personal";
 
     // Resolve the group entity + members only when the user belongs to one.
     const couple = groupId ? await prisma.couple.findUnique({ where: { id: groupId } }) : null;
@@ -56,17 +66,31 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // Spaces for the header switcher: Personal first, then one row per group.
     // Presentation + navigation only — the actual lens is still `scope` below.
     const spaces = [
-        { key: "personal", kind: "personal" as const, name: "Personal", sub: "Economía individual" },
+        // A guest has no personal economy, so omit the Personal row entirely.
+        ...(isGuest ? [] : [{ key: "personal", kind: "personal" as const, name: "Personal", sub: "Economía individual" }]),
         ...userGroups.map((g) => ({
             key: g.id,
             kind: "group" as const,
-            name: g.name ?? "Mi grupo",
-            sub: `${g.memberCount} ${g.memberCount === 1 ? "miembro" : "miembros"}`,
+            name: g.name ?? spaceTypeMeta(g.type).label,
+            sub: `${spaceTypeMeta(g.type).label} · ${g.memberCount} ${g.memberCount === 1 ? "miembro" : "miembros"}`,
+            spaceType: g.type,
+            status: g.status,
         })),
     ];
     // The active/checked space: the group when we're in a group lens, else Personal.
     const activeSpaceKey = groupId && scope !== "personal" ? groupId : "personal";
     const partner = members.find(m => m.id !== userId);
+
+    // Bifurcate by SPACE TYPE, never by member count (Fase 1). A COUPLE waits for
+    // its 2nd member; GROUP/EPHEMERAL are operative from a single member (you can
+    // record shared expenses solo). The two-pan seesaw only maps to COUPLE.
+    const spaceType = couple?.type;
+    const isCoupleType = spaceType === SpaceType.COUPLE;
+    const coupleWaiting = isCoupleType && members.length < 2;
+    const spaceOperative = Boolean(couple) && !coupleWaiting;
+    const myRole = userGroups.find(g => g.id === groupId)?.role;
+    const canManageSpace = myRole === "OWNER" || myRole === "ADMIN";
+
     // usersMap always includes the current user so personal expenses render even
     // for a group-less user.
     const usersMap = members.reduce<Record<string, User>>(
@@ -95,12 +119,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // Personal ledger (private to this user). Materialize the user's own recurring
     // personal sources (the couple runner above never sees them: coupleId is null),
     // then load them for the unified feed and the "Personal este mes" tile.
-    try {
-        await materializeDueRecurringExpensesForOwner(userId);
-    } catch (err) {
-        console.error("Failed to materialize personal recurring expenses", err);
+    // Guests have no personal economy — skip the personal ledger entirely.
+    if (!isGuest) {
+        try {
+            await materializeDueRecurringExpensesForOwner(userId);
+        } catch (err) {
+            console.error("Failed to materialize personal recurring expenses", err);
+        }
     }
-    const personalExpenses = await prisma.expense.findMany({
+    const personalExpenses = isGuest ? [] : await prisma.expense.findMany({
         where: { ownerId: userId, visibility: "PERSONAL" },
         include: { splits: true, ...CATEGORY_REF_SELECT },
     });
@@ -202,7 +229,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     return (
         <div className="flex flex-col h-full min-h-screen p-4 pb-24 space-y-6 relative">
             <header className="flex justify-between items-center pt-2">
-                <SpaceSwitcher spaces={spaces} activeSpaceKey={activeSpaceKey} />
+                <SpaceSwitcher spaces={spaces} activeSpaceKey={activeSpaceKey} locked={isGuest} />
                 {/* Profile avatar → account settings. Navigation (Analíticas/Ajustes) lives in the bottom nav. */}
                 <Link href="/settings" className="h-[38px] w-[38px] rounded-full bg-secondary border border-[color:var(--line)] flex items-center justify-center font-bold text-sm text-primary overflow-hidden shrink-0">
                     {isAvatarUrl(user.avatar) ? (
@@ -213,6 +240,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     )}
                 </Link>
             </header>
+
+            {/* Guest session notice + upgrade CTA (temporary shadow-user session). */}
+            <GuestBanner show={isGuest} />
+
+            {/* Lifecycle banner (SETTLING / ARCHIVED / ephemeral countdown). */}
+            {couple && scope !== "personal" && (
+                <SpaceStatusBanner
+                    spaceId={couple.id}
+                    type={couple.type}
+                    status={couple.status}
+                    expiresAt={couple.expiresAt}
+                    canManage={canManageSpace}
+                />
+            )}
 
             {/* Personal spend this month — a neutral total, not a signed balance. */}
             {scope !== "comun" && (
@@ -234,12 +275,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <>
             <section className="grid grid-cols-1 gap-4">
                 <GlassCard className="p-0 flex flex-col items-center justify-center text-center overflow-hidden rounded-[20px] bg-card border border-[color:var(--line)]">
-                    {!partner ? (
+                    {coupleWaiting ? (
                         <div className="p-6">
                             <span className="text-[11px] uppercase font-semibold tracking-[0.18em] text-muted-foreground mb-1 block">Tu balance</span>
                             <h2 className="text-3xl font-bold text-foreground">Esperando...</h2>
                             <p className="text-sm text-muted-foreground mt-2">
-                                Invita a tu grupo para empezar a registrar gastos juntos
+                                Invita a la otra persona para empezar a repartir gastos
                             </p>
                         </div>
                     ) : (
@@ -257,9 +298,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                 </h2>
                             </div>
 
-                            {members.length > 2 ? (
-                                // The two-pan seesaw only maps to a 2-person relationship;
-                                // larger groups get a per-member net-balance list instead.
+                            {!isCoupleType || !partner ? (
+                                // The two-pan seesaw only maps to a COUPLE; GROUP/EPHEMERAL
+                                // (and any non-couple shape) get a per-member net-balance list.
                                 <MemberBalanceList
                                     members={members}
                                     balances={balances}
@@ -387,7 +428,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 })()}
             </section>
 
-            {couple && !partner && <InviteCard code={couple.code} />}
+            {couple && coupleWaiting && <InviteCard spaceId={couple.id} />}
             </>
             )}
 
@@ -431,11 +472,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                             </div>
                         ) : (
                             <div className="text-center py-12 px-5 rounded-2xl border border-dashed border-[color:var(--line-strong)]">
-                                <p className="font-semibold text-[15px] text-foreground">{partner ? "Sin movimientos aún" : "Casi listos"}</p>
+                                <p className="font-semibold text-[15px] text-foreground">{spaceOperative ? "Sin movimientos aún" : "Casi listos"}</p>
                                 <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
-                                    {partner
-                                        ? <>Pulsa <span className="text-primary font-semibold">+</span> para añadir vuestro primer gasto.</>
-                                        : "Comparte el enlace de arriba para que tu grupo se una."
+                                    {spaceOperative
+                                        ? <>Pulsa <span className="text-primary font-semibold">+</span> para añadir el primer gasto.</>
+                                        : "Comparte el código de arriba para que se unan."
                                     }
                                 </p>
                             </div>
@@ -513,7 +554,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 </GlassCard>
             )}
 
-            {partner || scope === "personal" ? (
+            {spaceOperative || scope === "personal" ? (
                 <div className="fixed bottom-[92px] right-6 z-50">
                     <Link href={scope === "personal" ? "/expenses/new?type=personal" : "/expenses/new"}>
                         <Button size="icon" className="h-14 w-14 rounded-full shadow-[0_12px_28px_-8px_rgba(189,93,58,0.6)] bg-primary hover:bg-primary/90 active:scale-90 transition-transform">

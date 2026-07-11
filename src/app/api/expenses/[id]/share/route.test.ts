@@ -5,6 +5,8 @@ const mockGetPrimaryGroup = vi.fn();
 const mockUserFindUnique = vi.fn();
 const mockUserFindMany = vi.fn();
 const mockExpenseFindUnique = vi.fn();
+const mockCoupleFindUnique = vi.fn();
+const mockMembershipFindUnique = vi.fn();
 const mockTxExpenseUpdate = vi.fn();
 const mockTxSplitDeleteMany = vi.fn();
 const mockTxSeriesUpdate = vi.fn();
@@ -17,6 +19,8 @@ vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
 vi.mock('@/lib/membership', () => ({
     getGroupMembers: async () => [{ id: 'u1' }, { id: 'u2' }],
     getActiveGroup: (...a: unknown[]) => mockGetPrimaryGroup(...a),
+    // space-policy (pulled in via authz) reads this cap at module load.
+    MAX_GROUP_MEMBERS: 20,
 }));
 vi.mock('@/lib/ledger', () => ({ postExpenseLedger: vi.fn() }));
 vi.mock('@/lib/db', () => ({
@@ -26,6 +30,9 @@ vi.mock('@/lib/db', () => ({
             findMany: (...a: unknown[]) => mockUserFindMany(...a),
         },
         expense: { findUnique: (...a: unknown[]) => mockExpenseFindUnique(...a) },
+        // requireSpaceAccess (real authz module) authorizes against the target group.
+        couple: { findUnique: (...a: unknown[]) => mockCoupleFindUnique(...a) },
+        membership: { findUnique: (...a: unknown[]) => mockMembershipFindUnique(...a) },
         $transaction: (cb: (tx: unknown) => unknown) => mockTransaction(cb),
     },
 }));
@@ -42,7 +49,10 @@ function personal(overrides = {}) {
 
 describe('POST /api/expenses/[id]/share', () => {
     beforeEach(() => {
-        [mockGetSession, mockGetPrimaryGroup, mockUserFindUnique, mockUserFindMany, mockExpenseFindUnique, mockTxExpenseUpdate, mockTxSplitDeleteMany, mockTxSeriesUpdate, mockTransaction].forEach((m) => m.mockReset());
+        [mockGetSession, mockGetPrimaryGroup, mockUserFindUnique, mockUserFindMany, mockExpenseFindUnique, mockCoupleFindUnique, mockMembershipFindUnique, mockTxExpenseUpdate, mockTxSplitDeleteMany, mockTxSeriesUpdate, mockTransaction].forEach((m) => m.mockReset());
+        // requireSpaceAccess: every space is ACTIVE and the caller is an ACTIVE member.
+        mockCoupleFindUnique.mockImplementation(async ({ where: { id } }: { where: { id: string } }) => ({ id, status: 'ACTIVE' }));
+        mockMembershipFindUnique.mockImplementation(async ({ where: { groupId_userId } }: { where: { groupId_userId: { groupId: string; userId: string } } }) => ({ groupId: groupId_userId.groupId, userId: groupId_userId.userId, role: 'MEMBER', status: 'ACTIVE' }));
         // Run the transaction callback against a tx double. recurringSeries.update is
         // exercised when the shared source is the recurring TEMPLATE (Phase 5).
         mockTransaction.mockImplementation(async (cb) => cb({

@@ -10,6 +10,7 @@ import { ExpenseCard } from "@/components/dashboard/expense-card";
 import { User, Expense } from "@/types";
 import { formatEuros } from "@/lib/currency";
 import { getSettlementMethodLabel, getSettlementStatusLabel } from "@/lib/settlement-labels";
+import { GuestBanner } from "@/components/guest/guest-banner";
 
 interface UnifiedItem {
     id: string;
@@ -29,9 +30,10 @@ interface UnifiedItem {
 interface ExpensesListClientProps {
     items: UnifiedItem[];
     usersMap: Record<string, User>;
+    isGuest?: boolean;
 }
 
-export function ExpensesListClient({ items, usersMap }: ExpensesListClientProps) {
+export function ExpensesListClient({ items, usersMap, isGuest = false }: ExpensesListClientProps) {
     const [filters, setFilters] = useState({
         search: "",
         categories: [] as string[],
@@ -101,6 +103,8 @@ export function ExpensesListClient({ items, usersMap }: ExpensesListClientProps)
                     </Button>
                 </Link>
             </header>
+
+            <GuestBanner show={isGuest} />
 
             <ExpenseFilters onFiltersChange={setFilters} />
 

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { isAvatarUrl } from "@/lib/avatar";
 import { formatEuros } from "@/lib/currency";
+import { GuestBanner } from "@/components/guest/guest-banner";
 
 interface Debtor {
     userId: string;
@@ -30,6 +31,7 @@ interface SettleExpense {
 interface SettleClientProps {
     debts: Debtor[];
     expenses: SettleExpense[];
+    isGuest?: boolean;
     partner: {
         id: string;
         name: string;
@@ -37,7 +39,7 @@ interface SettleClientProps {
     } | null;
 }
 
-export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
+export function SettleClient({ debts, expenses, isGuest = false, partner }: SettleClientProps) {
     const router = useRouter();
     const [step, setStep] = useState<1 | 2>(1);
 
@@ -87,24 +89,30 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
         const hasUnsettledActivity = expenses.length > 0;
 
         const handleArchive = async () => {
-            if (!partner) return;
+            // Pairwise checkpoint (Fase 1 fix): the old code sent a single 0-€
+            // settlement to an arbitrary "partner", which only cleared ONE pair in a
+            // group. Instead, checkpoint every counterparty with unsettled activity
+            // (the distinct payers of the visible expenses), so each pair is cleared.
+            const counterparties = Array.from(new Set(expenses.map((e) => e.paidBy)));
+            const targets = counterparties.length > 0 ? counterparties : partner ? [partner.id] : [];
+            if (targets.length === 0) return;
             if (!confirm("Esto marcará toda la actividad actual como 'Saldada' para limpiar la vista. ¿Continuar?")) return;
 
             setIsSubmitting(true);
             setError(null);
             try {
-                // 0 amount settlement = Archive/Checkpoint
-                const res = await fetch("/api/settle", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        toUserId: partner.id,
-                        amount: 0,
-                        method: "CASH"
-                    })
-                });
-                if (!res.ok) {
-                    setError("No se pudo archivar el historial");
+                // 0-amount settlement = archive/checkpoint, one per counterparty.
+                const results = await Promise.all(
+                    targets.map((toUserId) =>
+                        fetch("/api/settle", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ toUserId, amount: 0, method: "CASH" }),
+                        })
+                    )
+                );
+                if (results.some((r) => !r.ok)) {
+                    setError("No se pudo archivar todo el historial");
                     return;
                 }
                 router.push("/dashboard");
@@ -141,7 +149,10 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                     </div>
                 </div>
 
-                {hasUnsettledActivity && (
+                <GuestBanner show={isGuest} />
+
+                {/* Archiving/checkpoint is a space-management action — not offered to guests. */}
+                {hasUnsettledActivity && !isGuest && (
                     <div className="space-y-3 pt-4">
                         <Button
                             className="w-full h-12 bg-card border border-[color:var(--line)] text-foreground hover:bg-secondary"
@@ -185,6 +196,8 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                     {step === 2 && "Realizar Pago"}
                 </h1>
             </header>
+
+            {step === 1 && <GuestBanner show={isGuest} />}
 
             {/* STEP 1: SELECT DEBTOR */}
             {step === 1 && (

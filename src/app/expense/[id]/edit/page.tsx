@@ -41,6 +41,12 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
     const canEdit = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
     if (!canEdit) redirect("/dashboard");
 
+    // A SETTLING/ARCHIVED space is read-only — editing is blocked (Fase 1).
+    const space = expense.coupleId
+        ? await prisma.couple.findUnique({ where: { id: expense.coupleId }, select: { type: true, status: true } })
+        : null;
+    if (space && space.status !== "ACTIVE") redirect(`/expense/${id}`);
+
     const allTags = groupId
         ? await prisma.tag.findMany({ where: { coupleId: groupId } })
         : [];
@@ -87,6 +93,9 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
             initialCategory={categoryKeyOf(expense)}
             initialSplitMode={initialSplitMode}
             initialMyPercent={initialMyPercent}
+            initialSplitStrategy={expense.splitStrategy ?? null}
+            initialSplits={expense.splits.map((s) => ({ userId: s.userId, amount: s.amount }))}
+            spaceType={space?.type ?? null}
             initialReceiptItems={receiptItemsView(expense.lineItems)}
             initialReceiptUrl={expense.receiptUrl ?? null}
             initialNotes={expense.notes ?? ""}

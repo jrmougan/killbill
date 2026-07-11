@@ -13,10 +13,10 @@ import { cn } from "@/lib/utils";
 import { ReceiptItem } from "@/types";
 import { getAllCategories } from "@/lib/categories";
 import { formatEuros, parseAmountInput, formatAmountInput } from "@/lib/currency";
+import { SplitEditor, computeSplit, seedSplitValue, type SplitValue } from "@/components/expense/split-editor";
 
 type Step = "amount" | "details";
 type ScanState = "idle" | "scanning" | "done";
-type SplitChoice = "equal" | "me" | "partner" | "custom" | "amounts";
 type ExpenseType = "shared" | "personal";
 type RecurringInterval = "weekly" | "monthly" | "yearly";
 
@@ -73,13 +73,12 @@ export default function NewExpensePage() {
     // Split / payer. Phase "decouple" F5: the payer is any group member (N-way),
     // not just me/partner. Defaults to the current user once loaded.
     const [paidById, setPaidById] = useState<string>("");
-    const [split, setSplit] = useState<SplitChoice>("equal");
-    const [myPercent, setMyPercent] = useState(50);
-    // Per-member custom amounts (euro strings keyed by userId), used by the
-    // "amounts" split mode for groups of >2 where percentages don't scale.
-    const [memberAmounts, setMemberAmounts] = useState<Record<string, string>>({});
+    // N-way split via the shared SplitEditor (Fase 1) — replaces the old
+    // me/partner/custom/amounts choices and the isTwoMember split branching.
+    const [splitValue, setSplitValue] = useState<SplitValue>({ mode: "equal", amounts: {}, percents: {}, beneficiaryId: null });
     const [members, setMembers] = useState<{ id: string; name: string; avatar: string | null }[]>([]);
     const [userId, setUserId] = useState<string | null>(null);
+    const [spaceType, setSpaceType] = useState<string | null>(null);
 
     // Advanced
     const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -104,29 +103,19 @@ export default function NewExpensePage() {
     const [pendingOcr, setPendingOcr] = useState<PendingOcr | null>(null);
 
     const partner = members.find((m) => m.id !== userId);
-    const partnerName = partner?.name || "pareja";
-    const partnerPercent = 100 - myPercent;
-    // 2-member groups keep the "me vs partner" split modes; larger groups use the
-    // N-way equal split (backend handles both). Custom %/per-item are 2-member-only.
+    const partnerName = partner?.name || "otra persona";
+    // Receipt items still support per-person assignment only for a 2-member space
+    // (couple ½/Yo/other). Larger groups split via the SplitEditor.
     const isTwoMember = members.length === 2;
 
     // es-ES users type the decimal separator as a comma; normalise before parsing
     const amountNum = parseAmountInput(amount);
     const amountValid = Number.isFinite(amountNum) && amountNum > 0 && amountNum <= 999999.99;
     const previewAmountCents = Math.round(amountNum * 100);
-    const previewMyCents = Math.round((previewAmountCents * myPercent) / 100);
-    const myAmount = previewMyCents / 100;
-    const partnerAmount = (previewAmountCents - previewMyCents) / 100;
 
-    // Per-member custom amounts (cents) for the N>2 "amounts" split mode.
-    const memberAmountsCents = members.reduce<Record<string, number>>((acc, m) => {
-        acc[m.id] = Math.round(parseAmountInput(memberAmounts[m.id] || "") * 100) || 0;
-        return acc;
-    }, {});
-    const memberAmountsSum = Object.values(memberAmountsCents).reduce((a, b) => a + b, 0);
-    const memberAmountsRemaining = previewAmountCents - memberAmountsSum;
-
-    const hasItemAssignments = receiptItems.length > 0;
+    // Receipt item assignments (2-member) override the split (as before).
+    const hasItemAssignments = receiptItems.length > 0 && isTwoMember;
+    const splitResult = computeSplit(splitValue, members, previewAmountCents);
     const itemSplitMyAmount = receiptItems.reduce((acc, item) => {
         if (item.assignedTo === null) return acc + item.total / 2;
         if (item.assignedTo === userId) return acc + item.total;
@@ -150,7 +139,16 @@ export default function NewExpensePage() {
         fetch("/api/couple")
             .then((res) => res.json())
             .then((data) => {
-                if (data.couple) setMembers(data.couple.members);
+                if (data.couple) {
+                    setMembers(data.couple.members);
+                    setSpaceType(data.couple.type ?? null);
+                    // Seed the split on an even baseline once members are known.
+                    setSplitValue((prev) =>
+                        prev.mode === "equal" && Object.keys(prev.amounts).length === 0
+                            ? seedSplitValue("equal", data.couple.members, 0)
+                            : prev,
+                    );
+                }
                 if (data.userId) { setUserId(data.userId); setPaidById(data.userId); }
             })
             .catch((err) => console.error("Failed to fetch couple", err));
@@ -377,16 +375,14 @@ export default function NewExpensePage() {
         }
         const isPersonal = expenseType === "personal";
         if (!isPersonal) {
-            if (isTwoMember && split === "custom" && myPercent + partnerPercent !== 100) {
-                setFormError("Los porcentajes deben sumar 100%.");
-                return;
-            }
-            if (!isTwoMember && split === "amounts" && memberAmountsRemaining !== 0) {
-                setFormError("Los importes por miembro deben sumar el total.");
-                return;
-            }
             if (members.length === 0) {
-                setFormError("Necesitas un grupo configurado para un gasto compartido.");
+                setFormError("Necesitas un espacio configurado para un gasto compartido.");
+                return;
+            }
+            // Item assignments (2-member) override the split; otherwise the
+            // SplitEditor result must be valid.
+            if (!hasItemAssignments && !splitResult.valid) {
+                setFormError(splitResult.reason || "Revisa el reparto del gasto.");
                 return;
             }
         }
@@ -432,38 +428,22 @@ export default function NewExpensePage() {
                 // N-way payer: any member (defaults to me).
                 bodyPayload.paidById = paidById || userId;
 
-                // Larger groups can split by explicit per-member amounts; otherwise
-                // they fall through to the N-way equal split (no customSplits → the
-                // API divides equally among ALL members).
-                if (!isTwoMember && split === "amounts") {
-                    bodyPayload.customSplits = members.map((m) => ({
-                        userId: m.id,
-                        amount: memberAmountsCents[m.id] || 0,
-                    }));
-                }
-
-                // The custom %, per-item and beneficiary modes are 2-member-only;
-                // larger groups always use the N-way equal split (no customSplits →
-                // the API divides equally among ALL members).
-                if (isTwoMember && userId && partner) {
-                    if (hasItemAssignments) {
-                        const myCents = Math.round(itemSplitMyAmount * 100);
-                        bodyPayload.customSplits = [
-                            { userId, amount: myCents },
-                            { userId: partner.id, amount: amountCents - myCents },
-                        ];
-                    } else if (split === "custom") {
-                        const myCents = Math.round((amountCents * myPercent) / 100);
-                        bodyPayload.customSplits = [
-                            { userId, amount: myCents },
-                            { userId: partner.id, amount: amountCents - myCents },
-                        ];
-                    } else if (split === "me") {
-                        bodyPayload.beneficiaryId = userId;
-                    } else if (split === "partner") {
-                        bodyPayload.beneficiaryId = partner.id;
+                if (hasItemAssignments && userId && partner) {
+                    // Receipt item assignments (2-member) override the split.
+                    const myCents = Math.round(itemSplitMyAmount * 100);
+                    bodyPayload.customSplits = [
+                        { userId, amount: myCents },
+                        { userId: partner.id, amount: amountCents - myCents },
+                    ];
+                } else {
+                    // N-way split from the shared SplitEditor: EQUAL → nothing,
+                    // EXCLUSIVE → beneficiaryId, CUSTOM → customSplits.
+                    if (splitResult.strategy === "EXCLUSIVE" && splitResult.beneficiaryId) {
+                        bodyPayload.beneficiaryId = splitResult.beneficiaryId;
+                    } else if (splitResult.strategy === "CUSTOM" && splitResult.customSplits) {
+                        bodyPayload.customSplits = splitResult.customSplits;
                     }
-                    // split === "equal" → no beneficiary/customSplits → equal split
+                    // EQUAL → no beneficiary/customSplits → the API divides equally.
                 }
             }
 
@@ -500,33 +480,6 @@ export default function NewExpensePage() {
 
     // Selecting per-member amounts seeds each member with an equal share (largest
     // remainder first) so the user only nudges the deltas from a valid baseline.
-    const selectSplit = (key: SplitChoice) => {
-        setSplit(key);
-        if (key === "amounts" && members.length > 0 && previewAmountCents > 0) {
-            const base = Math.floor(previewAmountCents / members.length);
-            let remainder = previewAmountCents - base * members.length;
-            const seeded: Record<string, string> = {};
-            for (const m of members) {
-                const cents = base + (remainder > 0 ? 1 : 0);
-                if (remainder > 0) remainder--;
-                seeded[m.id] = formatAmountInput(cents / 100);
-            }
-            setMemberAmounts(seeded);
-        }
-    };
-
-    const splitOptions: { key: SplitChoice; label: string; hint: string }[] = isTwoMember
-        ? [
-            { key: "equal", label: "Mitad y mitad", hint: "50% · 50%" },
-            { key: "me", label: "Pagué por mí", hint: "100% Yo" },
-            { key: "partner", label: `Favor para ${partnerName}`, hint: `100% ${partnerName}` },
-            { key: "custom", label: "Personalizado", hint: "Ajustar %" },
-          ]
-        : [
-            { key: "equal", label: "A partes iguales", hint: `Entre ${members.length} miembros` },
-            { key: "amounts", label: "Importes por miembro", hint: "Ajustar por persona" },
-          ];
-
     return (
         <div className="flex flex-col min-h-screen max-w-md mx-auto relative">
             {/* Hidden file input shared by the scan flow */}
@@ -753,118 +706,18 @@ export default function NewExpensePage() {
                             </div>
                         </fieldset>
 
-                        {/* How to split */}
-                        <fieldset className="space-y-2 border-0 p-0 m-0">
-                            <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">¿Cómo se divide?</legend>
-                            <div className="flex flex-col gap-2">
-                                {splitOptions.map((o) => {
-                                    const sel = split === o.key;
-                                    const disabled = (o.key === "partner" || o.key === "custom") && !partner;
-                                    return (
-                                        <button
-                                            key={o.key}
-                                            type="button"
-                                            disabled={disabled}
-                                            onClick={() => selectSplit(o.key)}
-                                            aria-pressed={sel}
-                                            aria-label={o.label}
-                                            className={cn(
-                                                "flex items-center justify-between w-full px-4 py-3 rounded-xl border transition-all active:scale-[0.99] disabled:opacity-40",
-                                                sel ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)]" : "bg-card border-[color:var(--line)] hover:bg-secondary"
-                                            )}
-                                        >
-                                            <span className="text-left">
-                                                <span className={cn("block text-sm font-semibold", sel ? "text-foreground" : "text-muted-foreground")}>{o.label}</span>
-                                                <span className="block text-[11px] text-muted-foreground/70 mt-0.5">{o.hint}</span>
-                                            </span>
-                                            <span className={cn(
-                                                "h-[18px] w-[18px] rounded-full border-2 flex-shrink-0 transition-all",
-                                                sel ? "border-primary bg-primary shadow-[inset_0_0_0_3px_var(--surface-hex)]" : "border-[color:var(--line-strong)]"
-                                            )} />
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            {split === "custom" && partner && (
-                                <div className="space-y-3 animate-in fade-in duration-200 bg-secondary rounded-xl p-4 mt-1">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex-1 space-y-1">
-                                            <label htmlFor="my-percent" className="text-xs text-muted-foreground">Yo</label>
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    id="my-percent"
-                                                    type="number"
-                                                    inputMode="numeric"
-                                                    min={0}
-                                                    max={100}
-                                                    value={myPercent}
-                                                    onChange={(e) => setMyPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                                    className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-[color:var(--accent-border)]"
-                                                />
-                                                <span className="text-sm text-muted-foreground">%</span>
-                                            </div>
-                                        </div>
-                                        <div className="text-muted-foreground text-sm font-bold pt-4">/</div>
-                                        <div className="flex-1 space-y-1">
-                                            <label htmlFor="partner-percent" className="text-xs text-muted-foreground">{partnerName}</label>
-                                            <div className="flex items-center gap-2">
-                                                <input
-                                                    id="partner-percent"
-                                                    type="number"
-                                                    inputMode="numeric"
-                                                    min={0}
-                                                    max={100}
-                                                    value={partnerPercent}
-                                                    onChange={(e) => setMyPercent(100 - Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                                    className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-[color:var(--accent-border)]"
-                                                />
-                                                <span className="text-sm text-muted-foreground">%</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    {amountNum > 0 && (
-                                        <div className="text-xs text-center text-muted-foreground">
-                                            Yo: <strong className="text-foreground">{formatEuros(myAmount)}</strong> — {partnerName}: <strong className="text-foreground">{formatEuros(partnerAmount)}</strong>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {split === "amounts" && !isTwoMember && (
-                                <div className="space-y-2 animate-in fade-in duration-200 bg-secondary rounded-xl p-4 mt-1">
-                                    {members.map((m) => (
-                                        <div key={m.id} className="flex items-center justify-between gap-3">
-                                            <label htmlFor={`amount-${m.id}`} className="text-sm text-muted-foreground truncate">
-                                                {m.id === userId ? "Yo" : m.name}
-                                            </label>
-                                            <div className="flex items-center gap-1.5">
-                                                <input
-                                                    id={`amount-${m.id}`}
-                                                    type="text"
-                                                    inputMode="decimal"
-                                                    value={memberAmounts[m.id] ?? ""}
-                                                    onChange={(e) => setMemberAmounts((prev) => ({ ...prev, [m.id]: e.target.value }))}
-                                                    placeholder="0,00"
-                                                    className="w-24 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:outline-none focus:border-[color:var(--accent-border)]"
-                                                />
-                                                <span className="text-sm text-muted-foreground">€</span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    <div className={cn(
-                                        "text-xs text-center pt-1 border-t border-[color:var(--line)] mt-1",
-                                        memberAmountsRemaining === 0 ? "text-[color:var(--positive)]" : "text-destructive"
-                                    )}>
-                                        {memberAmountsRemaining === 0
-                                            ? "Cuadra con el total ✓"
-                                            : memberAmountsRemaining > 0
-                                                ? `Faltan ${formatEuros(memberAmountsRemaining / 100)}`
-                                                : `Te pasas ${formatEuros(Math.abs(memberAmountsRemaining) / 100)}`}
-                                    </div>
-                                </div>
-                            )}
-                        </fieldset>
+                        {/* How to split — the shared N-way SplitEditor. Hidden when
+                            2-member receipt item assignments take over the split. */}
+                        {!hasItemAssignments && (
+                            <SplitEditor
+                                members={members}
+                                currentUserId={userId ?? ""}
+                                totalCents={previewAmountCents}
+                                value={splitValue}
+                                onChange={setSplitValue}
+                                isCouple={spaceType === "COUPLE"}
+                            />
+                        )}
                         </>
                         )}
 

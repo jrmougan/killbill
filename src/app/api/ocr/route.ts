@@ -62,6 +62,18 @@ export async function POST(request: Request) {
         );
     }
 
+    // Guests (product #5): OCR is allowed but capped PER SPACE PER DAY so a leaked
+    // guest link can't run up the Gemini bill. The guest JWT carries its groupId.
+    if (session.kind === 'guest' && typeof session.groupId === 'string') {
+        const dayLimit = rateLimit(`ocr:space:${session.groupId}`, 50, 24 * 60 * 60 * 1000);
+        if (!dayLimit.allowed) {
+            return NextResponse.json(
+                { error: 'Se alcanzó el límite diario de escaneos de este espacio.' },
+                { status: 429, headers: { 'Retry-After': String(dayLimit.retryAfterSeconds) } }
+            );
+        }
+    }
+
     if (!GEMINI_API_KEY) {
         return NextResponse.json({ error: 'GEMINI_API_KEY not configured' }, { status: 500 });
     }

@@ -38,6 +38,8 @@ export default async function SettingsPage() {
                 code: g.code,
                 memberCount: g.memberCount,
                 isActive: g.id === activeGroupId,
+                type: g.type,
+                status: g.status,
             }))}
             activeGroupId={activeGroupId}
         />

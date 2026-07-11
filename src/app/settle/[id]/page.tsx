@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
+import { getGroupMembers } from "@/lib/membership";
+import { calculateSplitAmounts } from "@/lib/splits";
 import { redirect, notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -16,8 +18,8 @@ interface SettlementDetailPageProps {
 
 export default async function SettlementDetailPage({ params }: SettlementDetailPageProps) {
     const { id } = await params;
-    const session = await getSession();
-    if (!session?.userId) redirect("/login");
+    const ctx = await getSessionCtx();
+    if (!ctx) redirect("/login");
 
     const settlement = await prisma.settlement.findUnique({
         where: { id },
@@ -35,6 +37,16 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
 
     if (!settlement) notFound();
 
+    // Fase 1 security: this page never validated group membership. Authorize
+    // against the settlement's OWN group (allowArchived: settlements stay viewable
+    // on an archived space). A non-member is treated as not-found.
+    const auth = await requireSpaceAccess(ctx, settlement.coupleId, { allowArchived: true });
+    if (!auth.ok) notFound();
+
+    // Group members back the N-way equal-share fallback for legacy expenses that
+    // have no Split rows (never a hardcoded 50/50).
+    const members = await getGroupMembers(settlement.coupleId);
+
     return (
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-24">
             <header className="flex items-center gap-4 pt-2">
@@ -46,7 +58,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                 <div className="flex-1">
                     <h1 className="text-xl font-bold text-foreground">Detalle de Liquidación</h1>
                 </div>
-                {settlement.fromUserId === session.userId && (
+                {settlement.fromUserId === ctx.userId && (
                     <Link href={`/settle/${id}/edit`}>
                         <Button variant="ghost" size="sm" className="rounded-full border border-[color:var(--accent-border)] text-primary hover:bg-[var(--accent-tint)]">
                             Editar
@@ -119,8 +131,10 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                             if (expense.splits.length > 0) {
                                 myShareCents = expense.splits.find(s => s.userId === settlement.fromUserId)?.amount || 0;
                             } else {
-                                // Assume 50/50 if no splits (legacy or simple)
-                                myShareCents = Math.floor(expense.amount / 2);
+                                // No Split rows (legacy): derive the payer's share via the
+                                // canonical N-way equal division, not a hardcoded 50/50.
+                                const computed = calculateSplitAmounts(expense.amount, null, members);
+                                myShareCents = computed.find(s => s.userId === settlement.fromUserId)?.amount || 0;
                             }
 
                             return (

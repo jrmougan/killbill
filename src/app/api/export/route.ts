@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
 import { getActiveGroup } from '@/lib/membership';
 import { toEuros } from '@/lib/currency';
 import { Prisma } from '@/generated/prisma/client';
@@ -8,13 +8,19 @@ import { escapeCsvField } from '@/lib/csv';
 import { categoryKeyOf, CATEGORY_REF_SELECT } from '@/lib/category-read';
 
 export async function GET(request: Request) {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const userId = session.userId as string;
+    const ctx = await getSessionCtx();
+    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const userId = ctx.userId;
 
     // Phase 4 selector switch: resolve my group via the Membership layer.
     const groupId = await getActiveGroup(userId);
     if (!groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+
+    // Fase 1: authorize against the resolved group (ACTIVE membership). Export is a
+    // read-only view — allowArchived so an archived "recuerdo del viaje" can still
+    // be exported. Guests are denied (export is a member-only action).
+    const auth = await requireSpaceAccess(ctx, groupId, { allowArchived: true });
+    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
 
     const { searchParams } = new URL(request.url);
     const from = searchParams.get('from');

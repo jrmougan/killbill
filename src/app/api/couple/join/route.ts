@@ -2,10 +2,23 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
-import { MAX_GROUP_MEMBERS, ACTIVE_GROUP_COOKIE } from '@/lib/membership';
+import { ACTIVE_GROUP_COOKIE } from '@/lib/membership';
+import { SPACE_CAPS, joinByCodeAllowed } from '@/lib/space-policy';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import type { SpaceType, SpaceStatus } from '@/generated/prisma/enums';
 
 export async function POST(request: Request) {
     try {
+        // Rate limit by client IP: the classic 6-hex code is brute-forceable, so
+        // cap join attempts (10 / 5 min) regardless of which code is tried.
+        const ip = getClientIp(request.headers);
+        if (!rateLimit(`couple-join:${ip}`, 10, 5 * 60 * 1000).allowed) {
+            return NextResponse.json(
+                { error: 'Demasiados intentos. Inténtalo de nuevo más tarde.' },
+                { status: 429 },
+            );
+        }
+
         const session = await getSession();
         if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const userId = session.userId as string;
@@ -17,13 +30,22 @@ export async function POST(request: Request) {
         // blanket "already in a group" block — only a per-group idempotency guard.
         const couple = await prisma.couple.findUnique({
             where: { code: code.toUpperCase() },
-            select: { id: true }
+            select: { id: true, type: true, status: true }
         });
 
         if (!couple) return NextResponse.json({ error: 'Código inválido' }, { status: 404 });
 
+        // Fase 1: join-by-code is only allowed for ACTIVE COUPLE/GROUP spaces.
+        // EPHEMERAL uses expirable invite links; SETTLING/ARCHIVED are closed.
+        if (!joinByCodeAllowed(couple.type as SpaceType, couple.status as SpaceStatus)) {
+            return NextResponse.json(
+                { error: 'Este espacio no admite unirse por código' },
+                { status: 400 },
+            );
+        }
+
         // Re-check membership and the caller's couple inside a transaction to close the
-        // TOCTOU window where two users could join simultaneously and exceed the cap of 2.
+        // TOCTOU window where two users could join simultaneously and exceed the cap.
         try {
             await prisma.$transaction(async (tx) => {
                 // Phase 5 (WS1 write-stop): the TOCTOU guards read the Membership
@@ -35,10 +57,11 @@ export async function POST(request: Request) {
                 });
                 if (existing) throw new Error('ALREADY_IN_COUPLE');
 
+                // Fase 1: cap is per space type (COUPLE=2, GROUP/EPHEMERAL=20).
                 const memberCount = await tx.membership.count({
                     where: { groupId: couple.id, status: 'ACTIVE' },
                 });
-                if (memberCount >= MAX_GROUP_MEMBERS) throw new Error('COUPLE_FULL');
+                if (memberCount >= SPACE_CAPS[couple.type as SpaceType]) throw new Error('SPACE_FULL');
 
                 // Upsert handles a previous LEFT rejoin.
                 await tx.membership.upsert({
@@ -51,8 +74,11 @@ export async function POST(request: Request) {
             if (e instanceof Error && e.message === 'ALREADY_IN_COUPLE') {
                 return NextResponse.json({ error: 'Ya estás en este grupo' }, { status: 400 });
             }
-            if (e instanceof Error && e.message === 'COUPLE_FULL') {
-                return NextResponse.json({ error: 'Este grupo ya está completo' }, { status: 400 });
+            if (e instanceof Error && e.message === 'SPACE_FULL') {
+                return NextResponse.json(
+                    { error: 'Este espacio ya está completo', code: 'SPACE_FULL' },
+                    { status: 400 },
+                );
             }
             throw e;
         }

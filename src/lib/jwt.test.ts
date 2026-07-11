@@ -3,7 +3,7 @@
 // instanceof checks fail under jsdom due to cross-realm typed arrays, so
 // pin this file to the node environment.
 import { describe, it, expect, beforeAll } from 'vitest';
-import { signToken, verifyToken } from './jwt';
+import { signToken, verifyToken, signGuestToken, refreshGuestToken, GUEST_SESSION_SECONDS } from './jwt';
 
 describe('jwt utilities', () => {
     beforeAll(() => {
@@ -56,5 +56,69 @@ describe('jwt utilities', () => {
 
         const payload = await verifyToken(foreignToken);
         expect(payload).toBeNull();
+    });
+});
+
+describe('guest session tokens', () => {
+    beforeAll(() => {
+        process.env.JWT_SECRET = 'test-secret-for-vitest';
+    });
+
+    it('signs a guest token carrying kind/groupId/role and a 72h exp', async () => {
+        const token = await signGuestToken({ userId: 'g1', groupId: 'space1', role: 'GUEST' });
+        const payload = await verifyToken(token);
+        expect(payload).not.toBeNull();
+        expect(payload?.kind).toBe('guest');
+        expect(payload?.userId).toBe('g1');
+        expect(payload?.groupId).toBe('space1');
+        expect(payload?.role).toBe('GUEST');
+        // exp ≈ iat + 72h, no hardCap claim when the space has no expiry.
+        expect((payload!.exp as number) - (payload!.iat as number)).toBe(GUEST_SESSION_SECONDS);
+        expect(payload?.hardCap).toBeUndefined();
+    });
+
+    it('clamps exp to the space expiry (hardCap) when it is sooner than 72h', async () => {
+        const soon = new Date(Date.now() + 60 * 60 * 1000); // +1h
+        const token = await signGuestToken({ userId: 'g1', groupId: 'space1', role: 'GUEST' }, soon);
+        const payload = await verifyToken(token);
+        const hardCap = Math.floor(soon.getTime() / 1000);
+        expect(payload?.hardCap).toBe(hardCap);
+        expect(payload?.exp).toBe(hardCap);
+    });
+
+    it('does not clamp when the space expiry is further out than 72h', async () => {
+        const far = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // +30d
+        const token = await signGuestToken({ userId: 'g1', groupId: 'space1', role: 'GUEST' }, far);
+        const payload = await verifyToken(token);
+        expect((payload!.exp as number) - (payload!.iat as number)).toBe(GUEST_SESSION_SECONDS);
+    });
+
+    it('refreshGuestToken re-issues a guest token from a verified guest payload', async () => {
+        const original = await signGuestToken({ userId: 'g1', groupId: 'space1', role: 'GUEST' });
+        const payload = await verifyToken(original);
+        const refreshed = await refreshGuestToken(payload!);
+        expect(refreshed).not.toBeNull();
+        const rp = await verifyToken(refreshed!);
+        expect(rp?.kind).toBe('guest');
+        expect(rp?.userId).toBe('g1');
+        expect(rp?.groupId).toBe('space1');
+    });
+
+    it('refreshGuestToken returns null for a non-guest payload', async () => {
+        const token = await signToken({ userId: 'u1', email: 'a@b.c', isAdmin: false });
+        const payload = await verifyToken(token);
+        expect(await refreshGuestToken(payload!)).toBeNull();
+    });
+
+    it('refreshGuestToken returns null once the hard cap has passed', async () => {
+        // A payload whose hardCap is already in the past cannot be extended.
+        const payload = {
+            userId: 'g1',
+            groupId: 'space1',
+            role: 'GUEST',
+            kind: 'guest',
+            hardCap: Math.floor((Date.now() - 1000) / 1000),
+        };
+        expect(await refreshGuestToken(payload)).toBeNull();
     });
 });

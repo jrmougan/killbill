@@ -24,6 +24,7 @@ import Link from "next/link";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
 import { setActiveGroup } from "@/app/actions/group";
+import { spaceTypeMeta, spaceStatusMeta } from "@/lib/space-ui";
 
 interface UserData {
     id: string;
@@ -38,6 +39,8 @@ interface GroupData {
     code: string;
     memberCount: number;
     isActive: boolean;
+    type: string;
+    status: string;
 }
 
 interface SettingsClientProps {
@@ -60,10 +63,8 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
     const [creating, setCreating] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
 
-    // Join-group form
+    // Join-group form — routes to the consent screen (no silent join).
     const [joinCode, setJoinCode] = useState("");
-    const [joining, setJoining] = useState(false);
-    const [joinError, setJoinError] = useState<string | null>(null);
 
     const handleSaveProfile = async () => {
         setIsSaving(true);
@@ -134,28 +135,16 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
         }
     };
 
-    const handleJoin = async () => {
-        setJoining(true);
-        setJoinError(null);
-        try {
-            const res = await fetch("/api/couple/join", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ code: joinCode }),
-            });
-            const data = await res.json();
-            if (res.ok) {
-                if (data.couple?.id) await setActiveGroup(data.couple.id);
-                setJoinCode("");
-                router.refresh();
-            } else {
-                setJoinError(data.error || "Código inválido");
-            }
-        } catch (_err) {
-            setJoinError("Error de conexión");
-        } finally {
-            setJoining(false);
-        }
+    // Route to the public consent screen `/i/[token]` instead of joining
+    // silently: the user confirms the join there and sees any error (expired,
+    // revoked, exhausted, SPACE_FULL, archived). Accepts a pasted `/i/…` link or
+    // a raw code/token (the consent page falls back to the classic Couple.code).
+    const handleJoin = () => {
+        const raw = joinCode.trim();
+        if (!raw) return;
+        const match = raw.match(/\/i\/([^/?#\s]+)/);
+        const token = match ? decodeURIComponent(match[1]) : raw;
+        router.push(`/i/${encodeURIComponent(token)}`);
     };
 
     const copyCode = (code: string, id: string) => {
@@ -237,20 +226,34 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
                         <p className="text-xs text-muted-foreground px-1">Todavía no perteneces a ningún grupo. Crea uno o únete con un código.</p>
                     )}
 
-                    {groups.map((g) => (
+                    {groups.map((g) => {
+                        const tMeta = spaceTypeMeta(g.type);
+                        const sMeta = spaceStatusMeta(g.status);
+                        return (
                         <GlassCard key={g.id} className="rounded-[16px] bg-card border border-[color:var(--line)] p-4 space-y-3">
                             <div className="flex items-center justify-between gap-2">
-                                <div className="space-y-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-sm font-bold text-foreground truncate">{g.name}</p>
-                                        {g.isActive && (
-                                            <span className="text-[11px] font-bold px-2 py-[3px] rounded-lg bg-[var(--accent-tint)] text-primary shrink-0">Activo</span>
-                                        )}
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                    <span className="w-9 h-9 rounded-[11px] bg-secondary flex items-center justify-center text-[18px] shrink-0">
+                                        {tMeta.emoji}
+                                    </span>
+                                    <div className="space-y-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-sm font-bold text-foreground truncate">{g.name}</p>
+                                            {g.isActive && (
+                                                <span className="text-[11px] font-bold px-2 py-[3px] rounded-lg bg-[var(--accent-tint)] text-primary shrink-0">Activo</span>
+                                            )}
+                                            {sMeta.tone !== "active" && (
+                                                <span className="text-[11px] font-semibold px-2 py-[3px] rounded-lg bg-secondary text-muted-foreground shrink-0">{sMeta.label}</span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            {tMeta.label} · {g.memberCount} {g.memberCount === 1 ? "miembro" : "miembros"}
+                                        </p>
                                     </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        {g.memberCount} {g.memberCount === 1 ? "miembro" : "miembros"}
-                                    </p>
                                 </div>
+                                <Link href={`/spaces/${g.id}`} className="shrink-0 text-[12px] font-semibold text-primary hover:underline">
+                                    Gestionar →
+                                </Link>
                             </div>
 
                             <div className="p-3 bg-secondary rounded-xl border border-[color:var(--line)] flex items-center justify-between">
@@ -278,9 +281,19 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
                                 <LogOut className="h-4 w-4 mr-2" /> Salir
                             </Button>
                         </GlassCard>
-                    ))}
+                        );
+                    })}
 
-                    {/* Create group — always available */}
+                    {/* Typed space creation (Fase 1): the type is chosen in /spaces/new. */}
+                    <Link
+                        href="/spaces/new"
+                        className="flex items-center gap-3 w-full h-14 px-4 bg-[var(--accent-tint)] border border-[color:var(--accent-border)] rounded-xl hover:opacity-90 transition-opacity"
+                    >
+                        <Plus className="h-5 w-5 text-primary" />
+                        <span className="font-semibold text-sm text-foreground">Nuevo espacio (pareja, grupo o viaje)</span>
+                    </Link>
+
+                    {/* Create group — quick untyped group, kept for convenience */}
                     <GlassCard className="rounded-[16px] bg-card border border-[color:var(--line)] p-4 space-y-3">
                         <div className="flex items-center gap-2">
                             <Plus className="h-4 w-4 text-primary" />
@@ -306,22 +319,20 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
                     <GlassCard className="rounded-[16px] bg-card border border-[color:var(--line)] p-4 space-y-3">
                         <div className="flex items-center gap-2">
                             <LogIn className="h-4 w-4 text-primary" />
-                            <h3 className="text-[13px] font-bold text-foreground">Unirse con código</h3>
+                            <h3 className="text-[13px] font-bold text-foreground">Unirse con enlace o código</h3>
                         </div>
                         <Input
                             value={joinCode}
-                            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                            placeholder="Código de invitación"
+                            onChange={(e) => setJoinCode(e.target.value)}
+                            placeholder="Enlace o código de invitación"
                             className="h-[50px] rounded-xl bg-card border border-[color:var(--line)] text-foreground px-[15px] font-mono tracking-tighter focus:border-[color:var(--accent-border)]"
                         />
-                        {joinError && <p className="text-destructive text-xs">{joinError}</p>}
                         <Button
                             className="w-full h-[52px] rounded-[13px] bg-primary text-white font-semibold"
                             onClick={handleJoin}
-                            isLoading={joining}
                             disabled={!joinCode.trim()}
                         >
-                            <LogIn className="h-4 w-4 mr-2" /> Unirse
+                            <LogIn className="h-4 w-4 mr-2" /> Continuar
                         </Button>
                     </GlassCard>
                 </section>

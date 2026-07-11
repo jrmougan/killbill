@@ -2,7 +2,8 @@ import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { toCents } from "@/lib/currency";
-import { calculateSplitAmounts, calculateSplitAmountsFromLines, hasExclusiveReceiptItems, hasExclusiveReceiptLines, type ReceiptItemForSplit } from "@/lib/splits";
+import { calculateSplitAmounts, calculateSplitAmountsFromLines, hasExclusiveReceiptItems, rescaleSplits, type ReceiptItemForSplit } from "@/lib/splits";
+import type { SplitStrategy } from "@/generated/prisma/enums";
 import { RECEIPT_LINES_SELECT, linesForSplit } from "@/lib/receipt-read";
 import { resolveCategoryId } from "@/lib/category-db";
 import { buildReceiptLineItems } from "@/lib/receipt";
@@ -93,9 +94,10 @@ export async function PATCH(
         // matches POST/reconcile exactly (Phase 5 WS1: no couple.members reverse
         // relation).
         const members = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
-        // `partner` (the non-payer, for the 2-member split fallbacks) is recomputed
-        // below against the EFFECTIVE payer once a payer change is validated.
-        let partner = members.find(m => m.id !== expense.paidById);
+        // A shared expense has splits over its group's ACTIVE members. N-way from
+        // day one: NO "partner" / 2-member heuristic — splits are recomputed for the
+        // full member set from the PERSISTED splitStrategy (see below).
+        const isShared = expense.visibility === "SHARED" && expense.coupleId != null && members.length > 0;
 
         // Personal expenses are authorized by ownership; shared ones strictly by
         // current couple membership (an ex-member who still "owns" a shared expense
@@ -117,7 +119,6 @@ export async function PATCH(
         const effectivePaidById = typeof paidByIdInput === 'string' && memberIds.has(paidByIdInput)
             ? paidByIdInput
             : expense.paidById;
-        partner = members.find(m => m.id !== effectivePaidById);
 
         // Validate description (when provided) is a non-empty string; an empty one previously 500'd at the DB layer.
         if (description !== undefined && (typeof description !== 'string' || description.trim().length === 0)) {
@@ -201,35 +202,72 @@ export async function PATCH(
             updateData.categoryId = await resolveCategoryId(category, expense.coupleId);
         }
 
-        // Recalculate splits if split mode changed, amount changed, receiptItems changed, or customSplits provided
-        const shouldRecalcSplits = splitWithPartner !== undefined || amount !== undefined || receiptItems !== undefined || customSplits !== undefined;
+        // Recalculate splits when a split-affecting field changes. `splitWithPartner`
+        // is a retired binary toggle (kept only so old clients don't 400); it no
+        // longer drives the strategy — the PERSISTED splitStrategy does.
+        const hasCustomSplits = customSplits && Array.isArray(customSplits) && customSplits.length > 0;
+        const shouldRecalcSplits = isShared
+            && (splitWithPartner !== undefined || amount !== undefined || receiptItems !== undefined || customSplits !== undefined);
 
-        // Determine the existing split mode BEFORE deleting anything — otherwise the
-        // count is always 0 and an amount-only edit silently collapses a 50/50 split.
-        let isSplitWithPartner = false;
-        if (shouldRecalcSplits && partner && !(customSplits && Array.isArray(customSplits) && customSplits.length > 0)) {
-            const existingSplits = await prisma.split.findMany({ where: { expenseId: id } });
-            isSplitWithPartner = splitWithPartner !== undefined
-                ? splitWithPartner
-                : existingSplits.length === 2;
-        }
+        // Rehydrate the N-way split from the persisted strategy (never from member
+        // count). `newSplits === null` means "leave splits untouched". `newStrategy
+        // === undefined` means "don't change the persisted strategy".
+        let newSplits: { userId: string; amount: number }[] | null = null;
+        let newStrategy: SplitStrategy | undefined = undefined;
 
-        // Keep the persisted split strategy in sync when splits are recalculated.
-        if (shouldRecalcSplits && partner) {
-            if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
-                updateData.splitStrategy = 'CUSTOM';
-            } else if (isSplitWithPartner) {
-                // Body branch: request receipt (euro floats). Fallback branch
-                // (receiptItems===undefined, e.g. amount-only edit): the PERSISTED
-                // ReceiptLineItem rows are the read source (Phase 4 read-switch).
-                const itemized = receiptItems !== undefined
-                    ? hasExclusiveReceiptItems(receiptItems)
-                    : hasExclusiveReceiptLines(expense.lineItems);
-                updateData.splitStrategy = itemized ? 'ITEMIZED' : 'EQUAL';
+        if (shouldRecalcSplits) {
+            // Existing rows are needed to preserve the EXCLUSIVE beneficiary and to
+            // rescale a CUSTOM distribution when only the amount changed.
+            const existingSplits = await prisma.split.findMany({
+                where: { expenseId: id },
+                select: { userId: true, amount: true },
+            });
+
+            if (hasCustomSplits) {
+                newStrategy = 'CUSTOM';
+                newSplits = (customSplits as { userId: string; amount: number }[])
+                    .map(s => ({ userId: s.userId, amount: s.amount }));
+            } else if (receiptItems !== undefined) {
+                // A fresh receipt was supplied: EQUAL or ITEMIZED, split N-way over
+                // ALL current members (euro-float request path).
+                newStrategy = hasExclusiveReceiptItems(receiptItems) ? 'ITEMIZED' : 'EQUAL';
+                newSplits = calculateSplitAmounts(amountCents, receiptItems as ReceiptItemForSplit[] | null, members);
             } else {
-                updateData.splitStrategy = 'EXCLUSIVE';
+                // No new split inputs (e.g. amount-only edit): recompute from the
+                // PERSISTED strategy so a group of N never collapses.
+                const strategy: SplitStrategy = expense.splitStrategy ?? 'EQUAL';
+                if (strategy === 'EXCLUSIVE') {
+                    // Preserve the single beneficiary; move the (possibly new) full
+                    // amount to them. Fall back to EQUAL if the beneficiary is no
+                    // longer a member.
+                    const beneficiaryId = existingSplits.length === 1
+                        ? existingSplits[0].userId
+                        : [...existingSplits].sort((a, b) => b.amount - a.amount)[0]?.userId;
+                    if (beneficiaryId && memberIds.has(beneficiaryId)) {
+                        newStrategy = 'EXCLUSIVE';
+                        newSplits = [{ userId: beneficiaryId, amount: amountCents }];
+                    } else {
+                        newStrategy = 'EQUAL';
+                        newSplits = calculateSplitAmounts(amountCents, null, members);
+                    }
+                } else if (strategy === 'ITEMIZED') {
+                    newStrategy = 'ITEMIZED';
+                    newSplits = calculateSplitAmountsFromLines(amountCents, linesForSplit(expense.lineItems), members);
+                } else if (strategy === 'CUSTOM') {
+                    // Can't invent per-user amounts: rescale the existing distribution
+                    // proportionally so it still sums to the amount and stays N-way.
+                    newStrategy = 'CUSTOM';
+                    newSplits = existingSplits.length > 0
+                        ? rescaleSplits(existingSplits, amountCents)
+                        : calculateSplitAmounts(amountCents, null, members);
+                } else {
+                    newStrategy = 'EQUAL';
+                    newSplits = calculateSplitAmounts(amountCents, null, members);
+                }
             }
         }
+
+        if (newStrategy !== undefined) updateData.splitStrategy = newStrategy;
 
         // Update the expense and rewrite its splits atomically so a failure mid-way
         // can never leave the expense updated with stale/orphaned splits.
@@ -239,32 +277,13 @@ export async function PATCH(
                 data: updateData,
             });
 
-            if (shouldRecalcSplits && partner) {
+            // Rewrite the N-way splits computed above (from the persisted strategy),
+            // atomically. `newSplits === null` leaves them untouched.
+            if (newSplits !== null) {
                 await tx.split.deleteMany({ where: { expenseId: id } });
-
-                if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
-                    await tx.split.createMany({
-                        data: customSplits.map((s: { userId: string; amount: number }) => ({
-                            expenseId: id,
-                            userId: s.userId,
-                            amount: s.amount,
-                        }))
-                    });
-                } else if (isSplitWithPartner) {
-                    // Body branch: split from the request receipt (euro floats,
-                    // unchanged create-time path). Fallback branch: split from the
-                    // PERSISTED ReceiptLineItem rows (cents-native, Phase 4 switch).
-                    const splits = receiptItems !== undefined
-                        ? calculateSplitAmounts(amountCents, receiptItems as ReceiptItemForSplit[] | null, members)
-                        : calculateSplitAmountsFromLines(amountCents, linesForSplit(expense.lineItems), members);
-                    await tx.split.createMany({
-                        data: splits.map(s => ({ expenseId: id, userId: s.userId, amount: s.amount }))
-                    });
-                } else {
-                    await tx.split.create({
-                        data: { expenseId: id, userId: partner.id, amount: amountCents }
-                    });
-                }
+                await tx.split.createMany({
+                    data: newSplits.map(s => ({ expenseId: id, userId: s.userId, amount: s.amount }))
+                });
             }
 
             // Rewrite the relational receipt line items when the receipt changes

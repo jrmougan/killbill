@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
-import { getActiveGroup } from '@/lib/membership';
+import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
 import { postSettlementLedger } from '@/lib/ledger';
 
 export async function PATCH(
@@ -10,9 +9,9 @@ export async function PATCH(
 ) {
     const { id } = await params;
 
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const userId = session.userId as string;
+    const ctx = await getSessionCtx();
+    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const userId = ctx.userId;
 
     const body = await request.json();
     const { status } = body;
@@ -27,12 +26,11 @@ export async function PATCH(
 
     if (!settlement) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Enforce Couple Context (Phase 4 selector switch: Membership layer).
-    const groupId = await getActiveGroup(userId);
-
-    if (settlement.coupleId !== groupId) {
-        return NextResponse.json({ error: 'Settlement does not belong to your couple' }, { status: 403 });
-    }
+    // Authorize against the settlement's OWN group (not the active-group cookie):
+    // confirming a settlement from a SETTLING/ARCHIVED space must not 403 in
+    // multi-group. Settling is permitted while the space is closing/archived.
+    const auth = await requireSpaceAccess(ctx, settlement.coupleId, { allowArchived: true });
+    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
 
     if (settlement.toUserId !== userId) {
         return NextResponse.json({ error: 'Only the receiver can update status' }, { status: 403 });

@@ -7,16 +7,20 @@ import { ArrowLeft, X, Plus, Check } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 interface Tag {
     id: string;
     name: string;
     color: string;
-    coupleId: string;
+    /** Personal tag (ownerId, no group) vs common (group) tag. */
+    personal: boolean;
 }
 
 interface TagsClientProps {
     initialTags: Tag[];
+    /** Whether the user belongs to a group — gates the "Común" scope. */
+    hasGroup: boolean;
 }
 
 const PRESET_COLORS = [
@@ -41,11 +45,14 @@ const COLOR_NAMES: Record<string, string> = {
     "#84cc16": "Lima",
 };
 
-export function TagsClient({ initialTags }: TagsClientProps) {
+export function TagsClient({ initialTags, hasGroup }: TagsClientProps) {
     const router = useRouter();
     const [tags, setTags] = useState<Tag[]>(initialTags);
     const [newName, setNewName] = useState("");
     const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
+    // Scope of the tag being created: common (group) or personal. Defaults to
+    // common when the user has a group, else personal.
+    const [newPersonal, setNewPersonal] = useState(!hasGroup);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -59,11 +66,12 @@ export function TagsClient({ initialTags }: TagsClientProps) {
             const res = await fetch("/api/tags", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: trimmed, color: newColor }),
+                body: JSON.stringify({ name: trimmed, color: newColor, personal: newPersonal }),
             });
             if (res.ok) {
                 const data = await res.json();
-                setTags((prev) => [...prev, data.tag].sort((a, b) => a.name.localeCompare(b.name)));
+                const created: Tag = { id: data.tag.id, name: data.tag.name, color: data.tag.color, personal: newPersonal };
+                setTags((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
                 setNewName("");
                 setNewColor(PRESET_COLORS[0]);
                 router.refresh();
@@ -118,6 +126,31 @@ export function TagsClient({ initialTags }: TagsClientProps) {
                         if (e.key === "Enter" && !saving) handleCreate();
                     }}
                 />
+
+                {hasGroup && (
+                    <div className="space-y-2">
+                        <p className="text-xs text-muted-foreground font-medium">Ámbito</p>
+                        <div className="flex gap-1.5 p-1 rounded-xl bg-secondary border border-[color:var(--line)]">
+                            {([["comun", "Común", false], ["personal", "Personal", true]] as const).map(([key, label, personal]) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => setNewPersonal(personal)}
+                                    aria-pressed={newPersonal === personal}
+                                    className={cn(
+                                        "flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-all active:scale-[0.98]",
+                                        newPersonal === personal ? "bg-primary text-white shadow" : "text-muted-foreground",
+                                    )}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground/70">
+                            {newPersonal ? "Solo para tus gastos personales." : "Compartida con el grupo."}
+                        </p>
+                    </div>
+                )}
 
                 <div className="space-y-2">
                     <p className="text-xs text-muted-foreground font-medium">Color</p>
@@ -179,6 +212,9 @@ export function TagsClient({ initialTags }: TagsClientProps) {
                                     style={{ backgroundColor: tag.color }}
                                 />
                                 <span className="text-sm font-semibold text-foreground">{tag.name}</span>
+                                {tag.personal && (
+                                    <span className="px-1.5 py-px rounded bg-secondary text-[10px] font-semibold text-muted-foreground">Personal</span>
+                                )}
                                 <button
                                     type="button"
                                     onClick={() => handleDelete(tag)}

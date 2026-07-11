@@ -5,6 +5,8 @@ const mockExpenseFindUnique = vi.fn();
 const mockExpenseDelete = vi.fn();
 const mockExpenseUpdate = vi.fn();
 const mockSplitFindMany = vi.fn();
+const mockSplitCreateMany = vi.fn();
+const mockSplitDeleteMany = vi.fn();
 const mockTxSeriesUpdate = vi.fn();
 const mockGetGroupMembers = vi.fn();
 const mockPostExpenseLedger = vi.fn();
@@ -23,8 +25,8 @@ vi.mock('@/lib/db', () => {
     };
     const split = {
         findMany: (...a: unknown[]) => mockSplitFindMany(...a),
-        deleteMany: vi.fn(),
-        createMany: vi.fn(),
+        deleteMany: (...a: unknown[]) => mockSplitDeleteMany(...a),
+        createMany: (...a: unknown[]) => mockSplitCreateMany(...a),
         create: vi.fn(),
     };
     const receiptLineItem = { deleteMany: vi.fn(), createMany: vi.fn() };
@@ -205,5 +207,106 @@ describe('PATCH /api/expenses/[id] — payer change (N-way)', () => {
         const res = await PATCH(patchReq({ notes: 'x' }), { params });
         expect(res.status).toBe(200);
         expect('receiptUrl' in mockExpenseUpdate.mock.calls[0][0].data).toBe(false);
+    });
+});
+
+// Regression coverage for the N-way rewrite: editing a group expense of 3-4
+// members must NEVER collapse the split to 2 people (the old
+// `partner = members.find(...)` + `existingSplits.length === 2` heuristic did
+// exactly that). Splits are recomputed from the PERSISTED splitStrategy over ALL
+// current members.
+describe('PATCH /api/expenses/[id] — N-way split rewrite (no 2-member collapse)', () => {
+    beforeEach(() => {
+        [mockGetSession, mockExpenseFindUnique, mockExpenseUpdate, mockSplitFindMany,
+            mockSplitCreateMany, mockSplitDeleteMany, mockGetGroupMembers, mockPostExpenseLedger]
+            .forEach((m) => m.mockReset());
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        mockSplitCreateMany.mockResolvedValue({});
+        mockSplitDeleteMany.mockResolvedValue({});
+        mockPostExpenseLedger.mockResolvedValue(undefined);
+        mockExpenseUpdate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+            Promise.resolve({ id: 'e1', visibility: 'SHARED', coupleId: 'c1', date: new Date(0), seriesId: null, paidById: 'u1', amount: data.amount ?? 3000, splitStrategy: data.splitStrategy }));
+    });
+
+    /** The rows passed to tx.split.createMany, or null if it was never called. */
+    function createdSplits(): { userId: string; amount: number }[] | null {
+        if (mockSplitCreateMany.mock.calls.length === 0) return null;
+        return mockSplitCreateMany.mock.calls[0][0].data;
+    }
+
+    it('re-splits an EQUAL 3-member expense across ALL 3 on an amount edit', async () => {
+        mockGetGroupMembers.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }, { id: 'u3' }]);
+        mockExpenseFindUnique.mockResolvedValue(sharedExpense({ amount: 2100, splitStrategy: 'EQUAL', series: null, lineItems: [] }));
+        mockSplitFindMany.mockResolvedValue([
+            { userId: 'u1', amount: 700 }, { userId: 'u2', amount: 700 }, { userId: 'u3', amount: 700 },
+        ]);
+
+        const res = await PATCH(patchReq({ amount: '30.00' }), { params });
+        expect(res.status).toBe(200);
+
+        const splits = createdSplits();
+        expect(splits).not.toBeNull();
+        expect(splits).toHaveLength(3);                               // NOT 2 — the bug
+        expect(splits!.map(s => s.userId).sort()).toEqual(['u1', 'u2', 'u3']);
+        expect(splits!.reduce((s, x) => s + x.amount, 0)).toBe(3000);
+        expect(mockExpenseUpdate.mock.calls[0][0].data.splitStrategy).toBe('EQUAL');
+    });
+
+    it('persists CUSTOM over all 4 members when customSplits are supplied', async () => {
+        mockGetGroupMembers.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }, { id: 'u3' }, { id: 'u4' }]);
+        mockExpenseFindUnique.mockResolvedValue(sharedExpense({ amount: 4000, splitStrategy: 'EQUAL', series: null, lineItems: [] }));
+        mockSplitFindMany.mockResolvedValue([]);
+
+        const custom = [
+            { userId: 'u1', amount: 1500 }, { userId: 'u2', amount: 1500 },
+            { userId: 'u3', amount: 500 }, { userId: 'u4', amount: 500 },
+        ];
+        const res = await PATCH(patchReq({ amount: '40.00', customSplits: custom }), { params });
+        expect(res.status).toBe(200);
+
+        const splits = createdSplits();
+        expect(splits).toHaveLength(4);
+        expect(splits!.reduce((s, x) => s + x.amount, 0)).toBe(4000);
+        expect(mockExpenseUpdate.mock.calls[0][0].data.splitStrategy).toBe('CUSTOM');
+    });
+
+    it('keeps the SAME single beneficiary when editing the amount of an EXCLUSIVE expense', async () => {
+        mockGetGroupMembers.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }, { id: 'u3' }]);
+        mockExpenseFindUnique.mockResolvedValue(sharedExpense({ amount: 2100, splitStrategy: 'EXCLUSIVE', series: null, lineItems: [] }));
+        mockSplitFindMany.mockResolvedValue([{ userId: 'u2', amount: 2100 }]); // charged entirely to u2
+
+        const res = await PATCH(patchReq({ amount: '30.00' }), { params });
+        expect(res.status).toBe(200);
+
+        const splits = createdSplits();
+        expect(splits).toEqual([{ expenseId: 'e1', userId: 'u2', amount: 3000 }]);
+        expect(mockExpenseUpdate.mock.calls[0][0].data.splitStrategy).toBe('EXCLUSIVE');
+    });
+
+    it('rescales a CUSTOM expense proportionally on an amount edit (no fresh customSplits)', async () => {
+        mockGetGroupMembers.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }, { id: 'u3' }]);
+        mockExpenseFindUnique.mockResolvedValue(sharedExpense({ amount: 3000, splitStrategy: 'CUSTOM', series: null, lineItems: [] }));
+        // Existing 2000/500/500 (Σ3000) → doubling to 6000 keeps the ratios.
+        mockSplitFindMany.mockResolvedValue([
+            { userId: 'u1', amount: 2000 }, { userId: 'u2', amount: 500 }, { userId: 'u3', amount: 500 },
+        ]);
+
+        const res = await PATCH(patchReq({ amount: '60.00' }), { params });
+        expect(res.status).toBe(200);
+
+        const splits = createdSplits();
+        expect(splits).toHaveLength(3);
+        expect(splits!.reduce((s, x) => s + x.amount, 0)).toBe(6000);
+        const byUser = Object.fromEntries(splits!.map(s => [s.userId, s.amount]));
+        expect(byUser).toEqual({ u1: 4000, u2: 1000, u3: 1000 });
+        expect(mockExpenseUpdate.mock.calls[0][0].data.splitStrategy).toBe('CUSTOM');
+    });
+
+    it('rejects customSplits that reference a non-member (IDOR guard)', async () => {
+        mockGetGroupMembers.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
+        mockExpenseFindUnique.mockResolvedValue(sharedExpense({ amount: 2000, splitStrategy: 'EQUAL', series: null, lineItems: [] }));
+        const res = await PATCH(patchReq({ amount: '20.00', customSplits: [{ userId: 'u1', amount: 1000 }, { userId: 'intruder', amount: 1000 }] }), { params });
+        expect(res.status).toBe(400);
+        expect(mockSplitCreateMany).not.toHaveBeenCalled();
     });
 });

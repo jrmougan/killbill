@@ -1,5 +1,61 @@
 import { describe, it, expect } from 'vitest';
-import { calculateSplitAmounts, hasExclusiveReceiptItems } from './splits';
+import { calculateSplitAmounts, hasExclusiveReceiptItems, rescaleSplits } from './splits';
+
+describe('rescaleSplits (N-way proportional rescale for edited CUSTOM expenses)', () => {
+    it('rescales proportionally and always sums to the new total (3 members)', () => {
+        // 1000/2000/3000 (Σ6000) rescaled to 12000 → doubles each share.
+        const out = rescaleSplits(
+            [{ userId: 'a', amount: 1000 }, { userId: 'b', amount: 2000 }, { userId: 'c', amount: 3000 }],
+            12000,
+        );
+        expect(out).toEqual([
+            { userId: 'a', amount: 2000 },
+            { userId: 'b', amount: 4000 },
+            { userId: 'c', amount: 6000 },
+        ]);
+        expect(out.reduce((s, x) => s + x.amount, 0)).toBe(12000);
+    });
+
+    it('assigns the rounding remainder to the first member so Σ is exact', () => {
+        // 1000/1000/1000 (Σ3000) rescaled to 1000 → floor gives 333/333/333=999,
+        // the 1-cent remainder lands on the first member.
+        const out = rescaleSplits(
+            [{ userId: 'a', amount: 1000 }, { userId: 'b', amount: 1000 }, { userId: 'c', amount: 1000 }],
+            1000,
+        );
+        expect(out).toEqual([
+            { userId: 'a', amount: 334 },
+            { userId: 'b', amount: 333 },
+            { userId: 'c', amount: 333 },
+        ]);
+        expect(out.reduce((s, x) => s + x.amount, 0)).toBe(1000);
+    });
+
+    it('never collapses a 4-member split (keeps all members)', () => {
+        const out = rescaleSplits(
+            [{ userId: 'a', amount: 500 }, { userId: 'b', amount: 500 }, { userId: 'c', amount: 500 }, { userId: 'd', amount: 500 }],
+            8000,
+        );
+        expect(out).toHaveLength(4);
+        expect(out.reduce((s, x) => s + x.amount, 0)).toBe(8000);
+    });
+
+    it('falls back to an even N-way division when the old total is zero', () => {
+        const out = rescaleSplits(
+            [{ userId: 'a', amount: 0 }, { userId: 'b', amount: 0 }, { userId: 'c', amount: 0 }],
+            1000,
+        );
+        expect(out).toEqual([
+            { userId: 'a', amount: 334 },
+            { userId: 'b', amount: 333 },
+            { userId: 'c', amount: 333 },
+        ]);
+    });
+
+    it('returns [] for an empty split set', () => {
+        expect(rescaleSplits([], 5000)).toEqual([]);
+    });
+});
 
 describe('hasExclusiveReceiptItems', () => {
     it('returns false for null/undefined/empty', () => {

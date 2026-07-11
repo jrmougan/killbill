@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
 import type { User } from "@/generated/prisma/client";
+import type { SpaceType, SpaceStatus, MembershipRole } from "@/generated/prisma/enums";
 
 /** Cookie holding the user's currently-active group (multi-group support, F4). */
 export const ACTIVE_GROUP_COOKIE = "active_group";
@@ -56,7 +57,16 @@ export async function getPrimaryGroup(userId: string): Promise<string | null> {
  */
 export async function getUserGroups(
     userId: string
-): Promise<{ id: string; name: string | null; code: string; memberCount: number }[]> {
+): Promise<{
+    id: string;
+    name: string | null;
+    code: string;
+    memberCount: number;
+    type: SpaceType;
+    status: SpaceStatus;
+    role: MembershipRole;
+    expiresAt: Date | null;
+}[]> {
     const memberships = await prisma.membership.findMany({
         where: { userId, status: "ACTIVE" },
         orderBy: [{ joinedAt: "asc" }, { groupId: "asc" }],
@@ -66,6 +76,9 @@ export async function getUserGroups(
                     id: true,
                     name: true,
                     code: true,
+                    type: true,
+                    status: true,
+                    expiresAt: true,
                     // ACTIVE-only member count — mirrors getGroupMembers semantics.
                     _count: { select: { memberships: { where: { status: "ACTIVE" } } } },
                 },
@@ -77,6 +90,10 @@ export async function getUserGroups(
         name: m.group.name,
         code: m.group.code,
         memberCount: m.group._count.memberships,
+        type: m.group.type,
+        status: m.group.status,
+        role: m.role,
+        expiresAt: m.group.expiresAt,
     }));
 }
 

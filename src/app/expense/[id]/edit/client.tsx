@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
     ArrowLeft, Check, Heart, User, Camera, Loader2, X, Plus, Trash2,
-    Calculator, FileText, SlidersHorizontal, Tag, RefreshCw, ChevronDown, ChevronUp,
+    Calculator, FileText, Tag, RefreshCw, ChevronDown, ChevronUp,
 } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
@@ -13,6 +13,12 @@ import { cn } from "@/lib/utils";
 import { ReceiptItem } from "@/types";
 import { getAllCategories } from "@/lib/categories";
 import { formatEuros } from "@/lib/currency";
+import {
+    SplitEditor,
+    computeSplit,
+    splitValueFromExisting,
+    type SplitValue,
+} from "@/components/expense/split-editor";
 
 type SplitMode = "shared" | "solo" | "custom";
 type RecurringInterval = "weekly" | "monthly" | "yearly";
@@ -47,6 +53,9 @@ interface EditExpenseClientProps {
     initialCategory: string;
     initialSplitMode: SplitMode;
     initialMyPercent: number;
+    initialSplitStrategy: "EQUAL" | "CUSTOM" | "EXCLUSIVE" | "ITEMIZED" | null;
+    initialSplits: { userId: string; amount: number }[];
+    spaceType: string | null;
     initialReceiptItems: ReceiptItem[];
     initialReceiptUrl: string | null;
     initialNotes: string;
@@ -66,8 +75,9 @@ export function EditExpenseClient({
     initialAmount,
     initialDescription,
     initialCategory,
-    initialSplitMode,
-    initialMyPercent,
+    initialSplitStrategy,
+    initialSplits,
+    spaceType,
     initialReceiptItems,
     initialReceiptUrl,
     initialNotes,
@@ -84,11 +94,13 @@ export function EditExpenseClient({
     const [category, setCategory] = useState(initialCategory);
     const [loading, setLoading] = useState(false);
 
-    // Split
-    const [splitMode, setSplitMode] = useState<SplitMode>(initialSplitMode);
-    const [myPercent, setMyPercent] = useState(initialMyPercent);
     // Payer (N-way): who fronted the money. Editable for shared expenses.
     const [paidById, setPaidById] = useState<string>(initialPaidById);
+    // N-way split via the shared SplitEditor (Fase 1), hydrated from the persisted
+    // strategy + materialized split rows. Replaces splitMode/myPercent/splitWithPartner.
+    const [splitValue, setSplitValue] = useState<SplitValue>(() =>
+        splitValueFromExisting(initialSplitStrategy, initialSplits, members, Math.round(initialAmount * 100)),
+    );
 
     // Items breakdown
     const [receiptItems, setReceiptItems] = useState<EditableReceiptItem[]>(() =>
@@ -122,10 +134,8 @@ export function EditExpenseClient({
     // 2-member groups keep the "me vs partner" split modes; larger groups (family)
     // edit as an N-way equal split (F5). The backend recalc is N-way already.
     const isTwoMember = members.length === 2;
-    const partnerPercent = 100 - myPercent;
     const amountNum = parseFloat(amount) || 0;
-    const myAmount = ((amountNum * myPercent) / 100).toFixed(2);
-    const partnerAmount = ((amountNum * partnerPercent) / 100).toFixed(2);
+    const amountCentsLive = Math.round(amountNum * 100);
 
     const itemSplitMyAmount = receiptItems.reduce((acc, item) => {
         if (item.assignedTo === null) return acc + item.total / 2;
@@ -137,7 +147,9 @@ export function EditExpenseClient({
         if (item.assignedTo === partner?.id) return acc + item.total;
         return acc;
     }, 0);
-    const hasItemAssignments = receiptItems.some((i) => i.assignedTo !== null);
+    // Receipt item assignments (2-member only) override the split, as before.
+    const hasItemAssignments = isTwoMember && receiptItems.some((i) => i.assignedTo !== null);
+    const splitResult = computeSplit(splitValue, members, amountCentsLive);
 
     // Sync amount from items
     useEffect(() => {
@@ -256,8 +268,8 @@ export function EditExpenseClient({
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (isTwoMember && splitMode === "custom" && myPercent + partnerPercent !== 100) {
-            alert("Los porcentajes deben sumar 100%");
+        if (!isPersonal && !hasItemAssignments && !splitResult.valid) {
+            alert(splitResult.reason || "Revisa el reparto del gasto");
             return;
         }
 
@@ -295,31 +307,23 @@ export function EditExpenseClient({
             // Payer change (N-way): shared expenses carry an editable payer.
             if (!isPersonal) {
                 bodyPayload.paidById = paidById;
-            }
 
-            // The custom %, per-item and solo modes are 2-member-only; larger groups
-            // recalc as an N-way equal split (splitWithPartner → the API divides
-            // equally among ALL members).
-            if (isTwoMember && partner) {
-                if (hasItemAssignments) {
+                if (hasItemAssignments && partner) {
+                    // Receipt item assignments (2-member) override the split.
                     const myCents = Math.round(itemSplitMyAmount * 100);
                     bodyPayload.customSplits = [
                         { userId, amount: myCents },
                         { userId: partner.id, amount: amountCents - myCents },
                     ];
-                } else if (splitMode === "solo") {
-                    bodyPayload.splitWithPartner = false;
-                } else if (splitMode === "custom") {
-                    const myCents = Math.round((amountCents * myPercent) / 100);
-                    bodyPayload.customSplits = [
-                        { userId, amount: myCents },
-                        { userId: partner.id, amount: amountCents - myCents },
-                    ];
                 } else {
-                    bodyPayload.splitWithPartner = true;
+                    // N-way split from the SplitEditor. Always send explicit
+                    // customSplits (from splitResult.shares) so no group ever
+                    // collapses — the PATCH persists these exact per-member cents.
+                    bodyPayload.customSplits = members.map((m) => ({
+                        userId: m.id,
+                        amount: splitResult.shares[m.id] ?? 0,
+                    }));
                 }
-            } else {
-                bodyPayload.splitWithPartner = true;
             }
 
             const res = await fetch(`/api/expenses/${expenseId}`, {
@@ -576,79 +580,27 @@ export function EditExpenseClient({
                     </div>
                 )}
 
-                {/* 6. Split mode — only for shared expenses */}
+                {/* 6. Split — only for shared expenses; the shared N-way SplitEditor.
+                    Hidden when 2-member receipt item assignments take over the split. */}
                 {isPersonal ? (
                     <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-card border border-[color:var(--line)] text-sm text-muted-foreground">
                         <User className="h-4 w-4 text-primary" />
                         Gasto personal — privado, sin reparto
                     </div>
-                ) : !isTwoMember ? (
+                ) : hasItemAssignments ? (
                     <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-card border border-[color:var(--line)] text-sm text-muted-foreground">
                         <Heart className="h-4 w-4 text-primary" />
-                        Se reparte a partes iguales entre {members.length} miembros
+                        El reparto lo definen los productos asignados arriba
                     </div>
                 ) : (
-                <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-2 p-1 bg-secondary rounded-xl">
-                        {(["shared", "solo", "custom"] as SplitMode[]).map((mode) => {
-                            const icons = { shared: <Heart className={cn("h-4 w-4", splitMode === "shared" && "fill-current")} />, solo: <User className="h-4 w-4" />, custom: <SlidersHorizontal className="h-4 w-4" /> };
-                            const labels = { shared: "Común", solo: `Solo ${partner?.name ?? "pareja"}`, custom: "Custom" };
-                            return (
-                                <button
-                                    key={mode}
-                                    type="button"
-                                    onClick={() => setSplitMode(mode)}
-                                    className={`py-3 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${
-                                        splitMode === mode ? "bg-primary text-white shadow-lg" : "text-muted-foreground hover:text-foreground"
-                                    }`}
-                                >
-                                    {icons[mode]}
-                                    <span className="truncate">{labels[mode]}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    {splitMode === "custom" && (
-                        <div className="space-y-3 animate-in fade-in duration-300 bg-secondary rounded-xl p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="flex-1 space-y-1">
-                                    <label htmlFor="split-my-percent" className="text-xs text-muted-foreground">Yo</label>
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            id="split-my-percent"
-                                            type="number" min={0} max={100} value={myPercent}
-                                            onChange={(e) => setMyPercent(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                            className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-mono font-semibold text-center text-foreground focus:outline-none focus:border-[color:var(--accent-border)]"
-                                        />
-                                        <span className="text-sm text-muted-foreground">%</span>
-                                    </div>
-                                </div>
-                                <div className="text-muted-foreground text-sm font-bold pt-4">/</div>
-                                <div className="flex-1 space-y-1">
-                                    <label htmlFor="split-partner-percent" className="text-xs text-muted-foreground">{partner?.name ?? "Pareja"}</label>
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            id="split-partner-percent"
-                                            type="number" min={0} max={100} value={partnerPercent}
-                                            onChange={(e) => setMyPercent(100 - Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                                            className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-mono font-semibold text-center text-foreground focus:outline-none focus:border-[color:var(--accent-border)]"
-                                        />
-                                        <span className="text-sm text-muted-foreground">%</span>
-                                    </div>
-                                </div>
-                            </div>
-                            {amountNum > 0 && (
-                                <div className="text-xs text-center text-muted-foreground">
-                                    Yo: <strong className="text-foreground font-mono">{formatEuros(Number(myAmount))}</strong> — {partner?.name ?? "Pareja"}: <strong className="text-foreground font-mono">{formatEuros(Number(partnerAmount))}</strong>
-                                </div>
-                            )}
-                            {myPercent + partnerPercent !== 100 && (
-                                <p className="text-xs text-destructive text-center">Los porcentajes deben sumar 100%</p>
-                            )}
-                        </div>
-                    )}
-                </div>
+                    <SplitEditor
+                        members={members.map((m) => ({ id: m.id, name: m.name }))}
+                        currentUserId={userId}
+                        totalCents={amountCentsLive}
+                        value={splitValue}
+                        onChange={setSplitValue}
+                        isCouple={spaceType === "COUPLE"}
+                    />
                 )}
 
                 {/* 7. Notes */}

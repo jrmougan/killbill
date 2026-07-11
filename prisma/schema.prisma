@@ -13,6 +13,32 @@ enum RecurringInterval {
   yearly
 }
 
+// Espacios (Fase 0). El tipo de espacio determina la política (cap de miembros,
+// budgets/recurrentes permitidos, invitados). INDIVIDUAL queda RESERVADO (modo
+// virtual permanente, sin filas Couple ni migración de gastos personales).
+enum SpaceType {
+  INDIVIDUAL
+  COUPLE
+  GROUP
+  EPHEMERAL
+}
+
+// Ciclo de vida de un espacio: ACTIVE (escribible) → SETTLING (saldando) →
+// ARCHIVED (solo lectura, recuerdo indefinido). Los efímeros archivados no se
+// auto-purgan en v1.
+enum SpaceStatus {
+  ACTIVE
+  SETTLING
+  ARCHIVED
+}
+
+// Fase 0: clase de invitación por enlace. MEMBER invita a registrados; GUEST
+// crea un User sombra (solo EPHEMERAL activo).
+enum InviteKind {
+  MEMBER
+  GUEST
+}
+
 enum SettlementStatus {
   PENDING
   CONFIRMED
@@ -44,6 +70,7 @@ enum MembershipRole {
   OWNER
   ADMIN
   MEMBER
+  GUEST // Fase 0: invitado sombra (EPHEMERAL). AL FINAL del enum: metadata-only en MySQL 8, no reordenar.
 }
 
 // Phase 2e: semantics of a Budget's period so a MONTH budget and a CUSTOM budget
@@ -73,6 +100,16 @@ model Couple {
   code      String    @unique // For invites
   createdAt DateTime  @default(now())
 
+  // Espacios (Fase 0). Aditivo con DEFAULT — el código actual las ignora. El
+  // backfill de `type` (GROUP donde ACTIVE members > 2) va en un script manual
+  // verificable, NO en el SQL de la migración.
+  type       SpaceType   @default(COUPLE)
+  status     SpaceStatus @default(ACTIVE)
+  archivedAt DateTime?
+  expiresAt  DateTime? // solo EPHEMERAL: sugerencia de cierre, sin cron en v1
+  createdById String?
+  createdBy   User?   @relation("SpaceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
   memberships Membership[]
   expenses    Expense[]
   settlements Settlement[]
@@ -82,6 +119,31 @@ model Couple {
   recurringSeries RecurringSeries[]
   accounts           Account[]
   ledgerTransactions LedgerTransaction[]
+  groupInvites       GroupInvite[]
+
+  @@index([status, expiresAt])
+}
+
+// Fase 0: invitación por enlace a un espacio. El token en claro NO se guarda,
+// solo su sha256 (`tokenHash`) + un prefijo para listarlo en la UI. Canje
+// transaccional con updateMany condicional (patrón anti-carrera de InviteCode).
+model GroupInvite {
+  id          String     @id @default(cuid())
+  groupId     String
+  group       Couple     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  tokenHash   String     @unique
+  tokenPrefix String
+  kind        InviteKind
+  maxUses     Int
+  usedCount   Int        @default(0)
+  expiresAt   DateTime // OBLIGATORIO
+  revokedAt   DateTime?
+  createdById String
+  createdBy   User       @relation("GroupInviteCreator", fields: [createdById], references: [id])
+  createdAt   DateTime   @default(now())
+
+  @@index([groupId])
+  @@index([createdById])
 }
 
 model User {
@@ -93,6 +155,11 @@ model User {
   password  String?
   isAdmin   Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  // Fase 0: identidad de invitado sombra (EPHEMERAL). isGuest=true → email/
+  // password NULL; el upgrade a cuenta real es un UPDATE de la misma fila.
+  isGuest    Boolean   @default(false)
+  upgradedAt DateTime?
 
   // Phase 5 contract: User.coupleId dropped — Membership is the sole membership
   // source (getPrimaryGroup / getGroupMembers).
@@ -115,6 +182,18 @@ model User {
 
   inviteCodesCreated InviteCode[] @relation("InviteCreator")
   inviteCodeUsed     InviteCode?  @relation("InviteUser")
+
+  // Espacios (Fase 0): auditoría de quién creó el espacio (onDelete SetNull).
+  spacesCreated Couple[] @relation("SpaceCreator")
+
+  // Fase 0: enlaces de invitación creados por este usuario.
+  groupInvitesCreated GroupInvite[] @relation("GroupInviteCreator")
+
+  // Fase 0: gastos creados por este usuario (autoría; backfill COALESCE(ownerId, paidById)).
+  expensesCreated Expense[] @relation("ExpenseCreator")
+
+  // Fase 0: tags personales (XOR con coupleId por convención, patrón Budget).
+  personalTags Tag[] @relation("PersonalTag")
 }
 
 model InviteCode {
@@ -146,6 +225,10 @@ model Membership {
 
   role     MembershipRole   @default(MEMBER)
   status   MembershipStatus @default(ACTIVE)
+
+  // Fase 0: enlace personal de recuperación multi-dispositivo del invitado
+  // (rotable). NULLs múltiples permitidos en MySQL bajo índice único.
+  guestTokenHash String? @unique
 
   joinedAt DateTime  @default(now())
   leftAt   DateTime?
@@ -216,13 +299,22 @@ model Expense {
   importFingerprint String? @unique
 
   paidById String
-  paidBy   User   @relation("Payer", fields: [paidById], references: [id], onDelete: Cascade)
+  // Fase 4: Restrict (no Cascade) desde User — borrar un User con gastos que pagó
+  // destruiría la contabilidad del grupo. Baja = REMOVED/anonimizar, nunca DELETE.
+  paidBy   User   @relation("Payer", fields: [paidById], references: [id], onDelete: Restrict)
+
+  // Fase 0: autoría del gasto (quién lo creó). Imprescindible para que un GUEST
+  // solo pueda editar/borrar los suyos. Nullable + SetNull; backfill
+  // COALESCE(ownerId, paidById) en el SQL de la migración.
+  createdById String?
+  createdBy   User?   @relation("ExpenseCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   // Owner of the "book" this expense belongs to (always set). For shared
   // expenses this defaults to the creator; for personal expenses it is the
   // only user who can see it.
   ownerId String
-  owner   User   @relation("Owner", fields: [ownerId], references: [id], onDelete: Cascade)
+  // Fase 4: Restrict (no Cascade) desde User — mismo motivo que paidBy.
+  owner   User   @relation("Owner", fields: [ownerId], references: [id], onDelete: Restrict)
 
   // Personal expenses have no couple; shared ones are scoped to a Couple.
   coupleId String?
@@ -258,6 +350,7 @@ model Expense {
   @@index([ownerId, visibility])
   @@index([categoryId])
   @@index([seriesId])
+  @@index([createdById])
 }
 
 // Relational receipt line items (Phase 2c), replacing the Expense.receiptData
@@ -371,11 +464,13 @@ model Settlement {
 
   // Who is settling their debt (The Debtor)
   fromUserId String
-  fromUser   User   @relation("SettlementPayer", fields: [fromUserId], references: [id], onDelete: Cascade)
+  // Fase 4: Restrict (no Cascade) desde User — borrar un User con liquidaciones
+  // rompería el zero-sum de la contabilidad. Baja = REMOVED/anonimizar.
+  fromUser   User   @relation("SettlementPayer", fields: [fromUserId], references: [id], onDelete: Restrict)
 
   // Who is receiving the settlement (The Creditor)
   toUserId String
-  toUser   User   @relation("SettlementReceiver", fields: [toUserId], references: [id], onDelete: Cascade)
+  toUser   User   @relation("SettlementReceiver", fields: [toUserId], references: [id], onDelete: Restrict)
 
   coupleId String
   couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
@@ -402,8 +497,16 @@ model Tag {
   id       String @id @default(cuid())
   name     String
   color    String @default("#8b5cf6")
-  coupleId String
-  couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+
+  // Fase 0: un Tag es de grupo (coupleId set) o personal (ownerId set) — XOR por
+  // convención, patrón Budget. coupleId pasa a nullable para admitir tags
+  // personales; los tags existentes conservan su coupleId.
+  coupleId String?
+  couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+
+  ownerId String?
+  owner   User?   @relation("PersonalTag", fields: [ownerId], references: [id], onDelete: Cascade)
+
   expenses ExpenseTag[]
 
   createdAt DateTime @default(now())
@@ -411,6 +514,7 @@ model Tag {
 
   @@unique([name, coupleId])
   @@index([coupleId])
+  @@index([ownerId])
 }
 
 model ExpenseTag {
@@ -434,7 +538,10 @@ model Account {
   group     Couple   @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Fase 4: Restrict (no Cascade) desde User — red de seguridad del ledger.
+  // LedgerEntry cuelga de Account (no de User), así que restringir aquí impide
+  // borrar un User con actividad de ledger sin tocar LedgerEntry.
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   entries   LedgerEntry[]
 

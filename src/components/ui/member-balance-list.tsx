@@ -8,6 +8,8 @@ interface Member {
     id: string;
     name: string;
     avatar: string | null;
+    /** Shadow guest (EPHEMERAL) — gets an "Invitado" badge. */
+    isGuest?: boolean;
 }
 
 /**
@@ -48,9 +50,16 @@ export function MemberBalanceList({
                                     m.name.charAt(0).toUpperCase()
                                 )}
                             </span>
-                            <span className="text-sm font-medium text-foreground truncate">
-                                {m.name}
-                                {isMe && <span className="text-muted-foreground font-normal"> (tú)</span>}
+                            <span className="text-sm font-medium text-foreground truncate flex items-center gap-1.5">
+                                <span className="truncate">
+                                    {m.name}
+                                    {isMe && <span className="text-muted-foreground font-normal"> (tú)</span>}
+                                </span>
+                                {m.isGuest && (
+                                    <span className="shrink-0 px-1.5 py-px rounded bg-secondary text-[10px] font-semibold text-muted-foreground">
+                                        Invitado
+                                    </span>
+                                )}
                             </span>
                         </div>
                         <span
