@@ -13,7 +13,7 @@ import { MembershipRole, MembershipStatus } from "@/generated/prisma/enums";
  * - An ADMIN cannot remove an OWNER (only an OWNER can).
  */
 export async function DELETE(
-    _request: Request,
+    request: Request,
     { params }: { params: Promise<{ id: string; userId: string }> },
 ) {
     const { id, userId: targetUserId } = await params;
@@ -50,10 +50,26 @@ export async function DELETE(
         newStatus = MembershipStatus.REMOVED;
     }
 
-    await prisma.membership.update({
-        where: { groupId_userId: { groupId: id, userId: targetUserId } },
-        data: { status: newStatus, leftAt: new Date() },
+    // RGPD suppression (Fase 3): an OWNER/ADMIN may anonymize a GUEST shadow user
+    // on expulsion (`?anonymize=true`). We NEVER physically delete a user with
+    // accounting attached (that would break the ledger's zero-sum); instead we
+    // scrub the display name to "Invitado" while every Split/Settlement/Ledger row
+    // stays intact. Only applies to shadow guests, never a real account.
+    const anonymize =
+        !isSelf && new URL(request.url).searchParams.get("anonymize") === "true";
+
+    await prisma.$transaction(async (tx) => {
+        await tx.membership.update({
+            where: { groupId_userId: { groupId: id, userId: targetUserId } },
+            data: { status: newStatus, leftAt: new Date() },
+        });
+        if (anonymize) {
+            await tx.user.updateMany({
+                where: { id: targetUserId, isGuest: true },
+                data: { name: "Invitado" },
+            });
+        }
     });
 
-    return NextResponse.json({ success: true, status: newStatus });
+    return NextResponse.json({ success: true, status: newStatus, anonymized: anonymize });
 }

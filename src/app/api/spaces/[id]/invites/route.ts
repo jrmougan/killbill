@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
-import { joinByCodeAllowed } from "@/lib/space-policy";
+import { allowsGuests, joinByCodeAllowed } from "@/lib/space-policy";
+import { ephemeralSpacesEnabled } from "@/lib/flags";
 import { generateInviteToken, hashInviteToken, tokenPrefix } from "@/lib/invite-token";
 import { InviteKind, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 
@@ -21,6 +22,9 @@ import { InviteKind, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 const MAX_USES_CEILING = 50;
 /** Furthest an invite may be set to expire (30 days, matches GUEST default). */
 const MAX_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
+/** GUEST link defaults (product #8): maxUses 10, expiry 30 days. */
+const GUEST_DEFAULT_MAX_USES = 10;
+const GUEST_DEFAULT_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
 
 export async function POST(
     request: Request,
@@ -34,15 +38,6 @@ export async function POST(
         return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
     }
 
-    // MEMBER links only target spaces you can join as a registered member.
-    // EPHEMERAL (guest-only) and SETTLING/ARCHIVED are rejected here.
-    if (!joinByCodeAllowed(auth.space.type as SpaceType, auth.space.status as SpaceStatus)) {
-        return NextResponse.json(
-            { error: "Este espacio no admite enlaces de invitación de miembro", code: "JOIN_NOT_ALLOWED" },
-            { status: 400 },
-        );
-    }
-
     let body: { maxUses?: unknown; expiresAt?: unknown; kind?: unknown };
     try {
         body = await request.json();
@@ -50,29 +45,64 @@ export async function POST(
         return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
     }
 
-    // Only MEMBER invites in this phase.
-    if (body.kind !== undefined && body.kind !== InviteKind.MEMBER) {
-        return NextResponse.json({ error: "Solo se admiten invitaciones de miembro" }, { status: 400 });
+    const kind = body.kind === undefined ? InviteKind.MEMBER : body.kind;
+    if (kind !== InviteKind.MEMBER && kind !== InviteKind.GUEST) {
+        return NextResponse.json({ error: "Tipo de invitación no válido" }, { status: 400 });
     }
 
-    // expiresAt is OBLIGATORIO and must be a future date within the ceiling.
-    if (body.expiresAt == null) {
-        return NextResponse.json({ error: "expiresAt es obligatorio" }, { status: 400 });
-    }
-    const expiresAt = new Date(body.expiresAt as string);
-    if (Number.isNaN(expiresAt.getTime())) {
-        return NextResponse.json({ error: "expiresAt inválido" }, { status: 400 });
-    }
+    const spaceType = auth.space.type as SpaceType;
+    const spaceStatus = auth.space.status as SpaceStatus;
     const now = Date.now();
-    if (expiresAt.getTime() <= now) {
-        return NextResponse.json({ error: "expiresAt debe estar en el futuro" }, { status: 400 });
-    }
-    if (expiresAt.getTime() - now > MAX_EXPIRY_MS) {
-        return NextResponse.json({ error: "expiresAt no puede superar los 30 días" }, { status: 400 });
+
+    if (kind === InviteKind.GUEST) {
+        // GUEST links live behind the ephemeral-spaces flag and only ever make
+        // sense in an ACTIVE space that allows guests (EPHEMERAL). A guest link
+        // mints a shadow user on claim — never on a COUPLE/GROUP.
+        if (!ephemeralSpacesEnabled()) {
+            return NextResponse.json(
+                { error: "Los espacios efímeros no están habilitados", code: "FEATURE_DISABLED" },
+                { status: 403 },
+            );
+        }
+        if (!allowsGuests(spaceType) || spaceStatus !== SpaceStatus.ACTIVE) {
+            return NextResponse.json(
+                { error: "Este espacio no admite invitados", code: "GUESTS_NOT_ALLOWED" },
+                { status: 400 },
+            );
+        }
+    } else {
+        // MEMBER links only target spaces you can join as a registered member.
+        // EPHEMERAL (guest-only) and SETTLING/ARCHIVED are rejected here.
+        if (!joinByCodeAllowed(spaceType, spaceStatus)) {
+            return NextResponse.json(
+                { error: "Este espacio no admite enlaces de invitación de miembro", code: "JOIN_NOT_ALLOWED" },
+                { status: 400 },
+            );
+        }
     }
 
-    // maxUses defaults to 1 (single-use, safest); clamp to a sane ceiling.
-    let maxUses = 1;
+    // expiresAt: OBLIGATORIO for MEMBER; for GUEST it defaults to +30d when omitted.
+    let expiresAt: Date;
+    if (body.expiresAt == null) {
+        if (kind === InviteKind.MEMBER) {
+            return NextResponse.json({ error: "expiresAt es obligatorio" }, { status: 400 });
+        }
+        expiresAt = new Date(now + GUEST_DEFAULT_EXPIRY_MS);
+    } else {
+        expiresAt = new Date(body.expiresAt as string);
+        if (Number.isNaN(expiresAt.getTime())) {
+            return NextResponse.json({ error: "expiresAt inválido" }, { status: 400 });
+        }
+        if (expiresAt.getTime() <= now) {
+            return NextResponse.json({ error: "expiresAt debe estar en el futuro" }, { status: 400 });
+        }
+        if (expiresAt.getTime() - now > MAX_EXPIRY_MS) {
+            return NextResponse.json({ error: "expiresAt no puede superar los 30 días" }, { status: 400 });
+        }
+    }
+
+    // maxUses: MEMBER defaults to 1 (single-use, safest); GUEST to 10. Clamp to ceiling.
+    let maxUses = kind === InviteKind.GUEST ? GUEST_DEFAULT_MAX_USES : 1;
     if (body.maxUses !== undefined) {
         const n = Number(body.maxUses);
         if (!Number.isInteger(n) || n < 1 || n > MAX_USES_CEILING) {
@@ -91,7 +121,7 @@ export async function POST(
             groupId: id,
             tokenHash: hashInviteToken(token),
             tokenPrefix: tokenPrefix(token),
-            kind: InviteKind.MEMBER,
+            kind,
             maxUses,
             expiresAt,
             createdById: auth.userId,

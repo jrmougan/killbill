@@ -64,14 +64,52 @@ export type SpaceAccessErr = {
 
 export type SpaceAccessResult = SpaceAccessOk | SpaceAccessErr;
 
-/** Read the current session as a SessionCtx, or null when unauthenticated. */
+/**
+ * Read the current session as a SessionCtx, or null when unauthenticated.
+ *
+ * For GUEST sessions this is the CENTRAL per-request revocation point (plan
+ * §2.3): a guest JWT is valid for up to 72h, but membership can be revoked
+ * (expelled → REMOVED) or the whole space archived at any moment. So for guests
+ * we ALWAYS revalidate against the DB — an expelled guest, or one whose space
+ * left ACTIVE, is treated as unauthenticated on its very next request without
+ * needing a JWT blacklist. Registered sessions skip the DB round-trip.
+ */
 export async function getSessionCtx(): Promise<SessionCtx | null> {
     const session = await getSession();
     if (!session?.userId) return null;
+
+    const userId = session.userId as string;
+    const isGuestSession = session.kind === "guest";
+
+    if (isGuestSession) {
+        const groupId = typeof session.groupId === "string" ? session.groupId : undefined;
+        if (!groupId) return null;
+        // Revalidate membership + space status live. Guests are caged to one
+        // EPHEMERAL space; archiving it revokes every guest session.
+        const membership = await prisma.membership.findUnique({
+            where: { groupId_userId: { groupId, userId } },
+            select: { role: true, status: true, group: { select: { status: true } } },
+        });
+        if (
+            !membership ||
+            membership.status !== MembershipStatus.ACTIVE ||
+            membership.group.status === SpaceStatus.ARCHIVED
+        ) {
+            return null;
+        }
+        return {
+            userId,
+            isAdmin: false,
+            kind: "guest",
+            groupId,
+            role: membership.role,
+        };
+    }
+
     return {
-        userId: session.userId as string,
+        userId,
         isAdmin: session.isAdmin === true,
-        kind: session.kind === "guest" ? "guest" : undefined,
+        kind: undefined,
         groupId: typeof session.groupId === "string" ? session.groupId : undefined,
         role: typeof session.role === "string" ? (session.role as MembershipRole) : undefined,
     };

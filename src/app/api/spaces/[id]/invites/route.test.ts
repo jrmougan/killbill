@@ -8,7 +8,10 @@ const mockGroupInviteCreate = vi.fn();
 const mockGroupInviteFindMany = vi.fn();
 const mockGroupInviteUpdateMany = vi.fn();
 
+const mockEphemeralEnabled = vi.fn();
+
 vi.mock("@/lib/auth", () => ({ getSession: () => mockGetSession() }));
+vi.mock("@/lib/flags", () => ({ ephemeralSpacesEnabled: () => mockEphemeralEnabled() }));
 vi.mock("@/lib/db", () => ({
     prisma: {
         couple: { findUnique: (...a: unknown[]) => mockCoupleFindUnique(...a) },
@@ -46,6 +49,7 @@ describe("/api/spaces/[id]/invites (kind MEMBER)", () => {
             createdAt: new Date(),
             ...data,
         }));
+        mockEphemeralEnabled.mockReturnValue(false);
     });
 
     it("403 when the caller is only a MEMBER", async () => {
@@ -118,5 +122,48 @@ describe("/api/spaces/[id]/invites (kind MEMBER)", () => {
         mockGroupInviteUpdateMany.mockResolvedValue({ count: 0 });
         const res = await DELETE(new Request("http://localhost/api/spaces/g1/invites?inviteId=nope", { method: "DELETE" }), { params });
         expect(res.status).toBe(404);
+    });
+});
+
+describe("/api/spaces/[id]/invites (kind GUEST, Fase 3)", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockGetSession.mockResolvedValue({ userId: "owner" });
+        mockCoupleFindUnique.mockResolvedValue({ id: "e1", type: "EPHEMERAL", status: "ACTIVE" });
+        mockMembershipFindUnique.mockResolvedValue({ groupId: "e1", userId: "owner", role: "OWNER", status: "ACTIVE" });
+        mockGroupInviteCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
+            id: "ginv1",
+            usedCount: 0,
+            createdAt: new Date(),
+            ...data,
+        }));
+        mockEphemeralEnabled.mockReturnValue(true);
+    });
+
+    it("403 FEATURE_DISABLED when the flag is off", async () => {
+        mockEphemeralEnabled.mockReturnValue(false);
+        const res = await POST(post({ kind: "GUEST" }), { params });
+        expect(res.status).toBe(403);
+        expect((await res.json()).code).toBe("FEATURE_DISABLED");
+        expect(mockGroupInviteCreate).not.toHaveBeenCalled();
+    });
+
+    it("rejects GUEST links on a non-EPHEMERAL space", async () => {
+        mockCoupleFindUnique.mockResolvedValue({ id: "g1", type: "GROUP", status: "ACTIVE" });
+        const res = await POST(post({ kind: "GUEST" }), { params });
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe("GUESTS_NOT_ALLOWED");
+    });
+
+    it("mints a GUEST link with defaults maxUses=10 and a 30d expiry when omitted", async () => {
+        const res = await POST(post({ kind: "GUEST" }), { params });
+        const data = await res.json();
+        expect(res.status).toBe(200);
+        expect(typeof data.token).toBe("string");
+        const created = mockGroupInviteCreate.mock.calls[0][0].data;
+        expect(created.kind).toBe("GUEST");
+        expect(created.maxUses).toBe(10);
+        expect(created.expiresAt).toBeInstanceOf(Date);
+        expect((created.expiresAt as Date).getTime()).toBeGreaterThan(Date.now());
     });
 });

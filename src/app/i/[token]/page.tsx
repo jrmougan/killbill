@@ -2,10 +2,12 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { evaluateInvite, hashInviteToken, inviteInvalidMessage } from "@/lib/invite-token";
-import { joinByCodeAllowed } from "@/lib/space-policy";
+import { allowsGuests, joinByCodeAllowed } from "@/lib/space-policy";
+import { ephemeralSpacesEnabled } from "@/lib/flags";
 import { InviteKind, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 import { Button } from "@/components/ui/button";
 import { ClaimButton } from "./claim-button";
+import { GuestEntry } from "./guest-entry";
 
 /**
  * Public invite consent screen (Fase 2). Reached from an invite link and from
@@ -20,7 +22,7 @@ export const dynamic = "force-dynamic";
 
 type Resolved =
     | { ok: false; message: string }
-    | { ok: true; spaceName: string };
+    | { ok: true; kind: "MEMBER" | "GUEST"; spaceName: string };
 
 async function resolveInvite(token: string): Promise<Resolved> {
     const invite = await prisma.groupInvite.findUnique({
@@ -29,8 +31,21 @@ async function resolveInvite(token: string): Promise<Resolved> {
     });
 
     if (invite) {
-        if (invite.kind !== InviteKind.MEMBER) {
-            return { ok: false, message: "Este tipo de invitación no está disponible todavía." };
+        if (invite.kind === InviteKind.GUEST) {
+            if (!ephemeralSpacesEnabled()) {
+                return { ok: false, message: "Este tipo de invitación no está disponible todavía." };
+            }
+            const validity = evaluateInvite(invite);
+            if (!validity.ok) {
+                return { ok: false, message: inviteInvalidMessage(validity.reason) };
+            }
+            if (
+                !allowsGuests(invite.group.type as SpaceType) ||
+                (invite.group.status as SpaceStatus) !== SpaceStatus.ACTIVE
+            ) {
+                return { ok: false, message: "Este espacio ya no admite invitados." };
+            }
+            return { ok: true, kind: "GUEST", spaceName: invite.group.name ?? "el espacio" };
         }
         const validity = evaluateInvite(invite);
         if (!validity.ok) {
@@ -39,7 +54,7 @@ async function resolveInvite(token: string): Promise<Resolved> {
         if (!joinByCodeAllowed(invite.group.type as SpaceType, invite.group.status as SpaceStatus)) {
             return { ok: false, message: "Este espacio ya no admite nuevos miembros." };
         }
-        return { ok: true, spaceName: invite.group.name ?? "el espacio" };
+        return { ok: true, kind: "MEMBER", spaceName: invite.group.name ?? "el espacio" };
     }
 
     const couple = await prisma.couple.findUnique({
@@ -50,7 +65,7 @@ async function resolveInvite(token: string): Promise<Resolved> {
         if (!joinByCodeAllowed(couple.type as SpaceType, couple.status as SpaceStatus)) {
             return { ok: false, message: "Este espacio ya no admite nuevos miembros." };
         }
-        return { ok: true, spaceName: couple.name ?? "el espacio" };
+        return { ok: true, kind: "MEMBER", spaceName: couple.name ?? "el espacio" };
     }
 
     return { ok: false, message: "Enlace de invitación no encontrado o caducado." };
@@ -79,6 +94,20 @@ export default async function InviteConsentPage({
                     <Link href="/dashboard" className="text-primary hover:underline text-sm">
                         Ir a mi panel
                     </Link>
+                </div>
+            ) : resolved.kind === "GUEST" ? (
+                <div className="w-full space-y-4 text-center">
+                    <p className="text-lg">
+                        Te han invitado a <span className="font-semibold">{resolved.spaceName}</span>. Entra con
+                        solo tu nombre, sin crear una cuenta.
+                    </p>
+                    <GuestEntry token={token} spaceName={resolved.spaceName} />
+                    <p className="text-xs text-muted-foreground">
+                        ¿Prefieres una cuenta?{" "}
+                        <Link href={`/register?code=${encodeURIComponent(token)}`} className="text-primary hover:underline">
+                            Regístrate
+                        </Link>
+                    </p>
                 </div>
             ) : session?.userId ? (
                 <div className="w-full space-y-4 text-center">

@@ -5,29 +5,49 @@ const mockGetSession = vi.fn();
 const mockGroupInviteFindUnique = vi.fn();
 const mockCoupleFindUnique = vi.fn();
 const mockMembershipFindFirst = vi.fn();
+const mockMembershipFindUnique = vi.fn();
 const mockMembershipCount = vi.fn();
 const mockMembershipUpsert = vi.fn();
+const mockMembershipCreate = vi.fn();
+const mockUserCreate = vi.fn();
 const mockGroupInviteUpdateMany = vi.fn();
 const mockCookieSet = vi.fn();
+const mockCookieDelete = vi.fn();
+const mockEphemeralEnabled = vi.fn();
+const mockRateLimit = vi.fn();
 
-vi.mock("@/lib/auth", () => ({ getSession: () => mockGetSession() }));
-vi.mock("next/headers", () => ({ cookies: async () => ({ set: mockCookieSet }) }));
+vi.mock("@/lib/auth", () => ({
+    getSession: () => mockGetSession(),
+    signGuestToken: async () => "signed.guest.jwt",
+}));
+vi.mock("@/lib/flags", () => ({ ephemeralSpacesEnabled: () => mockEphemeralEnabled() }));
+vi.mock("@/lib/rate-limit", () => ({
+    rateLimit: (...a: unknown[]) => mockRateLimit(...a),
+    getClientIp: () => "1.2.3.4",
+}));
+vi.mock("next/headers", () => ({
+    cookies: async () => ({ set: mockCookieSet, delete: mockCookieDelete }),
+}));
 vi.mock("@/lib/db", () => {
     const membership = {
         findFirst: (...a: unknown[]) => mockMembershipFindFirst(...a),
+        findUnique: (...a: unknown[]) => mockMembershipFindUnique(...a),
         count: (...a: unknown[]) => mockMembershipCount(...a),
         upsert: (...a: unknown[]) => mockMembershipUpsert(...a),
+        create: (...a: unknown[]) => mockMembershipCreate(...a),
     };
     const groupInvite = {
         findUnique: (...a: unknown[]) => mockGroupInviteFindUnique(...a),
         updateMany: (...a: unknown[]) => mockGroupInviteUpdateMany(...a),
     };
+    const user = { create: (...a: unknown[]) => mockUserCreate(...a) };
     return {
         prisma: {
             groupInvite,
             couple: { findUnique: (...a: unknown[]) => mockCoupleFindUnique(...a) },
             membership,
-            $transaction: (cb: (tx: unknown) => unknown) => cb({ membership, groupInvite }),
+            user,
+            $transaction: (cb: (tx: unknown) => unknown) => cb({ membership, groupInvite, user }),
         },
     };
 });
@@ -64,9 +84,14 @@ describe("POST /api/invites/claim", () => {
         vi.clearAllMocks();
         mockGetSession.mockResolvedValue({ userId: "u1" });
         mockMembershipFindFirst.mockResolvedValue(null); // not yet a member
+        mockMembershipFindUnique.mockResolvedValue(null); // no recovery membership
         mockMembershipCount.mockResolvedValue(1); // room available
         mockMembershipUpsert.mockResolvedValue({});
+        mockMembershipCreate.mockResolvedValue({});
+        mockUserCreate.mockResolvedValue({ id: "guest1" });
         mockGroupInviteUpdateMany.mockResolvedValue({ count: 1 }); // consume succeeds
+        mockEphemeralEnabled.mockReturnValue(false); // flag off by default
+        mockRateLimit.mockReturnValue({ allowed: true, retryAfterSeconds: 0 });
     });
 
     it("401 without a session", async () => {
@@ -187,5 +212,119 @@ describe("POST /api/invites/claim", () => {
         mockCoupleFindUnique.mockResolvedValue(null);
         const res = await POST(req({ token: "nope" }));
         expect(res.status).toBe(404);
+    });
+});
+
+function guestInvite(overrides: Record<string, unknown> = {}) {
+    return {
+        id: "ginv1",
+        tokenHash: hashInviteToken(TOKEN),
+        kind: "GUEST",
+        maxUses: 10,
+        usedCount: 0,
+        expiresAt: future,
+        revokedAt: null,
+        group: { id: "e1", type: "EPHEMERAL", status: "ACTIVE", expiresAt: null },
+        ...overrides,
+    };
+}
+
+describe("POST /api/invites/claim — GUEST", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockGetSession.mockResolvedValue(null); // guests have no prior session
+        mockMembershipFindUnique.mockResolvedValue(null);
+        mockMembershipCount.mockResolvedValue(1);
+        mockMembershipCreate.mockResolvedValue({});
+        mockUserCreate.mockResolvedValue({ id: "guest1" });
+        mockGroupInviteUpdateMany.mockResolvedValue({ count: 1 });
+        mockEphemeralEnabled.mockReturnValue(true);
+        mockRateLimit.mockReturnValue({ allowed: true, retryAfterSeconds: 0 });
+    });
+
+    it("403 FEATURE_DISABLED when the flag is off", async () => {
+        mockEphemeralEnabled.mockReturnValue(false);
+        mockGroupInviteFindUnique.mockResolvedValue(guestInvite());
+        const res = await POST(req({ token: TOKEN, name: "Ana" }));
+        expect(res.status).toBe(403);
+        expect((await res.json()).code).toBe("FEATURE_DISABLED");
+        expect(mockUserCreate).not.toHaveBeenCalled();
+    });
+
+    it("creates a shadow user + GUEST membership and returns a one-time recovery token", async () => {
+        mockGroupInviteFindUnique.mockResolvedValue(guestInvite());
+        const res = await POST(req({ token: TOKEN, name: "Ana" }));
+        const data = await res.json();
+        expect(res.status).toBe(200);
+        expect(data.guest).toBe(true);
+        expect(data.groupId).toBe("e1");
+        expect(typeof data.recoveryToken).toBe("string");
+        expect(mockUserCreate).toHaveBeenCalledOnce();
+        expect(mockMembershipCreate).toHaveBeenCalledOnce();
+        expect(mockGroupInviteUpdateMany).toHaveBeenCalledOnce();
+        // Session cookie opened without any prior session.
+        expect(mockCookieSet).toHaveBeenCalledWith("session_token", "signed.guest.jwt", expect.anything());
+    });
+
+    it("400 when the guest provides no name", async () => {
+        mockGroupInviteFindUnique.mockResolvedValue(guestInvite());
+        const res = await POST(req({ token: TOKEN, name: "   " }));
+        expect(res.status).toBe(400);
+        expect(mockUserCreate).not.toHaveBeenCalled();
+    });
+
+    it("rejects a GUEST invite on a non-EPHEMERAL space", async () => {
+        mockGroupInviteFindUnique.mockResolvedValue(
+            guestInvite({ group: { id: "g1", type: "GROUP", status: "ACTIVE", expiresAt: null } }),
+        );
+        const res = await POST(req({ token: TOKEN, name: "Ana" }));
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe("GUESTS_NOT_ALLOWED");
+    });
+
+    it("rejects a GUEST invite on a non-ACTIVE space", async () => {
+        mockGroupInviteFindUnique.mockResolvedValue(
+            guestInvite({ group: { id: "e1", type: "EPHEMERAL", status: "SETTLING", expiresAt: null } }),
+        );
+        const res = await POST(req({ token: TOKEN, name: "Ana" }));
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe("GUESTS_NOT_ALLOWED");
+    });
+
+    it("rolls back to EXHAUSTED when the invite use is lost in a race", async () => {
+        mockGroupInviteFindUnique.mockResolvedValue(guestInvite());
+        mockGroupInviteUpdateMany.mockResolvedValue({ count: 0 });
+        const res = await POST(req({ token: TOKEN, name: "Ana" }));
+        expect(res.status).toBe(400);
+        expect((await res.json()).code).toBe("EXHAUSTED");
+    });
+
+    it("re-opens a guest session from a personal recovery token", async () => {
+        mockGroupInviteFindUnique.mockResolvedValue(null); // not an invite
+        mockMembershipFindUnique.mockResolvedValue({
+            userId: "guest1",
+            role: "GUEST",
+            status: "ACTIVE",
+            group: { id: "e1", status: "ACTIVE", expiresAt: null },
+        });
+        const res = await POST(req({ token: "recovery-token" }));
+        const data = await res.json();
+        expect(res.status).toBe(200);
+        expect(data.recovered).toBe(true);
+        expect(data.groupId).toBe("e1");
+        expect(mockCookieSet).toHaveBeenCalledWith("session_token", "signed.guest.jwt", expect.anything());
+    });
+
+    it("rejects recovery when the guest space is archived", async () => {
+        mockGroupInviteFindUnique.mockResolvedValue(null);
+        mockMembershipFindUnique.mockResolvedValue({
+            userId: "guest1",
+            role: "GUEST",
+            status: "ACTIVE",
+            group: { id: "e1", status: "ARCHIVED", expiresAt: null },
+        });
+        const res = await POST(req({ token: "recovery-token" }));
+        expect(res.status).toBe(403);
+        expect((await res.json()).code).toBe("GUEST_REVOKED");
     });
 });

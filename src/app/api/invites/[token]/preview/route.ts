@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { evaluateInvite, hashInviteToken, inviteInvalidMessage } from "@/lib/invite-token";
 import { InviteKind, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
-import { joinByCodeAllowed } from "@/lib/space-policy";
+import { allowsGuests, joinByCodeAllowed } from "@/lib/space-policy";
+import { ephemeralSpacesEnabled } from "@/lib/flags";
 
 /**
  * Public, minimal preview of an invite link (Fase 2). Powers the consent screen
@@ -44,10 +45,32 @@ export async function GET(
     });
 
     if (invite) {
-        // MEMBER links only in this phase; GUEST (EPHEMERAL) is Fase 3.
-        if (invite.kind !== InviteKind.MEMBER) {
+        // GUEST links (EPHEMERAL) render a "join as guest" screen, gated by the flag.
+        if (invite.kind === InviteKind.GUEST) {
+            if (!ephemeralSpacesEnabled()) {
+                return NextResponse.json(
+                    { valid: false, reason: "UNSUPPORTED", error: "Tipo de invitación no disponible" },
+                    { status: 200, headers },
+                );
+            }
+            const validity = evaluateInvite(invite);
+            if (!validity.ok) {
+                return NextResponse.json(
+                    { valid: false, reason: validity.reason, error: inviteInvalidMessage(validity.reason) },
+                    { status: 200, headers },
+                );
+            }
+            const guestable =
+                allowsGuests(invite.group.type as SpaceType) &&
+                (invite.group.status as SpaceStatus) === SpaceStatus.ACTIVE;
             return NextResponse.json(
-                { valid: false, reason: "UNSUPPORTED", error: "Tipo de invitación no disponible" },
+                {
+                    valid: guestable,
+                    reason: guestable ? undefined : "NOT_JOINABLE",
+                    error: guestable ? undefined : "Este espacio ya no admite invitados",
+                    kind: InviteKind.GUEST,
+                    space: { name: invite.group.name, type: invite.group.type },
+                },
                 { status: 200, headers },
             );
         }
