@@ -125,12 +125,10 @@ export async function PATCH(
             return NextResponse.json({ error: 'Invalid description' }, { status: 400 });
         }
 
-        // Normalize/validate enum inputs so out-of-vocabulary values cannot trigger a DB enum 500.
-        const VALID_CATEGORIES = ['shopping', 'food', 'rent', 'utilities', 'transport', 'entertainment', 'health', 'other'];
+        // Fase 3: the category (when provided) is validated against the EFFECTIVE
+        // set of the expense's context — see the resolveCategoryId block below.
+        // No hardcoded whitelist: a custom category resolves, an unknown key 400s.
         const VALID_INTERVALS = ['weekly', 'monthly', 'yearly'];
-        if (category !== undefined && category !== null && !VALID_CATEGORIES.includes(category)) {
-            return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
-        }
         if (recurringInterval !== undefined && recurringInterval !== null && !VALID_INTERVALS.includes(recurringInterval)) {
             return NextResponse.json({ error: 'Invalid recurring interval' }, { status: 400 });
         }
@@ -194,12 +192,22 @@ export async function PATCH(
         // Phase 5 (stop-dual-write): Expense.isRecurring/recurringInterval/
         // nextRecurringDate are no longer written; the schedule is mirrored to the
         // RecurringSeries in the series-sync block below (using the resolved locals).
-        // Keep the relational Category in sync when the enum category changes (Phase 2b).
+        // Keep the relational Category in sync when the category changes (Phase 2b).
+        // Fase 3: validated against the EFFECTIVE set of the expense's context —
+        // resolveCategoryId returns null for a key absent from both the context-
+        // custom and the system layer, which we surface as a 400 (never 'other').
         if (category !== undefined && category !== null) {
-            updateData.categoryId = await resolveCategoryId(
+            if (typeof category !== 'string' || category.trim().length === 0) {
+                return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+            }
+            const resolvedCategoryId = await resolveCategoryId(
                 category,
                 expense.coupleId ? { groupId: expense.coupleId } : { ownerId: expense.ownerId },
             );
+            if (!resolvedCategoryId) {
+                return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+            }
+            updateData.categoryId = resolvedCategoryId;
         }
 
         // Recalculate splits when a split-affecting field changes. `splitWithPartner`

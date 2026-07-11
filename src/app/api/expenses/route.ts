@@ -157,19 +157,24 @@ export async function POST(request: Request) {
             }
         }
 
-        // Normalize free-form input to the DB enum vocabularies so an out-of-vocabulary
-        // value (e.g. a category guessed by OCR/Gemini) cannot trigger a DB enum error.
-        const VALID_CATEGORIES = ['shopping', 'food', 'rent', 'utilities', 'transport', 'entertainment', 'health', 'other'];
         const VALID_INTERVALS = ['weekly', 'monthly', 'yearly'];
-        const normalizedCategory = VALID_CATEGORIES.includes(category) ? category : 'other';
         const normalizedInterval = VALID_INTERVALS.includes(recurringInterval) ? recurringInterval : null;
 
-        // Dual-write the relational Category (Phase 2b). Personal expenses have no
-        // group, so they resolve to the system category.
+        // Fase 3: the category is validated against the EFFECTIVE set of the
+        // context (system ∪ context-custom) via resolveCategoryId — an unknown key
+        // is a 400, NEVER silently normalized to 'other'. resolveCategoryId returns
+        // null exactly when the key exists in neither the context-custom nor the
+        // system layer, which is the effective-list membership check.
+        if (typeof category !== 'string' || category.trim().length === 0) {
+            return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+        }
         const categoryId = await resolveCategoryId(
-            normalizedCategory,
+            category,
             isPersonalExpense ? { ownerId: userId } : { groupId },
         );
+        if (!categoryId) {
+            return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+        }
 
         const expenseData: Prisma.ExpenseUncheckedCreateInput = {
             description,
