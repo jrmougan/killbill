@@ -299,7 +299,9 @@ model Expense {
   importFingerprint String? @unique
 
   paidById String
-  paidBy   User   @relation("Payer", fields: [paidById], references: [id], onDelete: Cascade)
+  // Fase 4: Restrict (no Cascade) desde User — borrar un User con gastos que pagó
+  // destruiría la contabilidad del grupo. Baja = REMOVED/anonimizar, nunca DELETE.
+  paidBy   User   @relation("Payer", fields: [paidById], references: [id], onDelete: Restrict)
 
   // Fase 0: autoría del gasto (quién lo creó). Imprescindible para que un GUEST
   // solo pueda editar/borrar los suyos. Nullable + SetNull; backfill
@@ -311,7 +313,8 @@ model Expense {
   // expenses this defaults to the creator; for personal expenses it is the
   // only user who can see it.
   ownerId String
-  owner   User   @relation("Owner", fields: [ownerId], references: [id], onDelete: Cascade)
+  // Fase 4: Restrict (no Cascade) desde User — mismo motivo que paidBy.
+  owner   User   @relation("Owner", fields: [ownerId], references: [id], onDelete: Restrict)
 
   // Personal expenses have no couple; shared ones are scoped to a Couple.
   coupleId String?
@@ -461,11 +464,13 @@ model Settlement {
 
   // Who is settling their debt (The Debtor)
   fromUserId String
-  fromUser   User   @relation("SettlementPayer", fields: [fromUserId], references: [id], onDelete: Cascade)
+  // Fase 4: Restrict (no Cascade) desde User — borrar un User con liquidaciones
+  // rompería el zero-sum de la contabilidad. Baja = REMOVED/anonimizar.
+  fromUser   User   @relation("SettlementPayer", fields: [fromUserId], references: [id], onDelete: Restrict)
 
   // Who is receiving the settlement (The Creditor)
   toUserId String
-  toUser   User   @relation("SettlementReceiver", fields: [toUserId], references: [id], onDelete: Cascade)
+  toUser   User   @relation("SettlementReceiver", fields: [toUserId], references: [id], onDelete: Restrict)
 
   coupleId String
   couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
@@ -533,7 +538,10 @@ model Account {
   group     Couple   @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Fase 4: Restrict (no Cascade) desde User — red de seguridad del ledger.
+  // LedgerEntry cuelga de Account (no de User), así que restringir aquí impide
+  // borrar un User con actividad de ledger sin tocar LedgerEntry.
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   entries   LedgerEntry[]
 
