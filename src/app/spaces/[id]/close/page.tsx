@@ -50,7 +50,9 @@ export default async function CloseSpacePage({ params }: { params: Promise<{ id:
         <CloseSpaceClient
             spaceId={space.id}
             spaceName={space.name ?? spaceTypeMeta(space.type).label}
+            type={space.type}
             status={space.status}
+            expiresAt={space.expiresAt ? space.expiresAt.toISOString() : null}
             myDebts={myDebts}
             settlements={settlementRows}
             canManage={canManage}

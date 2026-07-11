@@ -25,6 +25,7 @@ import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
 import { MemberBalanceList } from "@/components/ui/member-balance-list";
 import { PendingSettlements } from "@/components/dashboard/pending-settlements";
 import { SpaceStatusBanner } from "@/components/space/space-status-banner";
+import { GuestBanner } from "@/components/guest/guest-banner";
 import { spaceTypeMeta } from "@/lib/space-ui";
 import { SpaceType } from "@/generated/prisma/enums";
 import { randomBytes } from "crypto";
@@ -35,6 +36,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const session = await getSession();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
+    // A GUEST session (Fase 3) is caged to a single EPHEMERAL space and has NO
+    // personal economy: force the shared lens, hide the personal tile/import/CSV
+    // and lock the space switcher. Detection is by the JWT `kind` claim only, so
+    // this stays correct even if EPHEMERAL_SPACES_ENABLED is later turned off
+    // (an already-open guest session keeps rendering; upgraded ones are normal).
+    const isGuest = session.kind === "guest";
 
     // Fetch the user for display; resolve the ACTIVE group via the Membership
     // layer (F4: honours the group-switcher cookie, else the primary group).
@@ -49,7 +56,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // 'personal' (private only). A user with NO group has only the personal lens —
     // the app is fully usable solo, with an optional "create/join a group" CTA
     // instead of a blocking onboarding wall.
-    const scope = groupId ? normalizeScope((await searchParams).scope) : "personal";
+    const scope = isGuest ? "comun" : groupId ? normalizeScope((await searchParams).scope) : "personal";
 
     // Resolve the group entity + members only when the user belongs to one.
     const couple = groupId ? await prisma.couple.findUnique({ where: { id: groupId } }) : null;
@@ -59,7 +66,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // Spaces for the header switcher: Personal first, then one row per group.
     // Presentation + navigation only — the actual lens is still `scope` below.
     const spaces = [
-        { key: "personal", kind: "personal" as const, name: "Personal", sub: "Economía individual" },
+        // A guest has no personal economy, so omit the Personal row entirely.
+        ...(isGuest ? [] : [{ key: "personal", kind: "personal" as const, name: "Personal", sub: "Economía individual" }]),
         ...userGroups.map((g) => ({
             key: g.id,
             kind: "group" as const,
@@ -111,12 +119,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // Personal ledger (private to this user). Materialize the user's own recurring
     // personal sources (the couple runner above never sees them: coupleId is null),
     // then load them for the unified feed and the "Personal este mes" tile.
-    try {
-        await materializeDueRecurringExpensesForOwner(userId);
-    } catch (err) {
-        console.error("Failed to materialize personal recurring expenses", err);
+    // Guests have no personal economy — skip the personal ledger entirely.
+    if (!isGuest) {
+        try {
+            await materializeDueRecurringExpensesForOwner(userId);
+        } catch (err) {
+            console.error("Failed to materialize personal recurring expenses", err);
+        }
     }
-    const personalExpenses = await prisma.expense.findMany({
+    const personalExpenses = isGuest ? [] : await prisma.expense.findMany({
         where: { ownerId: userId, visibility: "PERSONAL" },
         include: { splits: true, ...CATEGORY_REF_SELECT },
     });
@@ -218,7 +229,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     return (
         <div className="flex flex-col h-full min-h-screen p-4 pb-24 space-y-6 relative">
             <header className="flex justify-between items-center pt-2">
-                <SpaceSwitcher spaces={spaces} activeSpaceKey={activeSpaceKey} />
+                <SpaceSwitcher spaces={spaces} activeSpaceKey={activeSpaceKey} locked={isGuest} />
                 {/* Profile avatar → account settings. Navigation (Analíticas/Ajustes) lives in the bottom nav. */}
                 <Link href="/settings" className="h-[38px] w-[38px] rounded-full bg-secondary border border-[color:var(--line)] flex items-center justify-center font-bold text-sm text-primary overflow-hidden shrink-0">
                     {isAvatarUrl(user.avatar) ? (
@@ -229,6 +240,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     )}
                 </Link>
             </header>
+
+            {/* Guest session notice + upgrade CTA (temporary shadow-user session). */}
+            <GuestBanner show={isGuest} />
 
             {/* Lifecycle banner (SETTLING / ARCHIVED / ephemeral countdown). */}
             {couple && scope !== "personal" && (

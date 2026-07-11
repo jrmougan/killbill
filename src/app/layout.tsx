@@ -4,6 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/components/theme-provider";
 import { BottomNav } from "@/components/nav/bottom-nav";
+import { getSession } from "@/lib/auth";
 
 // EQUIL - Economía Familiar design fonts.
 const instrumentSans = Instrument_Sans({
@@ -36,11 +37,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Read the session once at the root so the global bottom nav can adapt to a
+  // GUEST session (reduced tabs). Cheap: just verifies the JWT, no DB round-trip.
+  const session = await getSession();
+  const isGuest = session?.kind === "guest";
   return (
     <html lang="es" className={cn(instrumentSans.variable, splineSansMono.variable)}>
       <body className="font-sans antialiased min-h-screen">
@@ -50,7 +55,7 @@ export default function RootLayout({
             {children}
           </main>
           {/* Global bottom navigation — self-hides on focused/full-screen flows */}
-          <BottomNav />
+          <BottomNav isGuest={isGuest} />
         </ThemeProvider>
       </body>
     </html>

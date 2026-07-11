@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { isAvatarUrl } from "@/lib/avatar";
 import { formatEuros } from "@/lib/currency";
+import { GuestBanner } from "@/components/guest/guest-banner";
 
 interface Debtor {
     userId: string;
@@ -30,6 +31,7 @@ interface SettleExpense {
 interface SettleClientProps {
     debts: Debtor[];
     expenses: SettleExpense[];
+    isGuest?: boolean;
     partner: {
         id: string;
         name: string;
@@ -37,7 +39,7 @@ interface SettleClientProps {
     } | null;
 }
 
-export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
+export function SettleClient({ debts, expenses, isGuest = false, partner }: SettleClientProps) {
     const router = useRouter();
     const [step, setStep] = useState<1 | 2>(1);
 
@@ -147,7 +149,10 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                     </div>
                 </div>
 
-                {hasUnsettledActivity && (
+                <GuestBanner show={isGuest} />
+
+                {/* Archiving/checkpoint is a space-management action — not offered to guests. */}
+                {hasUnsettledActivity && !isGuest && (
                     <div className="space-y-3 pt-4">
                         <Button
                             className="w-full h-12 bg-card border border-[color:var(--line)] text-foreground hover:bg-secondary"
@@ -191,6 +196,8 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
                     {step === 2 && "Realizar Pago"}
                 </h1>
             </header>
+
+            {step === 1 && <GuestBanner show={isGuest} />}
 
             {/* STEP 1: SELECT DEBTOR */}
             {step === 1 && (

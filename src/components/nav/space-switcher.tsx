@@ -37,9 +37,12 @@ function iconFor(sp: Pick<Space, "kind" | "spaceType">): string {
 export function SpaceSwitcher({
     spaces,
     activeSpaceKey,
+    locked = false,
 }: {
     spaces: Space[];
     activeSpaceKey: string;
+    /** Guest mode: a guest is caged to one space, so the switcher is display-only. */
+    locked?: boolean;
 }) {
     const [open, setOpen] = useState(false);
     const [pending, startTransition] = useTransition();
@@ -76,9 +79,13 @@ export function SpaceSwitcher({
             {/* Header space button (left child of the header) */}
             <button
                 type="button"
-                onClick={() => setOpen(true)}
-                aria-label="Cambiar de espacio"
-                className="flex items-center gap-[9px] py-1 text-left active:opacity-60 transition-opacity"
+                onClick={locked ? undefined : () => setOpen(true)}
+                aria-label={locked ? "Espacio activo" : "Cambiar de espacio"}
+                disabled={locked}
+                className={cn(
+                    "flex items-center gap-[9px] py-1 text-left transition-opacity",
+                    locked ? "cursor-default" : "active:opacity-60"
+                )}
             >
                 <span
                     className={cn(
@@ -93,20 +100,22 @@ export function SpaceSwitcher({
                         <span className="text-[17px] font-bold tracking-[-0.02em] text-foreground truncate">
                             {active?.name}
                         </span>
-                        <svg
-                            width="15"
-                            height="15"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className="shrink-0 text-muted-foreground"
-                            aria-hidden="true"
-                        >
-                            <path d="m6 9 6 6 6-6" />
-                        </svg>
+                        {!locked && (
+                            <svg
+                                width="15"
+                                height="15"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                className="shrink-0 text-muted-foreground"
+                                aria-hidden="true"
+                            >
+                                <path d="m6 9 6 6 6-6" />
+                            </svg>
+                        )}
                     </span>
                     <span className="block text-[12px] text-muted-foreground mt-px">
                         {active?.sub}
@@ -114,8 +123,8 @@ export function SpaceSwitcher({
                 </span>
             </button>
 
-            {/* Bottom sheet */}
-            {open && (
+            {/* Bottom sheet — never opens while locked (guest). */}
+            {open && !locked && (
                 <div className="fixed inset-0 z-[80] flex flex-col justify-end">
                     {/* Scrim — tapping it closes the sheet. */}
                     <button

@@ -13,6 +13,7 @@ export default async function ExpensesListPage() {
     const session = await getSession();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
+    const isGuest = session.kind === "guest";
 
     // Phase 5 (WS1): resolve the group + members via the Membership layer.
     const groupId = await getActiveGroup(userId);
@@ -71,5 +72,5 @@ export default async function ExpensesListPage() {
         usersMap[m.id] = { id: m.id, name: m.name, avatar: m.avatar };
     });
 
-    return <ExpensesListClient items={items} usersMap={usersMap} />;
+    return <ExpensesListClient items={items} usersMap={usersMap} isGuest={isGuest} />;
 }

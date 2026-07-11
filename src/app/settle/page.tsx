@@ -16,6 +16,7 @@ export default async function SettlePage() {
     const session = await getSession();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
+    const isGuest = session.kind === "guest";
 
     // Phase 5 (WS1): resolve the group + members via the Membership layer.
     const groupId = await getActiveGroup(userId);
@@ -108,6 +109,7 @@ export default async function SettlePage() {
     return <SettleClient
         debts={debts}
         expenses={unsettledExpenses}
+        isGuest={isGuest}
         partner={partner ? {
             id: partner.id,
             name: partner.name,

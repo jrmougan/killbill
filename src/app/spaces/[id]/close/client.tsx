@@ -4,10 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Check, Archive, CircleDollarSign, AlertCircle } from "lucide-react";
+import { ArrowLeft, Check, Archive, CircleDollarSign, AlertCircle, Hourglass } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatEuros } from "@/lib/currency";
-import { SpaceStatus } from "@/generated/prisma/enums";
+import { SpaceStatus, SpaceType } from "@/generated/prisma/enums";
+import { daysUntil } from "@/lib/space-ui";
 
 type Debt = { userId: string; name: string; amountCents: number };
 type SettlementRow = { id: string; fromName: string; toName: string; amountCents: number; status: string };
@@ -21,14 +22,19 @@ type SettlementRow = { id: string; fromName: string; toName: string; amountCents
 export function CloseSpaceClient({
     spaceId,
     spaceName,
+    type,
     status,
+    expiresAt,
     myDebts,
     settlements,
     canManage,
 }: {
     spaceId: string;
     spaceName: string;
+    type: SpaceType | string;
     status: SpaceStatus | string;
+    /** ISO string; the EPHEMERAL close SUGGESTION date (never auto-enforced). */
+    expiresAt?: string | null;
     myDebts: Debt[];
     settlements: SettlementRow[];
     canManage: boolean;
@@ -36,6 +42,17 @@ export function CloseSpaceClient({
     const router = useRouter();
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+
+    // EPHEMERAL close countdown — a soft suggestion to the organizer, never a
+    // hard deadline (there is no auto-archive cron in v1).
+    const days =
+        type === SpaceType.EPHEMERAL && status === SpaceStatus.ACTIVE ? daysUntil(expiresAt) : null;
+    const countdownLabel =
+        days === null ? null :
+        days < 0 ? "La fecha sugerida de cierre ya pasó" :
+        days === 0 ? "El viaje termina hoy" :
+        days === 1 ? "Queda 1 día sugerido para cerrar" :
+        `Quedan ${days} días sugeridos para cerrar`;
 
     const totalOwed = myDebts.reduce((acc, d) => acc + d.amountCents, 0);
     const confirmed = settlements.filter((s) => s.status === "CONFIRMED").length;
@@ -97,6 +114,17 @@ export function CloseSpaceClient({
                     <p className="text-[12px] text-muted-foreground">Liquidad las cuentas y archivad el espacio.</p>
                 </div>
             </header>
+
+            {/* Soft close countdown for an ephemeral trip (suggestion only). */}
+            {countdownLabel && (
+                <div className="flex items-center gap-3 rounded-2xl bg-secondary border border-[color:var(--line)] px-4 py-3">
+                    <Hourglass className="h-4 w-4 text-primary shrink-0" />
+                    <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-foreground">{countdownLabel}</p>
+                        <p className="text-[12px] text-muted-foreground">Es solo una sugerencia; cerrad cuando queráis.</p>
+                    </div>
+                </div>
+            )}
 
             {/* What I owe */}
             <section className="space-y-3">
