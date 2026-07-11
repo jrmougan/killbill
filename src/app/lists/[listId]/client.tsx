@@ -50,6 +50,7 @@ export function ListDetailClient({ listId, name, description, items: initialItem
     const [error, setError] = useState<string | null>(null);
     const [reconciling, setReconciling] = useState(false);
     const [matches, setMatches] = useState<ReconcileMatch[] | null>(null);
+    const [confirmingClear, setConfirmingClear] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Keep local state in sync when the server re-renders (another member's change
@@ -205,12 +206,12 @@ export function ListDetailClient({ listId, name, description, items: initialItem
     );
 
     const handleClearChecked = useCallback(async () => {
-        if (!window.confirm("¿Vaciar los comprados? Se borrarán los artículos marcados (la lista se conserva).")) return;
         setError(null);
         try {
             const res = await fetch(`${apiBase}/clear-checked`, { method: "POST" });
             if (res.ok) {
                 setItems((prev) => prev.filter((i) => !i.checked));
+                setConfirmingClear(false);
                 router.refresh();
             } else {
                 setError("No se pudieron vaciar los comprados.");
@@ -334,7 +335,7 @@ export function ListDetailClient({ listId, name, description, items: initialItem
                             </Button>
                         )}
                         {checkedCount > 0 && (
-                            <Button variant="ghost" className="gap-2 text-muted-foreground" onClick={handleClearChecked}>
+                            <Button variant="ghost" className="gap-2 text-muted-foreground" onClick={() => setConfirmingClear(true)}>
                                 <Trash2 className="h-4 w-4" />
                                 Vaciar comprados ({checkedCount})
                             </Button>
@@ -349,6 +350,29 @@ export function ListDetailClient({ listId, name, description, items: initialItem
                     onCancel={() => setMatches(null)}
                     onConfirm={confirmMatches}
                 />
+            )}
+
+            {confirmingClear && (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/40" onClick={() => setConfirmingClear(false)} aria-hidden />
+                    <div className="relative w-full max-w-md rounded-2xl bg-card border border-[color:var(--line)] p-5 space-y-4">
+                        <div className="space-y-1">
+                            <h3 className="text-base font-semibold text-foreground">Vaciar comprados</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Se borrarán los {checkedCount} artículos marcados. La lista se conserva.
+                            </p>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button variant="secondary" className="flex-1" onClick={() => setConfirmingClear(false)}>
+                                Cancelar
+                            </Button>
+                            <Button variant="destructive" className="flex-1 gap-2" onClick={handleClearChecked}>
+                                <Trash2 className="h-4 w-4" />
+                                Vaciar ({checkedCount})
+                            </Button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
