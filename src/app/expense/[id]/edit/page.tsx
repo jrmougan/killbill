@@ -4,7 +4,9 @@ import { getActiveGroup, getGroupMembers } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
-import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { getEffectiveCategories } from "@/lib/category-db";
+import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
 import { EditExpenseClient } from "./client";
 
 export default async function EditExpensePage({ params }: { params: Promise<{ id: string }> }) {
@@ -52,6 +54,19 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
         : [];
 
     const partner = members.find((m) => m.id !== userId) ?? null;
+
+    // DB-driven metadata for the CURRENT category, resolved in the expense's own
+    // context (personal → owner scope; shared → group scope). Passed so the
+    // picker can force-include it even if the custom category was later deleted.
+    const isPersonalExpense = expense.visibility === "PERSONAL";
+    const catScope = isPersonalExpense
+        ? { ownerId: userId }
+        : expense.coupleId
+            ? { groupId: expense.coupleId }
+            : {};
+    const catMap = categoryMetaMap(await getEffectiveCategories(catScope));
+    const currentKey = categoryKeyOf(expense);
+    const initialCategoryMeta = catMap[currentKey] ?? catMap.other ?? { ...NEUTRAL_CATEGORY_META, key: currentKey };
 
     // Detect initial split mode from current splits
     let initialSplitMode: "shared" | "solo" | "custom" = "shared";
@@ -103,7 +118,9 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
             initialRecurringInterval={(expense.series?.interval as "weekly" | "monthly" | "yearly") ?? "monthly"}
             initialTagIds={expense.tags.map((t) => t.tagId)}
             allTags={allTags}
-            isPersonal={expense.visibility === "PERSONAL"}
+            isPersonal={isPersonalExpense}
+            groupId={expense.coupleId ?? null}
+            initialCategoryMeta={initialCategoryMeta}
         />
     );
 }

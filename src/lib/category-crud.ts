@@ -23,21 +23,12 @@ import type { PrismaClient } from "@/generated/prisma/client";
 import { prisma } from "./db";
 import { isValidIconName } from "./category-icons";
 import { isValidCategoryHex } from "./category-colors";
+import { RESERVED_SYSTEM_KEYS, CATEGORY_KEY_RE, slugifyKey } from "./category-keys";
 
-/** The 8 reserved system keys — a custom category may never claim one (decision #1). */
-export const RESERVED_SYSTEM_KEYS: ReadonlySet<string> = new Set([
-    "shopping",
-    "food",
-    "rent",
-    "utilities",
-    "transport",
-    "entertainment",
-    "health",
-    "other",
-]);
+export { RESERVED_SYSTEM_KEYS, slugifyKey };
 
 const MAX_LABEL_LEN = 40;
-const KEY_RE = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+const KEY_RE = CATEGORY_KEY_RE;
 
 /**
  * Write scope for a category mutation. XOR by construction (a discriminated
@@ -93,18 +84,6 @@ function graphemeCount(s: string): number {
         return [...seg.segment(s)].length;
     }
     return [...s].length;
-}
-
-/** Lowercase-slugify a label into a key (accents stripped, non-alphanumerics → '-'). */
-export function slugifyKey(label: string): string {
-    return label
-        .normalize("NFD")
-        .replace(/[̀-ͯ]/g, "")
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")
-        .slice(0, 40);
 }
 
 function validateLabel(raw: unknown): string {

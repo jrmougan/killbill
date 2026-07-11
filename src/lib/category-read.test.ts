@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
     categoryKeyOf,
     mergeCategories,
+    categoryMetaMap,
     toCategoryMeta,
     type CategoryKeyed,
     type CategoryRow,
@@ -193,6 +194,28 @@ describe("mergeCategories — system ∪ custom with shadow-by-key", () => {
         ];
         const merged = mergeCategories(system, custom);
         expect(merged.map((c) => c.key)).toEqual(["food", "zebra", "apple", "other"]);
+    });
+});
+
+describe("categoryMetaMap — key → meta index for render-time lookup", () => {
+    it("indexes each merged category by its key", () => {
+        const merged = mergeCategories(
+            [row({ key: "food", emoji: "🍕", hex: "#fb923c", isSystem: true, sortOrder: 2 })],
+            [row({ key: "mascotas", emoji: "🐶", hex: "#8b5cf6", sortOrder: 9 })],
+        );
+        const map = categoryMetaMap(merged);
+        expect(Object.keys(map).sort()).toEqual(["food", "mascotas"]);
+        expect(map.food.emoji).toBe("🍕");
+        expect(map.mascotas.hex).toBe("#8b5cf6");
+        expect(map.nonexistent).toBeUndefined();
+    });
+
+    it("keeps the shadowing custom row after the merge", () => {
+        const merged = mergeCategories(
+            [row({ key: "food", id: "sys-food", isSystem: true, sortOrder: 2 })],
+            [row({ key: "food", id: "grp-food", isSystem: false, sortOrder: 2 })],
+        );
+        expect(categoryMetaMap(merged).food.id).toBe("grp-food");
     });
 });
 

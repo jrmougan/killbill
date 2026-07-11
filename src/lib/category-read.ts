@@ -123,3 +123,16 @@ export function mergeCategories(system: CategoryRow[], custom: CategoryRow[]): C
         (a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key),
     );
 }
+
+/**
+ * Index an effective category list by key for O(1) render-time lookup. Server
+ * pages build this once per request and pass `categoryMeta` down by prop so the
+ * client never re-resolves categories (no N+1, no flash). The 'other' system
+ * row is always present in the effective set, so callers can use it as the
+ * neutral fallback for an orphaned key.
+ */
+export function categoryMetaMap(list: CategoryMeta[]): Record<string, CategoryMeta> {
+    const map: Record<string, CategoryMeta> = {};
+    for (const c of list) map[c.key] = c;
+    return map;
+}

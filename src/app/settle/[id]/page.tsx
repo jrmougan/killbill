@@ -8,8 +8,9 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { ArrowLeft, Check, Calendar, CreditCard } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/currency";
-import { getCategoryById } from "@/lib/categories";
-import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { getEffectiveCategories } from "@/lib/category-db";
+import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
 import { getSettlementStatusLabel, getSettlementMethodLabel } from "@/lib/settlement-labels";
 
 interface SettlementDetailPageProps {
@@ -46,6 +47,11 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
     // Group members back the N-way equal-share fallback for legacy expenses that
     // have no Split rows (never a hardcoded 50/50).
     const members = await getGroupMembers(settlement.coupleId);
+
+    // DB-driven category metadata for the settlement's space (allowArchived is
+    // already honoured above), so covered expenses show their real emoji.
+    const catMap = categoryMetaMap(await getEffectiveCategories({ groupId: settlement.coupleId }));
+    const emojiFor = (key: string) => (catMap[key] ?? catMap.other ?? NEUTRAL_CATEGORY_META).emoji;
 
     return (
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-24">
@@ -141,7 +147,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                                 <GlassCard key={expense.id} className="p-4 flex items-center justify-between border-[color:var(--line-2)] bg-card">
                                     <div className="flex items-center gap-3">
                                         <div className="h-8 w-8 rounded-lg bg-secondary flex items-center justify-center text-sm">
-                                            {getCategoryById(categoryKeyOf(expense)).emoji}
+                                            {emojiFor(categoryKeyOf(expense))}
                                         </div>
                                         <div>
                                             <p className="text-sm font-bold text-foreground">{expense.description}</p>

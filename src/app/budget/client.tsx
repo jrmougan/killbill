@@ -7,8 +7,11 @@ import { ArrowLeft, Pencil, Plus, Check, X } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CATEGORIES, getAllCategories } from "@/lib/categories";
 import { formatEuros } from "@/lib/currency";
+import { getIconComponent } from "@/lib/category-icons";
+import { hexWithAlpha } from "@/lib/category-colors";
+import { type CategoryContext, type CategoryListItem } from "@/lib/category-context";
+import { useCategoryList } from "@/components/category/use-category-list";
 
 interface BudgetEntry {
     budget: {
@@ -27,6 +30,10 @@ interface BudgetClientProps {
     budgetData: BudgetEntry[];
     monthLabel: string;
     hasCouple?: boolean;
+    /** The active group id (for the shared-scope categories endpoint). */
+    groupId?: string | null;
+    /** Effective category set for the default scope, seeded from the server. */
+    initialCategories?: CategoryListItem[];
 }
 
 function ProgressBar({ percentage }: { percentage: number }) {
@@ -48,9 +55,17 @@ function ProgressBar({ percentage }: { percentage: number }) {
     );
 }
 
-export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: BudgetClientProps) {
+export function BudgetClient({ budgetData, monthLabel, hasCouple = true, groupId = null, initialCategories = [] }: BudgetClientProps) {
     const router = useRouter();
     const [scope, setScope] = useState<BudgetScope>(hasCouple ? "shared" : "personal");
+
+    // Effective category list for the active scope (DB-driven). Shared → the
+    // space endpoint; personal → /api/me. Seeded from the server for the default
+    // scope so the first paint doesn't flash.
+    const categoryContext: CategoryContext =
+        scope === "shared" && groupId ? { kind: "shared", groupId } : { kind: "personal" };
+    const { categories: catList } = useCategoryList(categoryContext, initialCategories);
+    const catByKey = new Map(catList.map((c) => [c.key, c]));
     const [data, setData] = useState<BudgetEntry[]>(budgetData);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
@@ -78,8 +93,8 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
     }, [scope, reload]);
 
     const budgetedCategories = new Set(data.map((b) => b.budget.category));
-    const unbudgetedCategories = getAllCategories().filter(
-        (cat) => !budgetedCategories.has(cat.id)
+    const unbudgetedCategories = catList.filter(
+        (cat) => !budgetedCategories.has(cat.key)
     );
 
     const handleSaveEdit = async (entry: BudgetEntry) => {
@@ -158,7 +173,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
                 </div>
             )}
 
-            {data.length === 0 && unbudgetedCategories.length === getAllCategories().length ? (
+            {data.length === 0 && catList.length > 0 && unbudgetedCategories.length === catList.length ? (
                 <GlassCard className="p-8 text-center space-y-3">
                     <div className="text-5xl">📊</div>
                     <h2 className="text-lg font-bold">Sin presupuestos aún</h2>
@@ -171,16 +186,19 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
             {data.length > 0 && (
                 <section className="space-y-3">
                     {data.map((entry) => {
-                        const cat = CATEGORIES[entry.budget.category];
-                        const Icon = cat?.icon;
+                        const cat = catByKey.get(entry.budget.category);
+                        const Icon = getIconComponent(cat?.iconName);
                         const isEditing = editingId === entry.budget.id;
 
                         return (
                             <GlassCard key={entry.budget.id} className="p-4 space-y-3">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${cat?.bgColor ?? "bg-secondary"}`}>
-                                            {Icon && <Icon className={`h-5 w-5 ${cat?.color ?? "text-foreground"}`} />}
+                                        <div
+                                            className="h-10 w-10 rounded-xl flex items-center justify-center"
+                                            style={{ backgroundColor: cat ? hexWithAlpha(cat.hex, 0.12) : "var(--secondary)" }}
+                                        >
+                                            <Icon className="h-5 w-5" style={{ color: cat?.hex ?? "var(--foreground)" }} />
                                         </div>
                                         <div>
                                             <p className="font-semibold text-sm">{cat?.label ?? entry.budget.category}</p>
@@ -263,15 +281,18 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
                     </div>
 
                     {unbudgetedCategories.map((cat) => {
-                        const Icon = cat.icon;
-                        const isAdding = addingCategory === cat.id;
+                        const Icon = getIconComponent(cat.iconName);
+                        const isAdding = addingCategory === cat.key;
 
                         return (
-                            <GlassCard key={cat.id} className="p-4">
+                            <GlassCard key={cat.key} className="p-4">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
-                                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${cat.bgColor}`}>
-                                            <Icon className={`h-5 w-5 ${cat.color}`} />
+                                        <div
+                                            className="h-10 w-10 rounded-xl flex items-center justify-center"
+                                            style={{ backgroundColor: hexWithAlpha(cat.hex, 0.12) }}
+                                        >
+                                            <Icon className="h-5 w-5" style={{ color: cat.hex }} />
                                         </div>
                                         <p className="font-semibold text-sm">{cat.label}</p>
                                     </div>
@@ -294,7 +315,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
                                                     size="icon"
                                                     variant="ghost"
                                                     className="h-8 w-8 text-[color:var(--positive)] hover:opacity-80"
-                                                    onClick={() => handleAddBudget(cat.id)}
+                                                    onClick={() => handleAddBudget(cat.key)}
                                                     disabled={saving}
                                                 >
                                                     <Check className="h-4 w-4" />
@@ -316,7 +337,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true }: Budge
                                             variant="ghost"
                                             className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                             onClick={() => {
-                                                setAddingCategory(cat.id);
+                                                setAddingCategory(cat.key);
                                                 setAddValue("");
                                                 setError(null);
                                             }}
