@@ -28,7 +28,7 @@ export async function proxy(request: NextRequest) {
 
     // Define protected paths
     // /setup should NOT be protected as it handles its own logic
-    const protectedPaths = ['/dashboard', '/admin', '/api/admin', '/expenses', '/personal', '/settle', '/settings']
+    const protectedPaths = ['/dashboard', '/admin', '/api/admin', '/expenses', '/personal', '/settle', '/settings', '/lists']
     const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
 
     if (isProtected) {
@@ -88,6 +88,7 @@ export const config = {
         '/personal/:path*',
         '/settle/:path*',
         '/settings/:path*',
+        '/lists/:path*',
         // Matched only to stamp Referrer-Policy: no-referrer — never guarded.
         '/i/:path*',
     ],

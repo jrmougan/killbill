@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Users } from "lucide-react";
+import { ArrowLeft, Users, ShoppingCart, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
@@ -87,6 +87,18 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
             <section className="space-y-3">
                 <h2 className="text-[13px] font-bold uppercase tracking-wider text-muted-foreground px-1">Invitaciones</h2>
                 <InviteManager spaceId={space.id} type={space.type} status={space.status} initialCode={space.code} canManage={canManage} />
+            </section>
+
+            <section className="space-y-3">
+                <h2 className="text-[13px] font-bold uppercase tracking-wider text-muted-foreground px-1">Listas</h2>
+                <Link
+                    href="/lists"
+                    className="flex items-center gap-3 w-full h-14 px-4 bg-card border border-[color:var(--line)] rounded-xl hover:bg-secondary transition-colors"
+                >
+                    <ShoppingCart className="h-5 w-5 text-muted-foreground" />
+                    <span className="font-medium text-sm text-foreground flex-1">Listas de la compra</span>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </Link>
             </section>
 
             {canManage && (
