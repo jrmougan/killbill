@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getActiveGroup } from "@/lib/membership";
-import { NoGroupState } from "@/components/ui/no-group-state";
 import { redirect } from "next/navigation";
 import { TagsClient } from "./client";
 
@@ -12,12 +11,15 @@ export default async function TagsPage() {
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    // Phase 5 (WS1): resolve the group via the Membership layer.
+    // Fase 1: tags can be group-scoped (coupleId) OR personal (ownerId). A user
+    // always sees their personal tags — the group-less "wall" is gone (personal
+    // mode is operative).
     const groupId = await getActiveGroup(userId);
-    if (!groupId) return <NoGroupState title="Etiquetas del grupo" />;
 
     const tags = await prisma.tag.findMany({
-        where: { coupleId: groupId },
+        where: groupId
+            ? { OR: [{ coupleId: groupId }, { ownerId: userId }] }
+            : { ownerId: userId },
         orderBy: { name: "asc" },
     });
 
@@ -25,10 +27,9 @@ export default async function TagsPage() {
         id: t.id,
         name: t.name,
         color: t.color,
-        // coupleId es ahora nullable (tags personales, Fase 0); aquí filtramos por
-        // coupleId === groupId, así que es siempre este grupo.
-        coupleId: t.coupleId ?? groupId,
+        // A personal tag has an ownerId and no group scope.
+        personal: t.coupleId === null && t.ownerId === userId,
     }));
 
-    return <TagsClient initialTags={tagData} />;
+    return <TagsClient initialTags={tagData} hasGroup={Boolean(groupId)} />;
 }

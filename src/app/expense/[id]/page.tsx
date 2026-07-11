@@ -21,6 +21,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
         where: { id: id },
         include: {
             paidBy: true,
+            createdBy: true,
             splits: {
                 include: {
                     user: true
@@ -41,6 +42,14 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
     // expense.couple.members reverse relation of User.coupleId.
     const members = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
 
+    // Space lifecycle: SETTLING/ARCHIVED spaces are read-only (no edit/delete).
+    const space = expense.coupleId
+        ? await prisma.couple.findUnique({ where: { id: expense.coupleId }, select: { status: true } })
+        : null;
+    const isReadOnly = space?.status === "SETTLING" || space?.status === "ARCHIVED";
+    // Map assignee userId -> display name for the itemized receipt footer.
+    const memberName = (uid: string) => members.find(m => m.id === uid)?.name ?? "Otro";
+
     // Phase 4 read-switch: the ReceiptLineItem table (cents) is the read source
     // for the receipt breakdown; receiptItemsView maps rows -> the euro DTO the
     // markup already renders (toEuros(toCents(x))==x keeps every sum identical).
@@ -56,7 +65,6 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
     const isPersonal = expense.visibility === "PERSONAL";
     const isMe = userId === expense.paidById;
-    const partner = members.find(m => m.id !== expense.paidById);
 
     // A personal expense can be promoted to shared if the owner belongs to a group.
     const myGroupId = isPersonal && expense.ownerId === userId ? await getActiveGroup(userId) : null;
@@ -74,14 +82,18 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     <h1 className="text-xl font-bold truncate text-foreground">{expense.description}</h1>
                     <p className="text-xs text-[color:var(--ink-3)]">{new Date(expense.date).toLocaleDateString("es-ES")}</p>
                 </div>
-                <Link href={`/expense/${expense.id}/edit`}>
-                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                        <Pencil className="h-4 w-4 sm:mr-2" />
-                        <span className="hidden sm:inline">Editar</span>
-                    </Button>
-                </Link>
-                {canPromote && <PromoteButton expenseId={expense.id} />}
-                <DeleteExpenseButton expenseId={expense.id} />
+                {!isReadOnly && (
+                    <>
+                        <Link href={`/expense/${expense.id}/edit`}>
+                            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+                                <Pencil className="h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Editar</span>
+                            </Button>
+                        </Link>
+                        {canPromote && <PromoteButton expenseId={expense.id} />}
+                        <DeleteExpenseButton expenseId={expense.id} />
+                    </>
+                )}
             </header>
 
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -101,7 +113,18 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         </div>
                         <p className="text-sm font-medium text-[color:var(--body-ink)]">Pagado por <span className="text-primary">{isMe ? "Ti" : expense.paidBy.name}</span></p>
                     </div>
+                    {expense.createdBy && expense.createdById !== expense.paidById && (
+                        <p className="text-[11px] text-muted-foreground mt-1.5">
+                            Añadido por {expense.createdById === userId ? "ti" : expense.createdBy.name}
+                        </p>
+                    )}
                 </div>
+
+                {isReadOnly && (
+                    <div className="flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-secondary border border-[color:var(--line)] text-[13px] text-muted-foreground">
+                        Este espacio está {space?.status === "ARCHIVED" ? "archivado" : "liquidando"} — solo lectura.
+                    </div>
+                )}
 
                 {isPersonal ? (
                     <div className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-card border border-[color:var(--line)] text-sm text-muted-foreground">
@@ -204,19 +227,35 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                     </div>
                                 ))}
                             </div>
-                            {/* Summary footer with shared vs personal breakdown */}
-                            {receiptItems.some(i => i.assignedTo) && (
-                                <div className="bg-secondary p-3 space-y-2 border-t border-[color:var(--line)]">
-                                    <div className="flex justify-between text-xs text-muted-foreground">
-                                        <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> Común (50/50)</span>
-                                        <span className="font-mono">{formatEuros(receiptItems.filter(i => !i.assignedTo).reduce((acc, i) => acc + i.total, 0))}</span>
+                            {/* Summary footer: shared part + one row per real assignee
+                                (Fase 1 fix — the old footer hard-coded "Solo {partner}",
+                                which was wrong for N-way / multi-assignee tickets). */}
+                            {receiptItems.some(i => i.assignedTo) && (() => {
+                                const sharedTotal = receiptItems.filter(i => !i.assignedTo).reduce((acc, i) => acc + i.total, 0);
+                                const byAssignee = new Map<string, number>();
+                                for (const i of receiptItems) {
+                                    if (!i.assignedTo) continue;
+                                    byAssignee.set(i.assignedTo, (byAssignee.get(i.assignedTo) ?? 0) + i.total);
+                                }
+                                return (
+                                    <div className="bg-secondary p-3 space-y-2 border-t border-[color:var(--line)]">
+                                        {sharedTotal > 0 && (
+                                            <div className="flex justify-between text-xs text-muted-foreground">
+                                                <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> Común</span>
+                                                <span className="font-mono">{formatEuros(sharedTotal)}</span>
+                                            </div>
+                                        )}
+                                        {[...byAssignee.entries()].map(([uid, total]) => (
+                                            <div key={uid} className="flex justify-between text-xs text-primary">
+                                                <span className="flex items-center gap-1">
+                                                    <User className="h-3 w-3" /> Solo {uid === userId ? "tú" : memberName(uid)}
+                                                </span>
+                                                <span className="font-mono">{formatEuros(total)}</span>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <div className="flex justify-between text-xs text-primary">
-                                        <span className="flex items-center gap-1"><User className="h-3 w-3" /> Solo {partner?.name}</span>
-                                        <span className="font-mono">{formatEuros(receiptItems.filter(i => i.assignedTo).reduce((acc, i) => acc + i.total, 0))}</span>
-                                    </div>
-                                </div>
-                            )}
+                                );
+                            })()}
                             <div className="bg-secondary p-3 flex justify-between items-center border-t border-[color:var(--line)]">
                                 <span className="font-bold text-sm text-muted-foreground">Total Detallado</span>
                                 <span className="font-mono font-semibold tracking-[-0.02em] text-foreground">

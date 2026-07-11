@@ -87,24 +87,30 @@ export function SettleClient({ debts, expenses, partner }: SettleClientProps) {
         const hasUnsettledActivity = expenses.length > 0;
 
         const handleArchive = async () => {
-            if (!partner) return;
+            // Pairwise checkpoint (Fase 1 fix): the old code sent a single 0-€
+            // settlement to an arbitrary "partner", which only cleared ONE pair in a
+            // group. Instead, checkpoint every counterparty with unsettled activity
+            // (the distinct payers of the visible expenses), so each pair is cleared.
+            const counterparties = Array.from(new Set(expenses.map((e) => e.paidBy)));
+            const targets = counterparties.length > 0 ? counterparties : partner ? [partner.id] : [];
+            if (targets.length === 0) return;
             if (!confirm("Esto marcará toda la actividad actual como 'Saldada' para limpiar la vista. ¿Continuar?")) return;
 
             setIsSubmitting(true);
             setError(null);
             try {
-                // 0 amount settlement = Archive/Checkpoint
-                const res = await fetch("/api/settle", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        toUserId: partner.id,
-                        amount: 0,
-                        method: "CASH"
-                    })
-                });
-                if (!res.ok) {
-                    setError("No se pudo archivar el historial");
+                // 0-amount settlement = archive/checkpoint, one per counterparty.
+                const results = await Promise.all(
+                    targets.map((toUserId) =>
+                        fetch("/api/settle", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ toUserId, amount: 0, method: "CASH" }),
+                        })
+                    )
+                );
+                if (results.some((r) => !r.ok)) {
+                    setError("No se pudo archivar todo el historial");
                     return;
                 }
                 router.push("/dashboard");

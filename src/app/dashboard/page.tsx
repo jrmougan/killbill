@@ -24,6 +24,9 @@ import { isAvatarUrl } from "@/lib/avatar";
 import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
 import { MemberBalanceList } from "@/components/ui/member-balance-list";
 import { PendingSettlements } from "@/components/dashboard/pending-settlements";
+import { SpaceStatusBanner } from "@/components/space/space-status-banner";
+import { spaceTypeMeta } from "@/lib/space-ui";
+import { SpaceType } from "@/generated/prisma/enums";
 import { randomBytes } from "crypto";
 
 export const dynamic = 'force-dynamic';
@@ -60,13 +63,26 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         ...userGroups.map((g) => ({
             key: g.id,
             kind: "group" as const,
-            name: g.name ?? "Mi grupo",
-            sub: `${g.memberCount} ${g.memberCount === 1 ? "miembro" : "miembros"}`,
+            name: g.name ?? spaceTypeMeta(g.type).label,
+            sub: `${spaceTypeMeta(g.type).label} · ${g.memberCount} ${g.memberCount === 1 ? "miembro" : "miembros"}`,
+            spaceType: g.type,
+            status: g.status,
         })),
     ];
     // The active/checked space: the group when we're in a group lens, else Personal.
     const activeSpaceKey = groupId && scope !== "personal" ? groupId : "personal";
     const partner = members.find(m => m.id !== userId);
+
+    // Bifurcate by SPACE TYPE, never by member count (Fase 1). A COUPLE waits for
+    // its 2nd member; GROUP/EPHEMERAL are operative from a single member (you can
+    // record shared expenses solo). The two-pan seesaw only maps to COUPLE.
+    const spaceType = couple?.type;
+    const isCoupleType = spaceType === SpaceType.COUPLE;
+    const coupleWaiting = isCoupleType && members.length < 2;
+    const spaceOperative = Boolean(couple) && !coupleWaiting;
+    const myRole = userGroups.find(g => g.id === groupId)?.role;
+    const canManageSpace = myRole === "OWNER" || myRole === "ADMIN";
+
     // usersMap always includes the current user so personal expenses render even
     // for a group-less user.
     const usersMap = members.reduce<Record<string, User>>(
@@ -214,6 +230,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 </Link>
             </header>
 
+            {/* Lifecycle banner (SETTLING / ARCHIVED / ephemeral countdown). */}
+            {couple && scope !== "personal" && (
+                <SpaceStatusBanner
+                    spaceId={couple.id}
+                    type={couple.type}
+                    status={couple.status}
+                    expiresAt={couple.expiresAt}
+                    canManage={canManageSpace}
+                />
+            )}
+
             {/* Personal spend this month — a neutral total, not a signed balance. */}
             {scope !== "comun" && (
                 <div className="rounded-[16px] bg-card border border-[color:var(--line)] px-5 py-4 flex items-center justify-between gap-3">
@@ -234,12 +261,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             <>
             <section className="grid grid-cols-1 gap-4">
                 <GlassCard className="p-0 flex flex-col items-center justify-center text-center overflow-hidden rounded-[20px] bg-card border border-[color:var(--line)]">
-                    {!partner ? (
+                    {coupleWaiting ? (
                         <div className="p-6">
                             <span className="text-[11px] uppercase font-semibold tracking-[0.18em] text-muted-foreground mb-1 block">Tu balance</span>
                             <h2 className="text-3xl font-bold text-foreground">Esperando...</h2>
                             <p className="text-sm text-muted-foreground mt-2">
-                                Invita a tu grupo para empezar a registrar gastos juntos
+                                Invita a la otra persona para empezar a repartir gastos
                             </p>
                         </div>
                     ) : (
@@ -257,9 +284,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                 </h2>
                             </div>
 
-                            {members.length > 2 ? (
-                                // The two-pan seesaw only maps to a 2-person relationship;
-                                // larger groups get a per-member net-balance list instead.
+                            {!isCoupleType || !partner ? (
+                                // The two-pan seesaw only maps to a COUPLE; GROUP/EPHEMERAL
+                                // (and any non-couple shape) get a per-member net-balance list.
                                 <MemberBalanceList
                                     members={members}
                                     balances={balances}
@@ -387,7 +414,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 })()}
             </section>
 
-            {couple && !partner && <InviteCard code={couple.code} />}
+            {couple && coupleWaiting && <InviteCard code={couple.code} />}
             </>
             )}
 
@@ -431,11 +458,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                             </div>
                         ) : (
                             <div className="text-center py-12 px-5 rounded-2xl border border-dashed border-[color:var(--line-strong)]">
-                                <p className="font-semibold text-[15px] text-foreground">{partner ? "Sin movimientos aún" : "Casi listos"}</p>
+                                <p className="font-semibold text-[15px] text-foreground">{spaceOperative ? "Sin movimientos aún" : "Casi listos"}</p>
                                 <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
-                                    {partner
-                                        ? <>Pulsa <span className="text-primary font-semibold">+</span> para añadir vuestro primer gasto.</>
-                                        : "Comparte el enlace de arriba para que tu grupo se una."
+                                    {spaceOperative
+                                        ? <>Pulsa <span className="text-primary font-semibold">+</span> para añadir el primer gasto.</>
+                                        : "Comparte el código de arriba para que se unan."
                                     }
                                 </p>
                             </div>
@@ -513,7 +540,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 </GlassCard>
             )}
 
-            {partner || scope === "personal" ? (
+            {spaceOperative || scope === "personal" ? (
                 <div className="fixed bottom-[92px] right-6 z-50">
                     <Link href={scope === "personal" ? "/expenses/new?type=personal" : "/expenses/new"}>
                         <Button size="icon" className="h-14 w-14 rounded-full shadow-[0_12px_28px_-8px_rgba(189,93,58,0.6)] bg-primary hover:bg-primary/90 active:scale-90 transition-transform">
