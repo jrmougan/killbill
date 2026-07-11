@@ -89,6 +89,40 @@ export function calculateSplitAmounts(
     return splits;
 }
 
+/**
+ * Proportionally rescale existing per-user split amounts (CENTS) to a new total,
+ * preserving each member's share of the old total. Used when a CUSTOM-strategy
+ * expense is edited with only a new amount (no fresh per-user amounts): rescaling
+ * keeps the split N-way and guarantees Σ == newTotalCents (remainder assigned to
+ * the first member), instead of collapsing the split or leaving a non-balanced
+ * ledger. Degenerate cases (empty input, zero old total) fall back to an even
+ * N-way division so the result still sums exactly.
+ */
+export function rescaleSplits(
+    existing: { userId: string; amount: number }[],
+    newTotalCents: number,
+): { userId: string; amount: number }[] {
+    if (existing.length === 0) return [];
+    const oldTotal = existing.reduce((acc, s) => acc + s.amount, 0);
+
+    if (oldTotal <= 0) {
+        const base = Math.floor(newTotalCents / existing.length);
+        const remainder = newTotalCents - base * existing.length;
+        return existing.map((s, i) => ({
+            userId: s.userId,
+            amount: base + (i < remainder ? 1 : 0),
+        }));
+    }
+
+    const scaled = existing.map((s) => ({
+        userId: s.userId,
+        amount: Math.floor((s.amount * newTotalCents) / oldTotal),
+    }));
+    const diff = newTotalCents - scaled.reduce((acc, s) => acc + s.amount, 0);
+    if (diff !== 0) scaled[0].amount += diff;
+    return scaled;
+}
+
 /** A persisted ReceiptLineItem row narrowed to the columns the split needs (CENTS). */
 export interface ReceiptLineForSplit {
     lineTotal: number;             // CENTS (already converted at write time)

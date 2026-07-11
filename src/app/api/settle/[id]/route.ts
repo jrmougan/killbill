@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
 import { toCents } from '@/lib/currency';
 
 export async function PATCH(
@@ -9,18 +9,22 @@ export async function PATCH(
 ) {
     const { id } = await params;
 
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const userId = session.userId as string;
+    const ctx = await getSessionCtx();
+    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const userId = ctx.userId;
 
     const body = await request.json();
     const { method } = body;
 
-    // Phase 5 (WS1): authz is by settlement.fromUserId; the couple.members
-    // over-fetch (a User.coupleId reverse-relation read) was dead — dropped.
     const settlement = await prisma.settlement.findUnique({ where: { id } });
 
     if (!settlement) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Fase 1 security: this endpoint used to validate ONLY settlement.fromUserId
+    // and never checked group membership. Authorize against the settlement's OWN
+    // group (allowArchived: editing an amount is part of the settle/close flow).
+    const auth = await requireSpaceAccess(ctx, settlement.coupleId, { allowArchived: true });
+    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
 
     if (settlement.fromUserId !== userId) {
         return NextResponse.json({ error: 'Only the creator can edit' }, { status: 403 });

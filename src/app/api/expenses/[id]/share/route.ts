@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
 import { calculateSplitAmountsFromLines, hasExclusiveReceiptLines } from "@/lib/splits";
 import { RECEIPT_LINES_SELECT, linesForSplit } from "@/lib/receipt-read";
 import { addInterval } from "@/lib/recurring";
@@ -15,20 +15,32 @@ import { postExpenseLedger } from "@/lib/ledger";
  * (equal / receipt-aware) so it starts counting towards the couple's balances.
  */
 export async function POST(
-    _request: Request,
+    request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { id } = await params;
-        const session = await getSession();
-        if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        const userId = session.userId as string;
+        const ctx = await getSessionCtx();
+        if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const userId = ctx.userId;
 
-        // Phase 4 selector switch: the caller's group comes from the Membership layer.
-        const groupId = await getActiveGroup(userId);
+        // Fase 1: the target space may be given explicitly (targetGroupId) so a
+        // personal expense can be shared into a chosen group, not just the active
+        // one. Default to the active group. Parse defensively (empty body must not 500).
+        let targetGroupId: string | null = null;
+        try {
+            const b = await request.json();
+            if (b && typeof b.targetGroupId === 'string') targetGroupId = b.targetGroupId;
+        } catch { /* no body — fall back to the active group */ }
+        const groupId = targetGroupId ?? await getActiveGroup(userId);
         if (!groupId) {
             return NextResponse.json({ error: 'Necesitas un grupo para compartir un gasto' }, { status: 400 });
         }
+
+        // Authorize against the TARGET group (of the resource we write into): ACTIVE
+        // membership + writable status (no sharing into a SETTLING/ARCHIVED space).
+        const auth = await requireSpaceAccess(ctx, groupId);
+        if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
 
         const expense = await prisma.expense.findUnique({ where: { id }, include: { ...RECEIPT_LINES_SELECT, series: true } });
         if (!expense) {

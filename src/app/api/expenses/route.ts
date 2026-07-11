@@ -7,7 +7,9 @@ import { getGroupMembers, getActiveGroup } from '@/lib/membership';
 import { resolveCategoryId } from '@/lib/category-db';
 import { buildReceiptLineItems } from '@/lib/receipt';
 import { postExpenseLedger } from '@/lib/ledger';
+import { assertSpaceWritable, SpacePolicyError } from '@/lib/space-policy';
 import { Prisma } from '@/generated/prisma/client';
+import type { SpaceStatus } from '@/generated/prisma/enums';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -98,6 +100,21 @@ export async function POST(request: Request) {
         const groupId = isPersonalExpense ? null : await getActiveGroup(userId);
         if (!isPersonalExpense && !groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
 
+        // A shared expense may only be created in a WRITABLE (ACTIVE) space —
+        // SETTLING blocks new expenses, ARCHIVED is read-only (space-policy).
+        if (!isPersonalExpense && groupId) {
+            const space = await prisma.couple.findUnique({ where: { id: groupId }, select: { status: true } });
+            if (!space) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+            try {
+                assertSpaceWritable(space.status as SpaceStatus);
+            } catch (e) {
+                if (e instanceof SpacePolicyError) {
+                    return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
+                }
+                throw e;
+            }
+        }
+
         // Validate description is a non-empty string (missing/empty previously 500'd at the DB layer).
         if (typeof description !== 'string' || description.trim().length === 0) {
             return NextResponse.json({ error: 'Invalid description' }, { status: 400 });
@@ -162,6 +179,9 @@ export async function POST(request: Request) {
             categoryId,
             paidById,
             ownerId: userId,
+            // Fase 1: authorship. Imprescindible para que un GUEST solo pueda
+            // editar/borrar los suyos; siempre = usuario actual en creación.
+            createdById: userId,
             visibility: isPersonalExpense ? 'PERSONAL' : 'SHARED',
             coupleId: isPersonalExpense ? null : groupId,
             receiptUrl: receiptUrl || null,

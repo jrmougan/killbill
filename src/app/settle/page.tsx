@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { resolveMyDebts, getLastSettlementDate } from "@/lib/finance";
+import { resolveMyDebts } from "@/lib/finance";
 import { getGroupBalances } from "@/lib/ledger-read";
 import { getGroupMembers, getActiveGroup } from "@/lib/membership";
 import { NoGroupState } from "@/components/ui/no-group-state";
@@ -53,15 +53,31 @@ export default async function SettlePage() {
         };
     });
 
-    // Find local cutoff date: only confirmed settlements mark a settled checkpoint.
-    // Pending/rejected settlements do not advance the cutoff date.
-    const confirmedSettlements = settlements.filter(s => s.status === "CONFIRMED");
-    const lastSettlementDate = getLastSettlementDate(confirmedSettlements);
+    // Pairwise cutoff (Fase 1 fix): a single GLOBAL last-settlement date was wrong
+    // in a group — settling with member A wrongly hid unpaid expenses paid by
+    // member B. Compute, per counterparty, the last CONFIRMED settlement date
+    // between me and them (either direction); that is THAT pair's settled
+    // checkpoint. An expense is "unsettled" only against its own payer's cutoff.
+    const pairwiseCutoff = new Map<string, Date>();
+    for (const s of settlements) {
+        if (s.status !== "CONFIRMED") continue;
+        const other = s.fromUserId === userId ? s.toUserId
+            : s.toUserId === userId ? s.fromUserId
+                : null;
+        if (!other) continue;
+        const d = new Date(s.date);
+        const prev = pairwiseCutoff.get(other);
+        if (!prev || d > prev) pairwiseCutoff.set(other, d);
+    }
 
-    // Fetch unsettled expenses where I owe money
-    // Logic change: We show expenses since the last settlement, regardless of status (as status is deprecated)
+    // Fetch unsettled expenses where I owe money (paid by someone else, and dated
+    // after my pairwise checkpoint with that payer).
     const unsettledExpenses = rawExpenses
-        .filter(e => new Date(e.date) > lastSettlementDate && e.paidById !== userId)
+        .filter(e => {
+            if (e.paidById === userId) return false;
+            const cutoff = pairwiseCutoff.get(e.paidById);
+            return !cutoff || new Date(e.date) > cutoff;
+        })
         .map(e => {
             // Find my split or 50%
             let myAmountCents = 0;

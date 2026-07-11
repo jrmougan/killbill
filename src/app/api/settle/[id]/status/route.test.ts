@@ -3,12 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockGetSession = vi.fn();
 const mockSettlementFindUnique = vi.fn();
 const mockSettlementUpdate = vi.fn();
-const mockMembershipFindFirst = vi.fn();
+const mockCoupleFindUnique = vi.fn();
+const mockMembershipFindUnique = vi.fn();
 
 vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
-// No active-group cookie in tests → getActiveGroup falls back to getPrimaryGroup,
-// which resolves via the mocked prisma.membership.findFirst below.
-vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
 // Ledger posting is covered by scripts/reconcile-ledger.ts + the ledger helper;
 // here it is a no-op so this test stays focused on authz + transitions.
 vi.mock('@/lib/ledger', () => ({ postSettlementLedger: vi.fn() }));
@@ -20,8 +18,10 @@ vi.mock('@/lib/db', () => {
     return {
         prisma: {
             settlement,
-            // getPrimaryGroup (real module) resolves the caller's group here.
-            membership: { findFirst: (...a: unknown[]) => mockMembershipFindFirst(...a) },
+            // requireSpaceAccess (real authz module) authorizes against the
+            // settlement's OWN group: it loads the space + the caller's membership.
+            couple: { findUnique: (...a: unknown[]) => mockCoupleFindUnique(...a) },
+            membership: { findUnique: (...a: unknown[]) => mockMembershipFindUnique(...a) },
             // Run the callback with a tx exposing the same settlement mock.
             $transaction: (cb: (tx: unknown) => unknown) => cb({ settlement }),
         },
@@ -47,7 +47,16 @@ describe('PATCH /api/settle/[id]/status — authz + transition state machine', (
         mockGetSession.mockReset();
         mockSettlementFindUnique.mockReset();
         mockSettlementUpdate.mockReset();
-        mockMembershipFindFirst.mockReset();
+        mockCoupleFindUnique.mockReset();
+        mockMembershipFindUnique.mockReset();
+        // Default: every space is ACTIVE; the caller is an ACTIVE MEMBER of c1
+        // only (so a settlement in any other group fails the membership check).
+        mockCoupleFindUnique.mockImplementation(async ({ where: { id } }: { where: { id: string } }) => ({ id, status: 'ACTIVE' }));
+        mockMembershipFindUnique.mockImplementation(async ({ where: { groupId_userId } }: { where: { groupId_userId: { groupId: string; userId: string } } }) =>
+            groupId_userId.groupId === 'c1'
+                ? { groupId: 'c1', userId: groupId_userId.userId, role: 'MEMBER', status: 'ACTIVE' }
+                : null,
+        );
     });
 
     it('401 when there is no session', async () => {
@@ -72,7 +81,6 @@ describe('PATCH /api/settle/[id]/status — authz + transition state machine', (
     it('403 when the settlement belongs to another couple', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
         mockSettlementFindUnique.mockResolvedValue(pendingSettlement({ coupleId: 'other' }));
-        mockMembershipFindFirst.mockResolvedValue({ groupId: 'c1' });
         const res = await PATCH(req({ status: 'CONFIRMED' }), { params });
         expect(res.status).toBe(403);
     });
@@ -81,7 +89,6 @@ describe('PATCH /api/settle/[id]/status — authz + transition state machine', (
         // u2 is the payer/debtor; only u1 (the receiver) may confirm.
         mockGetSession.mockResolvedValue({ userId: 'u2' });
         mockSettlementFindUnique.mockResolvedValue(pendingSettlement());
-        mockMembershipFindFirst.mockResolvedValue({ groupId: 'c1' });
         const res = await PATCH(req({ status: 'CONFIRMED' }), { params });
         expect(res.status).toBe(403);
         expect(mockSettlementUpdate).not.toHaveBeenCalled();
@@ -90,7 +97,6 @@ describe('PATCH /api/settle/[id]/status — authz + transition state machine', (
     it('confirms a PENDING settlement when the receiver acts', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
         mockSettlementFindUnique.mockResolvedValue(pendingSettlement());
-        mockMembershipFindFirst.mockResolvedValue({ groupId: 'c1' });
         mockSettlementUpdate.mockResolvedValue(pendingSettlement({ status: 'CONFIRMED' }));
         const res = await PATCH(req({ status: 'CONFIRMED' }), { params });
         expect(res.status).toBe(200);
@@ -100,7 +106,6 @@ describe('PATCH /api/settle/[id]/status — authz + transition state machine', (
     it('rejects re-acting on an already CONFIRMED settlement (invalid transition)', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
         mockSettlementFindUnique.mockResolvedValue(pendingSettlement({ status: 'CONFIRMED' }));
-        mockMembershipFindFirst.mockResolvedValue({ groupId: 'c1' });
         const res = await PATCH(req({ status: 'REJECTED' }), { params });
         expect(res.status).toBe(400);
         expect(mockSettlementUpdate).not.toHaveBeenCalled();
@@ -109,7 +114,6 @@ describe('PATCH /api/settle/[id]/status — authz + transition state machine', (
     it('forbids reverting a PENDING settlement back to PENDING', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
         mockSettlementFindUnique.mockResolvedValue(pendingSettlement());
-        mockMembershipFindFirst.mockResolvedValue({ groupId: 'c1' });
         const res = await PATCH(req({ status: 'PENDING' }), { params });
         expect(res.status).toBe(400);
         expect(mockSettlementUpdate).not.toHaveBeenCalled();
