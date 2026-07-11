@@ -4,6 +4,7 @@ import {
     capFor,
     allowsGuests,
     allowsBudgetsAndRecurring,
+    allowsCustomCategories,
     joinByCodeAllowed,
     isSpaceWritable,
     assertSpaceWritable,
@@ -41,6 +42,15 @@ describe("space-policy", () => {
             expect(allowsBudgetsAndRecurring("EPHEMERAL")).toBe(false);
             expect(allowsBudgetsAndRecurring("GROUP")).toBe(true);
             expect(allowsBudgetsAndRecurring("COUPLE")).toBe(true);
+        });
+    });
+
+    describe("allowsCustomCategories", () => {
+        it("permits custom categories in every space type", () => {
+            expect(allowsCustomCategories("COUPLE")).toBe(true);
+            expect(allowsCustomCategories("GROUP")).toBe(true);
+            expect(allowsCustomCategories("EPHEMERAL")).toBe(true);
+            expect(allowsCustomCategories("INDIVIDUAL")).toBe(true);
         });
     });
 

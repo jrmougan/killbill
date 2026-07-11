@@ -62,6 +62,18 @@ export function allowsBudgetsAndRecurring(type: SpaceType): boolean {
 }
 
 /**
+ * Whether a space type supports custom categories (Fase 5). Every type does:
+ * COUPLE/GROUP/EPHEMERAL manage space-scoped categories (by `groupId`) and
+ * INDIVIDUAL manages personal ones (by `ownerId`). Categories only classify —
+ * they carry no budget — so EPHEMERAL is included even though it vetoes budgets.
+ * Kept as an explicit predicate (mirrors `allowsBudgetsAndRecurring`) so a future
+ * product decision can restrict a type in one place.
+ */
+export function allowsCustomCategories(_type: SpaceType): boolean {
+    return true;
+}
+
+/**
  * Whether a space may be joined via the classic `Couple.code`. Only COUPLE and
  * GROUP support it, and only while ACTIVE. EPHEMERAL uses expirable invite links
  * exclusively; INDIVIDUAL is virtual and un-joinable; SETTLING/ARCHIVED are

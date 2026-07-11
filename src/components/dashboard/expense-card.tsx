@@ -3,20 +3,20 @@
 import { Expense, User } from "@/types";
 import Link from "next/link";
 import { Lock } from "lucide-react";
-import { getCategoryById } from "@/lib/categories";
+import { CategoryBadge, type CategoryBadgeMeta } from "@/components/category/category-badge";
 
 interface ExpenseCardProps {
     expense: Expense;
     paidByUser: User;
     allUsers?: Record<string, User>;
     isPersonal?: boolean;
+    /** DB-driven category metadata (resolved server-side from the effective set). */
+    categoryMeta?: CategoryBadgeMeta | null;
 }
 
 // Minimalist recent-expense row (EQUIL - Flujo de Gastos redesign):
 // flat surface, category emoji in a neutral rounded square, "{quién} pagó · {badge}".
-export function ExpenseCard({ expense, paidByUser, allUsers, isPersonal = false }: ExpenseCardProps) {
-    const category = getCategoryById(expense.category);
-
+export function ExpenseCard({ expense, paidByUser, allUsers, isPersonal = false, categoryMeta }: ExpenseCardProps) {
     // Determine beneficiary info
     let beneficiaryText = "Común";
     if (expense.splits.length === 1 && allUsers) {
@@ -34,12 +34,7 @@ export function ExpenseCard({ expense, paidByUser, allUsers, isPersonal = false 
     return (
         <Link href={`/expense/${expense.id}`}>
             <div className="flex items-center gap-[13px] p-[13px] rounded-2xl bg-card border border-[color:var(--line-2)] cursor-pointer transition-all duration-150 hover:border-[color:var(--accent-border)] active:scale-[0.99] min-w-0">
-                <div
-                    className="w-[42px] h-[42px] rounded-[11px] flex items-center justify-center text-xl shrink-0"
-                    style={{ backgroundColor: `${category.hex}20` }}
-                >
-                    {category.emoji}
-                </div>
+                <CategoryBadge meta={categoryMeta} variant="emoji" size={42} radius={11} />
 
                 <div className="flex-1 min-w-0">
                     <h3 className="font-semibold truncate text-[15px] text-foreground">{expense.description}</h3>

@@ -31,8 +31,123 @@ export function categoryKeyOf(row: CategoryKeyed): string {
     return row.categoryRef?.key ?? row.category ?? "other";
 }
 
+/** A row whose relational category was selected WITH its human label (Fase 6 export). */
+export interface CategoryLabeled {
+    category?: string | null;
+    categoryRef?: { key: string; label?: string | null } | null;
+}
+
 /**
- * Prisma `include`/`select` fragment for the relational category key. Spread it
- * into any Expense/Budget query whose result is grouped by category.
+ * Effective human label of a row (DB-driven): the relational category's `label`
+ * when present, else its key, else the enum fallback, else 'other'. Used by the
+ * CSV export so custom categories surface their real name instead of the raw key.
  */
-export const CATEGORY_REF_SELECT = { categoryRef: { select: { key: true } } } as const;
+export function categoryLabelOf(row: CategoryLabeled): string {
+    return row.categoryRef?.label ?? row.categoryRef?.key ?? row.category ?? "other";
+}
+
+/**
+ * Prisma `select` fragment for the full visual metadata of a Category row. The
+ * DB column is `icon` (a lucide component NAME); `toCategoryMeta` renames it to
+ * `iconName` for the render layer. Single source for the merge helper and the
+ * expanded CATEGORY_REF_SELECT below.
+ */
+export const CATEGORY_META_SELECT = {
+    id: true,
+    key: true,
+    label: true,
+    labelEn: true,
+    emoji: true,
+    icon: true,
+    hex: true,
+    isSystem: true,
+    sortOrder: true,
+} as const;
+
+/**
+ * Prisma `include`/`select` fragment for the relational category. Spread it into
+ * any Expense/Budget query whose result is grouped/rendered by category. It now
+ * carries the full visual metadata (emoji/icon/hex/label/…) so server pages and
+ * API routes can emit DB-driven `categoryMeta` without a second query.
+ * `categoryKeyOf` only reads `.key`, so this stays backward-compatible.
+ */
+export const CATEGORY_REF_SELECT = { categoryRef: { select: CATEGORY_META_SELECT } } as const;
+
+/**
+ * A Category row as selected by CATEGORY_META_SELECT (DB shape — `icon` is the
+ * lucide component name).
+ */
+export interface CategoryRow {
+    id: string;
+    key: string;
+    label: string;
+    labelEn: string;
+    emoji: string;
+    icon: string;
+    hex: string;
+    isSystem: boolean;
+    sortOrder: number;
+}
+
+/**
+ * Render-facing category metadata. `iconName` is the lucide component name
+ * (resolve to a component via ICON_REGISTRY / getIconComponent). Colors are
+ * rendered inline from `hex` (never tailwind classes — the JIT purges dynamic
+ * ones).
+ */
+export interface CategoryMeta {
+    id: string;
+    key: string;
+    label: string;
+    labelEn: string;
+    emoji: string;
+    iconName: string;
+    hex: string;
+    isSystem: boolean;
+    sortOrder: number;
+}
+
+/** Map a DB Category row to render-facing metadata (`icon` → `iconName`). */
+export function toCategoryMeta(row: CategoryRow): CategoryMeta {
+    return {
+        id: row.id,
+        key: row.key,
+        label: row.label,
+        labelEn: row.labelEn,
+        emoji: row.emoji,
+        iconName: row.icon,
+        hex: row.hex,
+        isSystem: row.isSystem,
+        sortOrder: row.sortOrder,
+    };
+}
+
+/**
+ * Effective category set of a context = system ∪ context-custom, where a custom
+ * row SHADOWS the system row with the same key (intended divergence — a group/
+ * personal `food` overrides the system `food`). Ordered by (sortOrder, key).
+ *
+ * Pure so it can be unit-tested and reused from server pages and API routes; the
+ * DB fetch that feeds it (`getEffectiveCategories`) lives in category-db.ts.
+ */
+export function mergeCategories(system: CategoryRow[], custom: CategoryRow[]): CategoryMeta[] {
+    const byKey = new Map<string, CategoryMeta>();
+    for (const row of system) byKey.set(row.key, toCategoryMeta(row));
+    for (const row of custom) byKey.set(row.key, toCategoryMeta(row)); // custom shadows system
+    return [...byKey.values()].sort(
+        (a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key),
+    );
+}
+
+/**
+ * Index an effective category list by key for O(1) render-time lookup. Server
+ * pages build this once per request and pass `categoryMeta` down by prop so the
+ * client never re-resolves categories (no N+1, no flash). The 'other' system
+ * row is always present in the effective set, so callers can use it as the
+ * neutral fallback for an orphaned key.
+ */
+export function categoryMetaMap(list: CategoryMeta[]): Record<string, CategoryMeta> {
+    const map: Record<string, CategoryMeta> = {};
+    for (const c of list) map[c.key] = c;
+    return map;
+}

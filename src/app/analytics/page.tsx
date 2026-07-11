@@ -5,8 +5,9 @@ import { NoGroupState } from "@/components/ui/no-group-state";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { calculateBalances } from "@/lib/finance";
-import { getCategoryById } from "@/lib/categories";
-import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { getEffectiveCategories } from "@/lib/category-db";
+import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
 import { AnalyticsClient } from "./client";
 
@@ -26,6 +27,12 @@ export default async function AnalyticsPage() {
     if (!groupId) return <NoGroupState title="Análisis de grupo" />;
 
     const members = await getGroupMembers(groupId);
+
+    // DB-driven category metadata for the space (system ∪ space-custom). Emits
+    // real hex/label per item so the client renders `fill={item.hex}` instead of
+    // a hardcoded CATEGORY_COLORS map.
+    const catMap = categoryMetaMap(await getEffectiveCategories({ groupId }));
+    const metaFor = (key: string) => catMap[key] ?? catMap.other ?? NEUTRAL_CATEGORY_META;
 
     const now = new Date();
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
@@ -94,7 +101,8 @@ export default async function AnalyticsPage() {
             category,
             amount: parseFloat(data.amount.toFixed(2)),
             count: data.count,
-            label: getCategoryById(category).label,
+            label: metaFor(category).label,
+            hex: metaFor(category).hex,
         }))
         .sort((a, b) => b.amount - a.amount);
 
@@ -157,7 +165,7 @@ export default async function AnalyticsPage() {
             id: e.id,
             description: e.description,
             category: categoryKeyOf(e),
-            categoryLabel: getCategoryById(categoryKeyOf(e)).label,
+            categoryLabel: metaFor(categoryKeyOf(e)).label,
             amount: parseFloat(toEuros(e.amount).toFixed(2)),
             date: new Date(e.date).toLocaleDateString("es-ES", { day: "2-digit", month: "short" }),
         }));

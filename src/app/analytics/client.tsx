@@ -19,18 +19,6 @@ import Link from "next/link";
 import { ArrowLeft, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { formatEuros } from "@/lib/currency";
 
-// Category hex colors aligned with the warm-light category catalog.
-const CATEGORY_COLORS: Record<string, string> = {
-    food: "#D9713C",
-    shopping: "#A85C8A",
-    rent: "#3F6F52",
-    utilities: "#C9A227",
-    transport: "#3E6E8E",
-    entertainment: "#5B7A9E",
-    health: "#C0554E",
-    other: "#8B8477",
-};
-
 // Warm-light chart palette (hex literals for Recharts SVG props).
 const ACCENT_HEX = "#BD5D3A";
 const POSITIVE_HEX = "#3F6F52";
@@ -50,6 +38,8 @@ interface CategoryItem {
     amount: number;
     count: number;
     label: string;
+    /** DB-driven category hex (server-resolved from the effective set). */
+    hex: string;
 }
 
 interface BalancePoint {
@@ -232,7 +222,7 @@ export function AnalyticsClient({
                                     {categoryBreakdown.map((item) => (
                                         <Cell
                                             key={item.category}
-                                            fill={CATEGORY_COLORS[item.category] ?? NEUTRAL_HEX}
+                                            fill={item.hex || NEUTRAL_HEX}
                                         />
                                     ))}
                                 </Pie>
@@ -250,7 +240,7 @@ export function AnalyticsClient({
                                     <span className="flex items-center gap-2">
                                         <span
                                             className="h-2.5 w-2.5 rounded-full flex-shrink-0"
-                                            style={{ backgroundColor: CATEGORY_COLORS[item.category] ?? NEUTRAL_HEX }}
+                                            style={{ backgroundColor: item.hex || NEUTRAL_HEX }}
                                         />
                                         <span className="text-[color:var(--body-ink)]">{item.label}</span>
                                     </span>

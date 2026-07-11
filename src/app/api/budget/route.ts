@@ -3,11 +3,8 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getActiveGroup } from '@/lib/membership';
 import { toCents } from '@/lib/currency';
-import { CATEGORIES } from '@/lib/categories';
 import { resolveCategoryId } from '@/lib/category-db';
 import { categoryKeyOf, CATEGORY_REF_SELECT } from '@/lib/category-read';
-
-const VALID_CATEGORIES = Object.keys(CATEGORIES);
 
 export async function GET(request: Request) {
     const session = await getSession();
@@ -90,9 +87,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'category and amount are required' }, { status: 400 });
         }
 
-        if (!VALID_CATEGORIES.includes(category)) {
-            return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
-        }
+        // Fase 3: no hardcoded whitelist. The category is validated against the
+        // EFFECTIVE set of the scope by resolveCategoryId below (null → 400), so a
+        // custom category is accepted and an unknown key is rejected.
 
         // Parse month (YYYY-MM) or default to current month
         let monthDate: Date;
@@ -116,7 +113,7 @@ export async function POST(request: Request) {
 
         // Dual-write the relational Category (Phase 2b). Personal budgets have no
         // group, so they resolve to the system category.
-        const categoryId = await resolveCategoryId(category, scope === 'personal' ? null : groupId);
+        const categoryId = await resolveCategoryId(category, scope === 'personal' ? { ownerId: userId } : { groupId });
         // Phase 5 (stop-dual-write): categoryId is now the NOT NULL unique key. An
         // unresolvable (e.g. unseeded) category must fail cleanly, not throw a
         // Prisma NOT-NULL error at upsert time.

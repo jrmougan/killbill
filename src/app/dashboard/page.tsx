@@ -16,8 +16,9 @@ import { getGroupMembers, getActiveGroup, getUserGroups } from "@/lib/membership
 import { SpaceSwitcher } from "@/components/nav/space-switcher";
 import { normalizeScope } from "@/lib/scope";
 import { toEuros, formatEuros } from "@/lib/currency";
-import { getCategoryById } from "@/lib/categories";
-import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { getEffectiveCategories } from "@/lib/category-db";
+import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
 import { getSettlementStatusLabel, getSettlementMethodLabel } from "@/lib/settlement-labels";
 import { cn } from "@/lib/utils";
 import { isAvatarUrl } from "@/lib/avatar";
@@ -172,6 +173,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const confirmedSettlements = settlements.filter(s => s.status === "CONFIRMED");
     const lastSettlementDate = getLastSettlementDate(confirmedSettlements);
 
+    // DB-driven category metadata for each context's effective set (system ∪
+    // custom). Shared expenses resolve in the group scope; personal ones in the
+    // owner scope. Resolved once per request and attached to each feed item —
+    // no N+1, no client-side re-resolution/flash. The 'other' system row is
+    // always present, so it is the neutral fallback for an orphaned key.
+    const [sharedCatList, personalCatList] = await Promise.all([
+        couple ? getEffectiveCategories({ groupId: couple.id }) : Promise.resolve([]),
+        isGuest ? Promise.resolve([]) : getEffectiveCategories({ ownerId: userId }),
+    ]);
+    const sharedCatMap = categoryMetaMap(sharedCatList);
+    const personalCatMap = categoryMetaMap(personalCatList);
+    const sharedMetaFor = (key: string) => sharedCatMap[key] ?? sharedCatMap.other ?? NEUTRAL_CATEGORY_META;
+    const personalMetaFor = (key: string) => personalCatMap[key] ?? personalCatMap.other ?? NEUTRAL_CATEGORY_META;
+
     // Unified feed, filtered by scope. Shared expenses respect the settlement
     // "clean slate"; personal ones are just the user's recent private movements.
     const sharedFeed = allExpenses
@@ -182,6 +197,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             amount: toEuros(e.amount), // cents -> euros
             date: e.date.toISOString(),
             category: categoryKeyOf(e), // Category table is the read key (enum fallback)
+            categoryMeta: sharedMetaFor(categoryKeyOf(e)),
             paidBy: e.paidById,
             receiptUrl: e.receiptUrl,
             splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
@@ -211,6 +227,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         amount: toEuros(e.amount),
         date: e.date.toISOString(),
         category: categoryKeyOf(e), // Category table is the read key (enum fallback)
+        categoryMeta: personalMetaFor(categoryKeyOf(e)),
         paidBy: e.paidById,
         receiptUrl: e.receiptUrl,
         splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
@@ -382,7 +399,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                 </div>
                                 <div className="bg-card py-4 px-2 text-center">
                                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">Top</p>
-                                    <p className="text-[15px] font-bold mt-1.5 text-foreground">{topCategory ? getCategoryById(topCategory[0]).label : "—"}</p>
+                                    <p className="text-[15px] font-bold mt-1.5 text-foreground">{topCategory ? sharedMetaFor(topCategory[0]).label : "—"}</p>
                                 </div>
                                 <div className="bg-card py-4 px-2 text-center">
                                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">vs Anterior</p>
@@ -401,25 +418,29 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                     <div className="flex h-2 w-full rounded-md overflow-hidden bg-secondary gap-0.5">
                                         {sortedCategories.map(([cat, amount]) => {
                                             const percentage = (amount / totalThisMonth) * 100;
+                                            const meta = sharedMetaFor(cat);
                                             return (
                                                 <div
                                                     key={cat}
                                                     className="h-full opacity-[0.85]"
-                                                    style={{ width: `${percentage}%`, backgroundColor: getCategoryById(cat).hex }}
-                                                    title={`${getCategoryById(cat).label}: ${formatEuros(amount)}`}
+                                                    style={{ width: `${percentage}%`, backgroundColor: meta.hex }}
+                                                    title={`${meta.label}: ${formatEuros(amount)}`}
                                                 />
                                             );
                                         })}
                                     </div>
                                     <div className="flex flex-wrap gap-x-4 gap-y-2">
-                                        {sortedCategories.slice(0, 4).map(([cat, amount]) => (
+                                        {sortedCategories.slice(0, 4).map(([cat, amount]) => {
+                                            const meta = sharedMetaFor(cat);
+                                            return (
                                             <div key={cat} className="flex items-center gap-1.5">
-                                                <div className="h-[7px] w-[7px] rounded-sm" style={{ backgroundColor: getCategoryById(cat).hex }} />
+                                                <div className="h-[7px] w-[7px] rounded-sm" style={{ backgroundColor: meta.hex }} />
                                                 <span className="text-[11px] font-medium text-muted-foreground">
-                                                    {getCategoryById(cat).label} · {((amount / totalThisMonth) * 100).toFixed(0)}%
+                                                    {meta.label} · {((amount / totalThisMonth) * 100).toFixed(0)}%
                                                 </span>
                                             </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </GlassCard>
                             )}
@@ -491,6 +512,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                         paidByUser={usersMap[item.paidBy]}
                                         allUsers={usersMap}
                                         isPersonal={item.isPersonal}
+                                        categoryMeta={item.categoryMeta}
                                     />
                                 );
                             } else {
