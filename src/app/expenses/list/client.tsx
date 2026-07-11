@@ -7,6 +7,7 @@ import { ArrowLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { ExpenseFilters } from "@/components/expenses/filters";
 import { ExpenseCard } from "@/components/dashboard/expense-card";
+import type { CategoryBadgeMeta } from "@/components/category/category-badge";
 import { User, Expense } from "@/types";
 import { formatEuros } from "@/lib/currency";
 import { getSettlementMethodLabel, getSettlementStatusLabel } from "@/lib/settlement-labels";
@@ -25,15 +26,18 @@ interface UnifiedItem {
     method?: string;
     receiptUrl?: string | null;
     splits?: { userId: string, amount: number }[];
+    categoryMeta?: CategoryBadgeMeta;
 }
 
 interface ExpensesListClientProps {
     items: UnifiedItem[];
     usersMap: Record<string, User>;
     isGuest?: boolean;
+    /** Effective category set (+ orphaned keys) for the filter chips. */
+    categories?: CategoryBadgeMeta[];
 }
 
-export function ExpensesListClient({ items, usersMap, isGuest = false }: ExpensesListClientProps) {
+export function ExpensesListClient({ items, usersMap, isGuest = false, categories = [] }: ExpensesListClientProps) {
     const [filters, setFilters] = useState({
         search: "",
         categories: [] as string[],
@@ -106,7 +110,7 @@ export function ExpensesListClient({ items, usersMap, isGuest = false }: Expense
 
             <GuestBanner show={isGuest} />
 
-            <ExpenseFilters onFiltersChange={setFilters} />
+            <ExpenseFilters onFiltersChange={setFilters} categories={categories} />
 
             {/* Results Summary */}
             {(filters.search || filters.categories.length > 0 || filters.dateRange !== "all") && (
@@ -144,6 +148,7 @@ export function ExpensesListClient({ items, usersMap, isGuest = false }: Expense
                                     expense={item as unknown as Expense}
                                     paidByUser={usersMap[item.paidBy]}
                                     allUsers={usersMap}
+                                    categoryMeta={item.categoryMeta}
                                 />
                             );
                         } else {

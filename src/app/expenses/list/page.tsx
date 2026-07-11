@@ -5,7 +5,9 @@ import { getSession } from "@/lib/auth";
 import { getGroupMembers, getActiveGroup } from "@/lib/membership";
 import { NoGroupState } from "@/components/ui/no-group-state";
 import { toEuros } from "@/lib/currency";
-import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { getEffectiveCategories } from "@/lib/category-db";
+import { NEUTRAL_CATEGORY_META, type CategoryBadgeMeta } from "@/components/category/category-badge";
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +24,14 @@ export default async function ExpensesListPage() {
     }
 
     const members = await getGroupMembers(groupId);
+
+    // DB-driven effective category set for the space (system ∪ space-custom).
+    // Built once and used to (a) tag each expense with its render metadata and
+    // (b) feed the filter chips — including any orphaned keys present on items.
+    const catList = await getEffectiveCategories({ groupId });
+    const catMap = categoryMetaMap(catList);
+    const metaFor = (key: string): CategoryBadgeMeta =>
+        catMap[key] ?? catMap.other ?? NEUTRAL_CATEGORY_META;
 
     // Fetch all expenses
     const rawExpenses = await prisma.expense.findMany({
@@ -48,6 +58,7 @@ export default async function ExpensesListPage() {
             // Phase 4 read-switch: the client's category filters key on the
             // relational Category (enum fallback), not the enum column.
             category: categoryKeyOf(e),
+            categoryMeta: metaFor(categoryKeyOf(e)),
             paidBy: e.paidById,
             receiptUrl: e.receiptUrl,
             splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
@@ -72,5 +83,21 @@ export default async function ExpensesListPage() {
         usersMap[m.id] = { id: m.id, name: m.name, avatar: m.avatar };
     });
 
-    return <ExpensesListClient items={items} usersMap={usersMap} isGuest={isGuest} />;
+    // Filter chips = the effective set plus any orphaned keys present on items
+    // (a deleted custom category still showing on old expenses stays filterable).
+    const presentKeys = new Set(rawExpenses.map((e) => categoryKeyOf(e)));
+    const orphanKeys = [...presentKeys].filter((k) => !catMap[k]);
+    const filterCategories: CategoryBadgeMeta[] = [
+        ...catList,
+        ...orphanKeys.map((k) => ({ ...NEUTRAL_CATEGORY_META, key: k, label: k })),
+    ];
+
+    return (
+        <ExpensesListClient
+            items={items}
+            usersMap={usersMap}
+            isGuest={isGuest}
+            categories={filterCategories}
+        />
+    );
 }

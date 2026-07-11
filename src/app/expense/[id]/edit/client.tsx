@@ -11,7 +11,10 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ReceiptItem } from "@/types";
-import { getAllCategories } from "@/lib/categories";
+import { CategoryPicker } from "@/components/category/category-picker";
+import type { CategoryBadgeMeta } from "@/components/category/category-badge";
+import { type CategoryContext, type CategoryListItem } from "@/lib/category-context";
+import { RESERVED_SYSTEM_KEYS } from "@/lib/category-keys";
 import { formatEuros } from "@/lib/currency";
 import {
     SplitEditor,
@@ -64,6 +67,8 @@ interface EditExpenseClientProps {
     initialTagIds: string[];
     allTags: TagItem[];
     isPersonal?: boolean;
+    groupId: string | null;
+    initialCategoryMeta: CategoryBadgeMeta;
 }
 
 export function EditExpenseClient({
@@ -86,6 +91,8 @@ export function EditExpenseClient({
     initialTagIds,
     allTags,
     isPersonal = false,
+    groupId,
+    initialCategoryMeta,
 }: EditExpenseClientProps) {
     const router = useRouter();
 
@@ -93,6 +100,19 @@ export function EditExpenseClient({
     const [description, setDescription] = useState(initialDescription);
     const [category, setCategory] = useState(initialCategory);
     const [loading, setLoading] = useState(false);
+
+    // Category context: personal expenses (or a space-less one) resolve in the
+    // owner scope; shared ones in the group scope.
+    const categoryContext: CategoryContext =
+        !isPersonal && groupId ? { kind: "shared", groupId } : { kind: "personal" };
+
+    // Effective category keys for OCR re-scan validation. Seeded with the system
+    // keys + the current one so the guard works before the picker loads.
+    const [effectiveKeys, setEffectiveKeys] = useState<Set<string>>(
+        () => new Set<string>([...RESERVED_SYSTEM_KEYS, initialCategory]),
+    );
+    const handleCategoriesLoaded = (cats: CategoryListItem[]) =>
+        setEffectiveKeys(new Set([...cats.map((c) => c.key), initialCategory]));
 
     // Payer (N-way): who fronted the money. Editable for shared expenses.
     const [paidById, setPaidById] = useState<string>(initialPaidById);
@@ -180,7 +200,8 @@ export function EditExpenseClient({
             if (data.success) {
                 if (data.total) setAmount(data.total.toFixed(2));
                 if (data.store) setDescription(data.store);
-                if (data.category) setCategory(data.category);
+                // Only accept an OCR category that exists in this context's effective set.
+                if (data.category && effectiveKeys.has(data.category)) setCategory(data.category);
                 if (data.items && data.items.length > 0) setReceiptItems(data.items.map((item: ReceiptItem) => withUid(item)));
             } else {
                 alert("No se pudo procesar el ticket. Intenta con otra foto.");
@@ -420,23 +441,13 @@ export function EditExpenseClient({
                 {/* 2. Category */}
                 <div className="space-y-4">
                     <span className="block text-sm font-medium ml-1 text-foreground">Categoría</span>
-                    <div className="grid grid-cols-4 gap-2">
-                        {getAllCategories().map((cat) => (
-                            <button
-                                key={cat.id}
-                                type="button"
-                                onClick={() => setCategory(cat.id)}
-                                className={`p-3 rounded-xl border text-center transition-all ${
-                                    category === cat.id
-                                        ? "bg-primary text-white border-primary scale-105"
-                                        : "bg-card border-[color:var(--line)] text-foreground hover:bg-secondary"
-                                }`}
-                            >
-                                <span className="text-xl block mb-1">{cat.emoji}</span>
-                                <span className="text-[10px] font-bold uppercase tracking-tight">{cat.label}</span>
-                            </button>
-                        ))}
-                    </div>
+                    <CategoryPicker
+                        context={categoryContext}
+                        value={category}
+                        onChange={setCategory}
+                        forcedCurrent={initialCategoryMeta}
+                        onLoaded={handleCategoriesLoaded}
+                    />
                 </div>
 
                 {/* 3. Amount */}

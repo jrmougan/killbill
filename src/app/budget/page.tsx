@@ -4,6 +4,7 @@ import { getActiveGroup } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { getEffectiveCategories } from "@/lib/category-db";
 import { BudgetClient } from "./client";
 
 export const dynamic = "force-dynamic";
@@ -69,5 +70,20 @@ export default async function BudgetPage() {
     const rawMonthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
     const monthLabel = rawMonthLabel.charAt(0).toUpperCase() + rawMonthLabel.slice(1);
 
-    return <BudgetClient budgetData={budgetData} monthLabel={monthLabel} hasCouple={hasCouple} />;
+    // Effective category set for the DEFAULT scope (shared when in a couple, else
+    // personal), seeded to the client so the first paint isn't a flash. The
+    // `editable` flag matches the CRUD GET shape the client's hook consumes.
+    const initialCategories = (
+        await getEffectiveCategories(hasCouple ? { groupId: coupleId! } : { ownerId: userId })
+    ).map((c) => ({ ...c, editable: !c.isSystem }));
+
+    return (
+        <BudgetClient
+            budgetData={budgetData}
+            monthLabel={monthLabel}
+            hasCouple={hasCouple}
+            groupId={coupleId ?? null}
+            initialCategories={initialCategories}
+        />
+    );
 }

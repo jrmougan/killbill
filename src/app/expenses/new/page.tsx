@@ -11,7 +11,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ReceiptItem } from "@/types";
-import { getAllCategories } from "@/lib/categories";
+import { CategoryPicker } from "@/components/category/category-picker";
+import { type CategoryContext, type CategoryListItem } from "@/lib/category-context";
 import { formatEuros, parseAmountInput, formatAmountInput } from "@/lib/currency";
 import { SplitEditor, computeSplit, seedSplitValue, type SplitValue } from "@/components/expense/split-editor";
 
@@ -79,6 +80,19 @@ export default function NewExpensePage() {
     const [members, setMembers] = useState<{ id: string; name: string; avatar: string | null }[]>([]);
     const [userId, setUserId] = useState<string | null>(null);
     const [spaceType, setSpaceType] = useState<string | null>(null);
+    const [groupId, setGroupId] = useState<string | null>(null);
+
+    // Effective category keys for the current context (OCR validation). Seeded
+    // with the 8 system keys so the check works before the picker loads, then
+    // extended by the picker's onLoaded callback with any custom keys.
+    const [effectiveKeys, setEffectiveKeys] = useState<Set<string>>(new Set(VALID_CATEGORY_IDS));
+    const handleCategoriesLoaded = (cats: CategoryListItem[]) =>
+        setEffectiveKeys(new Set(cats.map((c) => c.key)));
+
+    // Category context: a shared expense in a space resolves in the group scope;
+    // a personal one (or no space) in the caller's personal scope.
+    const categoryContext: CategoryContext =
+        expenseType === "shared" && groupId ? { kind: "shared", groupId } : { kind: "personal" };
 
     // Advanced
     const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -142,6 +156,7 @@ export default function NewExpensePage() {
                 if (data.couple) {
                     setMembers(data.couple.members);
                     setSpaceType(data.couple.type ?? null);
+                    setGroupId(data.couple.id ?? null);
                     // Seed the split on an even baseline once members are known.
                     setSplitValue((prev) =>
                         prev.mode === "equal" && Object.keys(prev.amounts).length === 0
@@ -231,7 +246,7 @@ export default function NewExpensePage() {
                 setPendingOcr({
                     total: typeof data.total === "number" ? data.total : null,
                     store: data.store || null,
-                    category: data.category && VALID_CATEGORY_IDS.has(data.category) ? data.category : null,
+                    category: data.category && effectiveKeys.has(data.category) ? data.category : null,
                     items: Array.isArray(data.items) ? data.items : [],
                 });
                 setScanState("done");
@@ -636,23 +651,12 @@ export default function NewExpensePage() {
                                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--accent-tint)] text-primary normal-case tracking-normal">✨ Auto</span>
                                 )}
                             </label>
-                            <div className="grid grid-cols-4 gap-2">
-                                {getAllCategories().map((cat) => (
-                                    <button
-                                        key={cat.id}
-                                        type="button"
-                                        onClick={() => { setCategory(cat.id); setCategoryAutoDetected(false); }}
-                                        aria-pressed={category === cat.id}
-                                        className={cn(
-                                            "flex flex-col items-center gap-1 py-2.5 rounded-xl border transition-all active:scale-95",
-                                            category === cat.id ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)]" : "bg-card border-[color:var(--line)] hover:bg-secondary"
-                                        )}
-                                    >
-                                        <span className="text-xl">{cat.emoji}</span>
-                                        <span className="text-[10px] font-medium text-muted-foreground">{cat.label}</span>
-                                    </button>
-                                ))}
-                            </div>
+                            <CategoryPicker
+                                context={categoryContext}
+                                value={category}
+                                onChange={(key) => { setCategory(key); setCategoryAutoDetected(false); }}
+                                onLoaded={handleCategoriesLoaded}
+                            />
                         </div>
 
                         {/* Personal vs shared */}

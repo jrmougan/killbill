@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Search, X, Filter, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getAllCategories } from "@/lib/categories";
+import type { CategoryBadgeMeta } from "@/components/category/category-badge";
 
 interface ExpenseFiltersProps {
     onFiltersChange: (filters: {
@@ -14,15 +14,15 @@ interface ExpenseFiltersProps {
         categories: string[];
         dateRange: "all" | "week" | "month" | "year";
     }) => void;
+    /** DB-driven effective category set (+ orphaned keys) for the chips. */
+    categories?: CategoryBadgeMeta[];
 }
 
-export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
+export function ExpenseFilters({ onFiltersChange, categories = [] }: ExpenseFiltersProps) {
     const [search, setSearch] = useState("");
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [dateRange, setDateRange] = useState<"all" | "week" | "month" | "year">("all");
     const [showFilters, setShowFilters] = useState(false);
-
-    const categories = getAllCategories();
 
     const handleSearchChange = (value: string) => {
         setSearch(value);
@@ -114,13 +114,15 @@ export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
                             Categorías
                         </span>
                         <div className="flex flex-wrap gap-2">
-                            {categories.map(cat => (
+                            {categories.map(cat => {
+                                const key = cat.key ?? "";
+                                return (
                                 <button
-                                    key={cat.id}
-                                    onClick={() => toggleCategory(cat.id)}
+                                    key={key}
+                                    onClick={() => toggleCategory(key)}
                                     className={cn(
                                         "px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5",
-                                        selectedCategories.includes(cat.id)
+                                        selectedCategories.includes(key)
                                             ? "bg-primary text-white"
                                             : "bg-secondary text-muted-foreground hover:bg-[var(--surface-raised-hex)] hover:text-foreground"
                                     )}
@@ -128,7 +130,8 @@ export function ExpenseFilters({ onFiltersChange }: ExpenseFiltersProps) {
                                     <span>{cat.emoji}</span>
                                     {cat.label}
                                 </button>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
 

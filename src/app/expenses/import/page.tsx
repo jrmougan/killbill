@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
 import { normalizeRow, type ColumnMapping, type DateFormat } from "@/lib/bank-csv";
 import { formatEuros } from "@/lib/currency";
+import { CategoryPicker } from "@/components/category/category-picker";
 
 const PRESET_KEY = "equil.csvImportMapping";
 
@@ -27,6 +28,8 @@ export default function ImportCsvPage() {
     const [importing, setImporting] = useState(false);
     const [result, setResult] = useState<{ created: number; skipped: number } | null>(null);
     const [error, setError] = useState<string | null>(null);
+    // Default category applied to every imported (personal) expense; editable later.
+    const [defaultCategory, setDefaultCategory] = useState("other");
 
     function handleFile(file: File) {
         setError(null);
@@ -87,6 +90,7 @@ export default function ImportCsvPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     rows: toImport.map((e) => ({ dateISO: e.dateISO, amountCents: e.amountCents, description: e.description })),
+                    defaultCategory,
                 }),
             });
             if (!res.ok) {
@@ -179,6 +183,18 @@ export default function ImportCsvPage() {
                                 </div>
                             </div>
                         )}
+                    </GlassCard>
+
+                    <GlassCard className="p-4 space-y-3">
+                        <div className="space-y-0.5">
+                            <h2 className="text-sm font-semibold text-foreground">Categoría por defecto</h2>
+                            <p className="text-[12px] text-muted-foreground">Se aplica a todos los gastos importados; puedes cambiarla en cada uno después.</p>
+                        </div>
+                        <CategoryPicker
+                            context={{ kind: "personal" }}
+                            value={defaultCategory}
+                            onChange={setDefaultCategory}
+                        />
                     </GlassCard>
 
                     <div className="flex items-center justify-between px-1">
