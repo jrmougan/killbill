@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Trash2, ScanLine } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { AddItemInput } from "@/components/shopping/add-item-input";
 import { ShoppingItemRow, type ShoppingItem, type ItemPatch } from "@/components/shopping/shopping-item-row";
-import { ReconcileSheet, type ReconcileMatch } from "@/components/shopping/reconcile-sheet";
 import { AISLES, getAisle } from "@/lib/aisles";
 
 interface ListDetailClientProps {
@@ -48,10 +47,7 @@ export function ListDetailClient({ listId, name, description, items: initialItem
     const [items, setItems] = useState<ShoppingItem[]>(initialItems);
     const [busyId, setBusyId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [reconciling, setReconciling] = useState(false);
-    const [matches, setMatches] = useState<ReconcileMatch[] | null>(null);
     const [confirmingClear, setConfirmingClear] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Keep local state in sync when the server re-renders (another member's change
     // arrives via router.refresh / focus / poll).
@@ -221,40 +217,6 @@ export function ListDetailClient({ listId, name, description, items: initialItem
         }
     }, [apiBase, router]);
 
-    const handleReceiptPicked = useCallback(
-        async (file: File) => {
-            setReconciling(true);
-            setError(null);
-            try {
-                const form = new FormData();
-                form.append("image", file);
-                const res = await fetch(`${apiBase}/reconcile`, { method: "POST", body: form });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                    setError(data.error ?? "No se pudo analizar el ticket.");
-                    return;
-                }
-                setMatches(data.matches ?? []);
-            } catch {
-                setError("No se pudo analizar el ticket.");
-            } finally {
-                setReconciling(false);
-            }
-        },
-        [apiBase],
-    );
-
-    const confirmMatches = useCallback(
-        async (ids: string[]) => {
-            setMatches(null);
-            for (const id of ids) {
-                const item = items.find((i) => i.id === id);
-                if (item && !item.checked) await handleToggle(item, true);
-            }
-        },
-        [items, handleToggle],
-    );
-
     return (
         <div className="flex flex-col min-h-screen p-4 space-y-5 max-w-md mx-auto pb-28">
             <header className="flex items-center gap-4 pt-2">
@@ -307,49 +269,15 @@ export function ListDetailClient({ listId, name, description, items: initialItem
                 </section>
             )}
 
-            {/* Hidden receipt picker for OCR reconciliation. */}
-            <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="hidden"
-                onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleReceiptPicked(file);
-                    e.target.value = "";
-                }}
-            />
-
-            {(items.some((i) => !i.checked) || checkedCount > 0) && (
+            {checkedCount > 0 && (
                 <div className="fixed bottom-0 inset-x-0 p-4 bg-gradient-to-t from-background via-background to-transparent">
                     <div className="max-w-md mx-auto flex gap-2">
-                        {items.some((i) => !i.checked) && (
-                            <Button
-                                variant="secondary"
-                                className="flex-1 gap-2"
-                                onClick={() => fileInputRef.current?.click()}
-                                isLoading={reconciling}
-                            >
-                                <ScanLine className="h-4 w-4" />
-                                Reconciliar con ticket
-                            </Button>
-                        )}
-                        {checkedCount > 0 && (
-                            <Button variant="ghost" className="gap-2 text-muted-foreground" onClick={() => setConfirmingClear(true)}>
-                                <Trash2 className="h-4 w-4" />
-                                Vaciar comprados ({checkedCount})
-                            </Button>
-                        )}
+                        <Button variant="ghost" className="gap-2 text-muted-foreground" onClick={() => setConfirmingClear(true)}>
+                            <Trash2 className="h-4 w-4" />
+                            Vaciar comprados ({checkedCount})
+                        </Button>
                     </div>
                 </div>
-            )}
-
-            {matches !== null && (
-                <ReconcileSheet
-                    matches={matches}
-                    onCancel={() => setMatches(null)}
-                    onConfirm={confirmMatches}
-                />
             )}
 
             {confirmingClear && (
