@@ -1,5 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { buildReconcilePrompt, parseReconcileResponse, type PendingItem } from "./receipt-reconcile";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import {
+    buildReconcilePrompt,
+    parseReconcileResponse,
+    reconcileReceiptWithItems,
+    type PendingItem,
+} from "./receipt-reconcile";
 
 const ITEMS: PendingItem[] = [
     { id: "a", name: "leche" },
@@ -48,5 +53,46 @@ describe("parseReconcileResponse", () => {
     it("returns [] on unparseable JSON", () => {
         expect(parseReconcileResponse("not json", ITEMS)).toEqual([]);
         expect(parseReconcileResponse("{}", ITEMS)).toEqual([]);
+    });
+});
+
+describe("reconcileReceiptWithItems (Gemini client, stubbed fetch)", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    /** Shape a Gemini generateContent success response wrapping `text`. */
+    function geminiOk(text: string) {
+        return {
+            ok: true,
+            json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }),
+        } as unknown as Response;
+    }
+
+    it("short-circuits with no items and never calls the API", async () => {
+        const fetchSpy = vi.spyOn(globalThis, "fetch");
+        const out = await reconcileReceiptWithItems("key", "b64", "image/png", []);
+        expect(out).toEqual([]);
+        expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("maps a successful Gemini match back to item ids", async () => {
+        const body = JSON.stringify({ matches: [{ index: 1, receiptText: "LECHE DESN", confidence: 0.9 }] });
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(geminiOk(body));
+        const out = await reconcileReceiptWithItems("key", "b64", "image/png", ITEMS);
+        expect(out).toEqual([{ itemId: "a", name: "leche", matchedText: "LECHE DESN", confidence: 0.9 }]);
+    });
+
+    it("returns [] when Gemini yields no text content (graceful)", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue({
+            ok: true,
+            json: async () => ({ candidates: [] }),
+        } as unknown as Response);
+        expect(await reconcileReceiptWithItems("key", "b64", "image/png", ITEMS)).toEqual([]);
+    });
+
+    it("throws on a hard API failure so the route can surface an error", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: false, status: 503 } as unknown as Response);
+        await expect(reconcileReceiptWithItems("key", "b64", "image/png", ITEMS)).rejects.toThrow(/503/);
     });
 });
