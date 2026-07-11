@@ -5,8 +5,10 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { signToken } from '@/lib/auth';
-import { MAX_GROUP_MEMBERS } from '@/lib/membership';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { SPACE_CAPS, joinByCodeAllowed, SpacePolicyError } from '@/lib/space-policy';
+import { evaluateInvite, hashInviteToken, inviteInvalidMessage } from '@/lib/invite-token';
+import { InviteKind, MembershipRole, MembershipStatus, SpaceStatus, SpaceType } from '@/generated/prisma/enums';
 import type { AuthState } from '@/lib/auth-types';
 
 const SESSION_COOKIE = {
@@ -17,11 +19,31 @@ const SESSION_COOKIE = {
     maxAge: 7 * 24 * 60 * 60, // 7 days
 };
 
+/**
+ * The resolved registration target after inspecting the supplied code/token.
+ * Exactly one of the invite kinds authorizes creating the account:
+ *  - adminInviteId: an admin-created InviteCode (instance stays CLOSED — this is
+ *    the only self-service-less registration path).
+ *  - groupInviteId + couple: a GroupInvite MEMBER link (Fase 2) — doubles as
+ *    registration authorization AND a space join.
+ *  - couple only: a legacy classic Couple.code link.
+ */
+type JoinTarget = {
+    adminInviteId?: string;
+    groupInviteId?: string;
+    groupInviteMaxUses?: number;
+    couple?: { id: string; type: SpaceType; status: SpaceStatus };
+};
+
 export async function registerAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
     const name = String(formData.get('name') ?? '').trim();
     const email = String(formData.get('email') ?? '').trim();
     const password = String(formData.get('password') ?? '');
-    const inviteCode = String(formData.get('inviteCode') ?? '').trim().toUpperCase();
+    // Raw token from an invite link (case-sensitive, may be a GroupInvite token
+    // or a legacy classic code). Falls back to the manually-typed code field.
+    const inviteToken = String(formData.get('inviteToken') ?? '').trim();
+    const manualCode = String(formData.get('inviteCode') ?? '').trim();
+    const effective = inviteToken || manualCode;
 
     // Rate limit by client IP: 20 attempts / 5 minutes (looser than login).
     const ip = getClientIp(await headers());
@@ -35,35 +57,61 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
     if (password.length < 8) {
         return { error: 'La contraseña debe tener al menos 8 caracteres' };
     }
-    if (!inviteCode) {
+    if (!effective) {
         return { error: 'Se requiere código de invitación' };
     }
 
     try {
-        // Try to find as InviteCode first (admin-created); else as Couple code.
-        const invite = await prisma.inviteCode.findUnique({ where: { code: inviteCode } });
+        // Resolve the registration target: GroupInvite → admin InviteCode →
+        // classic Couple.code. Read-only lookups; consumption happens in the tx.
+        const target: JoinTarget = {};
 
-        let couple = null;
-        if (!invite) {
-            couple = await prisma.couple.findUnique({ where: { code: inviteCode } });
+        const groupInvite = await prisma.groupInvite.findUnique({
+            where: { tokenHash: hashInviteToken(effective) },
+            include: { group: { select: { id: true, type: true, status: true } } },
+        });
 
-            if (!couple) {
-                return { error: 'Código de invitación inválido' };
+        if (groupInvite) {
+            if (groupInvite.kind !== InviteKind.MEMBER) {
+                return { error: 'Este enlace no es una invitación de miembro' };
             }
-            // Phase 5 (WS1): the cap-of-2 check counts ACTIVE memberships, not
-            // users-by-coupleId.
-            const memberCount = await prisma.membership.count({
-                where: { groupId: couple.id, status: 'ACTIVE' },
-            });
-            if (memberCount >= MAX_GROUP_MEMBERS) {
-                return { error: 'Este grupo ya está completo' };
+            const validity = evaluateInvite(groupInvite);
+            if (!validity.ok) {
+                return { error: inviteInvalidMessage(validity.reason) };
             }
+            const type = groupInvite.group.type as SpaceType;
+            const status = groupInvite.group.status as SpaceStatus;
+            if (!joinByCodeAllowed(type, status)) {
+                return { error: 'Este espacio no admite unirse mediante este enlace' };
+            }
+            target.groupInviteId = groupInvite.id;
+            target.groupInviteMaxUses = groupInvite.maxUses;
+            target.couple = { id: groupInvite.group.id, type, status };
         } else {
-            if (invite.usedById) {
-                return { error: 'Este código ya fue utilizado' };
-            }
-            if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
-                return { error: 'Este código ha expirado' };
+            const code = effective.toUpperCase();
+            const adminInvite = await prisma.inviteCode.findUnique({ where: { code } });
+            if (adminInvite) {
+                if (adminInvite.usedById) {
+                    return { error: 'Este código ya fue utilizado' };
+                }
+                if (adminInvite.expiresAt && new Date(adminInvite.expiresAt) < new Date()) {
+                    return { error: 'Este código ha expirado' };
+                }
+                target.adminInviteId = adminInvite.id;
+            } else {
+                const couple = await prisma.couple.findUnique({
+                    where: { code },
+                    select: { id: true, type: true, status: true },
+                });
+                if (!couple) {
+                    return { error: 'Código de invitación inválido' };
+                }
+                const type = couple.type as SpaceType;
+                const status = couple.status as SpaceStatus;
+                if (!joinByCodeAllowed(type, status)) {
+                    return { error: 'Este espacio no admite unirse mediante este código' };
+                }
+                target.couple = { id: couple.id, type, status };
             }
         }
 
@@ -74,48 +122,51 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create user + consume invite atomically. The invite consume is
-        // conditional (updateMany where still unused) so concurrent signups
-        // can't both consume the same single-use code or overfill a couple.
-        const inviteId = invite?.id;
-        const coupleId = couple?.id;
+        // Create user + join + consume the invite atomically. All consumes are
+        // conditional (updateMany / cap re-check) so concurrent signups can't both
+        // consume a single-use code, over-consume a link, or overfill a space.
+        const coupleTarget = target.couple;
         const user = await prisma.$transaction(async (tx) => {
             let existingMemberCount = 0;
-            if (coupleId) {
-                // Phase 5 (WS1): count ACTIVE memberships, not users-by-coupleId.
+            if (coupleTarget) {
                 existingMemberCount = await tx.membership.count({
-                    where: { groupId: coupleId, status: 'ACTIVE' },
+                    where: { groupId: coupleTarget.id, status: MembershipStatus.ACTIVE },
                 });
-                if (existingMemberCount >= MAX_GROUP_MEMBERS) throw new Error('COUPLE_FULL');
+                if (existingMemberCount >= SPACE_CAPS[coupleTarget.type]) throw new SpacePolicyError('SPACE_FULL', 'full');
             }
 
             const created = await tx.user.create({
-                data: {
-                    name,
-                    email,
-                    password: hashedPassword,
-                    avatar: '👤',
-                    // Phase 5 (WS1 write-stop): no User.coupleId — the Membership
-                    // create below is the sole group linkage.
-                },
+                data: { name, email, password: hashedPassword, avatar: '👤' },
             });
 
-            // Dual-write the Membership (OWNER if first in the couple, else MEMBER).
-            if (coupleId) {
+            if (coupleTarget) {
                 await tx.membership.create({
                     data: {
-                        groupId: coupleId,
+                        groupId: coupleTarget.id,
                         userId: created.id,
-                        role: existingMemberCount === 0 ? 'OWNER' : 'MEMBER',
-                        status: 'ACTIVE',
+                        role: existingMemberCount === 0 ? MembershipRole.OWNER : MembershipRole.MEMBER,
+                        status: MembershipStatus.ACTIVE,
                     },
                 });
             }
 
-            if (inviteId) {
+            if (target.adminInviteId) {
                 const consumed = await tx.inviteCode.updateMany({
-                    where: { id: inviteId, usedById: null },
+                    where: { id: target.adminInviteId, usedById: null },
                     data: { usedById: created.id, usedAt: new Date() },
+                });
+                if (consumed.count === 0) throw new Error('INVITE_ALREADY_USED');
+            }
+
+            if (target.groupInviteId) {
+                const consumed = await tx.groupInvite.updateMany({
+                    where: {
+                        id: target.groupInviteId,
+                        revokedAt: null,
+                        expiresAt: { gt: new Date() },
+                        usedCount: { lt: target.groupInviteMaxUses! },
+                    },
+                    data: { usedCount: { increment: 1 } },
                 });
                 if (consumed.count === 0) throw new Error('INVITE_ALREADY_USED');
             }
@@ -137,8 +188,8 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
         if (error instanceof Error && error.message === 'INVITE_ALREADY_USED') {
             return { error: 'Este código ya fue utilizado' };
         }
-        if (error instanceof Error && error.message === 'COUPLE_FULL') {
-            return { error: 'Este grupo ya está completo' };
+        if (error instanceof SpacePolicyError) {
+            return { error: 'Este espacio ya está completo' };
         }
         console.error('Registration Error:', error);
         return { error: 'Algo salió mal. Inténtalo de nuevo.' };

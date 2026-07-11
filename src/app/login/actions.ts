@@ -5,7 +5,6 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { signToken } from '@/lib/auth';
-import { MAX_GROUP_MEMBERS } from '@/lib/membership';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import type { AuthState } from '@/lib/auth-types';
 
@@ -44,36 +43,13 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
             return { error: 'Credenciales incorrectas' };
         }
 
-        // Handle couple invite (explicit + safe): join the invited group when the
-        // code is valid and the group still has room. F4 (multi-group): joining is
-        // allowed even if the user already belongs to other groups; only a
-        // per-group idempotency guard applies. Done atomically.
-        if (inviteCode) {
-            const couple = await prisma.couple.findUnique({
-                where: { code: inviteCode },
-                select: { id: true },
-            });
-
-            if (couple) {
-                await prisma.$transaction(async (tx) => {
-                    const existing = await tx.membership.findFirst({
-                        where: { userId: user.id, groupId: couple.id, status: 'ACTIVE' },
-                        select: { id: true },
-                    });
-                    if (existing) return;
-                    const memberCount = await tx.membership.count({
-                        where: { groupId: couple.id, status: 'ACTIVE' },
-                    });
-                    if (memberCount >= MAX_GROUP_MEMBERS) return;
-                    // Upsert handles a previous LEFT rejoin.
-                    await tx.membership.upsert({
-                        where: { groupId_userId: { groupId: couple.id, userId: user.id } },
-                        create: { groupId: couple.id, userId: user.id, role: 'MEMBER', status: 'ACTIVE' },
-                        update: { status: 'ACTIVE', leftAt: null },
-                    });
-                });
-            }
-        }
+        // SECURITY (Fase 2): login NEVER auto-joins a group. The old `?code=`
+        // silent auto-join let a shared link drop the victim into someone else's
+        // group without consent. Now the code is carried through and, after
+        // authentication, the user is redirected to the explicit consent screen
+        // `/i/[token]` where they choose to join. Old `/login?code=X` links keep
+        // working because that redirect handles both GroupInvite tokens and the
+        // legacy classic `Couple.code`.
 
         // Set session (JWT). Cookie write + redirect happen in the same server
         // response, so the middleware sees the cookie on the /dashboard request.
@@ -93,5 +69,10 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
 
     // redirect() throws NEXT_REDIRECT and must live OUTSIDE the try/catch so it
     // isn't swallowed. Server-driven navigation = no client cookie/cache race.
+    // With an invite code present, land on the consent screen instead of the
+    // dashboard so the join is explicit.
+    if (inviteCode) {
+        redirect(`/i/${encodeURIComponent(inviteCode)}`);
+    }
     redirect('/dashboard');
 }

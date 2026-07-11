@@ -4,10 +4,21 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { ACTIVE_GROUP_COOKIE } from '@/lib/membership';
 import { SPACE_CAPS, joinByCodeAllowed } from '@/lib/space-policy';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import type { SpaceType, SpaceStatus } from '@/generated/prisma/enums';
 
 export async function POST(request: Request) {
     try {
+        // Rate limit by client IP: the classic 6-hex code is brute-forceable, so
+        // cap join attempts (10 / 5 min) regardless of which code is tried.
+        const ip = getClientIp(request.headers);
+        if (!rateLimit(`couple-join:${ip}`, 10, 5 * 60 * 1000).allowed) {
+            return NextResponse.json(
+                { error: 'Demasiados intentos. Inténtalo de nuevo más tarde.' },
+                { status: 429 },
+            );
+        }
+
         const session = await getSession();
         if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         const userId = session.userId as string;

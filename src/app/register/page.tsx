@@ -37,15 +37,20 @@ function RegisterForm() {
                 )}
 
                 <div className="space-y-4">
-                    <Input
-                        data-testid="register-invite-code"
-                        name="inviteCode"
-                        placeholder="Código de invitación"
-                        defaultValue={urlCode || ""}
-                        required
-                        className="text-lg h-12 font-mono text-center tracking-widest uppercase placeholder:normal-case"
-                        maxLength={8}
-                    />
+                    {urlCode ? (
+                        // From an invite link: carry the raw token/code (may be a
+                        // long GroupInvite token, so NOT the 8-char manual input).
+                        <input type="hidden" name="inviteToken" defaultValue={urlCode} />
+                    ) : (
+                        <Input
+                            data-testid="register-invite-code"
+                            name="inviteCode"
+                            placeholder="Código de invitación"
+                            required
+                            className="text-lg h-12 font-mono text-center tracking-widest uppercase placeholder:normal-case"
+                            maxLength={8}
+                        />
+                    )}
                     <Input
                         data-testid="register-name"
                         name="name"
