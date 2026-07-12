@@ -247,4 +247,19 @@ export const registerFinanceTools: ToolRegistrar = (server, api) => {
       return toToolResult(result);
     },
   );
+
+  server.registerTool(
+    "get_expense_receipt_breakdown",
+    {
+      description:
+        "Get the persisted receipt line-item breakdown for a single expense. Monetary fields (unitPriceCents, lineTotalCents) are integer cents. An empty items array means the expense has no persisted receipt lines.",
+      inputSchema: {
+        expenseId: z.string().min(1).describe("Expense id whose receipt breakdown to retrieve."),
+      },
+    },
+    async (args) => {
+      const result = await api.get(`/api/expenses/${args.expenseId}/receipt-lines`);
+      return toToolResult(result);
+    },
+  );
 };

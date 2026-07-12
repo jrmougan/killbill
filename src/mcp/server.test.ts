@@ -47,6 +47,7 @@ describe("createServer", () => {
     expect(names).toContain("delete_expense");
     expect(names).toContain("create_settlement");
     expect(names).toContain("confirm_settlement");
+    expect(names).toContain("get_expense_receipt_breakdown");
   });
 
   it("registers budget and shopping tools", () => {
@@ -67,10 +68,10 @@ describe("createServer", () => {
     expect("parse_receipt" in tools).toBe(true);
   });
 
-  it("registers a total of 16+ tools", () => {
+  it("registers a total of 18+ tools", () => {
     const server = createServer("fake.jwt");
     const tools = getTools(server);
-    expect(Object.keys(tools).length).toBeGreaterThanOrEqual(16);
+    expect(Object.keys(tools).length).toBeGreaterThanOrEqual(18);
   });
 
   it("every tool has a description", () => {
