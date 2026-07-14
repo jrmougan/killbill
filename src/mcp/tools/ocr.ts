@@ -7,7 +7,7 @@ export const registerOcrTools: ToolRegistrar = (server, api) => {
     "parse_receipt",
     {
       description:
-        "Parse a receipt/ticket image using Gemini Vision AI. Uploads the image and extracts structured data: store name, suggested category, line items (description, quantity, price, total), and grand total. The image must be base64-encoded (without data URI prefix). Accepts PNG, JPEG, WEBP up to 8MB. Rate limited to 10 calls per 5 minutes.",
+        "Parse a receipt/ticket image using vision AI. Uploads the image and extracts structured data: store name, suggested category, line items (description, quantity, price, total), and grand total. The image must be base64-encoded (without data URI prefix). Accepts PNG, JPEG, WEBP up to 8MB. Rate limited to 10 calls per 5 minutes.",
       inputSchema: {
         imageBase64: z
           .string()

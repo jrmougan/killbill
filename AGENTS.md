@@ -32,7 +32,9 @@ docker compose up -d      # Start full stack (app + MySQL)
 Copy `.env.example` to `.env`. Required variables:
 - `DATABASE_URL`, `DATABASE_HOST`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME`
 - `JWT_SECRET` — used for signing session tokens
-- `GEMINI_API_KEY` — required for OCR receipt parsing
+- `GEMINI_API_KEY` — primary provider for OCR receipt parsing
+- `OPENROUTER_API_KEY` — optional OCR fallback when Gemini fails or returns invalid output
+- `OPENROUTER_OCR_MODEL` — optional fallback model override (defaults to `qwen/qwen3-vl-235b-a22b-instruct`)
 
 ## Architecture
 
@@ -42,7 +44,7 @@ Kill Bill is a couples/group expense-splitting app. Full-stack Next.js with App 
 
 - `src/app/` — Pages and API routes (App Router)
 - `src/components/` — React components grouped by feature (`dashboard/`, `expense/`, `expenses/`, `ui/`)
-- `src/lib/` — Core logic: `finance.ts` (balance/settlement math), `splits.ts` (split distributions), `ocr_parser.ts` (Gemini Vision OCR), `auth.ts` (session/cookie management), `jwt.ts` (sign/verify), `db.ts` (Prisma singleton)
+- `src/lib/` — Core logic: `finance.ts` (balance/settlement math), `splits.ts` (split distributions), `receipt-ocr-ai.ts` (Gemini/OpenRouter receipt OCR), `auth.ts` (session/cookie management), `jwt.ts` (sign/verify), `db.ts` (Prisma singleton)
 - `src/proxy.ts` — Edge middleware protecting `/dashboard`, `/admin`, and `/api/admin` routes (Next.js 16 renamed `middleware.ts` → `proxy.ts`)
 - `prisma/` — Schema, migrations, seed script, and fix scripts
 - `src/generated/prisma/` — Generated Prisma client (do not edit manually)
@@ -89,7 +91,7 @@ Routes: space `/api/spaces/[id]/lists/**` (authorized via `requireSpaceAccess`, 
 
 ### OCR flow
 
-Receipt image uploaded → stored via `/api/upload` → path sent to `/api/ocr` → `ocr_parser.ts` calls Gemini Vision API → returns structured JSON (items + amounts) for user confirmation before saving.
+Receipt image uploaded → stored via `/api/upload` → path sent to `/api/ocr` → Gemini Vision returns structured JSON (items + amounts) for user confirmation before saving. Provider calls and response validation live in `receipt-ocr-ai.ts`; an API, empty-response, or invalid-JSON failure falls back to OpenRouter when `OPENROUTER_API_KEY` is configured.
 
 ### MCP server (Model Context Protocol)
 
@@ -117,7 +119,7 @@ mcp_servers:
 
 ### Deployment
 
-GitHub Actions (`.github/workflows/deploy.yml`) on push to `main`: runs the e2e + unit/lint gates, builds a Docker image, pushes it to GHCR (`ghcr.io/jrmougan/killbill`), then triggers a **Coolify** webhook that pulls the new image and redeploys. Migrations run from the **container's start command** (`Dockerfile` `CMD`): `prisma migrate deploy` from the bundled `/prisma-tools` (Prisma CLI + `prisma/migrations`) executes before `node server.js`, so pending migrations auto-apply on every deploy and the server only starts if they succeed (a failed migration leaves the previous container serving). Coolify itself has no pre/post-deploy command. The container runs behind **Traefik** (host `finanzas.mougan.es`) and connects to a dedicated **MySQL 8.0** database (`killbill-mysql-8`, user in `mysql_native_password` — the `@prisma/adapter-mariadb` driver needs it) over the `coolify` Docker network. The production environment must set `JWT_SECRET` and `GEMINI_API_KEY` (auth fails loudly without `JWT_SECRET`).
+GitHub Actions (`.github/workflows/deploy.yml`) on push to `main`: runs the e2e + unit/lint gates, builds a Docker image, pushes it to GHCR (`ghcr.io/jrmougan/killbill`), then triggers a **Coolify** webhook that pulls the new image and redeploys. Migrations run from the **container's start command** (`Dockerfile` `CMD`): `prisma migrate deploy` from the bundled `/prisma-tools` (Prisma CLI + `prisma/migrations`) executes before `node server.js`, so pending migrations auto-apply on every deploy and the server only starts if they succeed (a failed migration leaves the previous container serving). Coolify itself has no pre/post-deploy command. The container runs behind **Traefik** (host `finanzas.mougan.es`) and connects to a dedicated **MySQL 8.0** database (`killbill-mysql-8`, user in `mysql_native_password` — the `@prisma/adapter-mariadb` driver needs it) over the `coolify` Docker network. The production environment must set `JWT_SECRET` and at least one OCR provider key (`GEMINI_API_KEY` and/or `OPENROUTER_API_KEY`); configure both to enable failover (auth fails loudly without `JWT_SECRET`).
 
 ## Testing
 
