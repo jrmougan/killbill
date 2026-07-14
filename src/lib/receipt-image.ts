@@ -1,13 +1,13 @@
 /**
- * Shared receipt-image validation for the paid Gemini Vision endpoints (OCR and
- * list reconciliation). Validates the ACTUAL bytes (magic numbers) rather than the
- * client-supplied MIME type before spending a Gemini call.
+ * Shared receipt-image validation for paid AI vision endpoints (OCR and list
+ * reconciliation). Validates the ACTUAL bytes (magic numbers) rather than the
+ * client-supplied MIME type before spending a provider call.
  */
 
-/** Content types accepted by the Gemini vision endpoints. */
+/** Content types accepted by the configured vision providers. */
 export const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
-/** Max upload size forwarded to Gemini (8 MB). */
+/** Max upload size forwarded to a vision provider (8 MB). */
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 
 /** Validate the first bytes of a buffer as JPEG/PNG/GIF/WEBP. */

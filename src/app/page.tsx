@@ -51,7 +51,7 @@ export default function Home() {
             </div>
             <div className="space-y-1">
               <h3 className="font-bold text-sm text-foreground">Escaneo con IA</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">Gemini OCR lee vuestros tickets y extrae cada producto automáticamente.</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">El OCR con IA lee vuestros tickets y extrae cada producto automáticamente.</p>
             </div>
           </GlassCard>
 
