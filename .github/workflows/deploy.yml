@@ -41,7 +41,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
-            type=sha,prefix=
+            type=raw,value=${{ github.sha }}
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -56,6 +56,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Point Coolify to this immutable image
+        env:
+          COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          test -n "$COOLIFY_API_TOKEN"
+          curl --fail-with-body -sS \
+            -X PATCH "https://coolify.mougan.es/api/v1/applications/w17ddm6y7ro4kpgq3i6nbrkr" \
+            -H "Authorization: Bearer ${COOLIFY_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "{\"docker_registry_image_tag\":\"${IMAGE_TAG}\"}"
+
       - name: Trigger Coolify deployment
         run: |
           curl --fail --request GET "${{ secrets.COOLIFY_WEBHOOK }}" \
