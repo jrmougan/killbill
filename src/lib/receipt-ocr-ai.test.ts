@@ -66,6 +66,48 @@ describe("analyzeReceiptImage", () => {
         expect(fetchMock.mock.calls[0][0]).toContain("generativelanguage.googleapis.com");
     });
 
+    it("sends Gemini a schema without additionalProperties", async () => {
+        vi.stubEnv("GEMINI_API_KEY", "gemini-key");
+        vi.stubEnv("OPENROUTER_API_KEY", "");
+        const fetchMock = vi.fn().mockResolvedValue(geminiResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await analyzeReceiptImage("base64", "image/jpeg");
+
+        const body = fetchMock.mock.calls[0][1].body as string;
+        expect(body).not.toContain("additionalProperties");
+        expect(JSON.parse(body).generationConfig.responseSchema.properties.items.items.required)
+            .toEqual(["description", "quantity", "price", "total"]);
+    });
+
+    it("keeps additionalProperties in the OpenRouter strict schema", async () => {
+        vi.stubEnv("GEMINI_API_KEY", "");
+        vi.stubEnv("OPENROUTER_API_KEY", "openrouter-key");
+        const fetchMock = vi.fn().mockResolvedValue(openRouterResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await analyzeReceiptImage("base64", "image/jpeg");
+
+        const schema = JSON.parse(fetchMock.mock.calls[0][1].body as string).response_format.json_schema.schema;
+        expect(schema.additionalProperties).toBe(false);
+        expect(schema.properties.items.items.additionalProperties).toBe(false);
+    });
+
+    it("logs the provider error body, not only the status", async () => {
+        vi.stubEnv("GEMINI_API_KEY", "gemini-key");
+        vi.stubEnv("OPENROUTER_API_KEY", "openrouter-key");
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(jsonResponse({ error: { message: "Unknown name \"additionalProperties\"" } }, 400))
+            .mockResolvedValueOnce(openRouterResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await analyzeReceiptImage("base64", "image/jpeg");
+
+        expect(warn.mock.calls[0][0]).toContain("Gemini HTTP 400");
+        expect(warn.mock.calls[0][0]).toContain("additionalProperties");
+    });
+
     it("falls back to OpenRouter after a Gemini HTTP error", async () => {
         vi.stubEnv("GEMINI_API_KEY", "gemini-key");
         vi.stubEnv("OPENROUTER_API_KEY", "openrouter-key");
