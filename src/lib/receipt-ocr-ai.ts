@@ -43,6 +43,20 @@ const RECEIPT_SCHEMA = {
     additionalProperties: false,
 } as const;
 
+// Gemini's responseSchema only accepts an OpenAPI subset and rejects
+// additionalProperties with HTTP 400; OpenRouter's strict mode requires it.
+function withoutAdditionalProperties(schema: unknown): unknown {
+    if (Array.isArray(schema)) return schema.map(withoutAdditionalProperties);
+    if (!schema || typeof schema !== "object") return schema;
+    return Object.fromEntries(
+        Object.entries(schema)
+            .filter(([key]) => key !== "additionalProperties")
+            .map(([key, value]) => [key, withoutAdditionalProperties(value)]),
+    );
+}
+
+const GEMINI_RECEIPT_SCHEMA = withoutAdditionalProperties(RECEIPT_SCHEMA);
+
 export interface ReceiptAIItem {
     description: string;
     quantity: number;
@@ -74,6 +88,12 @@ function stripMarkdownFence(text: string): string {
     else if (json.startsWith("```")) json = json.slice(3);
     if (json.endsWith("```")) json = json.slice(0, -3);
     return json.trim();
+}
+
+async function httpError(provider: string, response: Response): Promise<Error> {
+    const body = await response.text().catch(() => "");
+    const detail = body.replace(/\s+/g, " ").trim().slice(0, 300);
+    return new Error(`${provider} HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
 }
 
 function tryParseJSON(text: string): unknown | null {
@@ -157,13 +177,13 @@ async function callGemini(apiKey: string, base64: string, mimeType: string): Pro
                     temperature: 0.1,
                     maxOutputTokens: 8192,
                     responseMimeType: "application/json",
-                    responseSchema: RECEIPT_SCHEMA,
+                    responseSchema: GEMINI_RECEIPT_SCHEMA,
                 },
             }),
         },
     );
 
-    if (!response.ok) throw new Error(`Gemini HTTP ${response.status}`);
+    if (!response.ok) throw await httpError("Gemini", response);
 
     const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -209,7 +229,7 @@ async function callOpenRouter(apiKey: string, base64: string, mimeType: string):
         }),
     });
 
-    if (!response.ok) throw new Error(`OpenRouter HTTP ${response.status}`);
+    if (!response.ok) throw await httpError("OpenRouter", response);
 
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content;
