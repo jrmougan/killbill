@@ -34,7 +34,7 @@ Copy `.env.example` to `.env`. Required variables:
 - `JWT_SECRET` — used for signing session tokens
 - `GEMINI_API_KEY` — primary provider for OCR receipt parsing
 - `OPENROUTER_API_KEY` — optional OCR fallback when Gemini fails or returns invalid output
-- `OPENROUTER_OCR_MODEL` — optional fallback model override (defaults to `qwen/qwen3-vl-235b-a22b-instruct`)
+- `OPENROUTER_OCR_MODEL` — optional fallback model override (defaults to `xiaomi/mimo-v2.6-flash`)
 
 ## Architecture
 
