@@ -49,6 +49,15 @@ describe("parseReceiptAIResponse", () => {
         });
     });
 
+    it("rejects a receipt with a total but no line items", () => {
+        expect(() => parseReceiptAIResponse('{"store":"ALCAMPO","category":"shopping","items":[],"total":60.39}'))
+            .toThrow(ReceiptAIError);
+    });
+
+    it("accepts an empty receipt with a zero total", () => {
+        expect(parseReceiptAIResponse('{"store":"","category":"","items":[],"total":0}').items).toEqual([]);
+    });
+
     it("rejects JSON with an invalid receipt shape", () => {
         expect(() => parseReceiptAIResponse('{"items":"not-an-array"}')).toThrow(ReceiptAIError);
     });
@@ -122,7 +131,7 @@ describe("analyzeReceiptImage", () => {
         expect(fetchMock.mock.calls[1][0]).toBe("https://openrouter.ai/api/v1/chat/completions");
 
         const request = JSON.parse(fetchMock.mock.calls[1][1].body as string);
-        expect(request.model).toBe("qwen/qwen3-vl-235b-a22b-instruct");
+        expect(request.model).toBe("xiaomi/mimo-v2.6-flash");
         expect(request.provider).toEqual({ require_parameters: true, data_collection: "deny" });
         expect(request.response_format.json_schema.strict).toBe(true);
         expect(request.messages[0].content[1].image_url.url).toBe("data:image/png;base64,base64");
@@ -147,6 +156,19 @@ describe("analyzeReceiptImage", () => {
         vi.spyOn(console, "warn").mockImplementation(() => undefined);
         const fetchMock = vi.fn()
             .mockResolvedValueOnce(jsonResponse({ candidates: [] }))
+            .mockResolvedValueOnce(openRouterResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await expect(analyzeReceiptImage("base64", "image/jpeg")).resolves.toEqual(RECEIPT);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it("falls back when Gemini returns a total without line items", async () => {
+        vi.stubEnv("GEMINI_API_KEY", "gemini-key");
+        vi.stubEnv("OPENROUTER_API_KEY", "openrouter-key");
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(geminiResponse(JSON.stringify({ ...RECEIPT, items: [] })))
             .mockResolvedValueOnce(openRouterResponse(JSON.stringify(RECEIPT)));
         vi.stubGlobal("fetch", fetchMock);
 

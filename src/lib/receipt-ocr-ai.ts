@@ -1,5 +1,5 @@
 const GEMINI_MODEL = "gemini-flash-latest";
-const DEFAULT_OPENROUTER_MODEL = "qwen/qwen3-vl-235b-a22b-instruct";
+const DEFAULT_OPENROUTER_MODEL = "xiaomi/mimo-v2.6-flash";
 
 const RECEIPT_PROMPT = `Analiza este ticket de compra y extrae los productos en JSON.
 
@@ -157,6 +157,11 @@ export function parseReceiptAIResponse(text: string): ReceiptAIResult {
 
     const receipt = toReceiptResult(parsed);
     if (!receipt) throw new ReceiptAIError("La respuesta del modelo no contiene un ticket válido.");
+    // Some models return the total but skip the line items; treat that as a
+    // failure so the next provider gets a chance instead of losing the breakdown.
+    if (receipt.items.length === 0 && receipt.total > 0) {
+        throw new ReceiptAIError("La respuesta del modelo tiene total pero ninguna línea.");
+    }
     return receipt;
 }
 

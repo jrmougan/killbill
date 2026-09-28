@@ -16,7 +16,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OPENROUTER_OCR_MODEL=${OPENROUTER_OCR_MODEL:-qwen/qwen3-vl-235b-a22b-instruct}
+      - OPENROUTER_OCR_MODEL=${OPENROUTER_OCR_MODEL:-xiaomi/mimo-v2.6-flash}
     networks:
       - mysql_network
       - traefik
