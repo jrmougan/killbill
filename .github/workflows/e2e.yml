@@ -44,11 +44,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Install development tools
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4
         with:
-          node-version: 20
-          cache: npm
+          version: 2026.9.17
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -57,22 +56,22 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install dependencies
-        run: npm ci
+        run: mise exec -- npm ci
 
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
 
       - name: Run database migrations
-        run: ./node_modules/.bin/prisma migrate deploy
+        run: mise run db:migrate
 
       - name: Generate Prisma client
-        run: ./node_modules/.bin/prisma generate
+        run: mise run db:generate
 
       - name: Build app
-        run: npm run build
+        run: mise run build
 
       - name: Seed admin user
-        run: ./node_modules/.bin/prisma db seed
+        run: mise run db:seed
 
       - name: Copy static assets for standalone server
         run: |
@@ -80,7 +79,7 @@ jobs:
           cp -r public .next/standalone/public
 
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: mise run e2e
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4

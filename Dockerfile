@@ -1,5 +1,6 @@
 # 1. Base image
-FROM node:20-alpine AS base
+# Match the version in mise.toml (local development and CI).
+FROM node:24.21.0-alpine AS base
 # Instalar libc6-compat es necesario para Prisma y Sharp en Alpine
 RUN apk add --no-cache libc6-compat openssl
 

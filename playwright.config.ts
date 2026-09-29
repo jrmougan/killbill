@@ -1,5 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const port = process.env.PORT || '3000';
+const baseURL = `http://localhost:${port}`;
+// API fixtures create their own contexts; share the same worktree port.
+process.env.TEST_BASE_URL = baseURL;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -7,7 +12,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'html',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -16,10 +21,11 @@ export default defineConfig({
   ],
   webServer: {
     command: process.env.CI ? 'node .next/standalone/server.js' : 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    url: baseURL,
+    reuseExistingServer: false,
     timeout: 120_000,
     env: {
+      PORT: port,
       NODE_ENV: 'test',
       TEST_ROUTES_ENABLED: 'true',
     },
