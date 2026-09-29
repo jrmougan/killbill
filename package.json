@@ -8,6 +8,10 @@
     "start": "next start",
     "lint": "oxlint",
     "test": "vitest",
+    "test:unit": "vitest run",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "prisma db seed",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report"

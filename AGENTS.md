@@ -2,34 +2,29 @@
 
 ## Commands
 
+Use the versions pinned in `mise.toml` (Node 24.21.0, bundled npm 11.19.0).
+
 ```bash
-# Development
-npm run dev          # Start dev server on http://localhost:3000
-
-# Build & Production
-npm run build        # Build production bundle (standalone output)
-npm start            # Run production server
-
-# Linting
-npm run lint         # ESLint with Next.js + TypeScript rules
-
-# Testing
-npm test             # Run all Vitest tests (watch mode — use `npx vitest run` for one pass)
-npx vitest run src/lib/finance.test.ts   # Run a single test file
-npm run test:e2e     # Run Playwright end-to-end tests (e2e/)
-
-# Database
-npx prisma migrate dev    # Run migrations + regenerate client
-npx prisma db seed        # Seed admin user
-npx prisma studio         # Open Prisma Studio GUI
-
-# Docker
-docker compose up -d      # Start full stack (app + MySQL)
+mise install
+mise run setup          # Preserve/create .env, npm ci, Prisma generate; no DB writes
+mise run services:up    # Local MySQL via Docker/Podman; wait for readiness
+mise run db:migrate     # Apply committed migrations explicitly
+mise run db:seed        # Seed system categories and admin explicitly
+mise run dev            # Next.js on the PORT generated in .env
+mise run check          # Prisma generate + oxlint + unit tests (one pass)
+mise run build          # Prisma generate + production build
+mise run e2e            # Playwright: uses/reset the configured DB; stop dev first
+mise run services:down  # Keep the DB volume
 ```
+
+`compose.dev.yaml` is local-only; `docker-compose.yml` is the production deployment
+and does not provision a database. Each worktree should run `setup` independently,
+with its own `.env`, Compose project, ports and volume. See README.md for details.
+The existing npm scripts remain available through `mise exec -- npm …`.
 
 ## Environment Variables
 
-Copy `.env.example` to `.env`. Required variables:
+`mise run setup` creates `.env` from `.env.example` with local credentials and ports; it never overwrites an existing file. Required variables:
 - `DATABASE_URL`, `DATABASE_HOST`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME`
 - `JWT_SECRET` — used for signing session tokens
 - `GEMINI_API_KEY` — primary provider for OCR receipt parsing

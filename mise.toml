@@ -1,0 +1,52 @@
+[tools]
+node = "24.21.0" # Includes npm 11.19.0; keep Dockerfile aligned.
+"github:docker/compose" = "5.5.1"
+
+[tasks.setup]
+description = "Prepare local env, install locked dependencies and generate Prisma"
+run = ["node scripts/dev-env.mjs", "npm ci", "npm run db:generate"]
+
+[tasks.dev]
+description = "Start Next.js using this worktree's PORT"
+run = "node --env-file-if-exists=.env node_modules/next/dist/bin/next dev"
+
+[tasks.build]
+description = "Generate Prisma and build the production app"
+run = ["npm run db:generate", "npm run build"]
+
+[tasks.lint]
+run = "npm run lint"
+
+[tasks.test]
+description = "Run unit tests once"
+run = "npm run test:unit"
+
+[tasks.check]
+description = "Generate Prisma, lint and run unit tests"
+run = ["npm run db:generate", "npm run lint", "npm run test:unit"]
+
+[tasks.e2e]
+description = "Run Playwright against the configured database (fixtures reset it)"
+run = "node --env-file-if-exists=.env node_modules/@playwright/test/cli.js test"
+
+[tasks."services:up"]
+description = "Start the isolated local MySQL service and wait until healthy"
+run = "node --env-file=.env scripts/dev-compose.mjs up --detach --wait --wait-timeout 120"
+
+[tasks."services:down"]
+description = "Stop local services, retaining database data"
+run = "node --env-file=.env scripts/dev-compose.mjs down"
+
+[tasks."services:status"]
+run = "node --env-file=.env scripts/dev-compose.mjs ps"
+
+[tasks."db:generate"]
+run = "npm run db:generate"
+
+[tasks."db:migrate"]
+description = "Apply committed migrations to the configured database"
+run = "npm run db:migrate"
+
+[tasks."db:seed"]
+description = "Seed system categories and the admin account"
+run = "npm run db:seed"

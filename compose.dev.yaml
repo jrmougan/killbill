@@ -1,0 +1,24 @@
+# Local development only. Production remains in docker-compose.yml.
+# Project name, credentials and published port are generated per worktree by setup.
+services:
+  db:
+    image: docker.io/library/mysql:8.0
+    command: ["--default-authentication-plugin=mysql_native_password"]
+    environment:
+      MYSQL_DATABASE: ${DATABASE_NAME:?Run mise run setup first}
+      MYSQL_USER: ${DATABASE_USER:?Run mise run setup first}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD:?Run mise run setup first}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Run mise run setup first}
+    ports:
+      - "127.0.0.1:${DATABASE_PORT:?Run mise run setup first}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql --protocol=TCP -h 127.0.0.1 -u$$MYSQL_USER $$MYSQL_DATABASE -e 'SELECT 1'"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  mysql_data:
