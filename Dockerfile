@@ -71,8 +71,12 @@ WORKDIR /prisma-tools
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
-# Instalamos dependencias de Prisma (CLI y configuración)
-RUN npm init -y && npm install prisma tsx @prisma/client mysql2
+# Instalamos dependencias de Prisma (CLI y configuración) en las versiones exactas
+# del package-lock.json: sin fijarlas, un rebuild instalaba Prisma 8 (sin `migrate`)
+# y el contenedor no arrancaba.
+COPY --from=builder /app/package-lock.json /tmp/package-lock.json
+RUN npm init -y && npm install --save-exact $(node -p "const l = require('/tmp/package-lock.json').packages; ['prisma', 'tsx', '@prisma/client', 'mysql2'].map((n) => n + '@' + l['node_modules/' + n].version).join(' ')") \
+    && rm /tmp/package-lock.json
 
 # Volvemos al directorio de la app
 WORKDIR /app
