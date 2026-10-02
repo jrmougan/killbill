@@ -23,5 +23,6 @@ export async function seedScenario(request: APIRequestContext, scenario: string)
 }
 
 export async function resetDb(request: APIRequestContext): Promise<void> {
-  await request.post('/api/test/reset');
+  const res = await request.post('/api/test/reset');
+  if (!res.ok()) throw new Error(`Reset failed: ${await res.text()}`);
 }
