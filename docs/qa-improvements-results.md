@@ -69,4 +69,3 @@ conserva completa en ambas pantallas. No se ha ejecutado GitHub Actions remoto
 ni desplegado. El doble persistente comprueba reintentos secuenciales; no prueba
 contención simultánea contra una base real. La comparación de Next demuestra
 la corrección del fallo observado, sin identificar un commit interno de React.
-
