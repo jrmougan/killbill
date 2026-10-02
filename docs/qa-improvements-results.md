@@ -65,7 +65,54 @@ accesibles.
   terminales fueron liberados; no quedan trabajadores pendientes de recoger.
 
 La matriz authz mezcla contratos y navegación real del invitado, por lo que se
-conserva completa en ambas pantallas. No se ha ejecutado GitHub Actions remoto
+conserva completa en ambas pantallas. Al cerrar ese incremento aún no se había ejecutado GitHub Actions remoto
 ni desplegado. El doble persistente comprueba reintentos secuenciales; no prueba
 contención simultánea contra una base real. La comparación de Next demuestra
 la corrección del fallo observado, sin identificar un commit interno de React.
+
+## Ampliación: errores, concurrencia y OCR
+
+Segundo equipo de tres agentes, sobre el PR #34.
+
+- Presupuestos: los fallos de POST, red o recarga muestran un error y conservan
+  el formulario y el importe. Solo el guardado y lectura correctos cierran el
+  formulario; la carga de un ámbito fallida ya no aparece como una lista vacía.
+  Los importes deben ser finitos y representar al menos un céntimo.
+- Concurrencia: el control contra MySQL reprodujo una pareja con tres miembros
+  al aceptar dos enlaces distintos en su última plaza. Las rutas de claim
+  (miembros e invitados) y join antiguo toman el mismo bloqueo de fila del
+  espacio antes de leer membresías/capacidad. Confirmar un pago simultáneamente
+  provocaba un conflicto P2002 del ledger y una respuesta 500; una actualización
+  condicionada con updateMany limita el cambio PENDING al ganador y devuelve
+  400 al perdedor antes de publicar apuntes.
+- OCR: un proveedor HTTP en loopback responde de forma determinista, manteniendo
+  reales la autenticación, validación de imagen, parsing, subida, corrección de
+  productos/asignaciones y persistencia. El proveedor de prueba exige rutas de
+  test, puerto loopback explícito y claves ficticias; no admite redirects.
+- Tickets: producción no reindexa public tras subir un archivo nuevo. La ruta
+  dinámica /uploads/[filename] permite leerlo inmediatamente, conservando las
+  URLs UUID públicas existentes, con whitelist de extensiones, sin traversal y
+  con Content-Type/nosniff. La subida crea el directorio de almacenamiento.
+- CI detectó hidratación incoherente de fechas con servidor UTC y navegador
+  Madrid. ExpenseCard, historial de liquidaciones y caducidad MCP usan ahora
+  Europe/Madrid explícita. Una regresión comprueba el cambio de día/mes, y el
+  servidor E2E se fija en UTC para reproducir las condiciones de GitHub.
+
+Validación local de la ampliación:
+
+- `mise run check`: lint correcto, **480 tests en 45 archivos** pasan.
+- Fixture/reporter/config: **7/7** pasan.
+- Build de producción con TZ=UTC y rutas de prueba habilitadas: correcto.
+- Suite integrada sin reintentos: **126 casos pasan** y seis casos nuevos de
+  presupuestos fallan por un selector ambiguo que incluía el route-announcer de
+  Next. Tras limitarlo al landmark main, los **6/6 casos de presupuestos pasan**
+  sin reintentos. Quedan validados los 132 casos: 24 API y 54 UI por pantalla.
+- Concurrencia aislada: **18/18 ejecuciones**, 90 carreras contra MySQL, pasan
+  sin reintentos; no sobrepasar cupos/usos, no usuarios huérfanos ni dinero doble.
+- OCR: la imagen se recupera por HTTP byte a byte después de subirla al servidor
+  standalone ya arrancado; gasto 847 céntimos, repartos 461/386 y saldos ±386.
+- Los tres agentes terminaron correctamente y sus terminales fueron liberados.
+
+Los checks remotos del nuevo commit se consultarán tras actualizar el PR. Las
+pruebas de carreras cubren las solicitudes simultáneas descritas; no simulan
+fallos de red entre commits ni carreras de cambio de estado del espacio.

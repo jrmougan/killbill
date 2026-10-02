@@ -47,7 +47,7 @@ vi.mock("@/lib/db", () => {
             couple: { findUnique: (...a: unknown[]) => mockCoupleFindUnique(...a) },
             membership,
             user,
-            $transaction: (cb: (tx: unknown) => unknown) => cb({ membership, groupInvite, user }),
+            $transaction: (cb: (tx: unknown) => unknown) => cb({ membership, groupInvite, user, $queryRaw: vi.fn().mockResolvedValue([]) }),
         },
     };
 });

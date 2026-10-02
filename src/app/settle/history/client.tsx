@@ -111,6 +111,7 @@ export function SettlementHistoryClient({ settlements, currentUserId }: Settleme
                                             </p>
                                             <p className="text-[10px] text-[color:var(--ink-3)] font-mono uppercase tracking-wider">
                                                 {new Date(s.date).toLocaleDateString('es-ES', {
+                                                    timeZone: 'Europe/Madrid',
                                                     day: '2-digit',
                                                     month: 'short',
                                                     year: 'numeric'

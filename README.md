@@ -75,6 +75,14 @@ Para sesiones adicionales usa el fixture `newContext`: hereda las opciones del
 proyecto y conserva los errores de navegador incluso si se cierra el contexto.
 Un error JavaScript no controlado hace fallar la prueba.
 
+El servidor de pruebas usa UTC y el navegador Europe/Madrid para detectar
+fechas inconsistentes durante la hidratación. Playwright arranca un proveedor
+OCR HTTP local con puerto efímero y claves ficticias; el recorrido de ticket
+mantiene reales la validación, subida y persistencia. El override del proveedor
+solo funciona con `TEST_ROUTES_ENABLED=true`, loopback y credenciales de prueba.
+Los tests de concurrencia consultan la base local para verificar dinero,
+membresías y usos persistidos después de las solicitudes simultáneas.
+
 CI falla también si una prueba solo pasa tras un reintento. El resumen de GitHub
 Actions identifica prueba, proyecto, intento y error; el artefacto
 `playwright-report` incluye el informe HTML y `test-results` con trazas y capturas.

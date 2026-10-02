@@ -119,6 +119,9 @@ export async function POST(request: Request) {
 
     try {
         const result = await prisma.$transaction(async (tx) => {
+            // Different invites share the same capacity. Lock the space BEFORE
+            // reading memberships so MySQL's snapshot sees the previous claim.
+            await tx.$queryRaw`SELECT id FROM Couple WHERE id = ${groupId} FOR UPDATE`;
             const existing = await tx.membership.findFirst({
                 where: { userId, groupId, status: MembershipStatus.ACTIVE },
                 select: { id: true },
@@ -234,6 +237,7 @@ async function claimAsGuest(invite: GuestInvite, rawName: unknown, request: Requ
     let guestUserId: string;
     try {
         guestUserId = await prisma.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT id FROM Couple WHERE id = ${group.id} FOR UPDATE`;
             const memberCount = await tx.membership.count({
                 where: { groupId: group.id, status: MembershipStatus.ACTIVE },
             });

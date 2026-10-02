@@ -197,3 +197,78 @@ describe("analyzeReceiptImage", () => {
         await expect(analyzeReceiptImage("base64", "image/jpeg")).rejects.toThrow(ReceiptAIError);
     });
 });
+
+describe("OCR test provider gate", () => {
+    function configureTestProvider() {
+        vi.stubEnv("OCR_TEST_PROVIDER_URL", "http://127.0.0.1:4567");
+        vi.stubEnv("TEST_ROUTES_ENABLED", "true");
+        vi.stubEnv("GEMINI_API_KEY", "ocr-e2e-fake");
+        vi.stubEnv("OPENROUTER_API_KEY", "ocr-e2e-fake");
+    }
+
+    it.each(["", "false", "TRUE"])("rejects a configured seam when test routes are %s", async flag => {
+        configureTestProvider();
+        vi.stubEnv("TEST_ROUTES_ENABLED", flag);
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+        await expect(analyzeReceiptImage("image", "image/png")).rejects.toThrow(ReceiptAIError);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        "https://127.0.0.1:4567", "http://example.com:4567", "http://localhost:4567",
+        "http://127.0.0.1", "http://secret@127.0.0.1:4567", "http://127.0.0.1:4567/path",
+        "http://127.0.0.1:4567?key=secret", "http://127.0.0.1:4567#secret", "invalid",
+    ])("rejects unsafe provider URL %s before any request", async url => {
+        configureTestProvider();
+        vi.stubEnv("OCR_TEST_PROVIDER_URL", url);
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+        await expect(analyzeReceiptImage("image", "image/png")).rejects.toThrow(ReceiptAIError);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it.each(["GEMINI_API_KEY", "OPENROUTER_API_KEY"])("rejects real %s credentials before fetch", async key => {
+        configureTestProvider();
+        vi.stubEnv(key, "real-secret");
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+        await expect(analyzeReceiptImage("image", "image/png")).rejects.toThrow(ReceiptAIError);
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("uses the local Gemini response through the normal parser", async () => {
+        configureTestProvider();
+        const fetchMock = vi.fn().mockResolvedValue(geminiResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+        await expect(analyzeReceiptImage("image", "image/png")).resolves.toEqual(RECEIPT);
+        expect(fetchMock).toHaveBeenCalledOnce();
+        expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:4567/gemini");
+        expect(fetchMock.mock.calls[0][1].redirect).toBe("error");
+    });
+
+    it("keeps validation and fallback local when Gemini JSON is invalid", async () => {
+        configureTestProvider();
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(geminiResponse("invalid"))
+            .mockResolvedValueOnce(openRouterResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+        await expect(analyzeReceiptImage("image", "image/png")).resolves.toEqual(RECEIPT);
+        expect(fetchMock.mock.calls.map(call => call[0]))
+            .toEqual(["http://127.0.0.1:4567/gemini", "http://127.0.0.1:4567/openrouter"]);
+        expect(fetchMock.mock.calls[1][1].redirect).toBe("error");
+        expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe("Bearer ocr-e2e-fake");
+    });
+
+    it("does not escape to a real provider if the local server is unavailable", async () => {
+        configureTestProvider();
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        vi.spyOn(console, "error").mockImplementation(() => undefined);
+        const fetchMock = vi.fn().mockRejectedValue(new Error("Connection refused"));
+        vi.stubGlobal("fetch", fetchMock);
+        await expect(analyzeReceiptImage("image", "image/png")).rejects.toThrow(ReceiptAIError);
+        expect(fetchMock.mock.calls.map(call => call[0]))
+            .toEqual(["http://127.0.0.1:4567/gemini", "http://127.0.0.1:4567/openrouter"]);
+    });
+});

@@ -58,7 +58,7 @@ export function ExpenseCard({ expense, paidByUser, allUsers, isPersonal = false,
                         {new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(expense.amount)}
                     </span>
                     <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                        {new Date(expense.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                        {new Date(expense.date).toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: "Europe/Madrid" })}
                     </span>
                 </div>
             </div>

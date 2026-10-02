@@ -34,12 +34,15 @@ export default defineConfig({
     { name: 'mobile-chrome', testIgnore: apiSuites, use: { ...devices['Pixel 7'] } },
   ],
   webServer: {
-    command: process.env.CI ? 'node .next/standalone/server.js' : 'npm run dev',
+    command: process.env.CI
+      ? 'node e2e/ocr/test-server.mjs standalone'
+      : 'node e2e/ocr/test-server.mjs dev',
     url: baseURL,
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
       PORT: port,
+      TZ: 'UTC',
       NODE_ENV: 'test',
       TEST_ROUTES_ENABLED: 'true',
       // Guest/ephemeral surface must be on for e2e; flag-off behaviour is unit-tested.

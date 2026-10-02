@@ -48,6 +48,8 @@ export async function POST(request: Request) {
         // TOCTOU window where two users could join simultaneously and exceed the cap.
         try {
             await prisma.$transaction(async (tx) => {
+                // Share the capacity lock with member/guest invite claims.
+                await tx.$queryRaw`SELECT id FROM Couple WHERE id = ${couple.id} FOR UPDATE`;
                 // Phase 5 (WS1 write-stop): the TOCTOU guards read the Membership
                 // layer and the Membership row is the sole write (User.coupleId is
                 // no longer written).
