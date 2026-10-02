@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures/test.fixture';
 import { seedScenario, resetDb } from '../fixtures/db.fixture';
 import { loginAs, createAuthenticatedContext } from '../fixtures/auth.fixture';
 
@@ -15,7 +15,7 @@ test.describe('API CRUD Suite (Categories, Budget, Tags, Import & Export)', () =
 
   test('1. Categorías: validación de keys, paleta, icono, permisos y borrado con reasignación / colisión budget', async ({
     page,
-    browser,
+    newContext,
     context,
     request,
   }) => {
@@ -83,7 +83,7 @@ test.describe('API CRUD Suite (Categories, Budget, Tags, Import & Export)', () =
     expect(reservedErr.code).toBe('RESERVED_KEY');
 
     // E) MEMBER (no OWNER/ADMIN) intentando crear categoría de espacio -> 403
-    const ctxB = await createAuthenticatedContext(browser, userB);
+    const ctxB = await createAuthenticatedContext(newContext, userB);
     const apiB = ctxB.request;
     const memberCatRes = await apiB.post(`/api/spaces/${coupleId}/categories`, {
       data: {
@@ -164,7 +164,7 @@ test.describe('API CRUD Suite (Categories, Budget, Tags, Import & Export)', () =
     const spaceWithBudgetId = seedBudget.coupleId as string;
     const customCatId = seedBudget.categoryId as string;
 
-    const ctxBudget = await createAuthenticatedContext(browser, ownerSeed);
+    const ctxBudget = await createAuthenticatedContext(newContext, ownerSeed);
     const apiBudget = ctxBudget.request;
 
     // Obtener la categoría del sistema 'food' en el espacio
@@ -273,7 +273,7 @@ test.describe('API CRUD Suite (Categories, Budget, Tags, Import & Export)', () =
 
   test('3. Tags: creación de tag de grupo y personal, aislamiento por scope en GET y autorización en DELETE', async ({
     page,
-    browser,
+    newContext,
     context,
     request,
   }) => {
@@ -324,7 +324,7 @@ test.describe('API CRUD Suite (Categories, Budget, Tags, Import & Export)', () =
     expect(tagsA1.some((t) => t.id === personalTag.id), 'userA1 ve su tag personal').toBe(true);
 
     // D) Miembro de la misma pareja (userB1) ve el tag de grupo pero NO el personal de userA1
-    const ctxB1 = await createAuthenticatedContext(browser, userB1);
+    const ctxB1 = await createAuthenticatedContext(newContext, userB1);
     const apiB1 = ctxB1.request;
     const getTagsB1 = await apiB1.get('/api/tags');
     expect(getTagsB1.status()).toBe(200);
@@ -338,7 +338,7 @@ test.describe('API CRUD Suite (Categories, Budget, Tags, Import & Export)', () =
     await ctxB1.close();
 
     // E) Usuario de otro espacio (userA2) no ve los tags de pareja 1 ni puede borrarlos
-    const ctxA2 = await createAuthenticatedContext(browser, userA2);
+    const ctxA2 = await createAuthenticatedContext(newContext, userA2);
     const apiA2 = ctxA2.request;
     const getTagsA2 = await apiA2.get('/api/tags');
     expect(getTagsA2.status()).toBe(200);
@@ -435,7 +435,7 @@ test.describe('API CRUD Suite (Categories, Budget, Tags, Import & Export)', () =
 
   test('5. Export: GET /api/export devuelve CSV con los gastos del grupo y NO incluye gastos de otro espacio', async ({
     page,
-    browser,
+    newContext,
     context,
     request,
   }) => {
@@ -461,7 +461,7 @@ test.describe('API CRUD Suite (Categories, Budget, Tags, Import & Export)', () =
     expect(createX.status(), 'crear gasto en pareja X').toBe(200);
 
     // userAY crea un gasto compartido único en la pareja Y
-    const ctxY = await createAuthenticatedContext(browser, userAY);
+    const ctxY = await createAuthenticatedContext(newContext, userAY);
     const apiY = ctxY.request;
     const createY = await apiY.post('/api/expenses', {
       data: {

@@ -1,11 +1,12 @@
-import { test, expect, request as playwrightRequest, Browser, BrowserContext } from '@playwright/test';
+import { test, expect, type NewContext } from '../fixtures/test.fixture';
+import { request as playwrightRequest, type BrowserContext } from '@playwright/test';
 import { seedScenario, resetDb } from '../fixtures/db.fixture';
 
 const baseURL = process.env.TEST_BASE_URL || 'http://localhost:3000';
 
 /** A browser session authenticated as the seeded guest (JWT kind:'guest' in the session cookie). */
-async function createGuestContext(browser: Browser, sessionToken: string): Promise<BrowserContext> {
-  const context = await browser.newContext();
+async function createGuestContext(newContext: NewContext, sessionToken: string): Promise<BrowserContext> {
+  const context = await newContext();
   await context.addCookies([{ name: 'session_token', value: sessionToken, url: baseURL }]);
   return context;
 }
@@ -22,12 +23,12 @@ test.describe('Guest - Full lifecycle in an ephemeral space', () => {
     await apiContext.dispose();
   });
 
-  test('guest session loads the dashboard with banner and reduced bottom nav', async ({ browser }) => {
+  test('guest session loads the dashboard with banner and reduced bottom nav', async ({ newContext }) => {
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'ephemeral-with-guest');
     const guest = data.guest as { id: string; sessionToken: string };
 
-    const ctx = await createGuestContext(browser, guest.sessionToken);
+    const ctx = await createGuestContext(newContext, guest.sessionToken);
     const page = await ctx.newPage();
 
     await page.goto('/dashboard');
@@ -49,12 +50,12 @@ test.describe('Guest - Full lifecycle in an ephemeral space', () => {
     await ctx.close();
   });
 
-  test('the proxy cages the guest: /lists and /settings bounce to /dashboard', async ({ browser }) => {
+  test('the proxy cages the guest: /lists and /settings bounce to /dashboard', async ({ newContext }) => {
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'ephemeral-with-guest');
     const guest = data.guest as { id: string; sessionToken: string };
 
-    const ctx = await createGuestContext(browser, guest.sessionToken);
+    const ctx = await createGuestContext(newContext, guest.sessionToken);
     const page = await ctx.newPage();
 
     await page.goto('/lists');
@@ -67,12 +68,12 @@ test.describe('Guest - Full lifecycle in an ephemeral space', () => {
     await ctx.close();
   });
 
-  test('the guest can create an expense in its ephemeral space and sees it listed', async ({ browser }) => {
+  test('the guest can create an expense in its ephemeral space and sees it listed', async ({ newContext }) => {
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'ephemeral-with-guest');
     const guest = data.guest as { id: string; sessionToken: string };
 
-    const ctx = await createGuestContext(browser, guest.sessionToken);
+    const ctx = await createGuestContext(newContext, guest.sessionToken);
     const page = await ctx.newPage();
 
     await page.goto('/expenses/new');
@@ -110,12 +111,12 @@ test.describe('Guest - Full lifecycle in an ephemeral space', () => {
     await ctx.close();
   });
 
-  test('upgrading converts the guest into a full account with full nav and /settings access', async ({ browser }) => {
+  test('upgrading converts the guest into a full account with full nav and /settings access', async ({ newContext }) => {
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'ephemeral-with-guest');
     const guest = data.guest as { id: string; sessionToken: string };
 
-    const ctx = await createGuestContext(browser, guest.sessionToken);
+    const ctx = await createGuestContext(newContext, guest.sessionToken);
     const page = await ctx.newPage();
 
     await page.goto('/guest/upgrade');

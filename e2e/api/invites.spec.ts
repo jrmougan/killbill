@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures/test.fixture';
 import { seedScenario } from '../fixtures/db.fixture';
 import { loginAs, createAuthenticatedContext } from '../fixtures/auth.fixture';
 
@@ -75,7 +75,7 @@ test.describe('API Invites - Enlaces de invitación de espacio', () => {
   test('2. Claim explícito: segundo usuario registrado hace claim -> queda Membership; sin claim no hay Membership (no auto-join)', async ({
     page,
     context,
-    browser,
+    newContext,
     request,
   }) => {
     const seedData = (await seedScenario(request, 'invite-edge-cases')) as unknown as InviteEdgeCasesResult;
@@ -92,7 +92,7 @@ test.describe('API Invites - Enlaces de invitación de espacio', () => {
     const { token } = await createRes.json();
 
     // Segundo usuario registrado (outsider1)
-    const outsiderCtx = await createAuthenticatedContext(browser, {
+    const outsiderCtx = await createAuthenticatedContext(newContext, {
       email: seedData.outsider1.email,
       password: seedData.outsider1.password!,
     });
@@ -143,7 +143,7 @@ test.describe('API Invites - Enlaces de invitación de espacio', () => {
   test('3. maxUses: invite con maxUses=1 -> segundo claim retorna error 4xx (EXHAUSTED)', async ({
     page,
     context,
-    browser,
+    newContext,
     request,
   }) => {
     const seedData = (await seedScenario(request, 'invite-edge-cases')) as unknown as InviteEdgeCasesResult;
@@ -159,13 +159,13 @@ test.describe('API Invites - Enlaces de invitación de espacio', () => {
     expect(createRes.status()).toBe(200);
     const { token } = await createRes.json();
 
-    const outsider1Ctx = await createAuthenticatedContext(browser, {
+    const outsider1Ctx = await createAuthenticatedContext(newContext, {
       email: seedData.outsider1.email,
       password: seedData.outsider1.password!,
     });
     const outsider1Api = outsider1Ctx.request;
 
-    const outsider2Ctx = await createAuthenticatedContext(browser, {
+    const outsider2Ctx = await createAuthenticatedContext(newContext, {
       email: seedData.outsider2.email,
       password: seedData.outsider2.password!,
     });
@@ -191,7 +191,7 @@ test.describe('API Invites - Enlaces de invitación de espacio', () => {
   test('4. Token revocado: OWNER revoca invite via DELETE -> claim y preview fallan', async ({
     page,
     context,
-    browser,
+    newContext,
     request,
   }) => {
     const seedData = (await seedScenario(request, 'invite-edge-cases')) as unknown as InviteEdgeCasesResult;
@@ -221,7 +221,7 @@ test.describe('API Invites - Enlaces de invitación de espacio', () => {
     expect(previewBody.reason).toBe('REVOKED');
 
     // Claim sobre token revocado -> 400 con code REVOKED
-    const outsiderCtx = await createAuthenticatedContext(browser, {
+    const outsiderCtx = await createAuthenticatedContext(newContext, {
       email: seedData.outsider1.email,
       password: seedData.outsider1.password!,
     });
@@ -238,7 +238,7 @@ test.describe('API Invites - Enlaces de invitación de espacio', () => {
   });
 
   test('5. Token expirado: invite con expiresAt pasado -> preview y claim fallan con EXPIRED', async ({
-    browser,
+    newContext,
     request,
   }) => {
     const seedData = (await seedScenario(request, 'invite-edge-cases')) as unknown as InviteEdgeCasesResult;
@@ -253,7 +253,7 @@ test.describe('API Invites - Enlaces de invitación de espacio', () => {
     expect(previewBody.reason).toBe('EXPIRED');
 
     // Claim sobre token expirado -> 400 con code EXPIRED
-    const outsiderCtx = await createAuthenticatedContext(browser, {
+    const outsiderCtx = await createAuthenticatedContext(newContext, {
       email: seedData.outsider1.email,
       password: seedData.outsider1.password!,
     });

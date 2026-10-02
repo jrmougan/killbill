@@ -1,4 +1,5 @@
-import { test, expect, request as playwrightRequest, type Page } from '@playwright/test';
+import { test, expect } from '../fixtures/test.fixture';
+import { request as playwrightRequest, type Page } from '@playwright/test';
 import { seedScenario, resetDb } from '../fixtures/db.fixture';
 import { createAuthenticatedContext } from '../fixtures/auth.fixture';
 
@@ -77,14 +78,14 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await apiContext.dispose();
   });
 
-  test('couple-with-debt: OWNER starts settle-up → SETTLING; debtor pays → PENDING 50,00 € in the checklist', async ({ browser }) => {
+  test('couple-with-debt: OWNER starts settle-up → SETTLING; debtor pays → PENDING 50,00 € in the checklist', async ({ newContext }) => {
     const data = await seedScenario(apiContext, 'couple-with-debt');
     const userA = data.userA as Creds; // OWNER, creditor (+50 €)
     const userB = data.userB as Creds; // MEMBER, debtor (−50 €)
     const spaceId = data.coupleId as string;
 
-    const ctxA = await createAuthenticatedContext(browser, userA);
-    const ctxB = await createAuthenticatedContext(browser, userB);
+    const ctxA = await createAuthenticatedContext(newContext, userA);
+    const ctxB = await createAuthenticatedContext(newContext, userB);
     const pageA = await ctxA.newPage();
     const pageB = await ctxB.newPage();
 
@@ -144,15 +145,15 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await ctxB.close();
   });
 
-  test('space-settling: payer sees the pending settlement; creditor confirms → both balances 0,00 €', async ({ browser }) => {
+  test('space-settling: payer sees the pending settlement; creditor confirms → both balances 0,00 €', async ({ newContext }) => {
     const data = await seedScenario(apiContext, 'space-settling');
     const userA = data.userA as Creds; // OWNER, creditor
     const userB = data.userB as Creds; // MEMBER, payer
     const spaceId = data.coupleId as string;
     const settlementId = data.settlementId as string;
 
-    const ctxA = await createAuthenticatedContext(browser, userA);
-    const ctxB = await createAuthenticatedContext(browser, userB);
+    const ctxA = await createAuthenticatedContext(newContext, userA);
+    const ctxB = await createAuthenticatedContext(newContext, userB);
     const pageA = await ctxA.newPage();
     const pageB = await ctxB.newPage();
 
@@ -190,7 +191,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await ctxB.close();
   });
 
-  test('repeating settle-up or confirming twice neither duplicates settlements nor re-counts money', async ({ browser }) => {
+  test('repeating settle-up or confirming twice neither duplicates settlements nor re-counts money', async ({ newContext }) => {
     // Make the OWNER the debtor so settle-up generates a suggestion: B (MEMBER)
     // pays a 100 € shared expense split 50/50 → A owes B 50 €.
     const data = await seedScenario(apiContext, 'couple-no-expenses');
@@ -198,8 +199,8 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     const userB = data.userB as Creds; // MEMBER, creditor
     const spaceId = data.coupleId as string;
 
-    const ctxA = await createAuthenticatedContext(browser, userA);
-    const ctxB = await createAuthenticatedContext(browser, userB);
+    const ctxA = await createAuthenticatedContext(newContext, userA);
+    const ctxB = await createAuthenticatedContext(newContext, userB);
     const pageA = await ctxA.newPage();
     const pageB = await ctxB.newPage();
 

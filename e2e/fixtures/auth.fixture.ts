@@ -1,4 +1,5 @@
-import { Page, Browser, BrowserContext } from '@playwright/test';
+import type { NewContext } from './test.fixture';
+import { Page, BrowserContext } from '@playwright/test';
 
 export async function loginAs(page: Page, credentials: { email: string; password: string }): Promise<void> {
   await page.goto('/login');
@@ -8,8 +9,8 @@ export async function loginAs(page: Page, credentials: { email: string; password
   await page.waitForURL('**/dashboard');
 }
 
-export async function createAuthenticatedContext(browser: Browser, credentials: { email: string; password: string }): Promise<BrowserContext> {
-  const context = await browser.newContext();
+export async function createAuthenticatedContext(newContext: NewContext, credentials: { email: string; password: string }): Promise<BrowserContext> {
+  const context = await newContext();
   const page = await context.newPage();
   await loginAs(page, credentials);
   await page.close();

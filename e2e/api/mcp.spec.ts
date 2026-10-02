@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures/test.fixture';
 import { seedScenario } from '../fixtures/db.fixture';
 import { loginAs } from '../fixtures/auth.fixture';
 

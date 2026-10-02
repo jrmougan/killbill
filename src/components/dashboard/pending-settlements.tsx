@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Check, X } from "lucide-react";
@@ -20,6 +21,8 @@ interface PendingSettlementsProps {
 }
 
 export function PendingSettlements({ settlements }: PendingSettlementsProps) {
+    const router = useRouter();
+    const [refreshing, startTransition] = useTransition();
     const [loadingIds, setLoadingIds] = useState<string[]>([]);
 
     const handleStatusUpdate = async (id: string, newStatus: string) => {
@@ -32,7 +35,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
             });
 
             if (res.ok) {
-                window.location.reload();
+                startTransition(() => router.refresh());
             } else {
                 alert("Error al actualizar el estado");
             }
@@ -89,7 +92,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
                             <Button
                                 className="flex-1 bg-primary hover:bg-primary/90 text-white font-bold h-11"
                                 onClick={() => handleStatusUpdate(s.id, "CONFIRMED")}
-                                disabled={loadingIds.includes(s.id)}
+                                disabled={loadingIds.length > 0 || refreshing}
                             >
                                 <Check className="h-5 w-5 mr-2" /> Confirmar
                             </Button>
@@ -97,7 +100,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
                                 variant="ghost"
                                 className="bg-[var(--negative-tint)] hover:bg-[var(--negative-tint)] text-destructive h-11 px-4"
                                 onClick={() => handleStatusUpdate(s.id, "REJECTED")}
-                                disabled={loadingIds.includes(s.id)}
+                                disabled={loadingIds.length > 0 || refreshing}
                             >
                                 <X className="h-5 w-5" />
                             </Button>

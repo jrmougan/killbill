@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures/test.fixture';
 import { seedScenario, resetDb } from '../fixtures/db.fixture';
 import { loginAs, createAuthenticatedContext } from '../fixtures/auth.fixture';
 
@@ -167,7 +167,7 @@ test.describe('API Authorization Matrix (authz & space policy)', () => {
     expect(csvContent).toContain('Viaje (histórico)');
   });
 
-  test('4. Miembro expulsado: JWT sigue válido pero requireSpaceAccess deniega en DB (403)', async ({ page, browser, context, request }) => {
+  test('4. Miembro expulsado: JWT sigue válido pero requireSpaceAccess deniega en DB (403)', async ({ page, newContext, context, request }) => {
     await resetDb(request);
 
     const seed = await seedScenario(request, 'group-of-3');
@@ -177,7 +177,7 @@ test.describe('API Authorization Matrix (authz & space policy)', () => {
     const expenseId = seed.expenseId as string;
 
     // Crear contexto autenticado previo para userB (su cookie JWT ya está emitida y vigente)
-    const ctxB = await createAuthenticatedContext(browser, userB);
+    const ctxB = await createAuthenticatedContext(newContext, userB);
     const apiB = ctxB.request;
 
     // Verificación preliminar: userB puede acceder antes de ser expulsado
@@ -212,7 +212,7 @@ test.describe('API Authorization Matrix (authz & space policy)', () => {
     await ctxB.close();
   });
 
-  test('5. Guest: enjaulado en espacio efímero, dashboard/gastos permitidos, listas/export y cross-space denegados', async ({ browser, request }) => {
+  test('5. Guest: enjaulado en espacio efímero, dashboard/gastos permitidos, listas/export y cross-space denegados', async ({ newContext, request }) => {
     await resetDb(request);
 
     // Escenario efímero con guest + otro espacio ajeno
@@ -225,7 +225,7 @@ test.describe('API Authorization Matrix (authz & space policy)', () => {
     const guestData = seed.guest as { id: string; sessionToken: string };
 
     // Crear contexto para el guest inyectando la cookie session_token emitida en el seed
-    const guestContext = await browser.newContext();
+    const guestContext = await newContext();
     const baseURL = (test.info().project.use.baseURL as string) || process.env.TEST_BASE_URL || 'http://localhost:3000';
     await guestContext.addCookies([
       {

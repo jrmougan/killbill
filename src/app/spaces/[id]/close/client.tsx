@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Check, Archive, CircleDollarSign, AlertCircle, Hourglass } from "lucide-react";
@@ -38,6 +39,8 @@ export function CloseSpaceClient({
     settlements: SettlementRow[];
     canManage: boolean;
 }) {
+    const router = useRouter();
+    const [refreshing, startTransition] = useTransition();
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -64,7 +67,7 @@ export function CloseSpaceClient({
             const res = await fetch(`/api/spaces/${spaceId}/settle-up`, { method: "POST" });
             const data = await res.json().catch(() => null);
             if (res.ok) {
-                window.location.reload();
+                startTransition(() => router.refresh());
             } else {
                 setError(data?.error || "No se pudo iniciar la liquidación");
             }
@@ -87,7 +90,10 @@ export function CloseSpaceClient({
             });
             const data = await res.json().catch(() => null);
             if (res.ok) {
-                window.location.assign("/dashboard");
+                startTransition(() => {
+                    router.push("/dashboard");
+                    router.refresh();
+                });
             } else {
                 setError(data?.error || "No se pudo archivar");
             }
@@ -200,7 +206,7 @@ export function CloseSpaceClient({
             {canManage && (
                 <div className="space-y-3">
                     {status === SpaceStatus.ACTIVE && (
-                        <Button className="w-full h-12" onClick={startSettling} isLoading={busy === "settle"} data-testid="close-start-settling">
+                        <Button className="w-full h-12" onClick={startSettling} disabled={busy !== null || refreshing} isLoading={busy === "settle"} data-testid="close-start-settling">
                             <CircleDollarSign className="h-4 w-4 mr-2" /> Iniciar liquidación
                         </Button>
                     )}
@@ -209,6 +215,7 @@ export function CloseSpaceClient({
                             variant="secondary"
                             className={cn("w-full h-12", allConfirmed && "border-[color:var(--positive)]/40")}
                             onClick={archive}
+                            disabled={busy !== null || refreshing}
                             isLoading={busy === "archive"}
                             data-testid="close-archive"
                         >

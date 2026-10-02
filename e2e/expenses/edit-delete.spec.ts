@@ -1,4 +1,5 @@
-import { test, expect, request as playwrightRequest } from '@playwright/test';
+import { test, expect } from '../fixtures/test.fixture';
+import { request as playwrightRequest } from '@playwright/test';
 import { seedScenario, resetDb } from '../fixtures/db.fixture';
 import { createAuthenticatedContext } from '../fixtures/auth.fixture';
 
@@ -16,14 +17,14 @@ test.describe('Expenses - Edit and Delete', () => {
     await apiContext.dispose();
   });
 
-  test('editing the amount recalculates the balances exactly', async ({ browser }) => {
+  test('editing the amount recalculates the balances exactly', async ({ newContext }) => {
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'couple-with-debt');
     const userA = data.userA as { email: string; password: string; id: string };
     const userB = data.userB as { email: string; password: string; id: string };
     const expenseId = data.expenseId as string;
 
-    const ctxA = await createAuthenticatedContext(browser, userA);
+    const ctxA = await createAuthenticatedContext(newContext, userA);
     const pageA = await ctxA.newPage();
 
     await pageA.goto(`/expense/${expenseId}/edit`);
@@ -51,7 +52,7 @@ test.describe('Expenses - Edit and Delete', () => {
     await ctxA.close();
 
     // userB now owes 100€
-    const ctxB = await createAuthenticatedContext(browser, userB);
+    const ctxB = await createAuthenticatedContext(newContext, userB);
     const pageB = await ctxB.newPage();
     await pageB.goto('/dashboard');
     await expect(pageB.locator('[data-testid="balance-amount"]')).toHaveText(/-100,00\s*€/, { timeout: 10000 });
@@ -60,14 +61,14 @@ test.describe('Expenses - Edit and Delete', () => {
     await ctxB.close();
   });
 
-  test('deleting the expense zeroes the balances and removes it from the list', async ({ browser }) => {
+  test('deleting the expense zeroes the balances and removes it from the list', async ({ newContext }) => {
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'couple-with-debt');
     const userA = data.userA as { email: string; password: string; id: string };
     const userB = data.userB as { email: string; password: string; id: string };
     const expenseId = data.expenseId as string;
 
-    const ctxA = await createAuthenticatedContext(browser, userA);
+    const ctxA = await createAuthenticatedContext(newContext, userA);
     const pageA = await ctxA.newPage();
 
     await pageA.goto(`/expense/${expenseId}`);
@@ -93,7 +94,7 @@ test.describe('Expenses - Edit and Delete', () => {
     await ctxA.close();
 
     // userB's balance is zeroed too
-    const ctxB = await createAuthenticatedContext(browser, userB);
+    const ctxB = await createAuthenticatedContext(newContext, userB);
     const pageB = await ctxB.newPage();
     await pageB.goto('/dashboard');
     await expect(pageB.locator('[data-testid="balance-amount"]')).toHaveText(/0,00\s*€/, { timeout: 10000 });
@@ -102,14 +103,14 @@ test.describe('Expenses - Edit and Delete', () => {
     await ctxB.close();
   });
 
-  test('editing the payer inverts the balances', async ({ browser }) => {
+  test('editing the payer inverts the balances', async ({ newContext }) => {
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'couple-with-debt');
     const userA = data.userA as { email: string; password: string; id: string };
     const userB = data.userB as { email: string; password: string; id: string };
     const expenseId = data.expenseId as string;
 
-    const ctxA = await createAuthenticatedContext(browser, userA);
+    const ctxA = await createAuthenticatedContext(newContext, userA);
     const pageA = await ctxA.newPage();
 
     await pageA.goto(`/expense/${expenseId}/edit`);
@@ -140,7 +141,7 @@ test.describe('Expenses - Edit and Delete', () => {
     await ctxA.close();
 
     // ...and userB is owed 50€
-    const ctxB = await createAuthenticatedContext(browser, userB);
+    const ctxB = await createAuthenticatedContext(newContext, userB);
     const pageB = await ctxB.newPage();
     await pageB.goto('/dashboard');
     await expect(pageB.locator('[data-testid="balance-amount"]')).toHaveText(/\+50,00\s*€/, { timeout: 10000 });
@@ -149,14 +150,14 @@ test.describe('Expenses - Edit and Delete', () => {
     await ctxB.close();
   });
 
-  test('promoting a personal expense shares it and it counts in the balances', async ({ browser }) => {
+  test('promoting a personal expense shares it and it counts in the balances', async ({ newContext }) => {
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'couple-with-personal-expense');
     const userA = data.userA as { email: string; password: string; id: string };
     const userB = data.userB as { email: string; password: string; id: string };
     const personalExpenseId = data.personalExpenseId as string;
 
-    const ctxA = await createAuthenticatedContext(browser, userA);
+    const ctxA = await createAuthenticatedContext(newContext, userA);
     const pageA = await ctxA.newPage();
 
     await pageA.goto(`/expense/${personalExpenseId}`);
@@ -187,7 +188,7 @@ test.describe('Expenses - Edit and Delete', () => {
     await ctxA.close();
 
     // userB owes the mirror image
-    const ctxB = await createAuthenticatedContext(browser, userB);
+    const ctxB = await createAuthenticatedContext(newContext, userB);
     const pageB = await ctxB.newPage();
     await pageB.goto('/dashboard');
     await expect(pageB.locator('[data-testid="balance-amount"]')).toHaveText(/-300,00\s*€/, { timeout: 10000 });

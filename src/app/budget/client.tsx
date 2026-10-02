@@ -7,7 +7,7 @@ import { ArrowLeft, Pencil, Plus, Check, X } from "lucide-react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatEuros } from "@/lib/currency";
+import { formatEuros, toEuros } from "@/lib/currency";
 import { getIconComponent } from "@/lib/category-icons";
 import { hexWithAlpha } from "@/lib/category-colors";
 import { type CategoryContext, type CategoryListItem } from "@/lib/category-context";
@@ -78,7 +78,12 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true, groupId
     const reload = useCallback(async (s: BudgetScope) => {
         const res = await fetch(`/api/budget?scope=${s}`);
         const json = res.ok ? await res.json() : { budgets: [] };
-        setData(json.budgets ?? []);
+        // Server props use euros; the API exposes persisted amounts in cents.
+        setData((json.budgets ?? []).map((entry: BudgetEntry) => ({
+            ...entry,
+            budget: { ...entry.budget, amount: toEuros(entry.budget.amount) },
+            spent: toEuros(entry.spent),
+        })));
     }, []);
 
     // The server pre-renders the SHARED budgets; only refetch when the scope
@@ -215,6 +220,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true, groupId
                                                     type="number"
                                                     min="0"
                                                     step="0.01"
+                                                    aria-label="Importe del presupuesto"
                                                     value={editValue}
                                                     onChange={(e) => setEditValue(e.target.value)}
                                                     className="w-24 h-8 text-sm"
@@ -226,6 +232,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true, groupId
                                                     size="icon"
                                                     variant="ghost"
                                                     className="h-8 w-8 text-[color:var(--positive)] hover:opacity-80"
+                                                    aria-label="Guardar presupuesto"
                                                     onClick={() => handleSaveEdit(entry)}
                                                     disabled={saving}
                                                 >
@@ -235,6 +242,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true, groupId
                                                     size="icon"
                                                     variant="ghost"
                                                     className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                    aria-label="Cancelar"
                                                     onClick={() => { setEditingId(null); setEditValue(""); setError(null); }}
                                                 >
                                                     <X className="h-4 w-4" />
@@ -247,6 +255,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true, groupId
                                             size="icon"
                                             variant="ghost"
                                             className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                            aria-label={`Editar presupuesto de ${cat?.label ?? entry.budget.category}`}
                                             onClick={() => {
                                                 setEditingId(entry.budget.id);
                                                 setEditValue(entry.budget.amount.toString());
@@ -304,6 +313,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true, groupId
                                                     type="number"
                                                     min="0"
                                                     step="0.01"
+                                                    aria-label="Importe del presupuesto"
                                                     value={addValue}
                                                     onChange={(e) => setAddValue(e.target.value)}
                                                     className="w-24 h-8 text-sm"
@@ -315,6 +325,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true, groupId
                                                     size="icon"
                                                     variant="ghost"
                                                     className="h-8 w-8 text-[color:var(--positive)] hover:opacity-80"
+                                                    aria-label="Guardar presupuesto"
                                                     onClick={() => handleAddBudget(cat.key)}
                                                     disabled={saving}
                                                 >
@@ -324,6 +335,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true, groupId
                                                     size="icon"
                                                     variant="ghost"
                                                     className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                    aria-label="Cancelar"
                                                     onClick={() => { setAddingCategory(null); setAddValue(""); setError(null); }}
                                                 >
                                                     <X className="h-4 w-4" />
@@ -336,6 +348,7 @@ export function BudgetClient({ budgetData, monthLabel, hasCouple = true, groupId
                                             size="icon"
                                             variant="ghost"
                                             className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                            aria-label={`Añadir presupuesto de ${cat.label}`}
                                             onClick={() => {
                                                 setAddingCategory(cat.key);
                                                 setAddValue("");

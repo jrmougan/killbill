@@ -1,4 +1,5 @@
-import { test, expect, request as playwrightRequest } from '@playwright/test';
+import { test, expect } from '../fixtures/test.fixture';
+import { request as playwrightRequest } from '@playwright/test';
 import { seedScenario, resetDb } from '../fixtures/db.fixture';
 import { createAuthenticatedContext } from '../fixtures/auth.fixture';
 
@@ -16,14 +17,14 @@ test.describe('Settlements - Create and Confirm', () => {
     await apiContext.dispose();
   });
 
-  test('userB creates a settlement - appears as PENDING', async ({ browser }) => {
+  test('userB creates a settlement - appears as PENDING', async ({ newContext }) => {
     // Seed isolated scenario: userB owes userA 50€
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'couple-with-debt');
     const userA = data.userA as { email: string; password: string; id: string };
     const userB = data.userB as { email: string; password: string; id: string };
 
-    const ctxB = await createAuthenticatedContext(browser, userB);
+    const ctxB = await createAuthenticatedContext(newContext, userB);
     const pageB = await ctxB.newPage();
     const pageErrors: string[] = [];
     pageB.on('pageerror', (error) => pageErrors.push(error.message));
@@ -65,7 +66,7 @@ test.describe('Settlements - Create and Confirm', () => {
     await ctxB.close();
 
     // Verify receiver (userA, creditor) sees the pending settlement on their dashboard
-    const ctxA = await createAuthenticatedContext(browser, userA);
+    const ctxA = await createAuthenticatedContext(newContext, userA);
     const pageA = await ctxA.newPage();
     pageA.on('pageerror', (error) => pageErrors.push(error.message));
     await pageA.goto('/dashboard');
@@ -79,7 +80,7 @@ test.describe('Settlements - Create and Confirm', () => {
     await ctxA.close();
   });
 
-  test('userA (receiver) confirms settlement - status changes', async ({ browser }) => {
+  test('userA (receiver) confirms settlement - status changes', async ({ newContext }) => {
     // Seed isolated scenario: couple with an existing 50€ pending settlement from userB to userA
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'couple-with-pending-settlement');
@@ -87,7 +88,7 @@ test.describe('Settlements - Create and Confirm', () => {
     const userB = data.userB as { email: string; password: string; id: string };
 
     // Creditor / receiver (userA) confirms the settlement from dashboard
-    const ctxA = await createAuthenticatedContext(browser, userA);
+    const ctxA = await createAuthenticatedContext(newContext, userA);
     const pageA = await ctxA.newPage();
 
     await pageA.goto('/dashboard');
@@ -127,7 +128,7 @@ test.describe('Settlements - Create and Confirm', () => {
     await ctxA.close();
 
     // Verify debtor / payer (userB) in a separate browser context: balance settled to 0,00 €
-    const ctxB = await createAuthenticatedContext(browser, userB);
+    const ctxB = await createAuthenticatedContext(newContext, userB);
     const pageB = await ctxB.newPage();
 
     await pageB.goto('/dashboard');

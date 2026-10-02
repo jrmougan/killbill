@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Users, DoorClosed, DoorOpen, Archive, AlertCircle } from "lucide-react";
 import { SpaceType, SpaceStatus } from "@/generated/prisma/enums";
@@ -20,6 +21,8 @@ export function SpaceActions({
     type: SpaceType | string;
     status: SpaceStatus | string;
 }) {
+    const router = useRouter();
+    const [refreshing, startTransition] = useTransition();
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -35,9 +38,7 @@ export function SpaceActions({
             });
             const data = await res.json().catch(() => null);
             if (res.ok) {
-                // A full navigation applies the committed lifecycle state even
-                // when a concurrent App Router refresh keeps the old view.
-                window.location.reload();
+                startTransition(() => router.refresh());
             } else {
                 setError(data?.error || "No se pudo completar la acción");
             }
@@ -61,6 +62,7 @@ export function SpaceActions({
                             "¿Convertir esta pareja en grupo? Podrás añadir más de 2 personas. No se puede deshacer.",
                         )
                     }
+                    disabled={busy !== null || refreshing}
                     isLoading={busy === "convert"}
                     data-testid="space-action-convert"
                 >
@@ -73,6 +75,7 @@ export function SpaceActions({
                     variant="secondary"
                     className="w-full justify-start h-12"
                     onClick={() => patch({ status: SpaceStatus.SETTLING }, "settle")}
+                    disabled={busy !== null || refreshing}
                     isLoading={busy === "settle"}
                     data-testid="space-action-settle"
                 >
@@ -85,6 +88,7 @@ export function SpaceActions({
                     variant="secondary"
                     className="w-full justify-start h-12"
                     onClick={() => patch({ status: SpaceStatus.ACTIVE }, "reopen")}
+                    disabled={busy !== null || refreshing}
                     isLoading={busy === "reopen"}
                     data-testid="space-action-reopen"
                 >
@@ -103,6 +107,7 @@ export function SpaceActions({
                             "¿Archivar el espacio? Quedará en solo lectura como recuerdo. No se puede reabrir.",
                         )
                     }
+                    disabled={busy !== null || refreshing}
                     isLoading={busy === "archive"}
                     data-testid="space-action-archive"
                 >
