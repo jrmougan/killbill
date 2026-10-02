@@ -25,6 +25,8 @@ test.describe('Settlements - Create and Confirm', () => {
 
     const ctxB = await createAuthenticatedContext(browser, userB);
     const pageB = await ctxB.newPage();
+    const pageErrors: string[] = [];
+    pageB.on('pageerror', (error) => pageErrors.push(error.message));
 
     await pageB.goto('/settle');
 
@@ -57,6 +59,7 @@ test.describe('Settlements - Create and Confirm', () => {
     await expect(settlementCard).toBeVisible({ timeout: 10000 });
     await expect(settlementCard).toContainText(/50,00\s*€/);
     await expect(settlementCard).toContainText('Pendiente');
+    expect(pageErrors, 'el flujo de liquidación debe hidratar sin errores del navegador').toEqual([]);
 
     await pageB.close();
     await ctxB.close();
@@ -64,11 +67,13 @@ test.describe('Settlements - Create and Confirm', () => {
     // Verify receiver (userA, creditor) sees the pending settlement on their dashboard
     const ctxA = await createAuthenticatedContext(browser, userA);
     const pageA = await ctxA.newPage();
+    pageA.on('pageerror', (error) => pageErrors.push(error.message));
     await pageA.goto('/dashboard');
     const confirmSection = pageA.getByText(/Confirmar Pagos/i);
     await expect(confirmSection).toBeVisible({ timeout: 10000 });
     await expect(pageA.getByText(/User B te ha pagado/i)).toBeVisible();
     await expect(pageA.getByText(/50\.00\s*€/)).toBeVisible();
+    expect(pageErrors, 'el acreedor debe ver el pago pendiente sin errores del navegador').toEqual([]);
 
     await pageA.close();
     await ctxA.close();

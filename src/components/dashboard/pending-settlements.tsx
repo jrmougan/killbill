@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
 import { Check, X } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { toEuros } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 
@@ -21,7 +20,6 @@ interface PendingSettlementsProps {
 }
 
 export function PendingSettlements({ settlements }: PendingSettlementsProps) {
-    const router = useRouter();
     const [loadingIds, setLoadingIds] = useState<string[]>([]);
 
     const handleStatusUpdate = async (id: string, newStatus: string) => {
@@ -34,7 +32,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
             });
 
             if (res.ok) {
-                router.refresh();
+                window.location.reload();
             } else {
                 alert("Error al actualizar el estado");
             }
@@ -76,7 +74,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
                                         {s.fromUser.name} te ha pagado
                                     </p>
                                     <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">
-                                        {new Date(s.date).toLocaleDateString()} • {s.method}
+                                        {new Date(s.date).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' })} • {s.method}
                                     </p>
                                 </div>
                             </div>

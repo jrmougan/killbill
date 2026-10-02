@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Users, DoorClosed, DoorOpen, Archive, AlertCircle } from "lucide-react";
 import { SpaceType, SpaceStatus } from "@/generated/prisma/enums";
@@ -21,7 +20,6 @@ export function SpaceActions({
     type: SpaceType | string;
     status: SpaceStatus | string;
 }) {
-    const router = useRouter();
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +35,9 @@ export function SpaceActions({
             });
             const data = await res.json().catch(() => null);
             if (res.ok) {
-                router.refresh();
+                // A full navigation applies the committed lifecycle state even
+                // when a concurrent App Router refresh keeps the old view.
+                window.location.reload();
             } else {
                 setError(data?.error || "No se pudo completar la acción");
             }
@@ -49,7 +49,7 @@ export function SpaceActions({
     };
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-3" data-testid="space-actions">
             {type === SpaceType.COUPLE && (
                 <Button
                     variant="secondary"
@@ -62,6 +62,7 @@ export function SpaceActions({
                         )
                     }
                     isLoading={busy === "convert"}
+                    data-testid="space-action-convert"
                 >
                     <Users className="h-4 w-4 mr-2 text-primary" /> Convertir en grupo
                 </Button>
@@ -73,6 +74,7 @@ export function SpaceActions({
                     className="w-full justify-start h-12"
                     onClick={() => patch({ status: SpaceStatus.SETTLING }, "settle")}
                     isLoading={busy === "settle"}
+                    data-testid="space-action-settle"
                 >
                     <DoorClosed className="h-4 w-4 mr-2 text-primary" /> Empezar a cerrar cuentas
                 </Button>
@@ -84,6 +86,7 @@ export function SpaceActions({
                     className="w-full justify-start h-12"
                     onClick={() => patch({ status: SpaceStatus.ACTIVE }, "reopen")}
                     isLoading={busy === "reopen"}
+                    data-testid="space-action-reopen"
                 >
                     <DoorOpen className="h-4 w-4 mr-2 text-primary" /> Reabrir espacio
                 </Button>
@@ -101,13 +104,14 @@ export function SpaceActions({
                         )
                     }
                     isLoading={busy === "archive"}
+                    data-testid="space-action-archive"
                 >
                     <Archive className="h-4 w-4 mr-2" /> Archivar espacio
                 </Button>
             )}
 
             {error && (
-                <p className="flex items-center gap-1.5 text-xs text-destructive">
+                <p data-testid="space-action-error" className="flex items-center gap-1.5 text-xs text-destructive">
                     <AlertCircle className="h-3.5 w-3.5" /> {error}
                 </p>
             )}

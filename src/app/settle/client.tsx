@@ -254,7 +254,7 @@ export function SettleClient({ debts, expenses, isGuest = false, partner }: Sett
                                             <div className="text-left">
                                                 <p className="text-sm font-bold leading-none mb-1 text-foreground">{expense.description}</p>
                                                 <p className="text-[10px] text-[color:var(--ink-3)] uppercase tracking-wider">
-                                                    {new Date(expense.date).toLocaleDateString()} • {expense.category}
+                                                    {new Date(expense.date).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' })} • {expense.category}
                                                 </p>
                                             </div>
                                         </div>

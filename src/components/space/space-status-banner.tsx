@@ -28,7 +28,7 @@ export function SpaceStatusBanner({
 }) {
     if (status === SpaceStatus.ARCHIVED) {
         return (
-            <div className="flex items-center gap-3 rounded-2xl bg-secondary border border-[color:var(--line)] px-4 py-3">
+            <div data-testid="space-status-banner" data-status={status} className="flex items-center gap-3 rounded-2xl bg-secondary border border-[color:var(--line)] px-4 py-3">
                 <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
                 <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-foreground">Espacio archivado</p>
@@ -40,7 +40,7 @@ export function SpaceStatusBanner({
 
     if (status === SpaceStatus.SETTLING) {
         return (
-            <div className="flex items-center gap-3 rounded-2xl bg-[var(--accent-tint)] border border-[color:var(--accent-border)] px-4 py-3">
+            <div data-testid="space-status-banner" data-status={status} className="flex items-center gap-3 rounded-2xl bg-[var(--accent-tint)] border border-[color:var(--accent-border)] px-4 py-3">
                 <Clock className="h-4 w-4 text-primary shrink-0" />
                 <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-semibold text-foreground">Cerrando cuentas</p>
@@ -49,6 +49,7 @@ export function SpaceStatusBanner({
                 {canManage && (
                     <Link
                         href={`/spaces/${spaceId}/close`}
+                        data-testid="space-status-close-link"
                         className="shrink-0 text-[12px] font-semibold text-primary hover:underline"
                     >
                         Ver cierre →

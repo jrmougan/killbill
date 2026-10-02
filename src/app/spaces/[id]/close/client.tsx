@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Check, Archive, CircleDollarSign, AlertCircle, Hourglass } from "lucide-react";
@@ -39,7 +38,6 @@ export function CloseSpaceClient({
     settlements: SettlementRow[];
     canManage: boolean;
 }) {
-    const router = useRouter();
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +64,7 @@ export function CloseSpaceClient({
             const res = await fetch(`/api/spaces/${spaceId}/settle-up`, { method: "POST" });
             const data = await res.json().catch(() => null);
             if (res.ok) {
-                router.refresh();
+                window.location.reload();
             } else {
                 setError(data?.error || "No se pudo iniciar la liquidación");
             }
@@ -89,8 +87,7 @@ export function CloseSpaceClient({
             });
             const data = await res.json().catch(() => null);
             if (res.ok) {
-                router.push("/dashboard");
-                router.refresh();
+                window.location.assign("/dashboard");
             } else {
                 setError(data?.error || "No se pudo archivar");
             }
@@ -130,7 +127,7 @@ export function CloseSpaceClient({
             <section className="space-y-3">
                 <h2 className="text-[13px] font-bold uppercase tracking-wider text-muted-foreground px-1">Lo que debes</h2>
                 {myDebts.length === 0 ? (
-                    <div className="rounded-2xl bg-[var(--positive-tint)] border border-[color:var(--positive)]/30 px-4 py-4 text-center">
+                    <div data-testid="close-no-debts" className="rounded-2xl bg-[var(--positive-tint)] border border-[color:var(--positive)]/30 px-4 py-4 text-center">
                         <p className="text-sm font-semibold text-foreground">Estás al día ✓</p>
                         <p className="text-[12px] text-muted-foreground">No debes nada a nadie en este espacio.</p>
                     </div>
@@ -139,6 +136,7 @@ export function CloseSpaceClient({
                         {myDebts.map((d) => (
                             <div
                                 key={d.userId}
+                                data-testid="close-debt-row"
                                 className="flex items-center justify-between rounded-xl bg-card border border-[color:var(--line-2)] px-3 py-2.5"
                             >
                                 <span className="text-sm text-foreground">Debes a {d.name}</span>
@@ -160,12 +158,14 @@ export function CloseSpaceClient({
                 <section className="space-y-3">
                     <div className="flex items-center justify-between px-1">
                         <h2 className="text-[13px] font-bold uppercase tracking-wider text-muted-foreground">Liquidaciones</h2>
-                        <span className="text-[12px] text-muted-foreground">{confirmed}/{total} confirmadas</span>
+                        <span data-testid="close-progress" className="text-[12px] text-muted-foreground">{confirmed}/{total} confirmadas</span>
                     </div>
                     <div className="space-y-2">
                         {settlements.map((s) => (
                             <div
                                 key={s.id}
+                                data-testid="close-settlement-row"
+                                data-status={s.status}
                                 className="flex items-center gap-3 rounded-xl bg-card border border-[color:var(--line-2)] px-3 py-2.5"
                             >
                                 <span
@@ -191,7 +191,7 @@ export function CloseSpaceClient({
             )}
 
             {error && (
-                <p className="flex items-center gap-1.5 text-xs text-destructive px-1">
+                <p data-testid="close-error" className="flex items-center gap-1.5 text-xs text-destructive px-1">
                     <AlertCircle className="h-3.5 w-3.5" /> {error}
                 </p>
             )}
@@ -200,7 +200,7 @@ export function CloseSpaceClient({
             {canManage && (
                 <div className="space-y-3">
                     {status === SpaceStatus.ACTIVE && (
-                        <Button className="w-full h-12" onClick={startSettling} isLoading={busy === "settle"}>
+                        <Button className="w-full h-12" onClick={startSettling} isLoading={busy === "settle"} data-testid="close-start-settling">
                             <CircleDollarSign className="h-4 w-4 mr-2" /> Iniciar liquidación
                         </Button>
                     )}
@@ -210,6 +210,7 @@ export function CloseSpaceClient({
                             className={cn("w-full h-12", allConfirmed && "border-[color:var(--positive)]/40")}
                             onClick={archive}
                             isLoading={busy === "archive"}
+                            data-testid="close-archive"
                         >
                             <Archive className="h-4 w-4 mr-2" /> Archivar espacio
                         </Button>
