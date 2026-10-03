@@ -13,7 +13,8 @@ vi.mock('@/lib/ledger', () => ({ postSettlementLedger: vi.fn() }));
 vi.mock('@/lib/db', () => {
     const settlement = {
         findUnique: (...a: unknown[]) => mockSettlementFindUnique(...a),
-        update: (...a: unknown[]) => mockSettlementUpdate(...a),
+        updateMany: (...a: unknown[]) => mockSettlementUpdate(...a),
+        findUniqueOrThrow: (...a: unknown[]) => mockSettlementFindUnique(...a),
     };
     return {
         prisma: {
@@ -97,10 +98,10 @@ describe('PATCH /api/settle/[id]/status — authz + transition state machine', (
     it('confirms a PENDING settlement when the receiver acts', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
         mockSettlementFindUnique.mockResolvedValue(pendingSettlement());
-        mockSettlementUpdate.mockResolvedValue(pendingSettlement({ status: 'CONFIRMED' }));
+        mockSettlementUpdate.mockResolvedValue({ count: 1 });
         const res = await PATCH(req({ status: 'CONFIRMED' }), { params });
         expect(res.status).toBe(200);
-        expect(mockSettlementUpdate).toHaveBeenCalledWith({ where: { id: 's1' }, data: { status: 'CONFIRMED' } });
+        expect(mockSettlementUpdate).toHaveBeenCalledWith({ where: { id: 's1', status: 'PENDING' }, data: { status: 'CONFIRMED' } });
     });
 
     it('rejects re-acting on an already CONFIRMED settlement (invalid transition)', async () => {

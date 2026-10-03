@@ -65,6 +65,29 @@ Playwright arranca uno con las rutas de prueba habilitadas y usa el mismo `PORT`
 CI mantiene su base MariaDB 10.11 efímera y usa los comandos mise del repositorio.
 Las variables que CI exporta tienen prioridad sobre las del archivo `.env`.
 
+Playwright separa los contratos API (`api`, una ejecución) de los flujos de interfaz
+(`chromium` y `mobile-chrome`). Los escenarios de autorización que comprueban la
+navegación del invitado conservan ambas pantallas. Usa
+`mise run e2e -- --project=api` para ejecutar solo los contratos.
+
+Todos los specs importan `test` y `expect` de `e2e/fixtures/test.fixture.ts`.
+Para sesiones adicionales usa el fixture `newContext`: hereda las opciones del
+proyecto y conserva los errores de navegador incluso si se cierra el contexto.
+Un error JavaScript no controlado hace fallar la prueba.
+
+El servidor de pruebas usa UTC y el navegador Europe/Madrid para detectar
+fechas inconsistentes durante la hidratación. Playwright arranca un proveedor
+OCR HTTP local con puerto efímero y claves ficticias; el recorrido de ticket
+mantiene reales la validación, subida y persistencia. El override del proveedor
+solo funciona con `TEST_ROUTES_ENABLED=true`, loopback y credenciales de prueba.
+Los tests de concurrencia consultan la base local para verificar dinero,
+membresías y usos persistidos después de las solicitudes simultáneas.
+
+CI falla también si una prueba solo pasa tras un reintento. El resumen de GitHub
+Actions identifica prueba, proyecto, intento y error; el artefacto
+`playwright-report` incluye el informe HTML y `test-results` con trazas y capturas.
+El informe local nunca arranca un servidor automáticamente.
+
 ## Orca y worktrees
 
 Ejecuta `mise trust` y `mise run setup` desde cada worktree nuevo. No copies

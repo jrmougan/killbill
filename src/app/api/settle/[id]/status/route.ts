@@ -52,10 +52,12 @@ export async function PATCH(
 
     try {
         const updated = await prisma.$transaction(async (tx) => {
-            const u = await tx.settlement.update({
-                where: { id },
+            const claimed = await tx.settlement.updateMany({
+                where: { id, status: "PENDING" },
                 data: { status }
             });
+            if (claimed.count === 0) return null;
+            const u = await tx.settlement.findUniqueOrThrow({ where: { id } });
             // Phase 3 dual-write: PENDING->CONFIRMED is the moment the settlement
             // enters the balance, so post its ledger transaction here. REJECTED
             // posts nothing (representation-by-absence), matching
@@ -72,6 +74,9 @@ export async function PATCH(
             }
             return u;
         });
+        if (!updated) {
+            return NextResponse.json({ error: 'Settlement already resolved' }, { status: 400 });
+        }
         return NextResponse.json({ success: true, settlement: updated });
     } catch (e) {
         console.error(e);

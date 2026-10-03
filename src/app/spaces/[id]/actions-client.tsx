@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Users, DoorClosed, DoorOpen, Archive, AlertCircle } from "lucide-react";
 import { SpaceType, SpaceStatus } from "@/generated/prisma/enums";
@@ -22,6 +22,7 @@ export function SpaceActions({
     status: SpaceStatus | string;
 }) {
     const router = useRouter();
+    const [refreshing, startTransition] = useTransition();
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +38,7 @@ export function SpaceActions({
             });
             const data = await res.json().catch(() => null);
             if (res.ok) {
-                router.refresh();
+                startTransition(() => router.refresh());
             } else {
                 setError(data?.error || "No se pudo completar la acción");
             }
@@ -49,7 +50,7 @@ export function SpaceActions({
     };
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-3" data-testid="space-actions">
             {type === SpaceType.COUPLE && (
                 <Button
                     variant="secondary"
@@ -61,7 +62,9 @@ export function SpaceActions({
                             "¿Convertir esta pareja en grupo? Podrás añadir más de 2 personas. No se puede deshacer.",
                         )
                     }
+                    disabled={busy !== null || refreshing}
                     isLoading={busy === "convert"}
+                    data-testid="space-action-convert"
                 >
                     <Users className="h-4 w-4 mr-2 text-primary" /> Convertir en grupo
                 </Button>
@@ -72,7 +75,9 @@ export function SpaceActions({
                     variant="secondary"
                     className="w-full justify-start h-12"
                     onClick={() => patch({ status: SpaceStatus.SETTLING }, "settle")}
+                    disabled={busy !== null || refreshing}
                     isLoading={busy === "settle"}
+                    data-testid="space-action-settle"
                 >
                     <DoorClosed className="h-4 w-4 mr-2 text-primary" /> Empezar a cerrar cuentas
                 </Button>
@@ -83,7 +88,9 @@ export function SpaceActions({
                     variant="secondary"
                     className="w-full justify-start h-12"
                     onClick={() => patch({ status: SpaceStatus.ACTIVE }, "reopen")}
+                    disabled={busy !== null || refreshing}
                     isLoading={busy === "reopen"}
+                    data-testid="space-action-reopen"
                 >
                     <DoorOpen className="h-4 w-4 mr-2 text-primary" /> Reabrir espacio
                 </Button>
@@ -100,14 +107,16 @@ export function SpaceActions({
                             "¿Archivar el espacio? Quedará en solo lectura como recuerdo. No se puede reabrir.",
                         )
                     }
+                    disabled={busy !== null || refreshing}
                     isLoading={busy === "archive"}
+                    data-testid="space-action-archive"
                 >
                     <Archive className="h-4 w-4 mr-2" /> Archivar espacio
                 </Button>
             )}
 
             {error && (
-                <p className="flex items-center gap-1.5 text-xs text-destructive">
+                <p data-testid="space-action-error" className="flex items-center gap-1.5 text-xs text-destructive">
                     <AlertCircle className="h-3.5 w-3.5" /> {error}
                 </p>
             )}

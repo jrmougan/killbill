@@ -59,7 +59,7 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                     </span>
                     <div className="min-w-0">
                         <h1 className="text-lg font-bold text-foreground truncate">{space.name ?? typeMeta.label}</h1>
-                        <p className="text-[12px] text-muted-foreground">
+                        <p data-testid="space-header-status" data-status={space.status} className="text-[12px] text-muted-foreground">
                             {typeMeta.label} · {statusMeta.label}
                         </p>
                     </div>

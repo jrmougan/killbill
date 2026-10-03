@@ -168,7 +168,7 @@ export function ExpensesListClient({ items, usersMap, isGuest = false, categorie
                                                     {fromUser?.name} ha pagado a {toUser?.name}
                                                 </p>
                                                 <p className="text-[10px] text-muted-foreground mt-1">
-                                                    {new Date(item.date).toLocaleDateString()} • {item.method ? getSettlementMethodLabel(item.method) : ""}
+                                                    {new Date(item.date).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' })} • {item.method ? getSettlementMethodLabel(item.method) : ""}
                                                 </p>
                                             </div>
                                         </div>

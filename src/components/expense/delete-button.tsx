@@ -62,6 +62,7 @@ export function DeleteExpenseButton({ expenseId }: DeleteExpenseButtonProps) {
                             className="flex-1"
                             onClick={handleDelete}
                             isLoading={loading}
+                            data-testid="expense-delete-confirm"
                         >
                             Eliminar
                         </Button>
@@ -77,6 +78,7 @@ export function DeleteExpenseButton({ expenseId }: DeleteExpenseButtonProps) {
             size="sm"
             className="text-destructive hover:text-destructive hover:bg-destructive/10"
             onClick={() => setShowConfirm(true)}
+            data-testid="expense-delete"
         >
             <Trash2 className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Eliminar</span>

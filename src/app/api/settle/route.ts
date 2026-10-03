@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { getActiveGroup, getGroupMembers } from '@/lib/membership';
 import { toCents } from '@/lib/currency';
+import { SpaceStatus } from '@/generated/prisma/enums';
 
 export async function POST(request: Request) {
     try {
@@ -31,6 +32,14 @@ export async function POST(request: Request) {
         // (was user.coupleId + couple.members include).
         const coupleId = await getActiveGroup(userId);
         if (!coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+
+        const space = await prisma.couple.findUnique({ where: { id: coupleId }, select: { status: true } });
+        if (space?.status === SpaceStatus.ARCHIVED) {
+            return NextResponse.json(
+                { error: 'Este espacio está archivado (solo lectura)', code: 'SPACE_NOT_WRITABLE' },
+                { status: 409 },
+            );
+        }
 
         const members = await getGroupMembers(coupleId);
         const isMember = members.some((m) => m.id === toUserId);

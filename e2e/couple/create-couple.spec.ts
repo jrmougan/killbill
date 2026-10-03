@@ -1,4 +1,5 @@
-import { test, expect, request as playwrightRequest } from '@playwright/test';
+import { test, expect } from '../fixtures/test.fixture';
+import { request as playwrightRequest } from '@playwright/test';
 import { seedScenario, resetDb } from '../fixtures/db.fixture';
 import { loginAs } from '../fixtures/auth.fixture';
 

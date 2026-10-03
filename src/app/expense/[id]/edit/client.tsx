@@ -578,6 +578,7 @@ export function EditExpenseClient({
                                         type="button"
                                         onClick={() => setPaidById(m.id)}
                                         aria-pressed={sel}
+                                        data-testid={`edit-payer-${m.id}`}
                                         className={cn(
                                             "px-3 py-2 rounded-xl text-sm font-medium border transition-all active:scale-[0.98]",
                                             sel ? "bg-primary text-white border-primary shadow" : "bg-card border-[color:var(--line)] text-muted-foreground hover:bg-secondary"

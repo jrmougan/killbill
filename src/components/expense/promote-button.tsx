@@ -1,9 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Users } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 
 /**
  * Promote a PERSONAL expense to a SHARED (group) one. Wires the existing
@@ -12,6 +12,7 @@ import { useState } from "react";
  */
 export function PromoteButton({ expenseId }: { expenseId: string }) {
     const router = useRouter();
+    const [refreshing, startTransition] = useTransition();
     const [showConfirm, setShowConfirm] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -23,7 +24,7 @@ export function PromoteButton({ expenseId }: { expenseId: string }) {
             const res = await fetch(`/api/expenses/${expenseId}/share`, { method: "POST" });
             if (res.ok) {
                 setShowConfirm(false);
-                router.refresh(); // the expense is now SHARED — re-render the page
+                startTransition(() => router.refresh());
             } else {
                 const body = await res.json().catch(() => ({}));
                 setError(body.error ?? "No se pudo compartir el gasto");
@@ -50,10 +51,10 @@ export function PromoteButton({ expenseId }: { expenseId: string }) {
                         {error && <p className="text-sm text-destructive">{error}</p>}
                     </div>
                     <div className="flex gap-3">
-                        <Button variant="secondary" className="flex-1" onClick={() => setShowConfirm(false)} disabled={loading}>
+                        <Button variant="secondary" className="flex-1" onClick={() => setShowConfirm(false)} disabled={loading || refreshing}>
                             Cancelar
                         </Button>
-                        <Button className="flex-1" onClick={handlePromote} isLoading={loading}>
+                        <Button className="flex-1" onClick={handlePromote} disabled={loading || refreshing} isLoading={loading} data-testid="expense-promote-confirm">
                             Compartir
                         </Button>
                     </div>
@@ -68,6 +69,8 @@ export function PromoteButton({ expenseId }: { expenseId: string }) {
             size="sm"
             className="text-primary hover:text-primary hover:bg-[var(--accent-tint)]"
             onClick={() => setShowConfirm(true)}
+            disabled={loading || refreshing}
+            data-testid="expense-promote"
         >
             <Users className="h-4 w-4 sm:mr-2" />
             <span className="hidden sm:inline">Compartir</span>

@@ -14,7 +14,7 @@ import { UserPlus } from "lucide-react";
 export function GuestBanner({ show = true }: { show?: boolean }) {
     if (!show) return null;
     return (
-        <div className="flex items-center gap-3 rounded-2xl bg-[var(--accent-tint)] border border-[color:var(--accent-border)] px-4 py-3">
+        <div data-testid="guest-banner" className="flex items-center gap-3 rounded-2xl bg-[var(--accent-tint)] border border-[color:var(--accent-border)] px-4 py-3">
             <UserPlus className="h-4 w-4 text-primary shrink-0" />
             <div className="min-w-0 flex-1">
                 <p className="text-[13px] font-semibold text-foreground">Estás como invitado</p>

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { writeFile } from 'fs/promises';
+import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { getSession } from '@/lib/auth';
@@ -65,7 +65,9 @@ export async function POST(request: Request) {
         // Unpredictable filename with a whitelisted extension. It does NOT embed
         // the user id, so the public URL leaks no information about the uploader.
         const filename = `${randomUUID()}.${ext}`;
-        const path = join(process.cwd(), 'public/uploads', filename);
+        const directory = join(process.cwd(), 'public', 'uploads');
+        await mkdir(directory, { recursive: true });
+        const path = join(directory, filename);
 
         await writeFile(path, buffer);
         console.log(`File uploaded to ${path}`);

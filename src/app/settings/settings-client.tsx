@@ -498,7 +498,7 @@ export function SettingsClient({ user, groups }: SettingsClientProps) {
                             <>
                                 <div className="space-y-1">
                                     <h2 className="text-base font-bold text-foreground">Guarda tu token ahora</h2>
-                                    <p className="text-sm text-muted-foreground">Solo se muestra una vez. Caduca en {mcpToken.expiresInDays} días, el {new Date(mcpToken.expiresAt).toLocaleDateString("es-ES", { dateStyle: "long" })}.</p>
+                                    <p className="text-sm text-muted-foreground">Solo se muestra una vez. Caduca en {mcpToken.expiresInDays} días, el {new Date(mcpToken.expiresAt).toLocaleDateString("es-ES", { dateStyle: "long", timeZone: "Europe/Madrid" })}.</p>
                                 </div>
                                 <div className="rounded-xl bg-secondary border border-[color:var(--line)] p-3 space-y-2">
                                     <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Token MCP</p>
