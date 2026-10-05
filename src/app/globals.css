@@ -29,10 +29,10 @@
   --color-card: hsl(var(--card));
   --color-card-foreground: hsl(var(--card-foreground));
 
-  /* Design fonts (EQUIL - Economía Familiar): Instrument Sans + Spline Sans Mono.
+  /* Design fonts (EQUIL): Schibsted Grotesk + DM Mono (codes / ticket meta only).
      The variables are provided by next/font in layout.tsx. */
-  --font-sans: var(--font-instrument), system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-spline-mono), ui-monospace, "SF Mono", monospace;
+  --font-sans: var(--font-schibsted), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-dm-mono), ui-monospace, "SF Mono", monospace;
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -40,82 +40,98 @@
 }
 
 /* ===========================================================================
-   EQUIL - Economía Familiar design tokens (single warm-light theme).
-   Palette: paper #F3EFE6 · surface #FBF9F3 · ink #26231d · accent #BD5D3A.
+   EQUIL design tokens (rediseño "EQUIL Prototipo"): single light theme.
+   Palette: paper #F6F6F3 · surface #FFFFFF · ink #1B1C1A · accent #2F7D5B.
    =========================================================================== */
 :root {
-  --background: 42 35% 93%;        /* #F3EFE6 warm paper */
-  --foreground: 40 13% 13%;        /* #26231d warm ink */
+  --background: 60 11% 96%;        /* #F6F6F3 paper */
+  --foreground: 90 4% 11%;         /* #1B1C1A ink */
 
-  --card: 45 50% 97%;              /* #FBF9F3 raised paper */
-  --card-foreground: 40 13% 13%;
+  --card: 0 0% 100%;               /* #FFFFFF surface */
+  --card-foreground: 90 4% 11%;
 
   /* Surfaces */
-  --surface: 45 50% 97%;           /* #FBF9F3 - cards */
-  --surface-raised: 41 37% 90%;    /* #efe9dc - avatars, chips, pressed */
-  --hairline: 38 35 29;            /* rgb base for translucent ink borders */
+  --surface: 0 0% 100%;            /* #FFFFFF - cards */
+  --surface-raised: 80 9% 88%;     /* #E4E6DF - avatars, tracks, pressed */
+  --hairline: 0 0 0;               /* rgb base for translucent ink borders */
 
-  --popover: 45 50% 97%;
-  --popover-foreground: 40 13% 13%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 90 4% 11%;
 
-  /* Accent (terracotta) is the primary brand colour */
-  --primary: 16 53% 48%;           /* #BD5D3A */
+  /* Accent (green) is the primary brand colour */
+  --primary: 154 45% 34%;          /* #2F7D5B */
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 41 37% 90%;
-  --secondary-foreground: 40 13% 13%;
+  --secondary: 75 7% 91%;          /* #E9EAE5 segmented track */
+  --secondary-foreground: 90 4% 11%;
 
-  --muted: 41 37% 90%;
-  --muted-foreground: 39 8% 51%;   /* #8B8477 warm taupe */
+  --muted: 75 7% 91%;
+  --muted-foreground: 90 3% 42%;   /* #6E706B */
 
-  --accent: 16 53% 48%;            /* #BD5D3A */
+  --accent: 154 45% 34%;
   --accent-foreground: 0 0% 100%;
 
-  --destructive: 4 48% 53%;        /* #C0554E */
+  --destructive: 14 51% 47%;       /* #B4553A */
   --destructive-foreground: 0 0% 100%;
 
-  --border: 40 13% 87%;            /* solid ink hairline on paper */
-  --input: 40 13% 87%;
-  --ring: 16 53% 48%;
+  --border: 0 0% 92%;              /* ≈ rgba(0,0,0,.08) on paper */
+  --input: 0 0% 92%;
+  --ring: 154 45% 34%;
 
-  --radius: 0.8rem;
+  --radius: 1rem;
 
   /* --- Direct design tokens (use via var(...)) --- */
-  --accent-hex: #BD5D3A;
-  --accent-hover: #9c4a2d;
-  --accent-tint: rgba(189, 93, 58, 0.094);   /* accent @ 0x18 */
-  --accent-border: rgba(189, 93, 58, 0.25);  /* accent @ 0x40 */
+  --accent-hex: #2F7D5B;
+  --accent-hover: #235f45;
+  --accent-tint: #EEF4F0;                    /* selected chips, badges */
+  --accent-border: rgba(47, 125, 91, 0.3);
+  --accent-soft: #7FAE95;                    /* chart series 2 */
+  --accent-softer: #C5D6CA;                  /* chart series 3 / previous period */
 
-  --paper: #F3EFE6;
-  --surface-hex: #FBF9F3;
-  --surface-raised-hex: #efe9dc;
+  --paper: #F6F6F3;
+  --surface-hex: #FFFFFF;
+  --surface-raised-hex: #E4E6DF;
+  --track: #E9EAE5;                          /* segmented control track */
 
-  --ink: #26231d;      /* primary text */
-  --ink-2: #8B8477;    /* muted labels */
-  --ink-3: #a39c8c;    /* faint meta */
-  --body-ink: #57534a; /* body copy */
+  --ink: #1B1C1A;      /* primary text */
+  --ink-2: #6E706B;    /* muted labels */
+  --ink-3: #A5A79F;    /* faint meta, placeholders */
+  --ink-4: #C9CBC4;    /* disabled, chevrons, checkbox borders */
+  --body-ink: #3A3B38; /* body copy */
 
-  --line: rgba(38, 35, 29, 0.09);         /* default hairline */
-  --line-2: rgba(38, 35, 29, 0.07);       /* softer hairline */
-  --line-strong: rgba(38, 35, 29, 0.14);  /* dashed / emphasis */
+  --line: rgba(0, 0, 0, 0.08);            /* default hairline */
+  --line-2: rgba(0, 0, 0, 0.06);          /* softer hairline / row dividers */
+  --line-strong: rgba(0, 0, 0, 0.25);     /* dashed "add" chips */
 
-  --positive: #3F6F52;   /* owed / detected / income */
-  --negative: #C0554E;   /* owes / delete / error */
-  --positive-tint: rgba(63, 111, 82, 0.12);
-  --negative-tint: rgba(192, 85, 78, 0.12);
+  --positive: #2F7D5B;   /* owed to me / at peace */
+  --negative: #B4553A;   /* I owe / over budget / logout */
+  --positive-tint: #EEF4F0;
+  --negative-tint: rgba(180, 85, 58, 0.1);
 
   /* Category accent colours (match the category catalog) */
   --cat-food: #D9713C;
   --cat-grocery: #C98A2B;
-  --cat-home: #3F6F52;
+  --cat-home: #2F7D5B;
   --cat-utilities: #C9A227;
   --cat-transport: #3E6E8E;
   --cat-shopping: #A85C8A;
-  --cat-health: #C0554E;
+  --cat-health: #B4553A;
   --cat-subs: #5B7A9E;
   --cat-education: #7A6A3C;
-  --cat-other: #8B8477;
+  --cat-other: #6E706B;
 }
+
+@keyframes eq-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes eq-scan {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(250px); }
+}
+.eq-in { animation: eq-in .25s ease-out; }
+
+input::placeholder, textarea::placeholder { color: var(--ink-3); }
 
 /* Global styles */
 body {

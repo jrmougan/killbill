@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<style>body{margin:0;background:#e9e7e2;font-family:'Schibsted Grotesk',system-ui,sans-serif}a{color:#2F7D5B}a:hover{color:#235f45}input::placeholder{color:#A5A79F}@keyframes eqScan{0%{transform:translateY(0)}50%{transform:translateY(250px)}100%{transform:translateY(0)}}@keyframes eqIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 16px;box-sizing:border-box">
+<div style="width:375px;height:800px;border-radius:40px;background:#F6F6F3;overflow:hidden;position:relative;display:flex;flex-direction:column;box-shadow:0 0 0 8px #1b1c1a,0 30px 60px rgba(0,0,0,.2);font-family:'Schibsted Grotesk',sans-serif;color:#1B1C1A;flex:none">
+<div style="height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 28px;font-size:14px;font-weight:600">9:41<span style="font-size:11px">●●● ▮</span></div>
+
+<sc-if value="{{ is.welcome }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;min-height:0">
+<sc-if value="{{ welcomeCreate }}" hint-placeholder-val="{{ false }}"><div style="padding:4px 24px 0"><span onClick="{{ goEspacios }}" style="display:block;width:24px;height:24px;cursor:pointer">{{ I.arrowLeft }}</span></div></sc-if>
+<div style="padding:40px 24px 0;display:flex;flex-direction:column;gap:14px">
+<span style="font-size:15px;font-weight:800;letter-spacing:.14em;color:#2F7D5B">EQUIL</span>
+<span style="font-size:36px;font-weight:700;letter-spacing:-0.03em;line-height:1.05;text-wrap:pretty">¿Con quién compartes gastos?</span>
+<span style="font-size:15px;color:#6E706B;line-height:1.45">{{ welcomeSub }}</span>
+</div>
+<div style="padding:28px 24px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<sc-for list="{{ welcomeOpts }}" as="o" hint-placeholder-count="4">
+<div onClick="{{ o.onTap }}" style="height:104px;border-radius:18px;background:#fff;border:{{ o.border }};padding:14px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;transition:border-color .15s"><span style="font-size:24px">{{ o.e }}</span><div><div style="font-size:15px;font-weight:600">{{ o.t }}</div><div style="font-size:12px;color:#6E706B">{{ o.s }}</div></div></div>
+</sc-for>
+</div>
+<div style="margin-top:auto;padding:0 24px 34px;display:flex;flex-direction:column;gap:14px;align-items:center">
+<div onClick="{{ welcomeContinue }}" style="width:100%;height:56px;border-radius:18px;background:#2F7D5B;color:#fff;font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;cursor:pointer" style-active="transform:scale(.98)">{{ welcomeCta }}</div>
+<span onClick="{{ joinCode }}" style="font-size:14px;font-weight:600;color:#2F7D5B;cursor:pointer;padding:6px">Me han invitado · tengo un código</span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.home }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;animation:eqIn .25s ease-out">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 20px 12px"><span style="font-size:22px;font-weight:700;letter-spacing:-0.02em">Hola, Álvaro</span><div onClick="{{ goAjustes }}" style="width:38px;height:38px;border-radius:50%;background:#E4E6DF;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;cursor:pointer">Á</div></div>
+<div style="display:flex;gap:10px;padding:0 20px;overflow-x:auto;scrollbar-width:none">
+<sc-for list="{{ cards }}" as="c" hint-placeholder-count="3">
+<div onClick="{{ c.onTap }}" style="flex:none;width:{{ c.w }};height:150px;border-radius:22px;background:{{ c.bg }};color:{{ c.fg }};border:{{ c.border }};padding:16px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;transition:width .25s,background .25s">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:14px;font-weight:600;white-space:nowrap"><span>{{ c.title }}</span><span style="font-size:12px;font-weight:500;opacity:.75;overflow:hidden;text-overflow:ellipsis">{{ c.sub }}</span></div>
+<div><div style="font-size:13px;opacity:.8">{{ c.label }}</div><div style="font-size:{{ c.amtSize }};font-weight:700;letter-spacing:-0.03em;line-height:1.05;color:{{ c.amtColor }}">{{ c.amount }}</div></div>
+<sc-if value="{{ c.showSettle }}" hint-placeholder-val="{{ false }}"><div onClick="{{ c.onSettle }}" style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;align-self:flex-start"><span style="width:15px;height:15px">{{ I.check }}</span>Quedar en paz</div></sc-if>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px 0">
+<div style="display:flex;gap:5px"><sc-for list="{{ dots }}" as="d" hint-placeholder-count="3"><span style="width:{{ d.w }};height:4px;border-radius:2px;background:{{ d.bg }};transition:all .25s"></span></sc-for></div>
+<span onClick="{{ goEspacios }}" style="font-size:13px;font-weight:600;color:#2F7D5B;cursor:pointer">Ver espacios</span>
+</div>
+<div style="padding:18px 20px 20px;display:flex;flex-direction:column;gap:20px">
+<div style="background:#fff;border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:12px;border:1px solid rgba(0,0,0,.06)">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;color:#6E706B">{{ monthLabel }}</span><span style="font-size:17px;font-weight:700">{{ totalText }}</span></div>
+<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;gap:2px;background:#F0F1EC"><sc-for list="{{ segs }}" as="g" hint-placeholder-count="3"><div style="width:{{ g.w }};background:{{ g.c }};transition:width .3s"></div></sc-for></div>
+<div style="display:flex;gap:14px;font-size:12px;color:#6E706B"><sc-for list="{{ segLabels }}" as="g" hint-placeholder-count="3"><span>{{ g.t }}</span></sc-for></div>
+</div>
+<div style="display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:#6E706B;padding-bottom:4px"><span>Recientes</span><span onClick="{{ goGastos }}" style="color:#2F7D5B;cursor:pointer">Ver todo</span></div>
+<sc-if value="{{ noExpenses }}" hint-placeholder-val="{{ false }}"><div style="padding:24px 0;font-size:14px;color:#6E706B;text-align:center">Aún no hay gastos en este espacio.</div></sc-if>
+<sc-for list="{{ recent }}" as="x" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:12px;padding:10px 0"><span style="width:40px;height:40px;flex:none;border-radius:12px;background:{{ x.iconBg }};border:1px solid rgba(0,0,0,.06);display:flex;align-items:center;justify-content:center;font-size:18px;color:#2F7D5B">{{ x.icon }}</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ x.title }}</div><div style="font-size:12.5px;color:#6E706B">{{ x.sub }}</div></div><span style="font-size:15px;font-weight:600;color:{{ x.amtColor }}">{{ x.amount }}</span></div>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.gastos }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;animation:eqIn .25s ease-out">
+<div style="padding:4px 20px 0;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:24px;font-weight:700;letter-spacing:-0.02em">Gastos</span><span style="font-size:13px;color:#6E706B">{{ spaceTitle }}</span></div>
+<div style="height:42px;border-radius:12px;background:#fff;border:1px solid rgba(0,0,0,.08);display:flex;align-items:center;gap:8px;padding:0 12px;color:#A5A79F"><span style="width:17px;height:17px;flex:none">{{ I.search }}</span><input value="{{ q }}" onChange="{{ onQ }}" placeholder="Buscar gasto" style="flex:1;min-width:0;border:none;outline:none;background:transparent;font:inherit;font-size:14px;color:#1B1C1A"></div>
+<sc-if value="{{ shared }}" hint-placeholder-val="{{ true }}"><div style="display:flex;gap:6px;font-size:13px;font-weight:600"><sc-for list="{{ filters }}" as="f" hint-placeholder-count="3"><span onClick="{{ f.onTap }}" style="padding:7px 12px;border-radius:999px;background:{{ f.bg }};color:{{ f.fg }};border:1px solid {{ f.bd }};cursor:pointer;white-space:nowrap">{{ f.t }}</span></sc-for></div></sc-if>
+</div>
+<div style="flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;padding:12px 20px 16px">
+<sc-if value="{{ noGroups }}" hint-placeholder-val="{{ false }}"><div style="padding:40px 0;font-size:14px;color:#6E706B;text-align:center">No hay gastos que coincidan.</div></sc-if>
+<sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:#6E706B;padding:10px 0 4px"><span>{{ g.day }}</span><span>{{ g.total }}</span></div>
+<sc-for list="{{ g.items }}" as="x" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:12px;padding:10px 0"><span style="width:40px;height:40px;flex:none;border-radius:12px;background:{{ x.iconBg }};border:1px solid rgba(0,0,0,.06);display:flex;align-items:center;justify-content:center;font-size:18px;color:#2F7D5B">{{ x.icon }}</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ x.title }}</div><div style="font-size:12.5px;color:#6E706B">{{ x.sub2 }}</div></div><span style="font-size:15px;font-weight:600;color:{{ x.amtColor }}">{{ x.amount }}</span></div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.mes }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;animation:eqIn .25s ease-out">
+<div style="padding:4px 20px 0;display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:24px;font-weight:700;letter-spacing:-0.02em">Octubre</span><span style="font-size:13px;color:#6E706B">{{ spaceTitle }}</span></div>
+<div style="display:flex;background:#E9EAE5;border-radius:12px;padding:3px;font-size:14px;font-weight:600">
+<span onClick="{{ setBudgetView }}" style="flex:1;text-align:center;padding:8px 0;border-radius:10px;background:{{ segBudgetBg }};color:{{ segBudgetFg }};cursor:pointer;transition:background .15s">Presupuestos</span>
+<span onClick="{{ setAnalysisView }}" style="flex:1;text-align:center;padding:8px 0;border-radius:10px;background:{{ segAnaBg }};color:{{ segAnaFg }};cursor:pointer;transition:background .15s">Análisis</span>
+</div>
+</div>
+<div style="flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;padding:18px 20px 20px;display:flex;flex-direction:column;gap:18px">
+<sc-if value="{{ mesBudget }}" hint-placeholder-val="{{ true }}">
+<sc-if value="{{ hasBudgets }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:14px;color:#6E706B">{{ remainLabel }}</span><span style="font-size:44px;font-weight:700;letter-spacing:-0.03em;line-height:1;color:{{ remainColor }}">{{ remainText }}</span><div style="height:8px;border-radius:4px;background:#E4E6DF;margin-top:8px;overflow:hidden"><div style="width:{{ budgetPct }};height:100%;border-radius:4px;background:{{ remainBar }};transition:width .3s"></div></div><span style="font-size:12.5px;color:#6E706B">{{ budgetSummary }}</span></div>
+<div style="background:#fff;border-radius:18px;border:1px solid rgba(0,0,0,.06);padding:4px 16px">
+<sc-for list="{{ budgetRows }}" as="b" hint-placeholder-count="4">
+<div style="padding:12px 0;border-bottom:{{ b.bb }};display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;font-size:14px"><span style="font-weight:600">{{ b.label }}</span><span style="color:{{ b.tc }};font-weight:{{ b.tw }}">{{ b.text }}</span></div><div style="height:5px;border-radius:3px;background:#E4E6DF;overflow:hidden"><div style="width:{{ b.w }};height:100%;border-radius:3px;background:{{ b.c }}"></div></div></div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ noBudgets }}" hint-placeholder-val="{{ false }}"><div style="padding:16px 0;font-size:15px;color:#6E706B;line-height:1.45">Aún no tienes presupuestos aquí. Elige una categoría para ponerle un límite mensual.</div></sc-if>
+<div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:12px;font-weight:600;color:#6E706B">Sin presupuesto · toca para añadir 100 €</span><div style="display:flex;gap:6px;flex-wrap:wrap;font-size:13px;font-weight:600"><sc-for list="{{ unbudgeted }}" as="u" hint-placeholder-count="3"><span onClick="{{ u.onTap }}" style="padding:7px 12px;border-radius:999px;border:1px dashed rgba(0,0,0,.25);cursor:pointer" style-hover="background:#fff">+ {{ u.t }}</span></sc-for></div></div>
+</sc-if>
+<sc-if value="{{ mesAnalysis }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:14px;color:#6E706B">Gastado este mes</span><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span style="font-size:44px;font-weight:700;letter-spacing:-0.03em;line-height:1">{{ totalText }}</span><span style="font-size:13px;font-weight:600;color:{{ vsColor }}">{{ vsText }}</span></div></div>
+<div style="background:#fff;border-radius:18px;border:1px solid rgba(0,0,0,.06);padding:16px;display:flex;flex-direction:column;gap:10px">
+<div style="height:120px;display:flex;align-items:flex-end;gap:10px"><sc-for list="{{ bars }}" as="b" hint-placeholder-count="6"><div style="flex:1;height:{{ b.h }};border-radius:6px 6px 2px 2px;background:{{ b.c }};transition:height .3s"></div></sc-for></div>
+<div style="display:flex;gap:10px;font-size:11px;color:#6E706B;text-align:center"><sc-for list="{{ bars }}" as="b" hint-placeholder-count="6"><span style="flex:1;color:{{ b.lc }};font-weight:{{ b.lw }}">{{ b.m }}</span></sc-for></div>
+</div>
+<div style="display:flex;flex-direction:column">
+<span style="font-size:12px;font-weight:600;color:#6E706B;padding-bottom:4px">Por categoría</span>
+<sc-for list="{{ catRows }}" as="r" hint-placeholder-count="3">
+<div style="display:flex;align-items:center;gap:10px;padding:9px 0"><span style="font-size:17px;width:24px">{{ r.e }}</span><span style="flex:1;font-size:14px;font-weight:600">{{ r.l }}</span><span style="font-size:13px;color:#6E706B;width:40px;text-align:right">{{ r.p }}</span><span style="font-size:14px;font-weight:600;width:82px;text-align:right">{{ r.a }}</span></div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.listas }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;animation:eqIn .25s ease-out">
+<div style="padding:4px 20px 0;display:flex;flex-direction:column;gap:12px">
+<span style="font-size:24px;font-weight:700;letter-spacing:-0.02em">Listas</span>
+<div style="display:flex;gap:6px;font-size:13px;font-weight:600;overflow-x:auto;scrollbar-width:none"><sc-for list="{{ listChips }}" as="l" hint-placeholder-count="2"><span onClick="{{ l.onTap }}" style="flex:none;padding:7px 12px;border-radius:999px;background:{{ l.bg }};color:{{ l.fg }};border:1px solid {{ l.bd }};cursor:pointer">{{ l.t }}</span></sc-for><span onClick="{{ newList }}" style="flex:none;padding:7px 12px;border-radius:999px;border:1px dashed rgba(0,0,0,.25);cursor:pointer">+ Nueva</span></div>
+</div>
+<div style="flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;padding:16px 20px 0;display:flex;flex-direction:column;gap:12px">
+<div style="height:48px;flex:none;border-radius:14px;background:#fff;border:1px solid rgba(0,0,0,.08);display:flex;align-items:center;gap:10px;padding:0 6px 0 14px"><input value="{{ newItem }}" onChange="{{ onNewItem }}" onKeyDown="{{ onNewItemKey }}" placeholder="Añadir producto…" style="flex:1;min-width:0;border:none;outline:none;background:transparent;font:inherit;font-size:15px;color:#1B1C1A"><span onClick="{{ addItem }}" style="width:36px;height:36px;border-radius:10px;background:#2F7D5B;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:18px;height:18px">{{ I.plus }}</span></span></div>
+<sc-if value="{{ hasPending }}" hint-placeholder-val="{{ true }}">
+<div style="background:#fff;border-radius:18px;border:1px solid rgba(0,0,0,.06);padding:0 16px">
+<sc-for list="{{ pending }}" as="it" hint-placeholder-count="4">
+<div onClick="{{ it.onTap }}" style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:{{ it.bb }};cursor:pointer"><span style="width:22px;height:22px;flex:none;border-radius:7px;border:2px solid #C9CBC4;box-sizing:border-box"></span><span style="flex:1;font-size:15px">{{ it.t }}</span></div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ listEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:24px 0;font-size:14px;color:#6E706B;text-align:center">Lista vacía. Añade el primer producto.</div></sc-if>
+<sc-if value="{{ hasDone }}" hint-placeholder-val="{{ false }}">
+<span style="font-size:12px;font-weight:600;color:#6E706B;padding-top:4px">{{ doneLabel }}</span>
+<div style="display:flex;flex-direction:column;padding:0 16px;color:#A5A79F">
+<sc-for list="{{ done }}" as="it" hint-placeholder-count="2">
+<div onClick="{{ it.onTap }}" style="display:flex;align-items:center;gap:12px;padding:9px 0;cursor:pointer"><span style="width:22px;height:22px;flex:none;border-radius:7px;background:#2F7D5B;color:#fff;display:flex;align-items:center;justify-content:center"><span style="width:14px;height:14px">{{ I.check }}</span></span><span style="flex:1;font-size:15px;text-decoration:line-through">{{ it.t }}</span></div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+<div style="padding:10px 20px 12px;flex:none"><div onClick="{{ finishList }}" style="height:50px;border-radius:16px;background:#1B1C1A;color:#fff;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;opacity:{{ finishOpacity }}"><span style="width:18px;height:18px">{{ I.receipt }}</span>Terminar y apuntar gasto</div></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.espacios }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;animation:eqIn .25s ease-out">
+<div style="padding:4px 20px 0;display:flex;align-items:center;gap:10px"><span onClick="{{ goHome }}" style="width:24px;height:24px;cursor:pointer">{{ I.arrowLeft }}</span><span style="font-size:24px;font-weight:700;letter-spacing:-0.02em">Espacios</span></div>
+<div style="flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;padding:20px 20px 20px;display:flex;flex-direction:column;gap:10px">
+<sc-for list="{{ spaceRows }}" as="r" hint-placeholder-count="3">
+<div onClick="{{ r.onTap }}" style="background:#fff;border-radius:18px;border:{{ r.border }};padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer"><span style="width:44px;height:44px;flex:none;border-radius:14px;background:{{ r.iconBg }};display:flex;align-items:center;justify-content:center;font-size:20px">{{ r.emoji }}</span><div style="flex:1;min-width:0"><div style="font-size:15px;font-weight:600">{{ r.name }}</div><div style="font-size:12.5px;color:#6E706B">{{ r.sub }}</div></div><span style="font-size:15px;font-weight:700;color:{{ r.balColor }}">{{ r.bal }}</span></div>
+</sc-for>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+<div onClick="{{ createSpace }}" style="height:76px;border-radius:16px;background:#1B1C1A;color:#fff;padding:12px 14px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer"><span style="width:20px;height:20px">{{ I.plus }}</span><span style="font-size:14px;font-weight:600">Crear espacio</span></div>
+<div onClick="{{ joinCode }}" style="height:76px;border-radius:16px;background:#fff;border:1px solid rgba(0,0,0,.08);padding:12px 14px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer"><span style="width:20px;height:20px">{{ I.ticket }}</span><span style="font-size:14px;font-weight:600">Unirme con código</span></div>
+</div>
+<sc-if value="{{ shared }}" hint-placeholder-val="{{ true }}">
+<div style="margin-top:10px;background:#EEF4F0;border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+<span style="font-size:13px;font-weight:600">Invitar a {{ spaceName }}</span>
+<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;height:40px;border-radius:12px;background:#fff;display:flex;align-items:center;padding:0 12px;font:500 15px 'DM Mono',monospace;letter-spacing:.12em">{{ inviteCode }}</span><span onClick="{{ shareInvite }}" style="height:40px;padding:0 14px;border-radius:12px;background:#2F7D5B;color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer"><span style="width:15px;height:15px">{{ I.share }}</span>Enviar</span></div>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.ajustes }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;animation:eqIn .25s ease-out">
+<div style="padding:4px 20px 0;display:flex;align-items:center;gap:10px"><span onClick="{{ goHome }}" style="width:24px;height:24px;cursor:pointer">{{ I.arrowLeft }}</span><span style="font-size:24px;font-weight:700;letter-spacing:-0.02em">Ajustes</span></div>
+<div style="flex:1;min-height:0;overflow-y:auto;scrollbar-width:none;padding:20px;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center;gap:14px"><div style="width:56px;height:56px;border-radius:50%;background:#E4E6DF;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px">Á</div><div style="flex:1"><div style="font-size:17px;font-weight:600">Álvaro</div><div style="font-size:13px;color:#6E706B">alvaro@gmail.com</div></div><span onClick="{{ soon }}" style="font-size:14px;font-weight:600;color:#2F7D5B;cursor:pointer">Editar</span></div>
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:12px;font-weight:600;color:#6E706B;padding-left:4px">Organizar</span>
+<div style="background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,.06);padding:0 16px">
+<div onClick="{{ soon }}" style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer"><span style="width:19px;height:19px;color:#6E706B">{{ I.layoutGrid }}</span><span style="flex:1;font-size:15px">Categorías</span><span style="width:17px;height:17px;color:#C9CBC4">{{ I.chevronRight }}</span></div>
+<div onClick="{{ soon }}" style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer"><span style="width:19px;height:19px;color:#6E706B">{{ I.tag }}</span><span style="flex:1;font-size:15px">Etiquetas</span><span style="width:17px;height:17px;color:#C9CBC4">{{ I.chevronRight }}</span></div>
+<div onClick="{{ soon }}" style="display:flex;align-items:center;gap:12px;padding:14px 0;cursor:pointer"><span style="width:19px;height:19px;color:#6E706B">{{ I.fileUp }}</span><span style="flex:1;font-size:15px">Importar movimientos</span><span style="width:17px;height:17px;color:#C9CBC4">{{ I.chevronRight }}</span></div>
+</div></div>
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:12px;font-weight:600;color:#6E706B;padding-left:4px">Conexiones</span>
+<div style="background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,.06);padding:0 16px">
+<div style="display:flex;align-items:center;gap:12px;padding:14px 0"><span style="width:19px;height:19px;color:#6E706B">{{ I.bot }}</span><div style="flex:1"><div style="font-size:15px">Hermes Agent</div><div style="font-size:12px;color:#6E706B">{{ mcpSub }}</div></div><span onClick="{{ toggleMcp }}" style="font-size:14px;font-weight:600;color:#2F7D5B;cursor:pointer">{{ mcpCta }}</span></div>
+</div></div>
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:12px;font-weight:600;color:#6E706B;padding-left:4px">Cuenta</span>
+<div style="background:#fff;border-radius:16px;border:1px solid rgba(0,0,0,.06);padding:0 16px">
+<div onClick="{{ soon }}" style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer"><span style="width:19px;height:19px;color:#6E706B">{{ I.lock }}</span><span style="flex:1;font-size:15px">Contraseña</span><span style="width:17px;height:17px;color:#C9CBC4">{{ I.chevronRight }}</span></div>
+<div onClick="{{ logout }}" style="display:flex;align-items:center;gap:12px;padding:14px 0;color:#B4553A;cursor:pointer"><span style="width:19px;height:19px">{{ I.logOut }}</span><span style="flex:1;font-size:15px">Cerrar sesión</span></div>
+</div></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.settle }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;animation:eqIn .25s ease-out">
+<div style="padding:4px 20px"><span onClick="{{ goHome }}" style="display:block;width:24px;height:24px;cursor:pointer">{{ I.arrowLeft }}</span></div>
+<sc-if value="{{ atPeace }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:0 32px;text-align:center">
+<div style="width:84px;height:84px;border-radius:50%;background:#2F7D5B;color:#fff;display:flex;align-items:center;justify-content:center"><span style="width:40px;height:40px">{{ I.check }}</span></div>
+<span style="font-size:30px;font-weight:700;letter-spacing:-0.02em">Estáis en paz</span>
+<span style="font-size:15px;color:#6E706B;line-height:1.45">{{ peaceSub }}</span>
+</div>
+<div style="padding:0 20px 30px"><div onClick="{{ goHome }}" style="height:56px;border-radius:18px;background:#2F7D5B;color:#fff;font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;cursor:pointer">Volver al inicio</div></div>
+</sc-if>
+<sc-if value="{{ notPeace }}" hint-placeholder-val="{{ true }}">
+<div style="margin:16px 20px 0;background:#fff;border:1px solid rgba(0,0,0,.07);border-radius:10px 10px 0 0;padding:22px 20px 28px;display:flex;flex-direction:column;gap:12px;font-size:14px;-webkit-mask:radial-gradient(circle 7px at 50% 100%,transparent 98%,#000) 0 0/16px 100% repeat-x;mask:radial-gradient(circle 7px at 50% 100%,transparent 98%,#000) 0 0/16px 100% repeat-x">
+<div style="font-size:22px;font-weight:700;letter-spacing:-0.02em;text-align:center">Cuenta de {{ spaceName }}</div>
+<div style="text-align:center;color:#6E706B;font:400 11px 'DM Mono',monospace;margin-top:-6px">{{ ticketMeta }}</div>
+<div style="border-top:1px dashed rgba(0,0,0,.18)"></div>
+<div style="display:flex;justify-content:space-between"><span>Total común</span><span style="font-weight:600">{{ tShared }}</span></div>
+<div style="display:flex;justify-content:space-between;color:#6E706B"><span>{{ tEachLabel }}</span><span>{{ tEach }}</span></div>
+<div style="border-top:1px dashed rgba(0,0,0,.18)"></div>
+<div style="display:flex;justify-content:space-between"><span>Pagaste tú</span><span style="font-weight:600">{{ tMe }}</span></div>
+<div style="display:flex;justify-content:space-between"><span>{{ tOthersLabel }}</span><span style="font-weight:600">{{ tOthers }}</span></div>
+<div style="border-top:1px dashed rgba(0,0,0,.18)"></div>
+<div style="display:flex;justify-content:space-between;align-items:baseline;font-weight:600"><span>{{ balLabel }}</span><span style="font-size:32px;font-weight:700;letter-spacing:-0.03em;color:{{ balColor }}">{{ balText }}</span></div>
+</div>
+<div style="padding:22px 20px 0;display:flex;flex-direction:column;gap:8px">
+<span style="font-size:12px;font-weight:600;color:#6E706B">¿Cómo?</span>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:14px;font-weight:600"><sc-for list="{{ methods }}" as="m" hint-placeholder-count="3"><div onClick="{{ m.onTap }}" style="height:48px;border-radius:14px;background:#fff;border:{{ m.border }};box-sizing:border-box;display:flex;align-items:center;justify-content:center;cursor:pointer">{{ m.t }}</div></sc-for></div>
+</div>
+<div style="margin-top:auto;padding:0 20px 30px;display:flex;flex-direction:column;gap:12px;align-items:center">
+<div onClick="{{ confirmSettle }}" style="width:100%;height:56px;border-radius:18px;background:#2F7D5B;color:#fff;font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;cursor:pointer" style-active="transform:scale(.98)">{{ confirmLabel }}</div>
+<span onClick="{{ remind }}" style="font-size:14px;font-weight:600;color:#2F7D5B;cursor:pointer;padding:4px">{{ remindLabel }}</span>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ is.add }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;animation:eqIn .2s ease-out">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 20px">
+<span onClick="{{ closeAdd }}" style="width:24px;height:24px;flex:none;cursor:pointer">{{ I.x }}</span>
+<div style="display:flex;gap:6px;font-size:13px;font-weight:600;overflow-x:auto;scrollbar-width:none"><sc-for list="{{ draftSpaces }}" as="d" hint-placeholder-count="3"><span onClick="{{ d.onTap }}" style="flex:none;padding:6px 12px;border-radius:999px;background:{{ d.bg }};color:{{ d.fg }};border:1px solid {{ d.bd }};cursor:pointer;white-space:nowrap">{{ d.t }}</span></sc-for></div>
+<span style="width:24px;flex:none"></span>
+</div>
+<sc-if value="{{ scanning }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;padding:16px 20px 30px;gap:16px">
+<div style="flex:1;border-radius:24px;background:repeating-linear-gradient(135deg,#1c1c1a 0 10px,#232321 10px 20px);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">
+<div style="position:absolute;inset:30px 40px;border:2px solid rgba(255,255,255,.8);border-radius:14px"></div>
+{{ scanLine }}
+<span style="font:400 11px 'DM Mono',monospace;color:#8A8984">cámara · encuadra el ticket</span>
+</div>
+<span style="text-align:center;font-size:14px;color:#6E706B">Leyendo importe, comercio y fecha…</span>
+<div onClick="{{ cancelScan }}" style="height:56px;border-radius:18px;background:#fff;border:1px solid rgba(0,0,0,.1);font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;cursor:pointer">Cancelar</div>
+</div>
+</sc-if>
+<sc-if value="{{ formMode }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:22px 20px 10px">
+<sc-if value="{{ scanned }}" hint-placeholder-val="{{ false }}"><span style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#2F7D5B;background:#EEF4F0;padding:5px 10px;border-radius:999px"><span style="width:13px;height:13px">{{ I.sparkles }}</span>Ticket leído · revisa y guarda</span></sc-if>
+<span style="font-size:56px;font-weight:700;letter-spacing:-0.03em;line-height:1;color:{{ amtColor }}">{{ amtText }}<span style="color:#A5A79F"> €</span></span>
+<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;padding:0 14px;height:46px;width:100%;box-sizing:border-box"><input value="{{ draftTitle }}" onChange="{{ onTitle }}" placeholder="Concepto (opcional)" style="flex:1;min-width:0;border:none;outline:none;background:transparent;font:inherit;font-size:15px;color:#1B1C1A"></div>
+<div style="display:flex;gap:6px;width:100%;overflow-x:auto;scrollbar-width:none;font-size:13px;font-weight:600"><sc-for list="{{ catChips }}" as="c" hint-placeholder-count="5"><span onClick="{{ c.onTap }}" style="flex:none;padding:7px 11px;border-radius:10px;background:{{ c.bg }};color:{{ c.fg }};border:1px solid {{ c.bd }};cursor:pointer;white-space:nowrap">{{ c.t }}</span></sc-for></div>
+<sc-if value="{{ draftShared }}" hint-placeholder-val="{{ true }}">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%">
+<div onClick="{{ cyclePayer }}" style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;padding:9px 12px;cursor:pointer"><div style="font-size:11px;color:#6E706B">Pagó</div><div style="font-size:14px;font-weight:600;display:flex;justify-content:space-between;align-items:center">{{ payerName }}<span style="width:14px;height:14px;color:#6E706B">{{ I.chevronDown }}</span></div></div>
+<div onClick="{{ cycleSplit }}" style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;padding:9px 12px;cursor:pointer"><div style="font-size:11px;color:#6E706B">Reparto</div><div style="font-size:14px;font-weight:600;display:flex;justify-content:space-between;align-items:center;white-space:nowrap">{{ splitName }}<span style="width:14px;height:14px;flex:none;color:#6E706B">{{ I.chevronDown }}</span></div></div>
+</div>
+</sc-if>
+<span style="font-size:12.5px;color:#6E706B;min-height:16px">{{ preview }}</span>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);padding:0 20px;font-size:24px;font-weight:500;text-align:center;margin-top:auto">
+<sc-for list="{{ keys }}" as="k" hint-placeholder-count="12"><div onClick="{{ k.onTap }}" style="height:50px;display:flex;align-items:center;justify-content:center;border-radius:14px;cursor:pointer;user-select:none" style-active="background:#E9EAE5">{{ k.label }}</div></sc-for>
+</div>
+<div style="display:flex;gap:10px;padding:12px 20px 30px">
+<div onClick="{{ startScan }}" style="width:56px;height:56px;flex:none;border-radius:18px;background:#fff;border:1px solid rgba(0,0,0,.1);display:flex;align-items:center;justify-content:center;cursor:pointer"><span style="width:24px;height:24px">{{ I.scanLine }}</span></div>
+<div onClick="{{ save }}" style="flex:1;height:56px;border-radius:18px;background:#2F7D5B;color:#fff;font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;cursor:pointer;opacity:{{ saveOpacity }};transition:opacity .15s">Guardar</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ showTabs }}" hint-placeholder-val="{{ true }}">
+<div style="height:84px;flex:none;background:rgba(255,255,255,.94);border-top:1px solid rgba(0,0,0,.07);display:flex;align-items:flex-start;justify-content:space-around;padding-top:10px;font-size:10.5px;font-weight:500;color:#6E706B">
+<div onClick="{{ goHome }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;color:{{ tc.home }};cursor:pointer;width:56px"><span style="width:22px;height:22px">{{ I.house }}</span>Inicio</div>
+<div onClick="{{ goGastos }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;color:{{ tc.gastos }};cursor:pointer;width:56px"><span style="width:22px;height:22px">{{ I.list }}</span>Gastos</div>
+<div onClick="{{ openAdd }}" style="width:54px;height:54px;border-radius:18px;background:#2F7D5B;color:#fff;display:flex;align-items:center;justify-content:center;margin-top:-14px;box-shadow:0 10px 20px -8px rgba(47,125,91,.7);cursor:pointer" style-active="transform:scale(.94)"><span style="width:26px;height:26px">{{ I.plus }}</span></div>
+<div onClick="{{ goMes }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;color:{{ tc.mes }};cursor:pointer;width:56px"><span style="width:22px;height:22px">{{ I.calendarRange }}</span>Mes</div>
+<div onClick="{{ goListas }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;color:{{ tc.listas }};cursor:pointer;width:56px"><span style="width:22px;height:22px">{{ I.shoppingBasket }}</span>Listas</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:50%;bottom:104px;transform:translateX(-50%);background:#1B1C1A;color:#fff;font-size:14px;font-weight:500;padding:11px 16px;border-radius:14px;white-space:nowrap;animation:eqIn .2s ease-out;box-shadow:0 10px 24px -8px rgba(0,0,0,.4)">{{ toast }}</div>
+</sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;welcome&quot;,&quot;home&quot;,&quot;add&quot;,&quot;settle&quot;,&quot;mes&quot;,&quot;listas&quot;],&quot;default&quot;:&quot;welcome&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototipo&quot;}}">
+const CATS = {
+  super: { e: '🛒', l: 'Súper' }, comida: { e: '🍕', l: 'Comida' }, recibos: { e: '💡', l: 'Recibos' },
+  ocio: { e: '🍿', l: 'Ocio' }, transporte: { e: '🚗', l: 'Transporte' }, salud: { e: '💊', l: 'Salud' },
+  hogar: { e: '🛋️', l: 'Hogar' }, regalos: { e: '🎁', l: 'Regalos' }
+};
+const ICONS = { house: 'House', list: 'List', plus: 'Plus', calendarRange: 'CalendarRange', shoppingBasket: 'ShoppingBasket', check: 'Check', x: 'X', scanLine: 'ScanLine', del: 'Delete', arrowLeft: 'ArrowLeft', chevronDown: 'ChevronDown', chevronRight: 'ChevronRight', search: 'Search', receipt: 'Receipt', layoutGrid: 'LayoutGrid', tag: 'Tag', fileUp: 'FileUp', bot: 'Bot', lock: 'Lock', logOut: 'LogOut', ticket: 'Ticket', share: 'Share', sparkles: 'Sparkles' };
+const TYPES = {
+  pareja: { e: '💑', t: 'Mi pareja', s: '2 personas', name: 'Pareja', kind: 'Pareja', others: ['Tu pareja'] },
+  piso: { e: '🏢', t: 'Mi piso', s: 'Compañeros', name: 'Piso', kind: 'Piso', others: ['Compi 1', 'Compi 2'] },
+  viaje: { e: '✈️', t: 'Un viaje', s: 'Con fecha de fin', name: 'Viaje', kind: 'Viaje', others: ['Amigo 1', 'Amigo 2', 'Amigo 3'] },
+  solo: { e: '👤', t: 'Solo yo', s: 'Finanzas personales', name: 'Ahorro', kind: 'Personal', others: [] }
+};
+const fmt = n => (Math.round(n * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+const G = '#2F7D5B', R = '#B4553A', INK = '#1B1C1A', MUTED = '#6E706B';
+let uid = 100;
+const E = (space, title, cat, amount, payer, split, day) => ({ id: uid++, space, title, cat, amount, payer, split, day });
+
+class Component extends DCLogic {
+  state = {
+    screen: this.props.startScreen ?? 'welcome',
+    active: 'casa',
+    spaces: [
+      { id: 'casa', name: 'Casa', emoji: '🏠', kind: 'Pareja', others: ['Lucía'], code: 'K7Q-4MX' },
+      { id: 'lisboa', name: 'Lisboa', emoji: '✈️', kind: 'Viaje', others: ['Dani', 'Marta', 'Pau'], code: 'LX2-9TB', until: 'hasta el 12 oct' },
+      { id: 'personal', name: 'Personal', emoji: '👤', kind: 'Personal', others: [] }
+    ],
+    expenses: [
+      E('casa', 'Mercadona', 'super', 64.2, 'Tú', 'equal', 'Hoy'),
+      E('casa', 'Cena sushi', 'ocio', 38, 'Lucía', 'equal', 'Hoy'),
+      E('casa', 'Luz · Iberdrola', 'recibos', 58.9, 'Tú', 'equal', 'Ayer'),
+      E('casa', 'Gasolina', 'transporte', 45, 'Lucía', 'equal', 'Ayer'),
+      E('casa', 'Internet · Digi', 'recibos', 30, 'Lucía', 'equal', 'Sáb 3'),
+      E('casa', 'Lidl', 'super', 52.3, 'Lucía', 'equal', 'Sáb 3'),
+      E('casa', 'Cine', 'ocio', 18, 'Tú', 'equal', 'Vie 2'),
+      E('casa', 'Farmacia', 'salud', 12.4, 'Tú', 'mine', 'Vie 2'),
+      E('casa', 'Mercadona', 'super', 87.6, 'Tú', 'equal', 'Jue 1'),
+      E('casa', 'Agua · Canal', 'recibos', 24, 'Tú', 'equal', 'Jue 1'),
+      E('lisboa', 'Apartamento', 'hogar', 320, 'Dani', 'equal', 'Ayer'),
+      E('lisboa', 'Cena en Alfama', 'comida', 86, 'Tú', 'equal', 'Ayer'),
+      E('lisboa', 'Tranvía 28', 'transporte', 12, 'Marta', 'equal', 'Sáb 3'),
+      E('personal', 'Zapatillas', 'regalos', 89.9, 'Tú', 'mine', 'Ayer'),
+      E('personal', 'Libros', 'ocio', 24.5, 'Tú', 'mine', 'Sáb 3'),
+      E('personal', 'Gimnasio', 'salud', 39, 'Tú', 'mine', 'Jue 1')
+    ],
+    budgets: { casa: { super: 300, recibos: 150, ocio: 50, transporte: 100 }, lisboa: {}, personal: { ocio: 80 } },
+    hist: { casa: [520, 560, 540, 600, 548], lisboa: [0, 0, 0, 0, 0], personal: [180, 210, 200, 190, 205] },
+    lists: [
+      { id: 'l1', name: 'Mercadona', items: [{ id: 1, t: 'Leche de avena ×2', done: false }, { id: 2, t: 'Huevos', done: false }, { id: 3, t: 'Tomates', done: false }, { id: 4, t: 'Detergente', done: false }, { id: 5, t: 'Pan', done: true }, { id: 6, t: 'Café', done: true }] },
+      { id: 'l2', name: 'Farmacia', items: [{ id: 7, t: 'Ibuprofeno', done: false }, { id: 8, t: 'Crema solar', done: false }] }
+    ],
+    activeList: 'l1', newItem: '',
+    draft: null, addMode: 'form', scanned: false,
+    filter: 'all', q: '', mesView: 'budget', method: 'Bizum', settledNow: false,
+    choice: 'pareja', welcomeMode: 'onboard', toast: null, mcp: false, iconsReady: !!window.lucide
+  };
+
+  componentDidMount() {
+    if (!window.lucide) this.poll = setInterval(() => { if (window.lucide) { clearInterval(this.poll); this.setState({ iconsReady: true }); } }, 150);
+  }
+  componentWillUnmount() { clearInterval(this.poll); clearTimeout(this.tt); clearTimeout(this.st); }
+
+  icon(name) {
+    const L = window.lucide; const node = L && L.icons && L.icons[name];
+    if (!node) return React.createElement('span', { style: { display: 'block', width: '100%', height: '100%' } });
+    const kids = node[0] === 'svg' ? node[2] : node;
+    return React.createElement('svg', { width: '100%', height: '100%', viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block' } },
+      kids.map(([t, a], i) => React.createElement(t, { ...a, key: i })));
+  }
+
+  sp(id) { return this.state.spaces.find(s => s.id === id) || this.state.spaces[0]; }
+  n(s) { return s.others.length + 1; }
+  eff(e, s) {
+    if (e.type === 'settle') return e.delta;
+    const n = this.n(s); if (n === 1) return 0;
+    const me = e.payer === 'Tú';
+    if (e.split === 'equal') return me ? e.amount * (n - 1) / n : -e.amount / n;
+    if (e.split === 'mine') return me ? 0 : -e.amount;
+    return me ? e.amount : 0;
+  }
+  bal(id) { const s = this.sp(id); return this.state.expenses.filter(e => e.space === id).reduce((a, e) => a + this.eff(e, s), 0); }
+  spent(id) { return this.state.expenses.filter(e => e.space === id && e.type !== 'settle'); }
+  toastMsg(m) { clearTimeout(this.tt); this.setState({ toast: m }); this.tt = setTimeout(() => this.setState({ toast: null }), 2000); }
+  balWords(s, b) {
+    const n = this.n(s), o = s.others[0];
+    if (n === 1) return 'Este mes';
+    if (b > 0.005) return n === 2 ? `${o} te debe` : 'Te deben';
+    if (b < -0.005) return n === 2 ? `Le debes a ${o}` : 'Debes';
+    return 'Estáis en paz';
+  }
+  subOf(e, s) {
+    if (e.type === 'settle') return e.sub;
+    const n = this.n(s);
+    if (n === 1) return CATS[e.cat].l;
+    const p = e.payer === 'Tú' ? 'Pagaste tú' : 'Pagó ' + e.payer;
+    const sp = e.split === 'equal' ? (n === 2 ? 'a medias' : 'a partes iguales') : e.split === 'mine' ? 'solo para ti' : (n === 2 ? 'solo para ' + s.others[0] : 'para los demás');
+    return p + ' · ' + sp;
+  }
+  row(e, s) {
+    const st = e.type === 'settle';
+    return { key: e.id, icon: st ? this.icon('Check') : CATS[e.cat].e, iconBg: st ? '#EEF4F0' : '#fff', title: e.title, sub: this.subOf(e, s) + ' · ' + e.day, sub2: this.subOf(e, s), amount: fmt(e.amount), amtColor: st ? G : INK };
+  }
+  go = screen => this.setState({ screen });
+  openAdd = (pre = {}) => {
+    const s = this.sp(pre.space || this.state.active);
+    clearTimeout(this.st);
+    this.setState({ screen: 'add', addMode: 'form', scanned: false, draft: { amt: '', title: '', cat: 'super', payerIdx: 0, split: this.n(s) === 1 ? 'mine' : 'equal', space: s.id, from: this.state.screen, ...pre } });
+  };
+
+  renderVals() {
+    const S = this.state, s = this.sp(S.active), n = this.n(s), b = this.bal(s.id);
+    const I = {}; Object.keys(ICONS).forEach(k => { I[k] = this.icon(ICONS[k]); });
+    const spentList = this.spent(s.id), total = spentList.reduce((a, e) => a + e.amount, 0);
+    const byCat = {}; spentList.forEach(e => { byCat[e.cat] = (byCat[e.cat] || 0) + e.amount; });
+    const catSorted = Object.keys(byCat).sort((a, c) => byCat[c] - byCat[a]);
+    const tcol = k => (S.screen === k ? INK : '#8A8C85');
+
+    // home
+    const cards = S.spaces.map(sp => {
+      const act = sp.id === S.active, nn = this.n(sp), bb = this.bal(sp.id);
+      const tot = this.spent(sp.id).reduce((a, e) => a + e.amount, 0);
+      return {
+        key: sp.id, title: sp.emoji + ' ' + sp.name,
+        sub: nn === 1 ? 'Solo tú' : nn === 2 ? 'con ' + sp.others[0] : nn + ' personas',
+        label: this.balWords(sp, bb), amount: fmt(nn === 1 ? tot : Math.abs(bb)), amtSize: act ? '34px' : '22px',
+        w: act ? '236px' : '150px', bg: act ? G : '#fff', fg: act ? '#fff' : INK, border: act ? '1px solid ' + G : '1px solid rgba(0,0,0,.08)',
+        amtColor: act ? '#fff' : nn === 1 ? INK : bb < -0.005 ? R : bb > 0.005 ? G : INK,
+        showSettle: act && nn > 1 && Math.abs(bb) > 0.005,
+        onTap: () => this.setState({ active: sp.id, filter: 'all' }),
+        onSettle: ev => { ev.stopPropagation(); this.setState({ screen: 'settle', settledNow: false }); }
+      };
+    });
+    const palette = [G, '#7FAE95', '#C5D6CA', '#E4E6DF'];
+    const segs = total ? catSorted.slice(0, 4).map((c, i) => ({ key: c, w: (byCat[c] / total * 100) + '%', c: palette[i] })) : [];
+    const segLabels = total ? catSorted.slice(0, 3).map(c => ({ key: c, t: `${CATS[c].l} ${Math.round(byCat[c] / total * 100)}%` })) : [{ key: 'none', t: 'Sin gastos todavía' }];
+    const all = S.expenses.filter(e => e.space === s.id);
+
+    // gastos
+    const ql = S.q.trim().toLowerCase();
+    const filtered = all.filter(e => (S.filter === 'all' || e.type === 'settle' ? true : S.filter === 'me' ? e.payer === 'Tú' : e.payer !== 'Tú') && (!ql || e.title.toLowerCase().includes(ql) || String(e.amount).includes(ql)));
+    const groups = []; filtered.forEach(e => { let g = groups.find(x => x.day === e.day); if (!g) groups.push(g = { key: e.day, day: e.day, items: [], sum: 0 }); g.items.push(this.row(e, s)); if (e.type !== 'settle') g.sum += e.amount; });
+    groups.forEach(g => { g.total = fmt(g.sum); });
+    const fdefs = [['all', 'Todos'], ['me', 'Pagué yo'], ['other', n === 2 ? 'Pagó ' + s.others[0] : 'Pagaron otros']];
+    const filters = fdefs.map(([k, t]) => ({ key: k, t, bg: S.filter === k ? INK : '#fff', fg: S.filter === k ? '#fff' : INK, bd: S.filter === k ? INK : 'rgba(0,0,0,.08)', onTap: () => this.setState({ filter: k }) }));
+
+    // mes
+    const bud = S.budgets[s.id] || {}, bkeys = Object.keys(bud);
+    const bTotal = bkeys.reduce((a, k) => a + bud[k], 0), bSpent = bkeys.reduce((a, k) => a + (byCat[k] || 0), 0);
+    const remain = bTotal - bSpent;
+    const budgetRows = bkeys.map((k, i) => { const sp = byCat[k] || 0, over = sp > bud[k]; return { key: k, label: CATS[k].e + ' ' + CATS[k].l, text: `${Math.round(sp)} / ${bud[k]} €`, w: Math.min(100, sp / bud[k] * 100) + '%', c: over ? R : G, tc: over ? R : MUTED, tw: over ? 600 : 400, bb: i === bkeys.length - 1 ? 'none' : '1px solid rgba(0,0,0,.06)' }; });
+    const unbudgeted = Object.keys(CATS).filter(k => !bud[k]).map(k => ({ key: k, t: CATS[k].e + ' ' + CATS[k].l, onTap: () => { this.setState(st => ({ budgets: { ...st.budgets, [s.id]: { ...st.budgets[s.id], [k]: 100 } } })); this.toastMsg(`Presupuesto de ${CATS[k].l}: 100 €`); } }));
+    const hist = S.hist[s.id] || [0, 0, 0, 0, 0], vals = [...hist, total], mx = Math.max(...vals, 1), prev = hist[hist.length - 1];
+    const bars = ['may', 'jun', 'jul', 'ago', 'sep', 'oct'].map((m, i) => ({ key: m, m, h: Math.max(3, vals[i] / mx * 100) + '%', c: i === 5 ? G : i === 4 ? '#C5D6CA' : '#E4E6DF', lc: i === 5 ? INK : MUTED, lw: i === 5 ? 600 : 400 }));
+    const diff = prev ? Math.round((total - prev) / prev * 100) : null;
+
+    // listas
+    const L = S.lists.find(l => l.id === S.activeList) || S.lists[0];
+    const toggle = id => this.setState(st => ({ lists: st.lists.map(l => l.id !== L.id ? l : { ...l, items: l.items.map(it => it.id === id ? { ...it, done: !it.done } : it) }) }));
+    const pend = L.items.filter(i => !i.done), dn = L.items.filter(i => i.done);
+    const addItem = () => { const t = S.newItem.trim(); if (!t) return; this.setState(st => ({ newItem: '', lists: st.lists.map(l => l.id !== L.id ? l : { ...l, items: [{ id: uid++, t, done: false }, ...l.items] }) })); };
+
+    // settle
+    const shared = spentList.filter(e => e.split === 'equal'), tShared = shared.reduce((a, e) => a + e.amount, 0);
+    const tMe = spentList.filter(e => e.payer === 'Tú').reduce((a, e) => a + e.amount, 0);
+    const atPeace = S.settledNow || Math.abs(b) < 0.005;
+
+    // add
+    const D = S.draft || { amt: '', title: '', cat: 'super', payerIdx: 0, split: 'equal', space: S.active };
+    const ds = this.sp(D.space), dn2 = this.n(ds);
+    const amtNum = parseFloat((D.amt || '0').replace(',', '.')) || 0;
+    const payers = ['Tú', ...ds.others];
+    const splits = dn2 === 2 ? [['equal', 'A medias'], ['mine', 'Solo para mí'], ['theirs', 'Solo ' + ds.others[0]]] : [['equal', 'Iguales'], ['mine', 'Solo para mí'], ['theirs', 'Los demás']];
+    const draftEff = this.eff({ amount: amtNum, payer: payers[D.payerIdx] || 'Tú', split: D.split }, ds);
+    const who = dn2 === 2 ? ds.others[0] : 'el grupo';
+    const preview = !amtNum || dn2 === 1 ? '' : draftEff > 0.005 ? `${dn2 === 2 ? who + ' te deberá' : 'Te deberán'} ${fmt(draftEff)} más` : draftEff < -0.005 ? `Deberás ${fmt(-draftEff)} a ${dn2 === 2 ? who : payers[D.payerIdx] === 'Tú' ? 'los demás' : payers[D.payerIdx]}` : 'No cambia el saldo';
+    const setD = p => this.setState(st => ({ draft: { ...st.draft, ...p } }));
+    const press = k => () => {
+      let a = D.amt || '';
+      if (k === 'del') a = a.slice(0, -1);
+      else if (k === ',') { if (!a.includes(',')) a = (a || '0') + ','; }
+      else { if (a.includes(',') && a.split(',')[1].length >= 2) return; if (a.replace(',', '').length >= 6) return; a = a === '0' ? k : a + k; }
+      setD({ amt: a });
+    };
+    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', 'del'].map(k => ({ key: k, label: k === 'del' ? React.createElement('span', { style: { width: 24, height: 24, display: 'block' } }, this.icon('Delete')) : k, onTap: press(k) }));
+
+    const welcomeOpts = Object.keys(TYPES).map(k => ({ key: k, ...TYPES[k], border: S.choice === k ? '2px solid ' + G : '1px solid rgba(0,0,0,.08)', onTap: () => this.setState({ choice: k }) }));
+
+    return {
+      I,
+      is: { welcome: S.screen === 'welcome', home: S.screen === 'home', gastos: S.screen === 'gastos', mes: S.screen === 'mes', listas: S.screen === 'listas', espacios: S.screen === 'espacios', ajustes: S.screen === 'ajustes', settle: S.screen === 'settle', add: S.screen === 'add' },
+      showTabs: ['home', 'gastos', 'mes', 'listas'].includes(S.screen),
+      tc: { home: tcol('home'), gastos: tcol('gastos'), mes: tcol('mes'), listas: tcol('listas') },
+      goHome: () => this.go('home'), goGastos: () => this.go('gastos'), goMes: () => this.go('mes'), goListas: () => this.go('listas'),
+      goEspacios: () => this.go('espacios'), goAjustes: () => this.go('ajustes'), openAdd: () => this.openAdd(),
+      hasToast: !!S.toast, toast: S.toast,
+      spaceTitle: s.emoji + ' ' + s.name, spaceName: s.name, shared: n > 1,
+
+      welcomeCreate: S.welcomeMode === 'create', welcomeOpts,
+      welcomeSub: S.welcomeMode === 'create' ? 'Elige el tipo de espacio nuevo.' : 'Crea tu primer espacio. Podrás añadir más cuando quieras.',
+      welcomeCta: S.welcomeMode === 'create' ? 'Crear espacio' : 'Continuar',
+      welcomeContinue: () => {
+        const map = { pareja: 'casa', viaje: 'lisboa', solo: 'personal' };
+        if (S.welcomeMode === 'onboard' && map[S.choice]) return this.setState({ screen: 'home', active: map[S.choice] });
+        const T = TYPES[S.choice], id = 's' + uid++;
+        this.setState(st => ({ spaces: [...st.spaces, { id, name: T.name, emoji: T.e, kind: T.kind, others: T.others, code: 'NEW-' + id.toUpperCase().slice(-3) }], budgets: { ...st.budgets, [id]: {} }, hist: { ...st.hist, [id]: [0, 0, 0, 0, 0] }, active: id, screen: 'home', welcomeMode: 'onboard' }));
+        this.toastMsg(`Espacio "${T.name}" creado`);
+      },
+      joinCode: () => this.toastMsg('Abre el enlace de invitación o pega el código'),
+
+      cards, dots: S.spaces.map(sp => ({ key: sp.id, w: sp.id === S.active ? '16px' : '4px', bg: sp.id === S.active ? INK : '#C9CBC4' })),
+      monthLabel: 'Octubre en ' + s.name, totalText: fmt(total), segs, segLabels,
+      recent: all.slice(0, 4).map(e => this.row(e, s)), noExpenses: all.length === 0,
+
+      q: S.q, onQ: ev => this.setState({ q: ev.target.value }), filters, groups, noGroups: groups.length === 0,
+
+      mesBudget: S.mesView === 'budget', mesAnalysis: S.mesView === 'analysis',
+      setBudgetView: () => this.setState({ mesView: 'budget' }), setAnalysisView: () => this.setState({ mesView: 'analysis' }),
+      segBudgetBg: S.mesView === 'budget' ? '#fff' : 'transparent', segBudgetFg: S.mesView === 'budget' ? INK : MUTED,
+      segAnaBg: S.mesView === 'analysis' ? '#fff' : 'transparent', segAnaFg: S.mesView === 'analysis' ? INK : MUTED,
+      hasBudgets: bkeys.length > 0, noBudgets: bkeys.length === 0, budgetRows, unbudgeted,
+      remainLabel: remain >= 0 ? 'Te quedan para 26 días' : 'Te has pasado', remainText: fmt(Math.abs(remain)), remainColor: remain >= 0 ? INK : R, remainBar: remain >= 0 ? G : R,
+      budgetPct: Math.min(100, bTotal ? bSpent / bTotal * 100 : 0) + '%', budgetSummary: `${fmt(bSpent)} de ${fmt(bTotal)} en categorías con presupuesto`,
+      bars, vsText: diff === null ? 'primer mes' : `${diff > 0 ? '+' : ''}${diff}% vs sept.`, vsColor: diff > 0 ? R : G,
+      catRows: catSorted.map(c => ({ key: c, e: CATS[c].e, l: CATS[c].l, p: Math.round(byCat[c] / total * 100) + '%', a: fmt(byCat[c]) })),
+
+      listChips: S.lists.map(l => { const a = l.id === L.id; return { key: l.id, t: `${l.name} · ${l.items.filter(i => !i.done).length}`, bg: a ? INK : '#fff', fg: a ? '#fff' : INK, bd: a ? INK : 'rgba(0,0,0,.08)', onTap: () => this.setState({ activeList: l.id }) }; }),
+      newList: () => { const id = 'l' + uid++; this.setState(st => ({ lists: [...st.lists, { id, name: 'Lista ' + (st.lists.length + 1), items: [] }], activeList: id })); },
+      newItem: S.newItem, onNewItem: ev => this.setState({ newItem: ev.target.value }), onNewItemKey: ev => { if (ev.key === 'Enter') addItem(); }, addItem,
+      pending: pend.map((it, i) => ({ key: it.id, t: it.t, bb: i === pend.length - 1 ? 'none' : '1px solid rgba(0,0,0,.06)', onTap: () => toggle(it.id) })),
+      done: dn.map(it => ({ key: it.id, t: it.t, onTap: () => toggle(it.id) })),
+      hasPending: pend.length > 0, hasDone: dn.length > 0, listEmpty: L.items.length === 0, doneLabel: `En el carro · ${dn.length}`,
+      finishOpacity: dn.length ? 1 : 0.35,
+      finishList: () => {
+        if (!dn.length) return this.toastMsg('Marca lo que has cogido');
+        this.setState(st => ({ lists: st.lists.map(l => l.id !== L.id ? l : { ...l, items: l.items.filter(i => !i.done) }) }));
+        this.openAdd({ title: L.name, cat: 'super' });
+      },
+
+      spaceRows: S.spaces.map(sp => {
+        const nn = this.n(sp), bb = this.bal(sp.id), act = sp.id === S.active, tot = this.spent(sp.id).reduce((a, e) => a + e.amount, 0);
+        return { key: sp.id, emoji: sp.emoji, name: sp.name, iconBg: act ? '#EEF4F0' : '#F6F6F3', border: act ? '2px solid ' + G : '1px solid rgba(0,0,0,.08)',
+          sub: nn === 1 ? `Solo tú · ${fmt(tot)} este mes` : nn === 2 ? `${sp.kind} · tú y ${sp.others[0]}` : `${sp.kind} · ${nn} personas${sp.until ? ' · ' + sp.until : ''}`,
+          bal: nn === 1 ? '' : Math.abs(bb) < 0.005 ? 'En paz' : (bb > 0 ? '+' : '−') + fmt(Math.abs(bb)), balColor: bb > 0.005 ? G : bb < -0.005 ? R : MUTED,
+          onTap: () => this.setState({ active: sp.id, screen: 'home', filter: 'all' }) };
+      }),
+      createSpace: () => this.setState({ screen: 'welcome', welcomeMode: 'create', choice: 'piso' }),
+      inviteCode: s.code || '—', shareInvite: () => this.toastMsg('Enlace de invitación copiado'),
+
+      mcpSub: S.mcp ? 'Acceso MCP · conectado' : 'Acceso MCP · sin conectar', mcpCta: S.mcp ? 'Desconectar' : 'Conectar',
+      toggleMcp: () => { this.setState({ mcp: !S.mcp }); this.toastMsg(S.mcp ? 'Hermes Agent desconectado' : 'Token generado para Hermes Agent'); },
+      soon: () => this.toastMsg('Fuera del alcance del prototipo'),
+      logout: () => this.setState({ screen: 'welcome', welcomeMode: 'onboard', choice: 'pareja' }),
+
+      atPeace, notPeace: !atPeace,
+      peaceSub: S.settledNow ? `Pago registrado por ${S.method}. Lo verás en Gastos.` : `No hay nada pendiente en ${s.name}.`,
+      ticketMeta: `1 – 5 OCT · ${spentList.length} GASTOS`,
+      tShared: fmt(tShared), tEachLabel: n === 2 ? 'A cada uno' : `A cada uno (÷${n})`, tEach: fmt(tShared / n), tMe: fmt(tMe),
+      tOthersLabel: n === 2 ? 'Pagó ' + s.others[0] : 'Pagaron los demás', tOthers: fmt(total - tMe),
+      balLabel: this.balWords(s, b), balText: fmt(Math.abs(b)), balColor: b >= 0 ? G : R,
+      methods: ['Bizum', 'Transfer.', 'Efectivo'].map(m => ({ key: m, t: m, border: S.method === m ? '2px solid ' + G : '1px solid rgba(0,0,0,.08)', onTap: () => this.setState({ method: m }) })),
+      confirmLabel: b > 0 ? 'Ya me ha pagado' : 'Ya he pagado',
+      confirmSettle: () => this.setState(st => ({ settledNow: true, expenses: [{ id: uid++, type: 'settle', space: s.id, title: 'Quedasteis en paz', sub: (b > 0 ? (n === 2 ? s.others[0] + ' te pagó' : 'Te pagaron') : 'Pagaste') + ' por ' + st.method, amount: Math.abs(b), delta: -b, day: 'Hoy' }, ...st.expenses] })),
+      remindLabel: n === 2 ? 'Recordárselo a ' + s.others[0] : 'Recordárselo al grupo',
+      remind: () => this.toastMsg(n === 2 ? `Recordatorio enviado a ${s.others[0]}` : 'Recordatorio enviado al grupo'),
+
+      closeAdd: () => { clearTimeout(this.st); this.go(D.from && D.from !== 'add' ? D.from : 'home'); },
+      draftSpaces: S.spaces.map(sp => { const a = sp.id === D.space; return { key: sp.id, t: sp.emoji + ' ' + sp.name, bg: a ? G : '#fff', fg: a ? '#fff' : INK, bd: a ? G : 'rgba(0,0,0,.08)', onTap: () => setD({ space: sp.id, payerIdx: 0, split: this.n(sp) === 1 ? 'mine' : 'equal' }) }; }),
+      scanning: S.addMode === 'scan', formMode: S.addMode === 'form', scanned: S.scanned,
+      scanLine: React.createElement('div', { style: { position: 'absolute', left: 40, right: 40, top: 40, height: 2, background: '#7FD3A8', boxShadow: '0 0 14px #7FD3A8', animation: 'eqScan 1.8s ease-in-out infinite' } }),
+      startScan: () => { this.setState({ addMode: 'scan' }); clearTimeout(this.st); this.st = setTimeout(() => this.setState(st => ({ addMode: 'form', scanned: true, draft: { ...st.draft, amt: '43,85', title: 'Mercadona', cat: 'super' } })), 1900); },
+      cancelScan: () => { clearTimeout(this.st); this.setState({ addMode: 'form' }); },
+      amtText: D.amt || '0', amtColor: D.amt ? INK : '#A5A79F',
+      draftTitle: D.title, onTitle: ev => setD({ title: ev.target.value }),
+      catChips: Object.keys(CATS).map(k => { const a = D.cat === k; return { key: k, t: CATS[k].e + ' ' + CATS[k].l, bg: a ? '#EEF4F0' : '#fff', fg: a ? G : INK, bd: a ? G : 'rgba(0,0,0,.08)', onTap: () => setD({ cat: k }) }; }),
+      draftShared: dn2 > 1, payerName: payers[D.payerIdx] || 'Tú', splitName: (splits.find(x => x[0] === D.split) || splits[0])[1],
+      cyclePayer: () => setD({ payerIdx: (D.payerIdx + 1) % payers.length }),
+      cycleSplit: () => { const i = splits.findIndex(x => x[0] === D.split); setD({ split: splits[(i + 1) % splits.length][0] }); },
+      preview, keys, saveOpacity: amtNum ? 1 : 0.4,
+      save: () => {
+        if (!amtNum) return this.toastMsg('Introduce un importe');
+        const e = E(D.space, D.title.trim() || CATS[D.cat].l, D.cat, amtNum, payers[D.payerIdx] || 'Tú', dn2 === 1 ? 'mine' : D.split, 'Hoy');
+        this.setState(st => ({ expenses: [e, ...st.expenses], active: D.space, screen: 'home', settledNow: false }));
+        this.toastMsg('Gasto guardado · ' + fmt(amtNum));
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>
