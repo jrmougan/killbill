@@ -166,7 +166,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await expect(pendingCard).toContainText('Liquidación');
     await expect(pendingCard).toContainText('User B → User A');
     await expect(pendingCard).toContainText('Pendiente');
-    await expect(pendingCard.locator('p.font-mono')).toHaveText(FIFTY);
+    await expect(pendingCard).toContainText(/50,00\s€/);
     // Only the receiver gets the confirm section.
     await expect(pageB.getByText('Confirmar Pagos')).toHaveCount(0);
 
@@ -176,10 +176,12 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await confirmFromDashboard(pageA, 'User B');
     await expect(pageA.getByTestId('balance-amount')).toHaveText(ZERO);
 
-    // Payer: balance 0,00 € and the pending card is gone (feed shows PENDING only).
+    // Payer: balance 0,00 € and the Recientes row now reads as confirmed.
     await pageB.reload();
     await expect(pageB.getByTestId('balance-amount')).toHaveText(ZERO);
-    await expect(pageB.locator(`a[href="/settle/${settlementId}"]`)).toHaveCount(0);
+    const settledRow = pageB.locator(`a[href="/settle/${settlementId}"]`);
+    await expect(settledRow).toContainText('Confirmado');
+    await expect(settledRow).not.toContainText('Pendiente');
 
     // Close checklist: 1/1 confirmed.
     await pageA.goto(`/spaces/${spaceId}/close`);

@@ -1,11 +1,14 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { CreateSpaceForm } from "@/components/space/create-space-form";
+import { ephemeralSpacesEnabled } from "@/lib/flags";
+import { CreateSpaceFlow } from "@/components/space/create-space-flow";
 
 export const dynamic = "force-dynamic";
 
+/** "Crear espacio" — same chooser as the onboarding, reached from Espacios. */
 export default async function NewSpacePage() {
     const session = await getSession();
     if (!session?.userId) redirect("/login");
-    return <CreateSpaceForm />;
+    if (session.kind === "guest") redirect("/dashboard");
+    return <CreateSpaceFlow mode="create" ephemeralEnabled={ephemeralSpacesEnabled()} />;
 }

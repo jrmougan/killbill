@@ -11,6 +11,7 @@ test.describe('Couple - Create', () => {
     apiContext = await playwright.request.newContext({
       baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
     });
+    await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'solo-user');
     user = data.user;
   });
@@ -20,41 +21,41 @@ test.describe('Couple - Create', () => {
     await apiContext.dispose();
   });
 
-  test('user without a group sees the personal home with a "Crear un grupo" action', async ({ page }) => {
+  test('user without a space sees the personal home with create/join actions', async ({ page }) => {
     await loginAs(page, user);
     await expect(page).toHaveURL(/\/dashboard/);
 
-    // A group-less user is fully usable in the personal home (no onboarding wall);
-    // creating a group is a non-blocking action ("Crear un grupo") plus a join card.
-    const createGroupBtn = page.getByRole('button', { name: /Crear un grupo/i });
-    await expect(createGroupBtn).toBeVisible({ timeout: 10000 });
+    // A space-less user is fully usable in the personal context (no onboarding
+    // wall): the personal card is active and sharing is an optional action.
+    await expect(page.getByTestId('space-card-active')).toContainText('Personal este mes');
+    await expect(page.getByRole('link', { name: 'Crear espacio' })).toBeVisible({ timeout: 10000 });
+    await page.getByRole('button', { name: 'Unirme con enlace' }).click();
+    await expect(page.getByLabel('Pega el enlace de invitación')).toBeVisible();
   });
 
-  test('clicking "Crear un grupo" changes UI to show the group dashboard', async ({ page }) => {
+  test('creating a couple from "Crear espacio" makes it the active space', async ({ page }) => {
     await loginAs(page, user);
     await expect(page).toHaveURL(/\/dashboard/);
 
-    const createGroupBtn = page.getByRole('button', { name: /Crear un grupo/i });
-    await expect(createGroupBtn).toBeVisible({ timeout: 10000 });
+    await page.getByRole('link', { name: 'Crear espacio' }).click();
+    await expect(page).toHaveURL(/\/spaces\/new/);
+    await expect(page.getByRole('heading', { name: '¿Con quién compartes gastos?' })).toBeVisible();
 
-    // Submitting the form triggers a server action that creates the couple and
-    // redirects. Wait for that POST to fully complete before touching the page so
-    // we never abort the in-flight action (a premature reload/navigation does).
-    await Promise.all([
-      page.waitForResponse((r) => r.request().method() === 'POST', { timeout: 15000 }),
-      createGroupBtn.click(),
-    ]);
+    await page.getByRole('button', { name: /Mi pareja/ }).click();
+    await expect(page.getByRole('button', { name: /Mi pareja/ })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByLabel('Nombre del espacio').fill('Casa QA');
 
-    // The client-side RSC refresh after the redirect is racy under CI load (single
-    // worker, standalone server) — the dashboard intermittently keeps showing the
-    // onboarding view for a beat, which flaked this test as both a negative and a
-    // positive assertion. The couple now exists (POST completed), so a fresh
-    // navigation renders the couple view deterministically.
-    await page.goto('/dashboard');
+    const created = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/spaces' && r.request().method() === 'POST');
+    await page.getByRole('button', { name: 'Crear espacio' }).click();
+    expect((await created).status()).toBeLessThan(300);
 
-    // Group view rendered: the "Tu balance" card exists only once the user has a
-    // group, and the create-group action is gone.
-    await expect(page.getByText(/Tu balance/i)).toBeVisible({ timeout: 15000 });
-    await expect(page.getByRole('button', { name: /Crear un grupo/i })).toHaveCount(0);
+    // Inicio now shows the new couple as the active (wide) card, still waiting
+    // for the partner, with the secure-link invite card.
+    await expect(page).toHaveURL(/\/dashboard$/, { timeout: 15000 });
+    const activeCard = page.getByTestId('space-card-active');
+    await expect(activeCard).toContainText('Casa QA');
+    await expect(activeCard).toContainText('Solo tú');
+    await expect(page.getByTestId('space-invite-card')).toContainText('Invitar a Casa QA');
+    await expect(page.getByRole('link', { name: 'Crear espacio' })).toHaveCount(0);
   });
 });
