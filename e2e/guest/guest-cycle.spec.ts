@@ -85,7 +85,6 @@ test.describe('Guest - Full lifecycle in an ephemeral space', () => {
     const amountInput = page.locator('[data-testid="expense-amount"]');
     await expect(amountInput).toBeVisible({ timeout: 10000 });
     await amountInput.fill('10');
-    await page.locator('[data-testid="expense-next"]').click();
 
     // Wizard step 2: description + submit
     const descriptionInput = page.locator('[data-testid="expense-description"]');

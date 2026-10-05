@@ -11,7 +11,6 @@ function credentials(user: SeedUser | undefined) {
 async function createExpense(page: Page, description: string, amount: string, category: string, personal = false): Promise<string> {
   await page.goto(personal ? '/expenses/new?type=personal' : '/expenses/new');
   await page.getByTestId('expense-amount').fill(amount);
-  await page.getByTestId('expense-next').click();
   await page.getByTestId('expense-description').fill(description);
   await page.getByRole('button', { name: new RegExp(category) }).click();
   const saved = page.waitForResponse(response =>

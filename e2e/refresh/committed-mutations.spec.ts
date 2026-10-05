@@ -51,7 +51,6 @@ test('starting settle-up refreshes the suggested payment checklist without reloa
   const creditorPage = await creditorContext.newPage();
   await creditorPage.goto('/expenses/new');
   await creditorPage.getByTestId('expense-amount').fill('100.00');
-  await creditorPage.getByTestId('expense-next').click();
   await creditorPage.getByTestId('expense-description').fill('Compra para cerrar');
   await creditorPage.getByTestId('expense-submit').click();
   await expect(creditorPage).toHaveURL(/\/dashboard/);
