@@ -1,12 +1,12 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { EqCta, EqHeader } from "@/components/ui/eq";
 import { Input } from "@/components/ui/input";
 import {
-    ArrowLeft, Check, Heart, User, Camera, Loader2, X, Plus, Trash2,
+    Check, Heart, User, Camera, Loader2, X, Plus, Trash2,
     Calculator, FileText, Tag, RefreshCw, ChevronDown, ChevronUp,
 } from "lucide-react";
-import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -375,17 +375,10 @@ export function EditExpenseClient({
     };
 
     return (
-        <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto relative pb-24">
-            <header className="flex items-center gap-4 pt-2">
-                <Link href={`/expense/${expenseId}`}>
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
-                        <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                </Link>
-                <h1 className="text-xl font-bold text-foreground">Editar Gasto</h1>
-            </header>
+        <div className="eq-in flex flex-col min-h-screen w-full pt-3 pb-10 relative">
+            <EqHeader title="Editar gasto" back={`/expense/${expenseId}`} />
 
-            <form onSubmit={handleSubmit} className="flex-1 space-y-8 mt-4">
+            <form onSubmit={handleSubmit} className="flex-1 space-y-7 px-5 pt-5">
 
                 {/* 1. Receipt preview / re-scan */}
                 <div className="space-y-4">
@@ -393,7 +386,7 @@ export function EditExpenseClient({
                         <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="w-full aspect-video rounded-2xl border-2 border-dashed border-[color:var(--line-strong)] bg-card flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-secondary transition-all group"
+                            className="w-full aspect-video rounded-[18px] border-2 border-dashed border-[color:var(--line-strong)] bg-card flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-secondary transition-all group"
                         >
                             <div className="h-12 w-12 rounded-full bg-[var(--accent-tint)] flex items-center justify-center group-hover:scale-110 transition-transform">
                                 <Camera className="h-6 w-6 text-primary" />
@@ -404,7 +397,7 @@ export function EditExpenseClient({
                             </div>
                         </button>
                     ) : (
-                        <div className="relative rounded-2xl overflow-hidden border border-[color:var(--line)] aspect-video bg-secondary">
+                        <div className="relative rounded-[18px] overflow-hidden border border-[color:var(--line)] aspect-video bg-secondary">
                             {/* oxlint-disable-next-line nextjs/no-img-element -- user-uploaded receipt image of unknown dimensions; next/image would change layout/runtime */}
                             <img src={receiptPreview} alt="Ticket" className="w-full h-full object-contain" />
                             <Button
@@ -452,16 +445,16 @@ export function EditExpenseClient({
 
                 {/* 3. Amount */}
                 <div className="space-y-2 text-center py-2">
-                    <label htmlFor="expense-amount" className="text-[11px] text-muted-foreground uppercase tracking-[0.08em] font-bold">Importe</label>
-                    <div className="relative inline-block w-full max-w-[200px]">
-                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-3xl font-mono font-semibold text-muted-foreground">€</span>
+                    <label htmlFor="expense-amount" className="block text-xs font-semibold text-muted-foreground">Importe</label>
+                    <div className="relative inline-block w-full max-w-[260px]">
+                        <span className="absolute right-0 top-1/2 -translate-y-1/2 text-3xl font-bold text-[color:var(--ink-3)]">€</span>
                         <input
                             id="expense-amount"
                             type="number"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
                             placeholder="0.00"
-                            className="w-full bg-transparent text-center text-5xl font-mono font-semibold tracking-[-0.02em] text-foreground focus:outline-none placeholder:text-[color:var(--ink-3)] p-2 appearance-none"
+                            className="w-full bg-transparent text-center text-5xl font-bold tracking-[-0.03em] text-foreground pr-7 focus:outline-none placeholder:text-[color:var(--ink-3)] p-2 appearance-none"
                             required
                             step="0.01"
                         />
@@ -492,7 +485,7 @@ export function EditExpenseClient({
                         </Button>
                     </div>
 
-                    <div className="rounded-xl border border-[color:var(--line)] overflow-hidden bg-card">
+                    <div className="rounded-[14px] border border-[color:var(--line)] overflow-hidden bg-card">
                         {receiptItems.length === 0 ? (
                             <div className="p-4 text-center text-sm text-muted-foreground">
                                 Añade items manualmente o re-escanea el ticket
@@ -568,7 +561,7 @@ export function EditExpenseClient({
                 {/* 5b. Payer — only for shared expenses (N-way) */}
                 {!isPersonal && members.length > 0 && (
                     <div className="space-y-2">
-                        <span className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground">¿Quién pagó?</span>
+                        <span className="text-xs font-semibold text-muted-foreground">¿Quién pagó?</span>
                         <div className="flex flex-wrap gap-2">
                             {members.map((m) => {
                                 const sel = paidById === m.id;
@@ -580,7 +573,7 @@ export function EditExpenseClient({
                                         aria-pressed={sel}
                                         data-testid={`edit-payer-${m.id}`}
                                         className={cn(
-                                            "px-3 py-2 rounded-xl text-sm font-medium border transition-all active:scale-[0.98]",
+                                            "px-3 py-2 rounded-[14px] text-sm font-medium border transition-all active:scale-[0.98]",
                                             sel ? "bg-primary text-white border-primary shadow" : "bg-card border-[color:var(--line)] text-muted-foreground hover:bg-secondary"
                                         )}
                                     >
@@ -595,12 +588,12 @@ export function EditExpenseClient({
                 {/* 6. Split — only for shared expenses; the shared N-way SplitEditor.
                     Hidden when 2-member receipt item assignments take over the split. */}
                 {isPersonal ? (
-                    <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-card border border-[color:var(--line)] text-sm text-muted-foreground">
+                    <div className="flex items-center justify-center gap-2 py-3 rounded-[14px] bg-card border border-[color:var(--line)] text-sm text-muted-foreground">
                         <User className="h-4 w-4 text-primary" />
                         Gasto personal — privado, sin reparto
                     </div>
                 ) : hasItemAssignments ? (
-                    <div className="flex items-center justify-center gap-2 py-3 rounded-xl bg-card border border-[color:var(--line)] text-sm text-muted-foreground">
+                    <div className="flex items-center justify-center gap-2 py-3 rounded-[14px] bg-card border border-[color:var(--line)] text-sm text-muted-foreground">
                         <Heart className="h-4 w-4 text-primary" />
                         El reparto lo definen los productos asignados arriba
                     </div>
@@ -629,7 +622,7 @@ export function EditExpenseClient({
                             onChange={(e) => setNotes(e.target.value.slice(0, 500))}
                             placeholder="Añade una nota opcional..."
                             rows={3}
-                            className="w-full bg-card border border-[color:var(--line)] rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:border-[color:var(--accent-border)] resize-none placeholder:text-[color:var(--ink-3)] transition-colors"
+                            className="w-full bg-card border border-[color:var(--line)] rounded-[14px] px-4 py-3 text-sm text-foreground focus:outline-none focus:border-[color:var(--accent-border)] resize-none placeholder:text-[color:var(--ink-3)] transition-colors"
                         />
                         <span className={cn("absolute bottom-2 right-3 text-[10px] font-mono", notes.length >= 480 ? "text-primary" : "text-[color:var(--ink-3)]")}>
                             {notes.length}/500
@@ -642,7 +635,7 @@ export function EditExpenseClient({
                     <button
                         type="button"
                         onClick={() => setTagsExpanded((p) => !p)}
-                        className="w-full flex items-center justify-between text-sm font-medium p-3 rounded-xl bg-card border border-[color:var(--line)] text-foreground hover:bg-secondary transition-colors"
+                        className="w-full flex items-center justify-between text-sm font-medium p-3 rounded-[14px] bg-card border border-[color:var(--line)] text-foreground hover:bg-secondary transition-colors"
                     >
                         <span className="flex items-center gap-2">
                             <Tag className="h-4 w-4 text-primary" />
@@ -655,7 +648,7 @@ export function EditExpenseClient({
                     </button>
 
                     {tagsExpanded && (
-                        <div className="space-y-3 animate-in fade-in duration-200 bg-secondary rounded-xl p-4">
+                        <div className="space-y-3 animate-in fade-in duration-200 bg-secondary rounded-[14px] p-4">
                             {tags.length > 0 && (
                                 <div className="flex flex-wrap gap-2">
                                     {tags.map((tag) => {
@@ -709,7 +702,7 @@ export function EditExpenseClient({
                     <button
                         type="button"
                         onClick={() => setRecurringExpanded((p) => !p)}
-                        className="w-full flex items-center justify-between text-sm font-medium p-3 rounded-xl bg-card border border-[color:var(--line)] text-foreground hover:bg-secondary transition-colors"
+                        className="w-full flex items-center justify-between text-sm font-medium p-3 rounded-[14px] bg-card border border-[color:var(--line)] text-foreground hover:bg-secondary transition-colors"
                     >
                         <span className="flex items-center gap-2">
                             <RefreshCw className="h-4 w-4 text-primary" />
@@ -724,7 +717,7 @@ export function EditExpenseClient({
                     </button>
 
                     {recurringExpanded && (
-                        <div className="space-y-4 animate-in fade-in duration-200 bg-secondary rounded-xl p-4">
+                        <div className="space-y-4 animate-in fade-in duration-200 bg-secondary rounded-[14px] p-4">
                             <div className="flex items-center justify-between">
                                 <span className="text-sm text-foreground">¿Es un gasto recurrente?</span>
                                 <button
@@ -746,7 +739,7 @@ export function EditExpenseClient({
                                         return (
                                             <button
                                                 key={interval} type="button" onClick={() => setRecurringInterval(interval)}
-                                                className={cn("py-3 rounded-xl border text-center transition-all text-sm font-medium",
+                                                className={cn("py-3 rounded-[14px] border text-center transition-all text-sm font-medium",
                                                     recurringInterval === interval ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)] text-primary" : "border-[color:var(--line)] bg-card text-muted-foreground hover:bg-secondary")}
                                             >
                                                 <span className="block text-lg mb-1">{icons[interval]}</span>
@@ -766,14 +759,9 @@ export function EditExpenseClient({
                 </div>
 
                 <div className="pt-4">
-                    <Button
-                        type="submit"
-                        size="lg"
-                        className="w-full text-base h-16 shadow-[0_12px_28px_-8px_rgba(189,93,58,0.35)] font-bold"
-                        isLoading={loading}
-                    >
-                        Guardar Cambios <Check className="ml-2 h-5 w-5" />
-                    </Button>
+                    <EqCta type="submit" disabled={loading}>
+                        {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />} Guardar Cambios
+                    </EqCta>
                 </div>
             </form>
         </div>

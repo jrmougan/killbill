@@ -1,190 +1,215 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { GlassCard } from "@/components/ui/glass-card";
-import { ArrowLeft, Plus } from "lucide-react";
-import Link from "next/link";
-import { ExpenseFilters } from "@/components/expenses/filters";
-import { ExpenseCard } from "@/components/dashboard/expense-card";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, Search } from "lucide-react";
+import { EqChip, EqHeader, EqRow } from "@/components/ui/eq";
 import type { CategoryBadgeMeta } from "@/components/category/category-badge";
-import { User, Expense } from "@/types";
-import { formatEuros } from "@/lib/currency";
-import { getSettlementMethodLabel, getSettlementStatusLabel } from "@/lib/settlement-labels";
+import { formatCurrency } from "@/lib/currency";
+import { getSettlementMethodLabel } from "@/lib/settlement-labels";
 import { GuestBanner } from "@/components/guest/guest-banner";
+import {
+    EMPTY_FILTERS, ExpenseFiltersPanel, FiltersToggle, activeFilterCount, type AdvancedFilters,
+} from "@/components/expenses/filters";
+import { dayKey, dayLabel, expenseSubtitle, settlementText } from "@/components/expenses/list-format";
 
-interface UnifiedItem {
+export type ListItem = {
     id: string;
     type: "EXPENSE" | "SETTLEMENT";
     description: string;
-    amount: number;
+    amountCents: number;
     date: string;
     category: string;
     paidBy: string;
-    status?: string;
+    categoryMeta?: CategoryBadgeMeta;
+    splitStrategy?: string | null;
+    splits?: { userId: string; amount: number }[];
     toUserId?: string;
     method?: string;
-    receiptUrl?: string | null;
-    splits?: { userId: string, amount: number }[];
-    categoryMeta?: CategoryBadgeMeta;
+    status?: string;
+};
+
+type PayerFilter = "all" | "me" | "other";
+
+const PAGE = 40;
+
+function startOf(range: AdvancedFilters["dateRange"]): Date | null {
+    const now = new Date();
+    if (range === "week") { const d = new Date(now); d.setDate(now.getDate() - 7); return d; }
+    if (range === "month") return new Date(now.getFullYear(), now.getMonth(), 1);
+    if (range === "year") return new Date(now.getFullYear(), 0, 1);
+    return null;
 }
 
-interface ExpensesListClientProps {
-    items: UnifiedItem[];
-    usersMap: Record<string, User>;
+export function ExpensesListClient({
+    items,
+    userId,
+    members,
+    spaceLabel,
+    personal,
+    isGuest = false,
+    categories = [],
+}: {
+    items: ListItem[];
+    userId: string;
+    members: { id: string; name: string }[];
+    spaceLabel: string;
+    personal: boolean;
     isGuest?: boolean;
-    /** Effective category set (+ orphaned keys) for the filter chips. */
     categories?: CategoryBadgeMeta[];
-}
+}) {
+    const [q, setQ] = useState("");
+    const [payer, setPayer] = useState<PayerFilter>("all");
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const [advanced, setAdvanced] = useState<AdvancedFilters>(EMPTY_FILTERS);
+    const [visible, setVisible] = useState(PAGE);
 
-export function ExpensesListClient({ items, usersMap, isGuest = false, categories = [] }: ExpensesListClientProps) {
-    const [filters, setFilters] = useState({
-        search: "",
-        categories: [] as string[],
-        dateRange: "all" as "all" | "week" | "month" | "year",
-    });
+    const shared = !personal && members.length > 1;
+    const others = members.filter((m) => m.id !== userId);
+    const payerChips: { value: PayerFilter; label: string }[] = [
+        { value: "all", label: "Todos" },
+        { value: "me", label: "Pagué yo" },
+        { value: "other", label: others.length === 1 ? `Pagó ${others[0].name}` : "Pagaron otros" },
+    ];
 
-    const filteredItems = useMemo(() => {
-        let result = [...items];
-
-        // Search filter
-        if (filters.search) {
-            const searchLower = filters.search.toLowerCase();
-            result = result.filter(e =>
-                e.description.toLowerCase().includes(searchLower)
-            );
-        }
-
-        // Category filter
-        if (filters.categories.length > 0) {
-            result = result.filter(e => filters.categories.includes(e.category));
-        }
-
-        // Date range filter
-        if (filters.dateRange !== "all") {
-            const now = new Date();
-            let startDate: Date;
-
-            switch (filters.dateRange) {
-                case "week":
-                    startDate = new Date(now);
-                    startDate.setDate(now.getDate() - 7);
-                    break;
-                case "month":
-                    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-                    break;
-                case "year":
-                    startDate = new Date(now.getFullYear(), 0, 1);
-                    break;
+    const filtered = useMemo(() => {
+        const ql = q.trim().toLowerCase();
+        const since = startOf(advanced.dateRange);
+        return items.filter((e) => {
+            const isSettle = e.type === "SETTLEMENT";
+            if (!isSettle && payer === "me" && e.paidBy !== userId) return false;
+            if (!isSettle && payer === "other" && e.paidBy === userId) return false;
+            if (advanced.categories.length > 0 && (isSettle || !advanced.categories.includes(e.category))) return false;
+            if (since && new Date(e.date) < since) return false;
+            if (ql) {
+                const amountText = formatCurrency(e.amountCents).toLowerCase();
+                const raw = (e.amountCents / 100).toString();
+                const text = isSettle ? `liquidación ${e.description}` : e.description;
+                if (!text.toLowerCase().includes(ql) && !amountText.includes(ql) && !raw.includes(ql.replace(",", "."))) return false;
             }
+            return true;
+        });
+    }, [items, q, payer, advanced, userId]);
 
-            result = result.filter(e => new Date(e.date) >= startDate);
+    // Reset the window whenever the result set changes.
+    useEffect(() => { setVisible(PAGE); }, [q, payer, advanced]);
+
+    const groups = useMemo(() => {
+        // Day totals come from the whole filtered set so a day cut by the
+        // pagination window still shows its full total.
+        const totals = new Map<string, number>();
+        for (const e of filtered) {
+            if (e.type === "EXPENSE") totals.set(dayKey(e.date), (totals.get(dayKey(e.date)) ?? 0) + e.amountCents);
         }
+        const out: { key: string; label: string; total: number; items: ListItem[] }[] = [];
+        for (const e of filtered.slice(0, visible)) {
+            const key = dayKey(e.date);
+            let g = out[out.length - 1];
+            if (!g || g.key !== key) { g = { key, label: dayLabel(e.date), total: totals.get(key) ?? 0, items: [] }; out.push(g); }
+            g.items.push(e);
+        }
+        return out;
+    }, [filtered, visible]);
 
+    // Infinite load: grow the window when the sentinel scrolls into view.
+    const sentinel = useRef<HTMLDivElement>(null);
+    const hasMore = filtered.length > visible;
+    useEffect(() => {
+        const el = sentinel.current;
+        if (!el || !hasMore || typeof IntersectionObserver === "undefined") return;
+        const io = new IntersectionObserver((entries) => {
+            if (entries.some((en) => en.isIntersecting)) setVisible((v) => v + PAGE);
+        }, { rootMargin: "300px" });
+        io.observe(el);
+        return () => io.disconnect();
+    }, [hasMore, visible]);
 
-        return result;
-    }, [items, filters]);
-
-    const totalFiltered = filteredItems
-        .filter(i => i.type === "EXPENSE")
-        .reduce((sum, e) => sum + e.amount, 0);
+    const filterCount = activeFilterCount(advanced);
+    const anyFilter = q.trim() !== "" || payer !== "all" || filterCount > 0;
 
     return (
-        <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-24">
-            <header className="flex items-center gap-4 pt-2">
-                <Link href="/dashboard">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
-                        <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                </Link>
-                <div className="flex-1">
-                    <h1 className="text-xl font-bold">Todos los Movimientos</h1>
-                    <p className="text-xs text-muted-foreground">{items.length} registros en total</p>
+        <div className="eq-in flex flex-col w-full pt-3 pb-28">
+            <div className="flex flex-col gap-3 px-5">
+                <EqHeader title="Gastos" meta={spaceLabel} className="px-0 items-baseline" />
+                <GuestBanner show={isGuest} />
+                <label className="flex h-[42px] items-center gap-2 rounded-xl border border-[color:var(--line)] bg-card px-3 text-[color:var(--ink-3)]">
+                    <Search className="h-[17px] w-[17px] flex-none" aria-hidden />
+                    <input
+                        type="search"
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                        placeholder="Buscar gasto"
+                        aria-label="Buscar gasto"
+                        className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+                    />
+                </label>
+                <div className="eq-scroll flex items-center gap-1.5 overflow-x-auto">
+                    {shared && payerChips.map((c) => (
+                        <EqChip key={c.value} selected={payer === c.value} onClick={() => setPayer(c.value)}>
+                            {c.label}
+                        </EqChip>
+                    ))}
+                    <FiltersToggle open={filtersOpen} count={filterCount} onToggle={() => setFiltersOpen((o) => !o)} />
                 </div>
-                <Link href="/expenses/new">
-                    <Button size="icon" className="h-10 w-10 rounded-full shadow-lg">
-                        <Plus className="h-5 w-5" />
-                    </Button>
-                </Link>
-            </header>
+                {filtersOpen && <ExpenseFiltersPanel value={advanced} onChange={setAdvanced} categories={categories} />}
+            </div>
 
-            <GuestBanner show={isGuest} />
-
-            <ExpenseFilters onFiltersChange={setFilters} categories={categories} />
-
-            {/* Results Summary */}
-            {(filters.search || filters.categories.length > 0 || filters.dateRange !== "all") && (
-                <div className="flex items-center justify-between text-sm animate-in fade-in duration-200">
-                    <span className="text-muted-foreground">
-                        {filteredItems.length} resultado{filteredItems.length !== 1 ? "s" : ""}
-                    </span>
-                    <span className="font-mono font-semibold tracking-[-0.02em] text-primary">
-                        {new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(totalFiltered)}
-                    </span>
-                </div>
-            )}
-
-            {/* Unified List */}
-            <div className="space-y-3">
-                {filteredItems.length === 0 ? (
-                    <div className="text-center py-12 space-y-4">
-                        <div className="text-5xl">🔍</div>
-                        <div className="space-y-1">
-                            <p className="font-bold text-lg">Sin resultados</p>
-                            <p className="text-sm text-muted-foreground">
-                                {filters.search
-                                    ? `No hay elementos que coincidan con "${filters.search}"`
-                                    : "No hay elementos con los filtros seleccionados"
-                                }
-                            </p>
-                        </div>
-                    </div>
+            <div className="px-5 pt-3">
+                {groups.length === 0 ? (
+                    <p className="py-10 text-center text-sm text-muted-foreground">
+                        {anyFilter || items.length > 0 ? "No hay gastos que coincidan." : "Todavía no hay gastos."}
+                    </p>
                 ) : (
-                    filteredItems.map((item) => {
-                        if (item.type === "EXPENSE") {
-                            return (
-                                <ExpenseCard
-                                    key={item.id}
-                                    expense={item as unknown as Expense}
-                                    paidByUser={usersMap[item.paidBy]}
-                                    allUsers={usersMap}
-                                    categoryMeta={item.categoryMeta}
-                                />
-                            );
-                        } else {
-                            const fromUser = usersMap[item.paidBy];
-                            const toUser = item.toUserId ? usersMap[item.toUserId] : null;
-
-                            return (
-                                <Link href={`/settle/${item.id}`} key={item.id}>
-                                    <GlassCard className="p-4 flex items-center justify-between border-[color:var(--accent-border)] bg-[var(--accent-tint)] hover:bg-[var(--surface-raised-hex)] transition-all border-l-4 border-l-[color:var(--accent-hex)]">
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className="h-10 w-10 rounded-full bg-[var(--accent-tint)] flex items-center justify-center text-xl shrink-0">
-                                                🤝
-                                            </div>
-                                            <div className="min-w-0">
-                                                <h3 className="font-bold text-sm truncate">Liquidación</h3>
-                                                <p className="text-xs text-muted-foreground truncate">
-                                                    {fromUser?.name} ha pagado a {toUser?.name}
-                                                </p>
-                                                <p className="text-[10px] text-muted-foreground mt-1">
-                                                    {new Date(item.date).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' })} • {item.method ? getSettlementMethodLabel(item.method) : ""}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-lg font-mono font-semibold tracking-[-0.02em] text-primary">
-                                                {formatEuros(item.amount)}
-                                            </p>
-                                            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[var(--accent-tint)] text-primary">
-                                                {item.status ? getSettlementStatusLabel(item.status) : ""}
-                                            </span>
-                                        </div>
-                                    </GlassCard>
-                                </Link>
-                            );
-                        }
-                    })
+                    groups.map((g) => (
+                        <section key={g.key} aria-label={g.label} className="flex flex-col">
+                            <div className="flex justify-between pt-2.5 pb-1 text-xs font-semibold text-muted-foreground">
+                                <span>{g.label}</span>
+                                <span className="tabular-nums">{g.total > 0 ? formatCurrency(g.total) : ""}</span>
+                            </div>
+                            {g.items.map((e) => {
+                                if (e.type === "SETTLEMENT") {
+                                    const t = settlementText({
+                                        meId: userId,
+                                        fromId: e.paidBy,
+                                        toId: e.toUserId,
+                                        members,
+                                        methodLabel: e.method ? getSettlementMethodLabel(e.method) : "",
+                                        pending: e.status === "PENDING",
+                                    });
+                                    return (
+                                        <EqRow
+                                            key={e.id}
+                                            href={`/settle/${e.id}`}
+                                            icon={<Check className="h-5 w-5" />}
+                                            iconTint
+                                            title={t.title}
+                                            sub={t.sub}
+                                            amount={formatCurrency(e.amountCents)}
+                                            amountClassName="text-primary"
+                                        />
+                                    );
+                                }
+                                return (
+                                    <EqRow
+                                        key={e.id}
+                                        href={`/expense/${e.id}`}
+                                        icon={<span aria-hidden>{e.categoryMeta?.emoji ?? "📦"}</span>}
+                                        title={e.description}
+                                        sub={shared
+                                            ? expenseSubtitle({ meId: userId, paidBy: e.paidBy, members, splits: e.splits ?? [], splitStrategy: e.splitStrategy ?? null })
+                                            : e.categoryMeta?.label ?? "Gasto"}
+                                        amount={formatCurrency(e.amountCents)}
+                                    />
+                                );
+                            })}
+                        </section>
+                    ))
+                )}
+                {hasMore && (
+                    <div ref={sentinel} className="flex justify-center py-4">
+                        <button type="button" onClick={() => setVisible((v) => v + PAGE)} className="text-[13px] font-semibold text-muted-foreground hover:text-foreground">
+                            Mostrar más
+                        </button>
+                    </div>
                 )}
             </div>
         </div>

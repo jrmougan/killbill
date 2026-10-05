@@ -88,7 +88,7 @@ test.describe('Expenses - Edit and Delete', () => {
     // The expense no longer appears in the movements list
     await pageA.goto('/expenses/list');
     await expect(pageA.getByText('Test Expense')).not.toBeVisible({ timeout: 10000 });
-    await expect(pageA.getByText('Sin resultados')).toBeVisible();
+    await expect(pageA.getByText('Todavía no hay gastos.')).toBeVisible();
 
     await pageA.close();
     await ctxA.close();
