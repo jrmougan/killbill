@@ -111,4 +111,13 @@ test.describe('Dashboard - Balance', () => {
     await page.getByRole('button', { name: 'Continuar' }).click();
     await expect(page).toHaveURL(/\/i\/abc123TOKEN$/);
   });
+
+  test('?saved=<cents> shows a one-shot "Gasto guardado" toast and is stripped', async ({ page }) => {
+    await resetDb(apiContext);
+    const data = await seedScenario(apiContext, 'couple-with-debt');
+    await loginAs(page, data.userA);
+    await page.goto('/dashboard?scope=personal&saved=4385');
+    await expect(page.getByRole('status').filter({ hasText: 'Gasto guardado' })).toHaveText(/Gasto guardado · 43,85\s€/);
+    await expect(page).toHaveURL(/\/dashboard\?scope=personal$/);
+  });
 });

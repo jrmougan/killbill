@@ -32,11 +32,19 @@ function expensePost(page: Page) {
   );
 }
 
-/** Fill the 2-step add-expense wizard and submit; returns the POST response. */
+/**
+ * POST a shared expense into the ACTIVE space straight to the API. The add
+ * screen no longer offers SETTLING/ARCHIVED spaces at all, so the server-side
+ * veto is asserted here directly.
+ */
+function postSharedExpense(page: Page, amount: string, description: string) {
+  return page.request.post('/api/expenses', { data: { description, amount, category: 'other' } });
+}
+
+/** Fill the add-expense screen and submit; returns the POST response. */
 async function submitSharedExpense(page: Page, amount: string, description: string) {
   await page.goto('/expenses/new');
   await page.fill('[data-testid="expense-amount"]', amount);
-  await page.click('[data-testid="expense-next"]');
   await page.fill('[data-testid="expense-description"]', description);
   const responsePromise = expensePost(page);
   await page.click('[data-testid="expense-submit"]');
@@ -98,12 +106,12 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await expect(page.getByTestId('space-status-close-link')).toHaveAttribute('href', `/spaces/${spaceId}/close`);
     await expect(page.getByTestId('balance-amount')).toHaveText(PLUS_50);
 
-    // Adding a shared expense is blocked: the API answers 409 and the form shows why.
-    const expenseRes = await submitSharedExpense(page, '20.00', 'Gasto bloqueado');
+    // Adding a shared expense is blocked: the API answers 409 with the reason.
+    const expenseRes = await postSharedExpense(page, '20.00', 'Gasto bloqueado');
     expect(expenseRes.status()).toBe(409);
-    expect((await expenseRes.json()).code).toBe('SPACE_NOT_WRITABLE');
-    await expect(page.getByText('Este espacio se está liquidando: no se pueden crear gastos nuevos')).toBeVisible();
-    await expect(page).toHaveURL(/\/expenses\/new/);
+    const blocked = await expenseRes.json();
+    expect(blocked.code).toBe('SPACE_NOT_WRITABLE');
+    expect(blocked.error).toBe('Este espacio se está liquidando: no se pueden crear gastos nuevos');
 
     // Existing expenses become read-only (no edit/delete).
     await page.goto(`/expense/${expenseId}`);
@@ -201,9 +209,9 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await expect(page.getByTestId('close-archive')).toHaveCount(0);
 
     // New expenses are rejected with the archived message.
-    const expenseRes = await submitSharedExpense(page, '20.00', 'Gasto en archivado');
+    const expenseRes = await postSharedExpense(page, '20.00', 'Gasto en archivado');
     expect(expenseRes.status()).toBe(409);
-    await expect(page.getByText('Este espacio está archivado (solo lectura)')).toBeVisible();
+    expect((await expenseRes.json()).error).toBe('Este espacio está archivado (solo lectura)');
 
     // And the code treats ARCHIVED as terminal: reopening is refused (400 INVALID_TRANSITION).
     const reopen = await page.request.patch(`/api/spaces/${spaceId}`, { data: { status: 'ACTIVE' } });

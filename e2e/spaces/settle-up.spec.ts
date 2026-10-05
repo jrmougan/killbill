@@ -207,7 +207,6 @@ test.describe('Spaces - Settle-up (close flow)', () => {
 
     await pageB.goto('/expenses/new');
     await pageB.fill('[data-testid="expense-amount"]', '100.00');
-    await pageB.click('[data-testid="expense-next"]');
     await pageB.fill('[data-testid="expense-description"]', 'Compra compartida');
     const expensePromise = pageB.waitForResponse(
       (res) => new URL(res.url()).pathname === '/api/expenses' && res.request().method() === 'POST',
