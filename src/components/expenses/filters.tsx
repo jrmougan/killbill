@@ -1,169 +1,106 @@
 "use client";
 
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { GlassCard } from "@/components/ui/glass-card";
-import { Search, X, Filter, ChevronDown, ChevronUp } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EqCard, EqChip, EqLabel } from "@/components/ui/eq";
 import type { CategoryBadgeMeta } from "@/components/category/category-badge";
 
-interface ExpenseFiltersProps {
-    onFiltersChange: (filters: {
-        search: string;
-        categories: string[];
-        dateRange: "all" | "week" | "month" | "year";
-    }) => void;
-    /** DB-driven effective category set (+ orphaned keys) for the chips. */
-    categories?: CategoryBadgeMeta[];
+export type DateRange = "all" | "week" | "month" | "year";
+export type AdvancedFilters = { categories: string[]; dateRange: DateRange };
+
+export const EMPTY_FILTERS: AdvancedFilters = { categories: [], dateRange: "all" };
+
+const RANGES: { value: DateRange; label: string }[] = [
+    { value: "all", label: "Siempre" },
+    { value: "week", label: "7 días" },
+    { value: "month", label: "Este mes" },
+    { value: "year", label: "Este año" },
+];
+
+export function activeFilterCount(f: AdvancedFilters): number {
+    return f.categories.length + (f.dateRange !== "all" ? 1 : 0);
 }
 
-export function ExpenseFilters({ onFiltersChange, categories = [] }: ExpenseFiltersProps) {
-    const [search, setSearch] = useState("");
-    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-    const [dateRange, setDateRange] = useState<"all" | "week" | "month" | "year">("all");
-    const [showFilters, setShowFilters] = useState(false);
+/** Small "Filtros" toggle (sits next to the payer chips). */
+export function FiltersToggle({
+    open,
+    count,
+    onToggle,
+}: {
+    open: boolean;
+    count: number;
+    onToggle: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={open}
+            aria-controls="expense-filters-panel"
+            className={cn(
+                "ml-auto flex-none inline-flex items-center gap-1.5 rounded-full border px-3 py-[7px] text-[13px] font-semibold transition-colors",
+                open || count > 0 ? "border-foreground bg-card" : "border-[color:var(--line)] bg-card text-muted-foreground",
+            )}
+        >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Filtros{count > 0 && <span className="tabular-nums">· {count}</span>}
+        </button>
+    );
+}
 
-    const handleSearchChange = (value: string) => {
-        setSearch(value);
-        onFiltersChange({ search: value, categories: selectedCategories, dateRange });
-    };
-
-    const toggleCategory = (catId: string) => {
-        const newCategories = selectedCategories.includes(catId)
-            ? selectedCategories.filter(c => c !== catId)
-            : [...selectedCategories, catId];
-        setSelectedCategories(newCategories);
-        onFiltersChange({ search, categories: newCategories, dateRange });
-    };
-
-    const handleDateRangeChange = (range: "all" | "week" | "month" | "year") => {
-        setDateRange(range);
-        onFiltersChange({ search, categories: selectedCategories, dateRange: range });
-    };
-
-    const clearFilters = () => {
-        setSearch("");
-        setSelectedCategories([]);
-        setDateRange("all");
-        onFiltersChange({ search: "", categories: [], dateRange: "all" });
-    };
-
-    const hasActiveFilters = search || selectedCategories.length > 0 || dateRange !== "all";
+/**
+ * Advanced filters for Gastos (category + date range), tucked behind
+ * "Filtros" so the default view matches the prototype.
+ */
+export function ExpenseFiltersPanel({
+    value,
+    onChange,
+    categories,
+}: {
+    value: AdvancedFilters;
+    onChange: (v: AdvancedFilters) => void;
+    categories: CategoryBadgeMeta[];
+}) {
+    const toggleCategory = (key: string) =>
+        onChange({
+            ...value,
+            categories: value.categories.includes(key)
+                ? value.categories.filter((c) => c !== key)
+                : [...value.categories, key],
+        });
 
     return (
-        <div className="space-y-3">
-            {/* Search Bar */}
-            <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                    placeholder="Buscar gastos..."
-                    value={search}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    className="pl-10 pr-10"
-                />
-                {search && (
-                    <button
-                        onClick={() => handleSearchChange("")}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
-                )}
+        <EqCard id="expense-filters-panel" className="eq-in p-3.5 space-y-3">
+            <div className="space-y-2">
+                <EqLabel>Periodo</EqLabel>
+                <div className="eq-scroll flex gap-1.5 overflow-x-auto">
+                    {RANGES.map((r) => (
+                        <EqChip key={r.value} selected={value.dateRange === r.value} onClick={() => onChange({ ...value, dateRange: r.value })}>
+                            {r.label}
+                        </EqChip>
+                    ))}
+                </div>
             </div>
-
-            {/* Filter Toggle */}
-            <div className="flex items-center gap-2">
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowFilters(!showFilters)}
-                    className={cn(
-                        "flex items-center gap-2",
-                        hasActiveFilters && "text-primary"
-                    )}
-                >
-                    <Filter className="h-4 w-4" />
-                    Filtros
-                    {hasActiveFilters && (
-                        <span className="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                            {selectedCategories.length + (dateRange !== "all" ? 1 : 0)}
-                        </span>
-                    )}
-                    {showFilters ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                </Button>
-
-                {hasActiveFilters && (
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={clearFilters}
-                        className="text-muted-foreground hover:text-foreground"
-                    >
-                        Limpiar
-                    </Button>
-                )}
-            </div>
-
-            {/* Expanded Filters */}
-            {showFilters && (
-                <GlassCard className="p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                    {/* Categories */}
-                    <div className="space-y-2">
-                        <span className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                            Categorías
-                        </span>
-                        <div className="flex flex-wrap gap-2">
-                            {categories.map(cat => {
-                                const key = cat.key ?? "";
-                                return (
-                                <button
-                                    key={key}
-                                    onClick={() => toggleCategory(key)}
-                                    className={cn(
-                                        "px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5",
-                                        selectedCategories.includes(key)
-                                            ? "bg-primary text-white"
-                                            : "bg-secondary text-muted-foreground hover:bg-[var(--surface-raised-hex)] hover:text-foreground"
-                                    )}
-                                >
-                                    <span>{cat.emoji}</span>
-                                    {cat.label}
-                                </button>
-                                );
-                            })}
-                        </div>
+            {categories.length > 0 && (
+                <div className="space-y-2">
+                    <EqLabel>Categorías</EqLabel>
+                    <div className="flex flex-wrap gap-1.5">
+                        {categories.map((c) => {
+                            const key = c.key ?? c.label;
+                            return (
+                                <EqChip key={key} tone="accent" selected={value.categories.includes(key)} onClick={() => toggleCategory(key)}>
+                                    {c.emoji} {c.label}
+                                </EqChip>
+                            );
+                        })}
                     </div>
-
-                    {/* Date Range */}
-                    <div className="space-y-2">
-                        <span className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                            Período
-                        </span>
-                        <div className="flex gap-2">
-                            {[
-                                { id: "all", label: "Todo" },
-                                { id: "week", label: "Esta semana" },
-                                { id: "month", label: "Este mes" },
-                                { id: "year", label: "Este año" },
-                            ].map(range => (
-                                <button
-                                    key={range.id}
-                                    onClick={() => handleDateRangeChange(range.id as "all" | "week" | "month" | "year")}
-                                    className={cn(
-                                        "px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                                        dateRange === range.id
-                                            ? "bg-primary text-white"
-                                            : "bg-secondary text-muted-foreground hover:bg-[var(--surface-raised-hex)] hover:text-foreground"
-                                    )}
-                                >
-                                    {range.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </GlassCard>
+                </div>
             )}
-        </div>
+            {activeFilterCount(value) > 0 && (
+                <button type="button" onClick={() => onChange(EMPTY_FILTERS)} className="text-[13px] font-semibold text-primary">
+                    Quitar filtros
+                </button>
+            )}
+        </EqCard>
     );
 }

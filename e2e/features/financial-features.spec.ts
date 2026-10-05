@@ -11,7 +11,6 @@ function credentials(user: SeedUser | undefined) {
 async function createExpense(page: Page, description: string, amount: string, category: string, personal = false): Promise<string> {
   await page.goto(personal ? '/expenses/new?type=personal' : '/expenses/new');
   await page.getByTestId('expense-amount').fill(amount);
-  await page.getByTestId('expense-next').click();
   await page.getByTestId('expense-description').fill(description);
   await page.getByRole('button', { name: new RegExp(category) }).click();
   const saved = page.waitForResponse(response =>
@@ -47,16 +46,18 @@ test.describe('Financial feature UI journeys', () => {
     await createExpense(page, 'Compra para presupuesto', '25.02', 'Comida');
     await expect(page.getByTestId('balance-amount')).toHaveText(/\+12,51\s*€/);
 
+    // Legacy /budget forwards to the "Mes" tab (Presupuestos view).
     await page.goto('/budget');
+    await expect(page).toHaveURL(/\/month\?view=budget/);
     await page.getByRole('button', { name: 'Añadir presupuesto de Comida', exact: true }).click();
     await page.getByRole('spinbutton', { name: 'Importe del presupuesto' }).fill('100.08');
     const created = page.waitForResponse(response =>
       new URL(response.url()).pathname === '/api/budget' && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Guardar presupuesto', exact: true }).click();
     expect((await created).status()).toBe(201);
-    await expect(page.getByText(/Gastado:\s*25,02\s*€/)).toBeVisible();
-    await expect(page.getByText(/Límite:\s*100,08\s*€/)).toBeVisible();
-    await expect(page.getByText('25%', { exact: true })).toBeVisible();
+    // Row shows "spent / limit €"; the hero shows what is left (100,08 − 25,02).
+    await expect(page.getByText('25,02 / 100,08 €', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('budget-remaining')).toHaveText(/75,06\s*€/);
 
     await page.getByRole('button', { name: 'Editar presupuesto de Comida', exact: true }).click();
     await expect(page.getByRole('spinbutton', { name: 'Importe del presupuesto' })).toHaveValue('100.08');
@@ -65,21 +66,25 @@ test.describe('Financial feature UI journeys', () => {
       new URL(response.url()).pathname === '/api/budget' && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Guardar presupuesto', exact: true }).click();
     expect((await edited).status()).toBe(201);
-    await expect(page.getByText(/Límite:\s*125,10\s*€/)).toBeVisible();
-    await expect(page.getByText('20%', { exact: true })).toBeVisible();
+    await expect(page.getByText('25,02 / 125,10 €', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('budget-remaining')).toHaveText(/100,08\s*€/);
 
-    const personalLoaded = page.waitForResponse(response => response.url().includes('/api/budget?scope=personal'));
-    await page.getByRole('button', { name: 'Personal', exact: true }).click();
-    expect((await personalLoaded).ok()).toBe(true);
-    await expect(page.getByRole('heading', { name: 'Sin presupuestos aún' })).toBeVisible();
-    await expect(page.getByText(/Límite:/)).toHaveCount(0);
-    const sharedLoaded = page.waitForResponse(response => response.url().includes('/api/budget?scope=shared'));
-    await page.getByRole('button', { name: 'Común', exact: true }).click();
-    expect((await sharedLoaded).ok()).toBe(true);
-    await expect(page.getByText(/Gastado:\s*25,02\s*€/)).toBeVisible();
-    await expect(page.getByText(/Límite:\s*125,10\s*€/)).toBeVisible();
+    // The header meta toggles the lens: personal budgets are a separate set.
+    await page.getByRole('link', { name: 'Cambiar a Personal', exact: true }).click();
+    await expect(page).toHaveURL(/scope=personal/);
+    await expect(page.getByText(/Aún no tienes presupuestos aquí/)).toBeVisible();
+    await expect(page.getByText(/\/ 125,10 €/)).toHaveCount(0);
+    await page.getByRole('link', { name: /^Cambiar a / }).click();
+    await expect(page).not.toHaveURL(/scope=personal/);
+    await expect(page.getByText('25,02 / 125,10 €', { exact: true })).toBeVisible();
     await page.reload();
-    await expect(page.getByText(/Límite:\s*125,10\s*€/)).toBeVisible();
+    await expect(page.getByText('25,02 / 125,10 €', { exact: true })).toBeVisible();
+
+    // Análisis reflects the same month spend by category.
+    await page.getByRole('tab', { name: 'Análisis' }).click();
+    await expect(page).toHaveURL(/view=analysis/);
+    await expect(page.getByTestId('month-total')).toHaveText(/25,02\s*€/);
+    await expect(page.getByRole('tabpanel', { name: 'Análisis' }).getByText('100%', { exact: true })).toBeVisible();
     await expectBalances(context.request, groupId, { [userA.id]: 1251, [userB.id]: -1251 });
     const response = await context.request.get('/api/budget?scope=shared');
     expect(response.ok()).toBe(true);

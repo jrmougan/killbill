@@ -2,11 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft, X, Plus, Check } from "lucide-react";
-import { GlassCard } from "@/components/ui/glass-card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { X, Plus, Check } from "lucide-react";
+import { EqCard, EqCta, EqHeader, EqLabel } from "@/components/ui/eq";
 import { cn } from "@/lib/utils";
 
 interface Tag {
@@ -105,130 +102,122 @@ export function TagsClient({ initialTags, hasGroup }: TagsClientProps) {
     };
 
     return (
-        <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-10">
-            <header className="flex items-center gap-4 pt-2">
-                <Link href="/settings">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
-                        <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                </Link>
-                <h1 className="text-xl font-bold text-foreground">Etiquetas</h1>
-            </header>
+        <div className="flex flex-col min-h-screen pt-[max(12px,env(safe-area-inset-top))] pb-10">
+            <EqHeader title="Etiquetas" back="/settings" />
+            <div className="flex flex-col gap-5 px-5 pt-5">
+                <EqCard className="p-4 space-y-4">
+                    <h2 className="text-[15px] font-semibold">Nueva etiqueta</h2>
 
-            <GlassCard className="p-4 space-y-4">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Nueva etiqueta</h2>
+                    <input
+                        aria-label="Nombre de la etiqueta"
+                        className="w-full h-12 rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 text-[15px] outline-none focus:border-[color:var(--accent-border)]"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                        placeholder="Nombre de la etiqueta"
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && !saving) handleCreate();
+                        }}
+                    />
 
-                <Input
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder="Nombre de la etiqueta"
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter" && !saving) handleCreate();
-                    }}
-                />
+                    {hasGroup && (
+                        <div className="space-y-2">
+                            <EqLabel>Ámbito</EqLabel>
+                            <div className="flex rounded-xl bg-[var(--track)] p-[3px]">
+                                {([["comun", "Común", false], ["personal", "Personal", true]] as const).map(([key, label, personal]) => (
+                                    <button
+                                        key={key}
+                                        type="button"
+                                        onClick={() => setNewPersonal(personal)}
+                                        aria-pressed={newPersonal === personal}
+                                        className={cn(
+                                            "flex-1 rounded-[10px] py-2 text-sm font-semibold transition-colors",
+                                            newPersonal === personal ? "bg-card text-foreground" : "text-muted-foreground",
+                                        )}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                {newPersonal ? "Solo para tus gastos personales." : "Compartida con el grupo."}
+                            </p>
+                        </div>
+                    )}
 
-                {hasGroup && (
                     <div className="space-y-2">
-                        <p className="text-xs text-muted-foreground font-medium">Ámbito</p>
-                        <div className="flex gap-1.5 p-1 rounded-xl bg-secondary border border-[color:var(--line)]">
-                            {([["comun", "Común", false], ["personal", "Personal", true]] as const).map(([key, label, personal]) => (
+                        <EqLabel>Color</EqLabel>
+                        <div className="flex gap-2 flex-wrap">
+                            {PRESET_COLORS.map((color) => (
                                 <button
-                                    key={key}
+                                    key={color}
                                     type="button"
-                                    onClick={() => setNewPersonal(personal)}
-                                    aria-pressed={newPersonal === personal}
-                                    className={cn(
-                                        "flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-all active:scale-[0.98]",
-                                        newPersonal === personal ? "bg-primary text-white shadow" : "text-muted-foreground",
-                                    )}
+                                    onClick={() => setNewColor(color)}
+                                    className="h-8 w-8 rounded-full border-2 transition-all flex items-center justify-center"
+                                    style={{
+                                        backgroundColor: color,
+                                        borderColor: newColor === color ? "var(--ink)" : "transparent",
+                                    }}
+                                    aria-label={COLOR_NAMES[color] ?? color}
+                                    aria-pressed={newColor === color}
                                 >
-                                    {label}
+                                    {newColor === color && <Check className="h-4 w-4 text-white drop-shadow" />}
                                 </button>
                             ))}
                         </div>
-                        <p className="text-[11px] text-muted-foreground/70">
-                            {newPersonal ? "Solo para tus gastos personales." : "Compartida con el grupo."}
+                    </div>
+
+                    <EqCta
+                        className="h-12 rounded-2xl text-[15px]"
+                        onClick={handleCreate}
+                        disabled={saving || !newName.trim()}
+                    >
+                        <Plus className="h-4 w-4" /> Crear etiqueta
+                    </EqCta>
+
+                    {error && <p className="text-sm text-destructive">{error}</p>}
+                </EqCard>
+
+                {tags.length === 0 ? (
+                    <div className="py-6 text-center space-y-2">
+                        <div className="text-4xl" aria-hidden>🏷️</div>
+                        <h2 className="text-[15px] font-semibold text-foreground">Sin etiquetas aún</h2>
+                        <p className="text-sm text-muted-foreground">
+                            Crea etiquetas para organizar vuestros gastos
                         </p>
                     </div>
-                )}
+                ) : (
+                    <section className="flex flex-col gap-2">
+                        <EqLabel className="pl-1">Tus etiquetas · {tags.length}</EqLabel>
 
-                <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground font-medium">Color</p>
-                    <div className="flex gap-2 flex-wrap">
-                        {PRESET_COLORS.map((color) => (
-                            <button
-                                key={color}
-                                type="button"
-                                onClick={() => setNewColor(color)}
-                                className="h-8 w-8 rounded-full border-2 transition-all flex items-center justify-center"
-                                style={{
-                                    backgroundColor: color,
-                                    borderColor: newColor === color ? "var(--ink)" : "transparent",
-                                }}
-                                aria-label={COLOR_NAMES[color] ?? color}
-                            >
-                                {newColor === color && <Check className="h-4 w-4 text-white drop-shadow" />}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <Button
-                    className="w-full gap-2"
-                    onClick={handleCreate}
-                    disabled={saving || !newName.trim()}
-                    isLoading={saving}
-                >
-                    <Plus className="h-4 w-4" /> Crear etiqueta
-                </Button>
-
-                {error && <p className="text-sm text-destructive">{error}</p>}
-            </GlassCard>
-
-            {tags.length === 0 ? (
-                <GlassCard className="p-8 text-center space-y-3">
-                    <div className="text-5xl">🏷️</div>
-                    <h2 className="text-lg font-bold text-foreground">Sin etiquetas aún</h2>
-                    <p className="text-sm text-muted-foreground">
-                        Crea tags para organizar vuestros gastos
-                    </p>
-                </GlassCard>
-            ) : (
-                <section className="space-y-3">
-                    <div className="flex items-center gap-2 px-1">
-                        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                            Tus etiquetas ({tags.length})
-                        </h2>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                        {tags.map((tag) => (
-                            <div
-                                key={tag.id}
-                                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-[color:var(--line)] bg-card"
-                            >
+                        <div className="flex flex-wrap gap-2">
+                            {tags.map((tag) => (
                                 <div
-                                    className="h-3 w-3 rounded-full flex-shrink-0"
-                                    style={{ backgroundColor: tag.color }}
-                                />
-                                <span className="text-sm font-semibold text-foreground">{tag.name}</span>
-                                {tag.personal && (
-                                    <span className="px-1.5 py-px rounded bg-secondary text-[10px] font-semibold text-muted-foreground">Personal</span>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => handleDelete(tag)}
-                                    disabled={deleting === tag.id}
-                                    className="ml-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                                    aria-label={`Eliminar tag ${tag.name}`}
+                                    key={tag.id}
+                                    className="flex items-center gap-2 pl-3 pr-2 py-[7px] rounded-full border border-[color:var(--line)] bg-card"
                                 >
-                                    <X className="h-3.5 w-3.5" />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-            )}
+                                    <div
+                                        className="h-3 w-3 rounded-full flex-shrink-0"
+                                        style={{ backgroundColor: tag.color }}
+                                    />
+                                    <span className="text-[13px] font-semibold text-foreground">{tag.name}</span>
+                                    {tag.personal && (
+                                        <span className="text-[11px] text-muted-foreground">Personal</span>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDelete(tag)}
+                                        disabled={deleting === tag.id}
+                                        className="ml-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                                        aria-label={`Eliminar tag ${tag.name}`}
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+            </div>
         </div>
     );
 }

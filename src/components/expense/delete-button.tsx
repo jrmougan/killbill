@@ -38,7 +38,7 @@ export function DeleteExpenseButton({ expenseId }: DeleteExpenseButtonProps) {
     if (showConfirm) {
         return (
             <div className="fixed inset-0 bg-[color:var(--ink)]/40 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-200">
-                <div className="bg-card border border-[color:var(--line)] rounded-2xl p-6 max-w-sm w-full space-y-4 animate-in zoom-in-95 duration-200">
+                <div className="bg-card border border-[color:var(--line)] rounded-[18px] p-6 max-w-sm w-full space-y-4 animate-in zoom-in-95 duration-200">
                     <div className="text-center space-y-2">
                         <div className="h-12 w-12 rounded-full bg-[var(--negative-tint)] flex items-center justify-center mx-auto">
                             <Trash2 className="h-6 w-6 text-destructive" />
@@ -75,13 +75,13 @@ export function DeleteExpenseButton({ expenseId }: DeleteExpenseButtonProps) {
     return (
         <Button
             variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            size="icon"
+            aria-label="Eliminar"
+            className="h-9 w-9 rounded-full text-destructive hover:text-destructive hover:bg-destructive/10"
             onClick={() => setShowConfirm(true)}
             data-testid="expense-delete"
         >
-            <Trash2 className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Eliminar</span>
+            <Trash2 className="h-4 w-4" />
         </Button>
     );
 }

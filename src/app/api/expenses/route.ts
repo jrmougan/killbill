@@ -86,7 +86,7 @@ export async function POST(request: Request) {
         const userId = session.userId as string;
 
         const body = await request.json();
-        const { description, amount, category, beneficiaryId, customSplits, receiptUrl, receiptData, notes, isRecurring, recurringInterval, paidById: paidByIdInput, visibility: visibilityInput, isPersonal } = body;
+        const { description, amount, category, beneficiaryId, customSplits, receiptUrl, receiptData, notes, isRecurring, recurringInterval, paidById: paidByIdInput, visibility: visibilityInput, isPersonal, date: dateInput } = body;
 
         const user = await prisma.user.findUnique({
             where: { id: userId },
@@ -118,6 +118,17 @@ export async function POST(request: Request) {
         // Validate description is a non-empty string (missing/empty previously 500'd at the DB layer).
         if (typeof description !== 'string' || description.trim().length === 0) {
             return NextResponse.json({ error: 'Invalid description' }, { status: 400 });
+        }
+
+        // Optional expense date ("YYYY-MM-DD", from "Más opciones"). Absent → now.
+        // Stored at 12:00 UTC so the calendar day is stable in Europe/Madrid.
+        let expenseDate: Date | undefined;
+        if (dateInput !== undefined && dateInput !== null && dateInput !== '') {
+            const valid = typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput);
+            expenseDate = valid ? new Date(`${dateInput}T12:00:00.000Z`) : undefined;
+            if (!expenseDate || Number.isNaN(expenseDate.getTime())) {
+                return NextResponse.json({ error: 'Invalid date' }, { status: 400 });
+            }
         }
 
         // Convert euros to cents
@@ -191,6 +202,7 @@ export async function POST(request: Request) {
             coupleId: isPersonalExpense ? null : groupId,
             receiptUrl: receiptUrl || null,
             notes: notes || null,
+            ...(expenseDate ? { date: expenseDate } : {}),
             // Phase 5 (stop-dual-write): the recurrence schedule lives on
             // RecurringSeries (created below); Expense.isRecurring/recurringInterval/
             // nextRecurringDate are no longer written. The template is identified by

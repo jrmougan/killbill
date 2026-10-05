@@ -7,13 +7,22 @@ async function openBudget(page: Page, request: APIRequestContext): Promise<void>
   const seed = await seedScenario(request, 'couple-no-expenses');
   if (!seed.userA?.password) throw new Error('Scenario must return registered user credentials');
   await loginAs(page, { email: seed.userA.email, password: seed.userA.password });
-  await page.goto('/budget');
+  await page.goto('/month');
 }
 
-async function expectPersisted(api: APIRequestContext, cents: number): Promise<void> {
+/** A budget row reads "spent / limit €" (no spend in this scenario → "0 / …"). */
+function limitText(limit: string): RegExp {
+  return new RegExp(`/\\s*${limit}\\s*€$`);
+}
+
+async function expectPersisted(api: APIRequestContext, cents: number | null): Promise<void> {
   const response = await api.get('/api/budget?scope=shared');
   expect(response.ok()).toBe(true);
   const { budgets } = await response.json();
+  if (cents === null) {
+    expect(budgets).toHaveLength(0);
+    return;
+  }
   expect(budgets).toHaveLength(1);
   expect(budgets[0].budget).toMatchObject({ category: 'food', amount: cents });
 }
@@ -68,6 +77,7 @@ test.describe('Budget failures and retries', () => {
 
   test('add keeps the amount after 400, 500 and network failures; retry persists exact cents', async ({ page, request, context }) => {
     await openBudget(page, request);
+    await expect(page.getByText(/Aún no tienes presupuestos aquí/)).toBeVisible();
     await page.getByRole('button', { name: 'Añadir presupuesto de Comida', exact: true }).click();
     let invalidPosts = 0;
     const countInvalid = (route: Route) => { invalidPosts += 1; return route.continue(); };
@@ -81,10 +91,10 @@ test.describe('Budget failures and retries', () => {
     expect(invalidPosts).toBe(0);
     await page.unroute('**/api/budget', countInvalid);
     await failSaveThenRetry(page, '100.08');
-    await expect(page.getByText(/Límite:\s*100,08\s*€/)).toBeVisible();
+    await expect(page.getByText(limitText('100,08'))).toBeVisible();
     await expectPersisted(context.request, 10008);
     await page.reload();
-    await expect(page.getByText(/Límite:\s*100,08\s*€/)).toBeVisible();
+    await expect(page.getByText(limitText('100,08'))).toBeVisible();
   });
 
   test('edit retains the previous limit and entered amount through rejected saves and retries', async ({ page, request, context }) => {
@@ -93,8 +103,8 @@ test.describe('Budget failures and retries', () => {
     expect(initial.status()).toBe(201);
     await page.reload();
     await page.getByRole('button', { name: 'Editar presupuesto de Comida', exact: true }).click();
-    await failSaveThenRetry(page, '125.10', /Límite:\s*100,08\s*€/);
-    await expect(page.getByText(/Límite:\s*125,10\s*€/)).toBeVisible();
+    await failSaveThenRetry(page, '125.10', limitText('100,08'));
+    await expect(page.getByText(limitText('125,10'))).toBeVisible();
     await expectPersisted(context.request, 12510);
 
     // A successful write followed by a failed refresh must not erase the form or old data.
@@ -104,33 +114,52 @@ test.describe('Budget failures and retries', () => {
     await page.getByRole('button', { name: 'Guardar presupuesto', exact: true }).click();
     await expect(page.getByRole('main').getByRole('alert')).toHaveText(/No se pudieron cargar.*Read unavailable.*Vuelve a intentarlo/);
     await expect(page.getByRole('spinbutton', { name: 'Importe del presupuesto' })).toHaveValue('130.12');
-    await expect(page.getByText(/Límite:\s*125,10\s*€/)).toBeVisible();
+    await expect(page.getByText(limitText('125,10'))).toBeVisible();
     await expectPersisted(context.request, 13012);
     await page.unroute('**/api/budget?scope=shared');
     await page.getByRole('button', { name: 'Guardar presupuesto', exact: true }).click();
     await expect(page.getByRole('spinbutton', { name: 'Importe del presupuesto' })).toHaveCount(0);
     await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
     await page.reload();
-    await expect(page.getByText(/Límite:\s*130,12\s*€/)).toBeVisible();
+    await expect(page.getByText(limitText('130,12'))).toBeVisible();
     await expectPersisted(context.request, 13012);
   });
 
-  test('failed reads show a retry instead of an empty successful budget list', async ({ page, request, context }) => {
+  test('delete keeps the budget after a failure and removes it only on a successful retry', async ({ page, request, context }) => {
     await openBudget(page, request);
     const initial = await context.request.post('/api/budget', { data: { category: 'food', amount: 100.08, scope: 'shared' } });
     expect(initial.status()).toBe(201);
     await page.reload();
-    await page.route('**/api/budget?scope=personal', route => route.fulfill({ status: 500, json: { error: 'Read unavailable' } }));
-    await page.getByRole('button', { name: 'Personal', exact: true }).click();
-    await expect(page.getByRole('main').getByRole('alert')).toHaveText(/No se pudieron cargar.*Read unavailable.*Vuelve a intentarlo/);
-    await expect(page.getByRole('heading', { name: 'Sin presupuestos aún' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Añadir presupuesto de Comida', exact: true })).toHaveCount(0);
-    await page.unroute('**/api/budget?scope=personal');
-    await page.getByRole('button', { name: 'Reintentar carga', exact: true }).click();
-    await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Sin presupuestos aún' })).toBeVisible();
-    await page.getByRole('button', { name: 'Común', exact: true }).click();
-    await expect(page.getByText(/Límite:\s*100,08\s*€/)).toBeVisible();
+
+    // The personal lens is a separate set: the shared budget never shows there.
+    await page.getByRole('link', { name: 'Cambiar a Personal', exact: true }).click();
+    await expect(page).toHaveURL(/scope=personal/);
+    await expect(page.getByText(/Aún no tienes presupuestos aquí/)).toBeVisible();
+    await expect(page.getByText(limitText('100,08'))).toHaveCount(0);
+    await page.getByRole('link', { name: /^Cambiar a / }).click();
+    await expect(page).not.toHaveURL(/scope=personal/);
+    await expect(page.getByText(limitText('100,08'))).toBeVisible();
+
+    await page.getByRole('button', { name: 'Editar presupuesto de Comida', exact: true }).click();
+    const failDelete = (route: Route) => route.request().method() === 'DELETE'
+      ? route.fulfill({ status: 500, json: { error: 'Delete unavailable' } })
+      : route.continue();
+    await page.route('**/api/budget?*', failDelete);
+    await page.getByRole('button', { name: 'Eliminar presupuesto', exact: true }).click();
+    await expect(page.getByRole('main').getByRole('alert')).toHaveText(/No se pudo eliminar.*Delete unavailable.*Vuelve a intentarlo/);
+    await expect(page.getByText(limitText('100,08'))).toBeVisible();
     await expectPersisted(context.request, 10008);
+    await page.unroute('**/api/budget?*', failDelete);
+
+    const deleted = page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/api/budget' && response.request().method() === 'DELETE');
+    await page.getByRole('button', { name: 'Eliminar presupuesto', exact: true }).click();
+    expect((await deleted).status()).toBe(200);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByText(/Aún no tienes presupuestos aquí/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Añadir presupuesto de Comida', exact: true })).toBeVisible();
+    await expectPersisted(context.request, null);
+    await page.reload();
+    await expect(page.getByText(limitText('100,08'))).toHaveCount(0);
   });
 });
