@@ -54,35 +54,37 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
             <div className="flex items-center gap-4 justify-center">
                 {/* Current Avatar Preview */}
                 <div className="relative group">
-                    <div className="h-24 w-24 rounded-full bg-primary p-[3px] shadow-[0_12px_28px_-8px_rgba(189,93,58,0.35)]">
-                        <div className="h-full w-full rounded-full bg-secondary flex items-center justify-center overflow-hidden relative">
+                    <div className="h-20 w-20 rounded-full bg-[var(--surface-raised-hex)] flex items-center justify-center overflow-hidden relative">
                             {isInternalImage ? (
                                 // oxlint-disable-next-line nextjs/no-img-element
                                 <img src={currentAvatar} alt="Avatar" className="h-full w-full object-cover" />
                             ) : (
-                                <span className="text-5xl select-none">{currentAvatar}</span>
+                                <span className="text-4xl select-none">{currentAvatar}</span>
                             )}
-                        </div>
                     </div>
                 </div>
             </div>
 
             {/* Selector Tabs */}
-            <div className="flex p-1 bg-secondary rounded-lg">
+            <div className="flex p-[3px] bg-[var(--track)] rounded-xl">
                 <button
+                    type="button"
+                    aria-pressed={mode === "EMOJI"}
                     onClick={() => setMode("EMOJI")}
                     className={cn(
-                        "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all",
-                        mode === "EMOJI" ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:bg-card"
+                        "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-[10px] transition-colors",
+                        mode === "EMOJI" ? "bg-card text-foreground" : "text-muted-foreground"
                     )}
                 >
                     <Smile className="h-4 w-4" /> Emojis
                 </button>
                 <button
+                    type="button"
+                    aria-pressed={mode === "IMAGE"}
                     onClick={() => setMode("IMAGE")}
                     className={cn(
-                        "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-md transition-all",
-                        mode === "IMAGE" ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:bg-card"
+                        "flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-[10px] transition-colors",
+                        mode === "IMAGE" ? "bg-card text-foreground" : "text-muted-foreground"
                     )}
                 >
                     <ImageIcon className="h-4 w-4" /> Imagen
@@ -90,13 +92,16 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
             </div>
 
             {/* Content Area */}
-            <div className="min-h-[180px] p-4 bg-secondary rounded-xl border border-[color:var(--line)]">
+            <div className="min-h-[180px] p-4 bg-background rounded-2xl border border-[color:var(--line-2)]">
                 {mode === "EMOJI" && (
                     <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
                         <div className="grid grid-cols-7 gap-2">
                             {COMMON_EMOJIS.map(emoji => (
                                 <button
                                     key={emoji}
+                                    type="button"
+                                    aria-label={`Avatar ${emoji}`}
+                                    aria-pressed={currentAvatar === emoji}
                                     onClick={() => onAvatarChange(emoji)}
                                     className={cn(
                                         "h-8 w-8 flex items-center justify-center rounded-full text-xl hover:bg-card transition-colors",
@@ -116,6 +121,7 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
                                     setCustomEmoji(v);
                                     if (/\p{Extended_Pictographic}/u.test(v)) onAvatarChange(v);
                                 }}
+                                aria-label="Emoji personalizado"
                                 className="h-8 bg-card border-[color:var(--line)] text-center"
                                 placeholder="🚀"
                             />
@@ -133,6 +139,7 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
                             onChange={handleFileUpload}
                         />
                         <Button
+                            type="button"
                             variant="secondary"
                             className="h-auto py-8 px-8 border-dashed border-2 border-[color:var(--line-strong)] bg-transparent hover:bg-card flex flex-col gap-2"
                             onClick={() => fileInputRef.current?.click()}

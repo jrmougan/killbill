@@ -1,25 +1,25 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 interface LogoutButtonProps {
     className?: string;
-    showText?: boolean;
+    /** Icon-only (aria-labelled) instead of icon + "Cerrar sesión". */
+    iconOnly?: boolean;
 }
 
-export function LogoutButton({ className, showText = true }: LogoutButtonProps) {
+/** Ends the session (POST /api/auth/logout) and returns to /login. Unstyled row by default. */
+export function LogoutButton({ className, iconOnly = false }: LogoutButtonProps) {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
 
     const handleLogout = async () => {
         setLoading(true);
         try {
-            await fetch("/api/auth/logout", {
-                method: "POST",
-            });
+            await fetch("/api/auth/logout", { method: "POST" });
             router.push("/login");
             router.refresh();
         } catch (error) {
@@ -29,15 +29,15 @@ export function LogoutButton({ className, showText = true }: LogoutButtonProps) 
     };
 
     return (
-        <Button
-            variant="ghost"
-            size={showText ? undefined : "icon"}
+        <button
+            type="button"
             onClick={handleLogout}
             disabled={loading}
-            className={className || "text-muted-foreground hover:text-foreground"}
+            aria-label={iconOnly ? "Cerrar sesión" : undefined}
+            className={cn("flex items-center gap-3 text-left disabled:opacity-50", className)}
         >
-            <LogOut className="h-5 w-5 mr-2" />
-            {showText && "Cerrar Sesión"}
-        </Button>
+            <LogOut className="h-[19px] w-[19px] flex-none" />
+            {!iconOnly && <span className="flex-1 text-[15px]">Cerrar sesión</span>}
+        </button>
     );
 }

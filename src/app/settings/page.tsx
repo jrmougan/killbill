@@ -30,7 +30,8 @@ export default async function SettingsPage() {
                 id: user.id,
                 name: user.name,
                 email: user.email || "",
-                avatar: user.avatar || "👤"
+                avatar: user.avatar || "👤",
+                isAdmin: user.isAdmin,
             }}
             groups={groups.map(g => ({
                 id: g.id,
