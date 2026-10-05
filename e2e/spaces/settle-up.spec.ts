@@ -119,14 +119,13 @@ test.describe('Spaces - Settle-up (close flow)', () => {
 
     // ...so they pay from /settle, which SETTLING still allows.
     await pageB.goto('/settle');
-    await pageB.getByRole('button', { name: /Continuar/i }).click();
-    await pageB.getByLabel(/importe/i).fill('50');
+    await expect(pageB.getByTestId('settle-balance')).toHaveText(FIFTY);
     const settlePromise = pageB.waitForResponse(
       (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST',
     );
-    await pageB.getByRole('button', { name: /Confirmar Pago/i }).click();
+    await pageB.getByRole('button', { name: 'Ya he pagado' }).click();
     expect((await settlePromise).ok()).toBeTruthy();
-    await expect(pageB).toHaveURL(/\/dashboard/);
+    await expect(pageB.getByTestId('settle-pending')).toContainText('Pendiente de que User A confirme');
 
     // Creditor's checklist: exactly one PENDING B → A of 50,00 €.
     await pageA.goto(`/spaces/${spaceId}/close`);
