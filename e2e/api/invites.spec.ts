@@ -289,4 +289,29 @@ test.describe('API Invites - Enlaces de invitación de espacio', () => {
     // Las denegaciones por rol de requireSpaceAccess devuelven { error } sin code
     expect(body.error).toBe('No tienes permisos para esta acción');
   });
+
+  test('7. El código corto legacy (Couple.code) ya no es una invitación: ni une ni revela el nombre', async ({
+    newContext,
+    request,
+  }) => {
+    const seed = await seedScenario(request, 'couple-with-debt');
+    const userA = await createAuthenticatedContext(newContext, seed.userA as { email: string; password: string });
+    const couple = await userA.request.get('/api/couple');
+    const { code, name } = (await couple.json()).couple as { code: string; name: string };
+    expect(code).toMatch(/^[0-9A-Z]+$/);
+
+    const outsiderSeed = await seedScenario(request, 'solo-user');
+    const outsider = await createAuthenticatedContext(newContext, outsiderSeed.user as { email: string; password: string });
+    const claim = await outsider.request.post('/api/invites/claim', { data: { token: code } });
+    expect(claim.status()).toBe(404);
+    expect((await outsider.request.post('/api/couple/join', { data: { code } })).status()).toBe(404);
+    expect((await outsider.request.get(`/api/invites/${code.toLowerCase()}/preview`)).status()).toBe(404);
+
+    const page = await (await newContext()).newPage();
+    await page.goto(`/i/${code.toLowerCase()}`);
+    await expect(page.getByRole('heading', { name: 'Este enlace no funciona' })).toBeVisible();
+    await expect(page.locator('body')).not.toContainText(name);
+    await userA.close();
+    await outsider.close();
+  });
 });
