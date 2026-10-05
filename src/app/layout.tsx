@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { Schibsted_Grotesk, DM_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
@@ -54,7 +55,9 @@ export default async function RootLayout({
                         {children}
           </main>
           {/* Global bottom navigation — self-hides on focused/full-screen flows */}
-          <BottomNav isGuest={isGuest} />
+          <Suspense fallback={null}>
+            <BottomNav isGuest={isGuest} />
+          </Suspense>
         </ThemeProvider>
       </body>
     </html>

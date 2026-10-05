@@ -46,9 +46,9 @@ describe("expenseSubtitle", () => {
 
 describe("settlementText", () => {
     it("words the direction from my point of view", () => {
-        expect(settlementText({ meId: "me", fromId: "lu", toId: "me", members: [me, lu], methodLabel: "Efectivo", pending: false }))
-            .toEqual({ title: "Lucía te pagó", sub: "Liquidación · Efectivo" });
-        expect(settlementText({ meId: "me", fromId: "me", toId: "lu", members: [me, lu], methodLabel: "", pending: true }).title)
-            .toBe("Pagaste a Lucía");
+        expect(settlementText({ meId: "me", fromId: "lu", toId: "me", members: [me, lu], methodLabel: "Efectivo", status: "CONFIRMED" }))
+            .toEqual({ title: "Lucía te pagó", sub: "Liquidación · Efectivo · Confirmado" });
+        expect(settlementText({ meId: "me", fromId: "me", toId: "lu", members: [me, lu], methodLabel: "", status: "PENDING" }))
+            .toEqual({ title: "Pagaste a Lucía", sub: "Liquidación · Pendiente" });
     });
 });

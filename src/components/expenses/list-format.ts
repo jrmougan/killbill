@@ -86,14 +86,14 @@ export function settlementText({
     toId,
     members,
     methodLabel,
-    pending,
+    status,
 }: {
     meId: string;
     fromId: string;
     toId: string | undefined;
     members: Member[];
     methodLabel: string;
-    pending: boolean;
+    status?: string | null;
 }): { title: string; sub: string } {
     const nameOf = (id: string | undefined) => members.find((m) => m.id === id)?.name ?? "otra persona";
     const title = fromId === meId
@@ -101,7 +101,8 @@ export function settlementText({
         : toId === meId
             ? `${nameOf(fromId)} te pagó`
             : `${nameOf(fromId)} pagó a ${nameOf(toId)}`;
-    const sub = [`Liquidación${methodLabel ? ` · ${methodLabel}` : ""}`, pending ? "pendiente de confirmar" : null]
+    const statusLabel = status === "PENDING" ? "Pendiente" : status === "CONFIRMED" ? "Confirmado" : status === "REJECTED" ? "Rechazado" : null;
+    const sub = [`Liquidación${methodLabel ? ` · ${methodLabel}` : ""}`, statusLabel]
         .filter(Boolean)
         .join(" · ");
     return { title, sub };

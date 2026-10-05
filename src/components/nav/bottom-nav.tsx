@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { House, List, Plus, CalendarRange, ShoppingBasket, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,16 +32,26 @@ const ADD_HREF = "/expenses/new";
 // chrome-free. Shopping-list detail keeps the nav (it is still the Listas tab).
 const TAB_ROUTES = TABS.map((t) => t.href);
 
+// Personal mode lives in the URL (`?scope=personal`), not in a cookie. Carry it
+// across the tabs that understand it so switching tabs doesn't silently jump
+// back to the shared space.
+const SCOPED_ROUTES = new Set(["/dashboard", "/expenses/list", "/month", "/expenses/new"]);
+
+function withScope(href: string, personal: boolean) {
+    if (!personal || !SCOPED_ROUTES.has(href)) return href;
+    return href === "/expenses/new" ? `${href}?space=personal` : `${href}?scope=personal`;
+}
+
 function isActive(pathname: string, href: string) {
     return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function NavTab({ tab, active }: { tab: Tab; active: boolean }) {
+function NavTab({ tab, active, personal }: { tab: Tab; active: boolean; personal: boolean }) {
     const Icon = tab.icon;
     return (
         <li className="w-14 flex justify-center">
             <Link
-                href={tab.href}
+                href={withScope(tab.href, personal)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                     "flex flex-col items-center gap-1 pt-2.5 text-[10.5px] font-medium transition-colors active:scale-95",
@@ -57,6 +67,7 @@ function NavTab({ tab, active }: { tab: Tab; active: boolean }) {
 
 export function BottomNav({ isGuest = false }: { isGuest?: boolean }) {
     const pathname = usePathname();
+    const personal = useSearchParams().get("scope") === "personal";
     const isTabRoute = TAB_ROUTES.some((r) => isActive(pathname, r));
     if (!isTabRoute) return null;
 
@@ -71,11 +82,11 @@ export function BottomNav({ isGuest = false }: { isGuest?: boolean }) {
         >
             <ul className="flex items-start justify-around h-[74px]">
                 {tabs.slice(0, mid).map((t) => (
-                    <NavTab key={t.href} tab={t} active={isActive(pathname, t.href)} />
+                    <NavTab key={t.href} tab={t} active={isActive(pathname, t.href)} personal={personal} />
                 ))}
                 <li className="flex justify-center">
                     <Link
-                        href={ADD_HREF}
+                        href={withScope(ADD_HREF, personal)}
                         aria-label="Añadir gasto"
                         className="-mt-3.5 flex h-[54px] w-[54px] items-center justify-center rounded-[18px] bg-primary text-primary-foreground shadow-[0_10px_20px_-8px_rgba(47,125,91,0.7)] transition-transform active:scale-[0.94]"
                     >
@@ -83,7 +94,7 @@ export function BottomNav({ isGuest = false }: { isGuest?: boolean }) {
                     </Link>
                 </li>
                 {tabs.slice(mid).map((t) => (
-                    <NavTab key={t.href} tab={t} active={isActive(pathname, t.href)} />
+                    <NavTab key={t.href} tab={t} active={isActive(pathname, t.href)} personal={personal} />
                 ))}
             </ul>
         </nav>

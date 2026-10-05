@@ -99,7 +99,7 @@ test.describe('Shopping Lists - UI Happy Path', () => {
     await page.goto('/dashboard');
     await expect(page.locator('[data-testid="balance-amount"]')).toHaveText(/0,00\s*€/);
     await page.goto('/expenses/list');
-    await expect(page.getByText('Sin resultados')).toBeVisible();
+    await expect(page.getByText('Todavía no hay gastos.')).toBeVisible();
   });
 
   test('personal list: switch via chip, dimmed shortcut and create a new personal list', async ({ page }) => {

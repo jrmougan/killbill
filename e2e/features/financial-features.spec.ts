@@ -196,9 +196,10 @@ test.describe('Financial feature UI journeys', () => {
       expect(await response.json()).toEqual(expected);
       await expect(page.getByRole('heading', { name: 'Importación completada' })).toBeVisible();
       await page.getByRole('link', { name: 'Ver mis gastos' }).click();
-      await expect(page).toHaveURL(/\/dashboard\?scope=personal/);
+      await expect(page).toHaveURL(/\/expenses\/list\?scope=personal/);
       await expect(page.getByText('Pan banco QA', { exact: true })).toBeVisible();
       await expect(page.getByText('Fruta banco QA', { exact: true })).toBeVisible();
+      await page.goto('/dashboard?scope=personal');
       await expect(page.getByText('Personal este mes', { exact: true }).locator('..')).toContainText(/37,35\s*€/);
       await expect(page.getByText('Compra excluida QA', { exact: true })).toHaveCount(0);
       await expect(page.getByText('Nómina QA', { exact: true })).toHaveCount(0);

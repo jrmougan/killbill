@@ -173,7 +173,7 @@ export function ExpensesListClient({
                                         toId: e.toUserId,
                                         members,
                                         methodLabel: e.method ? getSettlementMethodLabel(e.method) : "",
-                                        pending: e.status === "PENDING",
+                                        status: e.status,
                                     });
                                     return (
                                         <EqRow
