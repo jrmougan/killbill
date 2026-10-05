@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Search } from "lucide-react";
-import { EqChip, EqHeader, EqRow } from "@/components/ui/eq";
+import { useRouter } from "next/navigation";
+import { EqChip, EqHeader, EqRow, EqSegmented } from "@/components/ui/eq";
 import type { CategoryBadgeMeta } from "@/components/category/category-badge";
 import { formatCurrency } from "@/lib/currency";
 import { getSettlementMethodLabel } from "@/lib/settlement-labels";
@@ -10,7 +11,7 @@ import { GuestBanner } from "@/components/guest/guest-banner";
 import {
     EMPTY_FILTERS, ExpenseFiltersPanel, FiltersToggle, activeFilterCount, type AdvancedFilters,
 } from "@/components/expenses/filters";
-import { dayKey, dayLabel, expenseSubtitle, settlementText } from "@/components/expenses/list-format";
+import { dayKey, dayLabel, expenseSubtitle, matchesSearch, settlementText } from "@/components/expenses/list-format";
 
 export type ListItem = {
     id: string;
@@ -48,6 +49,8 @@ export function ExpensesListClient({
     personal,
     isGuest = false,
     categories = [],
+    canSwitchScope = false,
+    readOnlyStatus = null,
 }: {
     items: ListItem[];
     userId: string;
@@ -56,7 +59,12 @@ export function ExpensesListClient({
     personal: boolean;
     isGuest?: boolean;
     categories?: CategoryBadgeMeta[];
+    /** The caller has a space AND a personal ledger → show Común/Personal. */
+    canSwitchScope?: boolean;
+    /** SETTLING/ARCHIVED status of the shown space (read-only note). */
+    readOnlyStatus?: "SETTLING" | "ARCHIVED" | null;
 }) {
+    const router = useRouter();
     const [q, setQ] = useState("");
     const [payer, setPayer] = useState<PayerFilter>("all");
     const [filtersOpen, setFiltersOpen] = useState(false);
@@ -72,21 +80,17 @@ export function ExpensesListClient({
     ];
 
     const filtered = useMemo(() => {
-        const ql = q.trim().toLowerCase();
         const since = startOf(advanced.dateRange);
         return items.filter((e) => {
             const isSettle = e.type === "SETTLEMENT";
-            if (!isSettle && payer === "me" && e.paidBy !== userId) return false;
-            if (!isSettle && payer === "other" && e.paidBy === userId) return false;
+            // "Pagué yo" / "Pagó X" apply to settlements too: who handed over the
+            // money (paidBy = fromUserId) — G-18.
+            if (payer === "me" && e.paidBy !== userId) return false;
+            if (payer === "other" && e.paidBy === userId) return false;
             if (advanced.categories.length > 0 && (isSettle || !advanced.categories.includes(e.category))) return false;
             if (since && new Date(e.date) < since) return false;
-            if (ql) {
-                const amountText = formatCurrency(e.amountCents).toLowerCase();
-                const raw = (e.amountCents / 100).toString();
-                const text = isSettle ? `liquidación ${e.description}` : e.description;
-                if (!text.toLowerCase().includes(ql) && !amountText.includes(ql) && !raw.includes(ql.replace(",", "."))) return false;
-            }
-            return true;
+            const text = isSettle ? `liquidación ${e.description}` : e.description;
+            return matchesSearch({ text, amountCents: e.amountCents }, q);
         });
     }, [items, q, payer, advanced, userId]);
 
@@ -131,6 +135,21 @@ export function ExpensesListClient({
             <div className="flex flex-col gap-3 px-5">
                 <EqHeader title="Gastos" meta={spaceLabel} className="px-0 items-baseline" />
                 <GuestBanner show={isGuest} />
+                {canSwitchScope && (
+                    // Común / Personal, synced with ?scope=personal (G-08/T-05).
+                    <EqSegmented
+                        value={personal ? "personal" : "shared"}
+                        options={[{ value: "shared", label: "Común" }, { value: "personal", label: "Personal" }]}
+                        onChange={(v) => router.replace(v === "personal" ? "/expenses/list?scope=personal" : "/expenses/list")}
+                    />
+                )}
+                {readOnlyStatus && (
+                    <p data-testid="space-readonly-note" className="rounded-[14px] bg-[var(--track)] px-3 py-2.5 text-center text-[13px] text-muted-foreground">
+                        {readOnlyStatus === "ARCHIVED"
+                            ? "Este espacio está archivado — solo lectura."
+                            : "Este espacio se está liquidando: no admite gastos nuevos."}
+                    </p>
+                )}
                 <label className="flex h-[42px] items-center gap-2 rounded-xl border border-[color:var(--line)] bg-card px-3 text-[color:var(--ink-3)]">
                     <Search className="h-[17px] w-[17px] flex-none" aria-hidden />
                     <input

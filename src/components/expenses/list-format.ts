@@ -4,7 +4,32 @@
  * ("Pagaste tú · a medias"). Dates are bucketed in Europe/Madrid.
  */
 
+import { parseEuroInput } from "@/lib/currency";
+
 const TZ = "Europe/Madrid";
+
+/** Lowercase + strip diacritics so "íTEM" finds "item" (G-17). */
+export function foldText(s: string): string {
+    return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/**
+ * Search the Gastos list by concept (accent/case-insensitive) or by amount,
+ * written the usual ways: "12,5", "12,50", "12.50", "12,50 €", "1.234,56" —
+ * or a fragment of it ("12" matches 12,50 €).
+ */
+export function matchesSearch(item: { text: string; amountCents: number }, query: string): boolean {
+    const q = foldText(query.trim());
+    if (!q) return true;
+    if (foldText(item.text).includes(q)) return true;
+    const compact = q.replace(/[\s €]/g, "");
+    if (!/^[0-9.,]+$/.test(compact)) return false;
+    const cents = parseEuroInput(compact);
+    if (cents !== null && cents === item.amountCents) return true;
+    const plain = (item.amountCents / 100).toFixed(2).replace(".", ","); // "1234,56"
+    const fragment = compact.includes(",") ? compact.replace(/\./g, "") : compact.replace(".", ",");
+    return plain.includes(fragment);
+}
 
 /** Calendar day key (YYYY-MM-DD) of an instant in Madrid time. */
 export function dayKey(date: Date | string): string {

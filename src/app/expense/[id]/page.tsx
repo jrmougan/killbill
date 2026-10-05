@@ -58,6 +58,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
     // for the receipt breakdown; receiptItemsView maps rows -> the euro DTO the
     // markup already renders (toEuros(toCents(x))==x keeps every sum identical).
     const receiptItems = receiptItemsView(expense.lineItems);
+    const linesCents = expense.lineItems.reduce((acc, l) => acc + l.lineTotal, 0);
 
     // Privacy: a personal expense is only visible to its owner; a shared one to
     // members of its couple.
@@ -103,7 +104,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                             <Pencil className="h-4 w-4" />
                         </Link>
                         {canPromote && <PromoteButton expenseId={expense.id} />}
-                        <DeleteExpenseButton expenseId={expense.id} />
+                        <DeleteExpenseButton expenseId={expense.id} redirectTo={backHref} />
                     </div>
                 )}
             </EqHeader>
@@ -252,9 +253,16 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                             <div className="flex items-center justify-between border-t border-[color:var(--line)] bg-background px-4 py-3">
                                 <span className="text-sm font-semibold text-muted-foreground">Total detallado</span>
                                 <span className="font-semibold tabular-nums text-foreground">
-                                    {formatEuros(receiptItems.reduce((acc, i) => acc + i.total, 0))}
+                                    {formatCurrency(linesCents)}
                                 </span>
                             </div>
+                            {linesCents !== expense.amount && (
+                                // G-03: never show a breakdown total that silently contradicts the amount.
+                                <p data-testid="lines-mismatch-note" className="border-t border-[color:var(--line)] bg-background px-4 py-2.5 text-xs text-muted-foreground">
+                                    El desglose no coincide con el importe del gasto ({formatCurrency(expense.amount)}).
+                                    {expense.splitStrategy === "ITEMIZED" && " El reparto se ha ajustado en proporción a los productos."}
+                                </p>
+                            )}
                         </EqCard>
                     </section>
                 )}
