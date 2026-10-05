@@ -175,3 +175,35 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Error al guardar el presupuesto' }, { status: 500 });
     }
 }
+
+/**
+ * DELETE /api/budget?id=<budgetId>&scope=shared|personal — remove one budget
+ * (EQUIL "Mes" sheet → "Eliminar"). Scoped exactly like POST: a personal budget
+ * must belong to the caller (`ownerId`), a shared one to the caller's ACTIVE
+ * group. The ownership condition is part of the delete itself (`deleteMany`
+ * by id + scope), so a foreign/unknown id is a 404 without read-then-write.
+ */
+export async function DELETE(request: Request) {
+    try {
+        const session = await getSession();
+        if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const userId = session.userId as string;
+
+        const { searchParams } = new URL(request.url);
+        const id = searchParams.get('id');
+        if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 });
+        const scope = searchParams.get('scope') === 'personal' ? 'personal' : 'shared';
+
+        const groupId = scope === 'shared' ? await getActiveGroup(userId) : null;
+        if (scope === 'shared' && !groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+
+        const { count } = await prisma.budget.deleteMany({
+            where: scope === 'personal' ? { id, ownerId: userId } : { id, coupleId: groupId! },
+        });
+        if (count === 0) return NextResponse.json({ error: 'Budget not found' }, { status: 404 });
+        return NextResponse.json({ ok: true });
+    } catch (error) {
+        console.error('Error al eliminar el presupuesto:', error);
+        return NextResponse.json({ error: 'Error al eliminar el presupuesto' }, { status: 500 });
+    }
+}

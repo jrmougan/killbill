@@ -4,6 +4,7 @@ const mockGetSession = vi.fn();
 const mockMembershipFindFirst = vi.fn();
 const mockBudgetFindMany = vi.fn();
 const mockBudgetUpsert = vi.fn();
+const mockBudgetDeleteMany = vi.fn();
 const mockExpenseFindMany = vi.fn();
 const mockCategoryFindFirst = vi.fn();
 
@@ -18,13 +19,55 @@ vi.mock('@/lib/db', () => ({
         budget: {
             findMany: (...a: unknown[]) => mockBudgetFindMany(...a),
             upsert: (...a: unknown[]) => mockBudgetUpsert(...a),
+            deleteMany: (...a: unknown[]) => mockBudgetDeleteMany(...a),
         },
         expense: { findMany: (...a: unknown[]) => mockExpenseFindMany(...a) },
         category: { findFirst: (...a: unknown[]) => mockCategoryFindFirst(...a) },
     },
 }));
 
-import { GET, POST } from './route';
+import { GET, POST, DELETE } from './route';
+
+describe('budget API — DELETE', () => {
+    beforeEach(() => {
+        [mockGetSession, mockMembershipFindFirst, mockBudgetDeleteMany].forEach((m) => m.mockReset());
+    });
+
+    const del = (qs: string) => DELETE(new Request(`http://localhost/api/budget?${qs}`, { method: 'DELETE' }));
+
+    it('rejects anonymous callers', async () => {
+        mockGetSession.mockResolvedValue(null);
+        expect((await del('id=b1')).status).toBe(401);
+        expect(mockBudgetDeleteMany).not.toHaveBeenCalled();
+    });
+
+    it('requires an id', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        expect((await del('scope=personal')).status).toBe(400);
+    });
+
+    it('scope=personal deletes only the caller-owned budget', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        mockBudgetDeleteMany.mockResolvedValue({ count: 1 });
+        expect((await del('id=b1&scope=personal')).status).toBe(200);
+        expect(mockBudgetDeleteMany.mock.calls[0][0].where).toEqual({ id: 'b1', ownerId: 'u1' });
+    });
+
+    it('scope=shared is bound to the active group and 404s on a foreign id', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        mockMembershipFindFirst.mockResolvedValue({ groupId: 'c1' });
+        mockBudgetDeleteMany.mockResolvedValue({ count: 0 });
+        expect((await del('id=other&scope=shared')).status).toBe(404);
+        expect(mockBudgetDeleteMany.mock.calls[0][0].where).toEqual({ id: 'other', coupleId: 'c1' });
+    });
+
+    it('scope=shared without a group is rejected (400)', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        mockMembershipFindFirst.mockResolvedValue(null);
+        expect((await del('id=b1&scope=shared')).status).toBe(400);
+        expect(mockBudgetDeleteMany).not.toHaveBeenCalled();
+    });
+});
 
 describe('budget API — personal scope', () => {
     beforeEach(() => {

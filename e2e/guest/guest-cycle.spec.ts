@@ -44,7 +44,7 @@ test.describe('Guest - Full lifecycle in an ephemeral space', () => {
     await expect(nav).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Inicio' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Crear cuenta' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: /Presupuestos|Análisis|Ajustes/ })).toHaveCount(0);
+    await expect(nav.getByRole('link', { name: /^Mes$|Ajustes/ })).toHaveCount(0);
 
     await page.close();
     await ctx.close();
@@ -138,8 +138,7 @@ test.describe('Guest - Full lifecycle in an ephemeral space', () => {
     await expect(page.locator('[data-testid="guest-banner"]')).toHaveCount(0);
 
     const nav = page.locator('nav[aria-label="Navegación principal"]');
-    await expect(nav.getByRole('link', { name: 'Presupuestos' })).toBeVisible({ timeout: 10000 });
-    await expect(nav.getByRole('link', { name: 'Análisis' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Mes', exact: true })).toBeVisible({ timeout: 10000 });
     await expect(nav.getByRole('link', { name: 'Ajustes' })).toBeVisible();
 
     // /settings is now reachable (no proxy bounce)
