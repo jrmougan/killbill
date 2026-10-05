@@ -1,11 +1,12 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { WelcomeClient } from "./welcome-client";
+import { ephemeralSpacesEnabled } from "@/lib/flags";
+import { CreateSpaceFlow } from "@/components/space/create-space-flow";
 
 /**
- * Optional first-run onboarding (Fase 3). Presents the three ways to use EQUIL —
- * solo, a new shared space, or joining via an invite link — and is always
- * skippable. Not a wall: nothing here is required to reach the dashboard.
+ * Optional first-run onboarding (prototype `is.welcome`): pick who you share
+ * expenses with, or paste an invite link. Never a wall — "Solo yo" opens the
+ * personal context without creating anything.
  *
  * A guest session never onboards (it is caged to its space), so it is bounced to
  * its dashboard; anonymous visitors go to login.
@@ -17,5 +18,5 @@ export default async function WelcomePage() {
     if (!session?.userId) redirect("/login");
     if (session.kind === "guest") redirect("/dashboard");
 
-    return <WelcomeClient />;
+    return <CreateSpaceFlow mode="onboard" ephemeralEnabled={ephemeralSpacesEnabled()} />;
 }

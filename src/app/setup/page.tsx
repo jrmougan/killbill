@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { EqCta } from "@/components/ui/eq";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -84,9 +84,9 @@ export default function SetupPage() {
                     La aplicación ya está configurada.<br />
                     Inicia sesión para continuar.
                 </p>
-                <Button onClick={() => router.push("/login")}>
+                <EqCta className="max-w-xs" onClick={() => router.push("/login")}>
                     Ir a Login
-                </Button>
+                </EqCta>
             </div>
         );
     }
@@ -95,20 +95,21 @@ export default function SetupPage() {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-4">
                 <div className="text-6xl">👑</div>
-                <h1 className="text-2xl font-bold text-green-400">¡Admin creado!</h1>
+                <h1 className="text-2xl font-bold text-primary">¡Admin creado!</h1>
                 <p className="text-muted-foreground">Redirigiendo al login...</p>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-8 max-w-md mx-auto">
-            <div className="text-center space-y-4">
-                <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center mx-auto">
-                    <Shield className="h-8 w-8 text-primary" />
-                </div>
-                <h1 className="text-3xl font-bold">Setup Inicial</h1>
-                <p className="text-muted-foreground">
+        <div className="flex flex-col justify-center min-h-screen p-6 space-y-8 max-w-md mx-auto">
+            <div className="w-full flex flex-col gap-3.5">
+                <span className="text-[15px] font-extrabold tracking-[0.14em] text-primary">EQUIL</span>
+                <h1 className="text-[36px] font-bold tracking-[-0.03em] leading-[1.05] flex items-center gap-2.5">
+                    <Shield className="h-8 w-8 text-primary flex-none" aria-hidden="true" />
+                    Setup inicial
+                </h1>
+                <p className="text-[15px] text-muted-foreground leading-[1.45]">
                     Crea el primer usuario administrador para gestionar invitaciones.
                 </p>
             </div>
@@ -126,7 +127,7 @@ export default function SetupPage() {
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         required
-                        className="text-lg h-12"
+                        className="h-12 rounded-[14px] bg-card text-[15px]"
                     />
                     <Input
                         type="email"
@@ -135,7 +136,7 @@ export default function SetupPage() {
                         onChange={(e) => setEmail(e.target.value)}
                         required
                         autoComplete="email"
-                        className="text-lg h-12"
+                        className="h-12 rounded-[14px] bg-card text-[15px]"
                     />
                     <Input
                         type="password"
@@ -144,18 +145,14 @@ export default function SetupPage() {
                         onChange={(e) => setPassword(e.target.value)}
                         required
                         autoComplete="new-password"
-                        className="text-lg h-12"
+                        className="h-12 rounded-[14px] bg-card text-[15px]"
                     />
                 </div>
 
-                <Button
-                    type="submit"
-                    size="lg"
-                    className="w-full h-12 text-lg shadow-xl shadow-primary/20"
-                    isLoading={loading}
-                >
-                    Crear Administrador
-                </Button>
+                <EqCta type="submit" disabled={loading}>
+                    {loading && <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />}
+                    Crear administrador
+                </EqCta>
             </form>
         </div>
     );

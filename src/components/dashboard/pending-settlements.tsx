@@ -2,11 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Button } from "@/components/ui/button";
-import { GlassCard } from "@/components/ui/glass-card";
 import { Check, X } from "lucide-react";
 import { toEuros } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
+import { getSettlementMethodLabel } from "@/lib/settlement-labels";
 
 interface PendingSettlement {
     id: string;
@@ -49,65 +48,59 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
 
     if (settlements.length === 0) return null;
 
+    // Compact EQUIL card under the carousel. Copy ("Confirmar Pagos",
+    // "X te ha pagado", "50.00€", "Confirmar") is a cross-suite e2e contract.
     return (
-        <section className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
-            <h2 className="text-lg font-bold ml-1 flex items-center gap-2 text-foreground">
-                <span className="relative flex h-3 w-3">
+        <section aria-labelledby="pending-title" className="eq-in rounded-[18px] bg-[var(--accent-tint)] border border-[color:var(--accent-border)] p-4 flex flex-col gap-3">
+            <h2 id="pending-title" className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
+                <span className="relative flex h-2 w-2" aria-hidden="true">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
                 </span>
                 Confirmar Pagos
             </h2>
 
-            <div className="space-y-3">
+            <ul className="flex flex-col gap-3">
                 {settlements.map((s) => (
-                    <GlassCard key={s.id} className="p-4 border border-[color:var(--accent-border)] bg-[var(--accent-tint)]">
-                        <div className="flex justify-between items-start mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-[var(--accent-tint)] flex items-center justify-center text-xl overflow-hidden text-primary font-bold">
-                                    {isAvatarUrl(s.fromUser.avatar) ? (
-                                        // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
-                                        <img src={s.fromUser.avatar!} alt={s.fromUser.name} className="h-full w-full object-cover" />
-                                    ) : (
-                                        s.fromUser.avatar || "👤"
-                                    )}
-                                </div>
-                                <div>
-                                    <p className="font-bold text-sm text-foreground">
-                                        {s.fromUser.name} te ha pagado
-                                    </p>
-                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-mono">
-                                        {new Date(s.date).toLocaleDateString('es-ES', { timeZone: 'Europe/Madrid' })} • {s.method}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <span className="text-2xl font-mono font-bold text-[color:var(--positive)] leading-none block">
-                                    {toEuros(s.amount).toFixed(2)}€
-                                </span>
-                            </div>
+                    <li key={s.id} className="flex items-center gap-3">
+                        <span className="h-10 w-10 flex-none rounded-full bg-card flex items-center justify-center text-lg overflow-hidden text-primary font-bold">
+                            {isAvatarUrl(s.fromUser.avatar) ? (
+                                // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
+                                <img src={s.fromUser.avatar!} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                                s.fromUser.avatar || s.fromUser.name.charAt(0).toUpperCase()
+                            )}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[15px] font-semibold truncate">{s.fromUser.name} te ha pagado</p>
+                            <p className="text-[12.5px] text-muted-foreground truncate">
+                                <span className="tabular-nums font-semibold text-[color:var(--positive)]">{toEuros(s.amount).toFixed(2)}€</span>
+                                {" · "}
+                                {getSettlementMethodLabel(s.method)}
+                                {" · "}
+                                {new Date(s.date).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short" })}
+                            </p>
                         </div>
-
-                        <div className="flex gap-2">
-                            <Button
-                                className="flex-1 bg-primary hover:bg-primary/90 text-white font-bold h-11"
-                                onClick={() => handleStatusUpdate(s.id, "CONFIRMED")}
-                                disabled={loadingIds.length > 0 || refreshing}
-                            >
-                                <Check className="h-5 w-5 mr-2" /> Confirmar
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                className="bg-[var(--negative-tint)] hover:bg-[var(--negative-tint)] text-destructive h-11 px-4"
-                                onClick={() => handleStatusUpdate(s.id, "REJECTED")}
-                                disabled={loadingIds.length > 0 || refreshing}
-                            >
-                                <X className="h-5 w-5" />
-                            </Button>
-                        </div>
-                    </GlassCard>
+                        <button
+                            type="button"
+                            className="h-9 flex-none rounded-xl bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground flex items-center gap-1.5 disabled:opacity-50 active:scale-[0.97]"
+                            onClick={() => handleStatusUpdate(s.id, "CONFIRMED")}
+                            disabled={loadingIds.length > 0 || refreshing}
+                        >
+                            <Check className="h-4 w-4" aria-hidden="true" /> Confirmar
+                        </button>
+                        <button
+                            type="button"
+                            aria-label={`Rechazar el pago de ${s.fromUser.name}`}
+                            className="h-9 w-9 flex-none rounded-xl bg-[var(--negative-tint)] text-destructive flex items-center justify-center disabled:opacity-50 active:scale-[0.97]"
+                            onClick={() => handleStatusUpdate(s.id, "REJECTED")}
+                            disabled={loadingIds.length > 0 || refreshing}
+                        >
+                            <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                    </li>
                 ))}
-            </div>
+            </ul>
         </section>
     );
 }

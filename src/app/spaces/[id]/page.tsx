@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, Users, ShoppingCart, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { MembershipStatus } from "@/generated/prisma/enums";
@@ -24,8 +23,8 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
         prisma.couple.findUnique({ where: { id } }),
         prisma.membership.findUnique({ where: { groupId_userId: { groupId: id, userId } } }),
     ]);
-    if (!space) redirect("/settings");
-    if (!myMembership || myMembership.status !== MembershipStatus.ACTIVE) redirect("/settings");
+    if (!space) redirect("/spaces");
+    if (!myMembership || myMembership.status !== MembershipStatus.ACTIVE) redirect("/spaces");
 
     const roster = await prisma.membership.findMany({
         where: { groupId: id, status: MembershipStatus.ACTIVE },
@@ -47,11 +46,9 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
 
     return (
         <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-24">
-            <header className="flex items-center gap-3 pt-2">
-                <Link href="/settings">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
-                        <ArrowLeft className="h-5 w-5" />
-                    </Button>
+            <header className="flex items-center gap-3 pt-2 px-1">
+                <Link href="/spaces" aria-label="Volver a Espacios" className="h-6 w-6 flex-none">
+                    <ArrowLeft className="h-6 w-6" />
                 </Link>
                 <div className="flex items-center gap-2.5 min-w-0">
                     <span className="w-10 h-10 rounded-[12px] bg-secondary flex items-center justify-center text-[20px] shrink-0">

@@ -1,16 +1,14 @@
 import Link from "next/link";
-import { Users, Plus } from "lucide-react";
-import { GlassCard } from "@/components/ui/glass-card";
-import { Button } from "@/components/ui/button";
+import { EqHeader } from "@/components/ui/eq";
+import { SpaceActionTiles } from "@/components/space/space-action-tiles";
 
 /**
- * Coherent empty state for group-scoped pages (analytics, settle, tags, ...) when
- * the user has no group. Fase 1 (decouple): a solo user is never blocked — the
- * "wall" becomes an OPTIONAL invitation to create/join a space.
+ * Coherent empty state for group-scoped pages (analytics, settle, …) when the
+ * user has no shared space. A solo user is never blocked — the "wall" is an
+ * OPTIONAL invitation to create a space or join one with an invite link.
  *
- * `variant`:
- *  - "wall" (default): informative empty state with a way back to Inicio.
- *  - "invite": foregrounds "Crear un espacio" (for surfaces that benefit from the CTA).
+ * `variant` is kept for API compatibility: "invite" and "wall" both offer the
+ * create/join tiles; "wall" also offers a way back to Inicio.
  */
 export function NoGroupState({
     title,
@@ -20,32 +18,23 @@ export function NoGroupState({
     variant?: "wall" | "invite";
 }) {
     return (
-        <div className="flex flex-col min-h-screen p-4 pb-24 items-center justify-center">
-            <GlassCard className="text-center py-10 px-6 space-y-4 max-w-sm w-full">
-                <Users className="h-12 w-12 text-muted-foreground mx-auto" />
-                <div className="space-y-1.5">
-                    <h2 className="text-lg font-bold text-foreground">{title ?? "Aún no tienes un espacio compartido"}</h2>
-                    <p className="text-sm text-muted-foreground">
-                        Esta sección es para gastos compartidos. Crea un espacio (pareja, grupo o viaje) o únete a uno para empezar.
+        <div className="min-h-screen pb-28 eq-in">
+            <EqHeader title={title ?? "Espacio compartido"} back="/dashboard" className="pt-4" />
+            <div className="px-5 pt-8 flex flex-col gap-5">
+                <div className="flex flex-col gap-2">
+                    <span className="text-[28px]" aria-hidden="true">🤝</span>
+                    <h2 className="text-xl font-bold tracking-[-0.02em]">Aún no compartes gastos con nadie</h2>
+                    <p className="text-[15px] text-muted-foreground leading-[1.45]">
+                        Esta sección es para gastos compartidos. Crea un espacio (pareja, piso o amigos) o únete con un enlace de invitación.
                     </p>
                 </div>
-                {variant === "invite" ? (
-                    <div className="space-y-2">
-                        <Link href="/spaces/new">
-                            <Button size="sm" className="w-full gap-2">
-                                <Plus className="h-4 w-4" /> Crear un espacio
-                            </Button>
-                        </Link>
-                        <Link href="/dashboard">
-                            <Button variant="ghost" size="sm" className="w-full">Volver a Inicio</Button>
-                        </Link>
-                    </div>
-                ) : (
-                    <Link href="/dashboard">
-                        <Button variant="secondary" size="sm" className="w-full">Ir a Inicio</Button>
+                <SpaceActionTiles />
+                {variant === "wall" && (
+                    <Link href="/dashboard" className="self-center text-sm font-semibold text-primary py-1.5">
+                        Volver a Inicio
                     </Link>
                 )}
-            </GlassCard>
+            </div>
         </div>
     );
 }
