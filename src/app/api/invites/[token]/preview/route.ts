@@ -14,9 +14,8 @@ import { ephemeralSpacesEnabled } from "@/lib/flags";
  * Rate-limited by client IP: an invite token is a bearer secret and this is the
  * one unauthenticated lookup, so it must not be a brute-force oracle.
  *
- * Backward compatibility: old `/login?code=X` links carried a classic 6-hex
- * `Couple.code`. Those now route through consent (`/i/X`), so this resolver falls
- * back to a classic code lookup when the token isn't a GroupInvite.
+ * The legacy 6-hex `Couple.code` is NOT resolved (no short codes): it was
+ * guessable, so an unknown token never reveals a space name.
  */
 export async function GET(
     request: Request,
@@ -89,26 +88,6 @@ export async function GET(
                 error: joinable ? undefined : "Este espacio ya no admite nuevos miembros",
                 kind: InviteKind.MEMBER,
                 space: { name: invite.group.name, type: invite.group.type },
-            },
-            { status: 200, headers },
-        );
-    }
-
-    // 2) Classic Couple.code fallback (legacy /login?code=X links).
-    const couple = await prisma.couple.findUnique({
-        where: { code: token.toUpperCase() },
-        select: { name: true, type: true, status: true },
-    });
-    if (couple) {
-        const joinable = joinByCodeAllowed(couple.type as SpaceType, couple.status as SpaceStatus);
-        return NextResponse.json(
-            {
-                valid: joinable,
-                reason: joinable ? undefined : "NOT_JOINABLE",
-                error: joinable ? undefined : "Este espacio ya no admite nuevos miembros",
-                kind: InviteKind.MEMBER,
-                legacyCode: true,
-                space: { name: couple.name, type: couple.type },
             },
             { status: 200, headers },
         );
