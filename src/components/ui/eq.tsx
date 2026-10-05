@@ -195,12 +195,11 @@ export function EqRow({
 /** Ephemeral bottom toast (dark pill above the nav). Render conditionally. */
 export function EqToast({ children }: { children: React.ReactNode }) {
     return (
-        <div
-            role="status"
+        <output
             className="eq-in fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 whitespace-nowrap rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]"
         >
             {children}
-        </div>
+        </output>
     );
 }
 
