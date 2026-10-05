@@ -1,6 +1,12 @@
 // Pure presentation helpers for the "Mes" tab (Presupuestos | Análisis). DB-free
 // and timezone-agnostic (they take the `now` they reason about) so they can be
-// unit-tested and shared by the server page and the client views.
+// unit-tested and shared by the server page and the client views. Month/day
+// labels are rendered in the app timezone (Europe/Madrid), so a server running
+// in UTC labels the same month the Madrid-based ranges select.
+
+import { APP_TZ } from "@/lib/home-format";
+
+export { daysLeftInMonth } from "@/lib/month-range";
 
 export type MonthView = "budget" | "analysis";
 export type MonthScope = "shared" | "personal";
@@ -17,18 +23,17 @@ export function capitalize(s: string): string {
 
 /** Full month name, capitalised: "Octubre". */
 export function monthName(date: Date): string {
-    return capitalize(date.toLocaleDateString("es-ES", { month: "long" }));
+    return capitalize(date.toLocaleDateString("es-ES", { month: "long", timeZone: APP_TZ }));
 }
 
 /** Short lowercase month without the trailing dot ICU sometimes adds: "sept", "oct". */
 export function monthShort(date: Date): string {
-    return date.toLocaleDateString("es-ES", { month: "short" }).replace(/\.$/, "");
+    return date.toLocaleDateString("es-ES", { month: "short", timeZone: APP_TZ }).replace(/\.$/, "");
 }
 
-/** Days left in `now`'s month, counting today (Oct 5 → 27). Always ≥ 1. */
-export function daysLeftInMonth(now: Date): number {
-    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    return Math.max(1, last - now.getDate() + 1);
+/** "15 oct" — day + short month in the app timezone. */
+export function dayMonth(date: Date): string {
+    return date.toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: APP_TZ }).replace(/\.$/, "");
 }
 
 /**

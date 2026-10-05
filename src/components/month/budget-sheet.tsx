@@ -29,6 +29,8 @@ export function BudgetSheet({
     onClose: () => void;
 }) {
     const [value, setValue] = useState(initialValue);
+    // "Eliminar presupuesto" asks first (one tap must never delete).
+    const [confirmDelete, setConfirmDelete] = useState(false);
     const titleId = useId();
     const inputId = useId();
     const ref = useRef<HTMLDialogElement>(null);
@@ -43,7 +45,7 @@ export function BudgetSheet({
     }, []);
 
     // Tapping the backdrop dismisses (a mouse/touch nicety — keyboard users have
-    // Escape and the "Cancelar" button). A click whose target is the <dialog>
+    // Escape and the "Cerrar" button). A click whose target is the <dialog>
     // itself landed outside the padded content, i.e. on ::backdrop.
     const dismiss = useRef(() => {});
     dismiss.current = () => { if (!saving) onClose(); };
@@ -70,7 +72,7 @@ export function BudgetSheet({
                     </h2>
                     <button
                         type="button"
-                        aria-label="Cancelar"
+                        aria-label="Cerrar"
                         disabled={saving}
                         onClick={onClose}
                         className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-card"
@@ -92,11 +94,12 @@ export function BudgetSheet({
                         <div className="flex items-baseline gap-2 rounded-[14px] bg-card border border-[color:var(--line)] px-4 py-3 focus-within:border-primary">
                             <input
                                 id={inputId}
-                                type="number"
+                                type="text"
                                 inputMode="decimal"
-                                min="0.01"
-                                step="0.01"
+                                autoComplete="off"
+                                maxLength={16}
                                 placeholder="0"
+                                aria-invalid={error ? true : undefined}
                                 aria-describedby={`${inputId}-hint`}
                                 disabled={saving}
                                 value={value}
@@ -108,20 +111,52 @@ export function BudgetSheet({
                             <span className="text-xl font-semibold text-muted-foreground">€</span>
                         </div>
                         <p id={`${inputId}-hint`} className="text-[12.5px] text-muted-foreground">
-                            Límite mensual para esta categoría
+                            Límite mensual para esta categoría (máx. 1.000.000 €)
                         </p>
                         {error && <p role="alert" className="text-[13px] text-[color:var(--negative)]">{error}</p>}
                     </div>
-                    <EqCta type="submit" disabled={saving}>Guardar presupuesto</EqCta>
-                    {onDelete && (
-                        <button
-                            type="button"
-                            disabled={saving}
-                            onClick={onDelete}
-                            className="h-11 text-[15px] font-semibold text-[color:var(--negative)] disabled:opacity-40"
+                    {confirmDelete && onDelete ? (
+                        <fieldset
+                            aria-describedby={`${inputId}-confirm`}
+                            className="m-0 min-w-0 border-0 flex flex-col gap-3 rounded-[14px] bg-[var(--negative-tint)] p-3.5"
                         >
-                            Eliminar presupuesto
-                        </button>
+                            <legend className="sr-only">Confirmar eliminación</legend>
+                            <p id={`${inputId}-confirm`} className="text-sm">
+                                ¿Eliminar el presupuesto de <strong>{category.label}</strong>? Dejarás de ver su límite
+                                este mes; tus gastos no cambian.
+                            </p>
+                            <div className="flex gap-2.5">
+                                <EqCta
+                                    variant="outline"
+                                    className="flex-1 h-11 rounded-2xl text-[15px]"
+                                    disabled={saving}
+                                    onClick={() => setConfirmDelete(false)}
+                                >
+                                    Cancelar
+                                </EqCta>
+                                <EqCta
+                                    className="flex-1 h-11 rounded-2xl text-[15px] bg-destructive"
+                                    disabled={saving}
+                                    onClick={onDelete}
+                                >
+                                    Sí, eliminar
+                                </EqCta>
+                            </div>
+                        </fieldset>
+                    ) : (
+                        <>
+                            <EqCta type="submit" disabled={saving}>Guardar presupuesto</EqCta>
+                            {onDelete && (
+                                <button
+                                    type="button"
+                                    disabled={saving}
+                                    onClick={() => setConfirmDelete(true)}
+                                    className="h-11 text-[15px] font-semibold text-[color:var(--negative)] disabled:opacity-40"
+                                >
+                                    Eliminar presupuesto
+                                </button>
+                            )}
+                        </>
                     )}
                 </form>
             </div>
