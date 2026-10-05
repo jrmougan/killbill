@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dayLabel, dayKey, expenseSubtitle, settlementText } from "./list-format";
+import { dayLabel, dayKey, expenseSubtitle, matchesSearch, settlementText } from "./list-format";
 
 const me = { id: "me", name: "Yo" };
 const lu = { id: "lu", name: "Lucía" };
@@ -50,5 +50,28 @@ describe("settlementText", () => {
             .toEqual({ title: "Lucía te pagó", sub: "Liquidación · Efectivo · Confirmado" });
         expect(settlementText({ meId: "me", fromId: "me", toId: "lu", members: [me, lu], methodLabel: "", status: "PENDING" }))
             .toEqual({ title: "Pagaste a Lucía", sub: "Liquidación · Pendiente" });
+    });
+});
+
+describe("matchesSearch (G-17)", () => {
+    const item = { text: "Ítem del súper", amountCents: 1250 };
+    it("is accent and case insensitive", () => {
+        expect(matchesSearch(item, "item")).toBe(true);
+        expect(matchesSearch(item, "SUPER")).toBe(true);
+        expect(matchesSearch({ text: "item", amountCents: 1 }, "íTEM")).toBe(true);
+    });
+    it.each(["12,5", "12,50", "12.50", "12,50 €", "12", "2,5"])("finds 12,50 € by %j", (q) => {
+        expect(matchesSearch(item, q)).toBe(true);
+    });
+    it("finds thousands written either way", () => {
+        expect(matchesSearch({ text: "x", amountCents: 123456 }, "1.234,56")).toBe(true);
+        expect(matchesSearch({ text: "x", amountCents: 123456 }, "1234,56")).toBe(true);
+    });
+    it("does not match unrelated amounts or text", () => {
+        expect(matchesSearch(item, "13")).toBe(false);
+        expect(matchesSearch(item, "pan")).toBe(false);
+    });
+    it("empty query matches everything", () => {
+        expect(matchesSearch(item, "  ")).toBe(true);
     });
 });

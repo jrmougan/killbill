@@ -22,11 +22,12 @@ export default async function ExpensesListPage({ searchParams }: { searchParams:
     const isGuest = session.kind === "guest";
     const { scope } = await searchParams;
 
-    const groupId = scope === "personal" && !isGuest ? null : await getActiveGroup(userId);
+    const activeGroupId = await getActiveGroup(userId);
+    const groupId = scope === "personal" && !isGuest ? null : activeGroupId;
     const personal = !groupId;
 
     const [space, members, catList] = await Promise.all([
-        groupId ? prisma.couple.findUnique({ where: { id: groupId }, select: { name: true, type: true } }) : null,
+        groupId ? prisma.couple.findUnique({ where: { id: groupId }, select: { name: true, type: true, status: true } }) : null,
         groupId ? getGroupMembers(groupId) : Promise.resolve([]),
         getEffectiveCategories(groupId ? { groupId } : { ownerId: userId }),
     ]);
@@ -92,6 +93,8 @@ export default async function ExpensesListPage({ searchParams }: { searchParams:
             personal={personal}
             isGuest={isGuest}
             categories={filterCategories}
+            canSwitchScope={!isGuest && !!activeGroupId}
+            readOnlyStatus={space?.status === "SETTLING" || space?.status === "ARCHIVED" ? space.status : null}
         />
     );
 }

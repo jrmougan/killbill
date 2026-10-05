@@ -6,6 +6,7 @@
  * A generic importer: the user maps their bank's columns + formats to this shape,
  * so no per-bank parser is hardcoded.
  */
+import { checkExpenseDay, isRealCalendarDay } from './expense-input';
 
 export type DateFormat = 'DMY' | 'YMD' | 'MDY';
 
@@ -39,7 +40,8 @@ export function parseDateISO(value: string, format: DateFormat): string | null {
     if (!Number.isInteger(d) || !Number.isInteger(mo) || !Number.isInteger(y)) return null;
     if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 1900 || y > 3000) return null;
     const iso = `${y.toString().padStart(4, '0')}-${mo.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
-    return iso;
+    // Real calendar day only (G-06): 31/02 must not roll over to 3 March.
+    return isRealCalendarDay(iso) ? iso : null;
 }
 
 /**
@@ -75,6 +77,9 @@ export function normalizeRow(raw: Record<string, string>, m: ColumnMapping): Nor
     const signedCents = parseSignedCents(rawAmount, m.decimalSep);
 
     if (!dateISO) return { dateISO: '', amountCents: 0, description, isExpense: false, error: `Fecha inválida: "${rawDate}"` };
+    // Same accepted range as the expenses API ([2000-01-01, today + 1 year]).
+    const inRange = checkExpenseDay(dateISO);
+    if (!inRange.ok) return { dateISO, amountCents: 0, description, isExpense: false, error: inRange.error };
     if (signedCents === null) return { dateISO, amountCents: 0, description, isExpense: false, error: `Importe inválido: "${rawAmount}"` };
     if (!description) return { dateISO, amountCents: Math.abs(signedCents), description, isExpense: false, error: 'Concepto vacío' };
 

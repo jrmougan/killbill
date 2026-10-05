@@ -16,7 +16,7 @@ export function Numpad({ onKey }: { onKey: (k: AmountKey) => void }) {
                     data-testid={`numpad-${k === "," ? "comma" : k}`}
                     aria-label={k === "del" ? "Borrar" : k === "," ? "Coma decimal" : k}
                     onClick={() => onKey(k)}
-                    className="h-[50px] flex items-center justify-center rounded-[14px] select-none tabular-nums transition-colors active:bg-[var(--track)] [@media(hover:hover)]:hover:bg-[var(--track)]"
+                    className="h-[50px] [@media(max-height:640px)]:h-[40px] flex items-center justify-center rounded-[14px] select-none tabular-nums transition-colors active:bg-[var(--track)] [@media(hover:hover)]:hover:bg-[var(--track)]"
                 >
                     {k === "del" ? <Delete className="h-6 w-6" aria-hidden /> : k}
                 </button>

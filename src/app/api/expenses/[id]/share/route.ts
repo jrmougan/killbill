@@ -21,7 +21,7 @@ export async function POST(
     try {
         const { id } = await params;
         const ctx = await getSessionCtx();
-        if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
         const userId = ctx.userId;
 
         // Fase 1: the target space may be given explicitly (targetGroupId) so a

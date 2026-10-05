@@ -24,12 +24,15 @@ export function ReceiptItemsEditor({
     userId,
     partner,
     assignable,
+    emptyHint,
 }: {
     items: EditableReceiptItem[];
     onChange: (items: EditableReceiptItem[]) => void;
     userId: string;
     partner: { id: string; name: string } | null;
     assignable: boolean;
+    /** Shown when there are no lines and per-person assignment is unavailable. */
+    emptyHint?: string;
 }) {
     const partnerName = partner?.name ?? "otra persona";
 
@@ -67,7 +70,11 @@ export function ReceiptItemsEditor({
     return (
         <div className="space-y-2.5">
             {items.length === 0 ? (
-                <p className="text-[13px] text-muted-foreground">Escanea un ticket o añade productos para repartir por persona.</p>
+                <p className="text-[13px] text-muted-foreground">
+                    {assignable
+                        ? "Escanea un ticket o añade productos para repartir por persona."
+                        : emptyHint ?? "Escanea un ticket o añade productos para guardar el desglose."}
+                </p>
             ) : (
                 <div className="rounded-[14px] border border-[color:var(--line)] bg-card divide-y divide-[color:var(--line-2)] overflow-hidden">
                     {items.map((item, idx) => (

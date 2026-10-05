@@ -35,23 +35,23 @@ function isAllowedImage(buffer: Buffer): boolean {
 
 export async function POST(request: Request) {
     const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
 
     try {
         const formData = await request.formData();
         const file = formData.get('file') as File;
 
         if (!file) {
-            return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+            return NextResponse.json({ error: 'No se ha subido ningún archivo' }, { status: 400 });
         }
 
         const ext = ALLOWED_TYPES[file.type];
         if (!ext) {
-            return NextResponse.json({ error: 'Invalid file type. Only PNG, JPEG and WEBP images are allowed.' }, { status: 400 });
+            return NextResponse.json({ error: 'Tipo de archivo no válido: solo se admiten imágenes PNG, JPEG y WEBP.' }, { status: 400 });
         }
 
         if (file.size > MAX_SIZE_BYTES) {
-            return NextResponse.json({ error: 'File too large. Maximum size is 8 MB.' }, { status: 413 });
+            return NextResponse.json({ error: 'El archivo es demasiado grande (máximo 8 MB).' }, { status: 413 });
         }
 
         const bytes = await file.arrayBuffer();
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
 
         // Validate the actual bytes, not just the client-supplied MIME/extension.
         if (!isAllowedImage(buffer)) {
-            return NextResponse.json({ error: 'Invalid image file' }, { status: 400 });
+            return NextResponse.json({ error: 'El archivo no es una imagen válida' }, { status: 400 });
         }
 
         // Unpredictable filename with a whitelisted extension. It does NOT embed
@@ -78,6 +78,6 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         console.error('Error uploading file:', error);
-        return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+        return NextResponse.json({ error: 'No se pudo subir el archivo' }, { status: 500 });
     }
 }

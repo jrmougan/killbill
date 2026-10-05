@@ -24,9 +24,14 @@ function ledgerStore() {
             },
         },
         account: {
-            async upsert(args: { create: Omit<Account, 'id'> }) {
-                const key = `${args.create.groupId}:${args.create.userId}`;
-                const account = accounts.get(key) ?? { id: `account-${accounts.size}`, ...args.create };
+            async findUnique(args: { where: { groupId_userId: { groupId: string; userId: string } } }) {
+                const { groupId, userId } = args.where.groupId_userId;
+                return accounts.get(`${groupId}:${userId}`) ?? null;
+            },
+            async create(args: { data: Omit<Account, 'id'> }) {
+                const key = `${args.data.groupId}:${args.data.userId}`;
+                if (accounts.has(key)) throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+                const account = { id: `account-${accounts.size}`, ...args.data };
                 accounts.set(key, account);
                 return account;
             },

@@ -4,8 +4,11 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { resolveCategoryId, getEffectiveCategories } from '@/lib/category-db';
 import type { Prisma } from '@/generated/prisma/client';
+import { checkExpenseDay } from '@/lib/expense-input';
 
 const MAX_ROWS = 2000;
+/** 999.999,99 € — same ceiling as POST /api/expenses. */
+const MAX_AMOUNT_CENTS = 99_999_999;
 
 interface ImportRow {
     dateISO: string;      // YYYY-MM-DD
@@ -28,22 +31,23 @@ function fingerprint(userId: string, r: ImportRow): string {
  */
 export async function POST(request: Request) {
     const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    if (session.kind === 'guest') return NextResponse.json({ error: 'Los invitados no pueden importar movimientos' }, { status: 403 });
     const userId = session.userId as string;
 
     let body: { rows?: ImportRow[]; defaultCategory?: string };
     try {
         body = await request.json();
     } catch {
-        return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+        return NextResponse.json({ error: 'Petición no válida' }, { status: 400 });
     }
 
-    const rows = body.rows;
+    const rows = body?.rows;
     if (!Array.isArray(rows) || rows.length === 0) {
-        return NextResponse.json({ error: 'No rows to import' }, { status: 400 });
+        return NextResponse.json({ error: 'No hay movimientos que importar' }, { status: 400 });
     }
     if (rows.length > MAX_ROWS) {
-        return NextResponse.json({ error: `Too many rows (max ${MAX_ROWS})` }, { status: 400 });
+        return NextResponse.json({ error: `Demasiadas filas (máximo ${MAX_ROWS})` }, { status: 400 });
     }
 
     // Effective personal category set (system ∪ this user's personal-custom). Import
@@ -63,14 +67,16 @@ export async function POST(request: Request) {
     // Validate every row up-front; a bad row fails the whole import (all-or-nothing
     // is clearer for the user than a partial import).
     for (const r of rows) {
-        if (typeof r?.dateISO !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.dateISO)) {
-            return NextResponse.json({ error: `Invalid date: ${r?.dateISO}` }, { status: 400 });
+        // Real calendar day in [2000-01-01, today + 1 year] (G-06: 31/02 is not 3/03).
+        const day = typeof r?.dateISO === 'string' ? checkExpenseDay(r.dateISO) : { ok: false as const, error: 'Fecha inválida' };
+        if (!day.ok) {
+            return NextResponse.json({ error: `${day.error} ("${r?.description ?? ''}")` }, { status: 400 });
         }
-        if (!Number.isInteger(r.amountCents) || r.amountCents <= 0) {
-            return NextResponse.json({ error: `Invalid amount for "${r?.description}"` }, { status: 400 });
+        if (!Number.isInteger(r.amountCents) || r.amountCents <= 0 || r.amountCents > MAX_AMOUNT_CENTS) {
+            return NextResponse.json({ error: `Importe no válido en "${r?.description}"` }, { status: 400 });
         }
         if (typeof r.description !== 'string' || r.description.trim().length === 0) {
-            return NextResponse.json({ error: 'A row has an empty description' }, { status: 400 });
+            return NextResponse.json({ error: 'Hay un movimiento sin concepto' }, { status: 400 });
         }
         if (r.category !== undefined && (typeof r.category !== 'string' || !validKeys.has(r.category))) {
             return NextResponse.json({ error: `Categoría desconocida: ${r.category}` }, { status: 400 });
@@ -104,7 +110,7 @@ export async function POST(request: Request) {
         data.push({
             description: r.description.trim(),
             amount: r.amountCents,
-            date: new Date(`${r.dateISO}T12:00:00`), // local noon avoids tz day-shift
+            date: new Date(`${r.dateISO}T12:00:00.000Z`), // 12:00 UTC like POST /api/expenses: stable day in Madrid
             categoryId: await categoryIdFor(r.category ?? defaultCategory),
             paidById: userId,
             ownerId: userId,

@@ -1,25 +1,10 @@
 import { prisma } from '@/lib/db';
 import { getGroupMembers } from '@/lib/membership';
 import { postExpenseLedger } from '@/lib/ledger';
+import { addInterval } from '@/lib/recurring-interval';
 
-/**
- * Returns a NEW Date advanced by one period from `base`.
- * - 'weekly'  -> +7 days
- * - 'monthly' -> +1 month
- * - 'yearly'  -> +1 year
- * Unknown intervals return an unchanged copy of `base`. Never mutates the input.
- */
-export function addInterval(base: Date, interval: string): Date {
-    const next = new Date(base);
-    if (interval === 'weekly') {
-        next.setDate(next.getDate() + 7);
-    } else if (interval === 'monthly') {
-        next.setMonth(next.getMonth() + 1);
-    } else if (interval === 'yearly') {
-        next.setFullYear(next.getFullYear() + 1);
-    }
-    return next;
-}
+// Pure helper lives in recurring-interval.ts (client-safe); re-exported here.
+export { addInterval };
 
 // Safety cap on catch-up iterations per source expense to avoid runaway loops.
 const MAX_CATCHUP_ITERATIONS = 60;

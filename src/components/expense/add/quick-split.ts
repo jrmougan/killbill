@@ -10,7 +10,7 @@
  */
 
 import { formatCurrency } from "@/lib/currency";
-import { computeSplit, type SplitMember } from "@/components/expense/split-editor";
+import { computeSplit, splitValueFromExisting, type SplitMember, type SplitValue } from "@/components/expense/split-editor";
 
 export type QuickSplit = "equal" | "mine" | "theirs";
 
@@ -117,4 +117,34 @@ export function previewLine({
         return `Deberás ${formatCurrency(-deltaCents)} a ${who}`;
     }
     return "No cambia el saldo";
+}
+
+/**
+ * Map a persisted split (edit screen) back onto the quick tiles when it is one
+ * of them, otherwise onto the custom editor. ITEMIZED is left to the receipt
+ * lines (returned as "equal" here; the caller's itemized flag wins).
+ */
+export function initialSplitState(
+    strategy: "EQUAL" | "CUSTOM" | "EXCLUSIVE" | "ITEMIZED" | null | undefined,
+    splits: { userId: string; amount: number }[],
+    members: SplitMember[],
+    meId: string,
+    totalCents: number,
+): { choice: QuickSplit | "custom"; value: SplitValue } {
+    const value = splitValueFromExisting(strategy, splits, members, totalCents);
+    if (members.length < 2 || !strategy || strategy === "EQUAL" || strategy === "ITEMIZED") {
+        return { choice: "equal", value };
+    }
+    const others = members.filter((m) => m.id !== meId);
+    if (strategy === "EXCLUSIVE" && splits.length === 1) {
+        if (splits[0].userId === meId) return { choice: "mine", value };
+        if (others.length === 1 && splits[0].userId === others[0].id) return { choice: "theirs", value };
+    }
+    if (strategy === "CUSTOM" && others.length > 1) {
+        const theirs = quickShares("theirs", members, meId, totalCents);
+        const byId = new Map(splits.map((s) => [s.userId, s.amount]));
+        const matches = members.every((m) => (byId.get(m.id) ?? 0) === (theirs[m.id] ?? 0));
+        if (matches) return { choice: "theirs", value };
+    }
+    return { choice: "custom", value };
 }

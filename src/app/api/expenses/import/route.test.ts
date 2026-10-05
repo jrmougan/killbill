@@ -52,6 +52,18 @@ describe('POST /api/expenses/import', () => {
         expect((await POST(req({ rows: [row({ description: '  ' })] }))).status).toBe(400);
     });
 
+    it.each(['2026-02-31', '2025-02-29', '1999-12-31', '9999-01-01'])('400 with a Spanish message on impossible / out-of-range date %s (G-06)', async (dateISO) => {
+        const res = await POST(req({ rows: [row({ dateISO })] }));
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toMatch(/fecha/i);
+        expect(mockCreateMany).not.toHaveBeenCalled();
+    });
+
+    it('stores the day at 12:00 UTC', async () => {
+        await POST(req({ rows: [row()] }));
+        expect(mockCreateMany.mock.calls[0][0].data[0].date).toEqual(new Date('2026-07-09T12:00:00.000Z'));
+    });
+
     it('creates PERSONAL expenses with date + fingerprint', async () => {
         const res = await POST(req({ rows: [row(), row({ description: 'Alcampo', amountCents: 5000 })] }));
         expect(res.status).toBe(200);

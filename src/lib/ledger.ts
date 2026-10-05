@@ -41,9 +41,36 @@ export function computeExpenseEntries(
   return entries;
 }
 
-async function ensureAccount(tx: Tx, groupId: string, userId: string): Promise<string> {
-  const a = await tx.account.upsert({ where: { groupId_userId: { groupId, userId } }, create: { groupId, userId }, update: {} });
-  return a.id;
+/** Prisma's unique-constraint violation (a concurrent writer created the row first). */
+function isUniqueViolation(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === 'P2002';
+}
+
+/**
+ * Race-safe "get or create" of a member's ledger Account (G-04).
+ *
+ * The former `account.upsert({ update: {} })` took next-key/gap locks on the
+ * (groupId, userId) unique index, so two expenses posted concurrently in the
+ * same space deadlocked (P2034 → 500). Now: plain read first (accounts exist
+ * after the first expense, so the hot path never writes); only a missing
+ * account is INSERTed, and a duplicate-key error from a concurrent creator is
+ * caught and resolved by re-reading. A duplicate-key error does not abort an
+ * InnoDB transaction, and under READ COMMITTED (see runLedgerTransaction in
+ * expense-tx.ts) the re-read sees the other writer's committed row.
+ */
+export async function ensureAccount(tx: Tx, groupId: string, userId: string): Promise<string> {
+  const where = { groupId_userId: { groupId, userId } };
+  const existing = await tx.account.findUnique({ where, select: { id: true } });
+  if (existing) return existing.id;
+  try {
+    const created = await tx.account.create({ data: { groupId, userId }, select: { id: true } });
+    return created.id;
+  } catch (e) {
+    if (!isUniqueViolation(e)) throw e;
+    const again = await tx.account.findUnique({ where, select: { id: true } });
+    if (again) return again.id;
+    throw e;
+  }
 }
 
 async function postTransaction(tx: Tx, args: { groupId: string; kind: 'EXPENSE' | 'SETTLEMENT'; dedupeKey: string; amount: number; postedAt: Date; expenseId?: string; settlementId?: string; entries: Entry[] }): Promise<void> {

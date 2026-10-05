@@ -77,16 +77,7 @@ export function calculateSplitAmounts(
         amount: commonBase + (i < commonRemainder ? 1 : 0) + (exclusiveByUser[m.id] || 0),
     }));
 
-    // Verify splits sum matches the total amount.
-    // Due to rounding differences between receipt item totals and the overall amount,
-    // there may be a small discrepancy. Adjust the first split to compensate.
-    const splitsSum = splits.reduce((acc, s) => acc + s.amount, 0);
-    const diff = amountCents - splitsSum;
-    if (diff !== 0) {
-        splits[0].amount += diff;
-    }
-
-    return splits;
+    return reconcileItemizedSplits(splits, amountCents);
 }
 
 /**
@@ -184,11 +175,30 @@ export function calculateSplitAmountsFromLines(
         amount: commonBase + (i < commonRemainder ? 1 : 0) + (exclusiveByUser[m.id] || 0),
     }));
 
-    const splitsSum2 = splits.reduce((acc, s) => acc + s.amount, 0);
-    const diff2 = amountCents - splitsSum2;
-    if (diff2 !== 0) {
-        splits[0].amount += diff2;
-    }
+    return reconcileItemizedSplits(splits, amountCents);
+}
 
+/**
+ * Make ITEMIZED splits sum EXACTLY to the expense amount (G-03).
+ *
+ * When the receipt lines add up to the amount (the normal case) nothing
+ * changes. When they don't (the amount was edited after itemizing, an OCR
+ * total with an unlisted discount…), the difference is spread PROPORTIONALLY
+ * over every member's share instead of being dumped on the first member —
+ * which previously charged a whole price change to one person, or even made
+ * their split negative. Degenerate inputs (a non-positive share, e.g. a
+ * promotion line) keep the old "first member absorbs the diff" behaviour.
+ */
+function reconcileItemizedSplits(
+    splits: { userId: string; amount: number }[],
+    amountCents: number,
+): { userId: string; amount: number }[] {
+    const sum = splits.reduce((acc, s) => acc + s.amount, 0);
+    const diff = amountCents - sum;
+    if (diff === 0) return splits;
+    if (sum > 0 && amountCents > 0 && splits.every((s) => s.amount >= 0)) {
+        return rescaleSplits(splits, amountCents);
+    }
+    splits[0].amount += diff;
     return splits;
 }
