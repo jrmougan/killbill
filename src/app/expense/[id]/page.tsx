@@ -1,5 +1,4 @@
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, Heart, Calculator, User, Pencil, Tag } from "lucide-react";
+import { Heart, User, Pencil } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
@@ -9,7 +8,11 @@ import { formatCurrency, formatEuros } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
 import { getGroupMembers, getActiveGroup } from "@/lib/membership";
+import { getEffectiveCategories } from "@/lib/category-db";
+import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
+import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
 import { PromoteButton } from "@/components/expense/promote-button";
+import { EqCard, EqHeader, EqLabel } from "@/components/ui/eq";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -32,7 +35,8 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     tag: true
                 }
             },
-            ...RECEIPT_LINES_SELECT
+            ...RECEIPT_LINES_SELECT,
+            ...CATEGORY_REF_SELECT,
         }
     });
 
@@ -70,166 +74,155 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
     const myGroupId = isPersonal && expense.ownerId === userId ? await getActiveGroup(userId) : null;
     const canPromote = Boolean(myGroupId);
 
+    // Category tile, resolved in the expense's own context (personal → owner
+    // scope, shared → group scope).
+    const catMap = categoryMetaMap(await getEffectiveCategories(
+        isPersonal ? { ownerId: expense.ownerId } : expense.coupleId ? { groupId: expense.coupleId } : {},
+    ));
+    const categoryMeta = catMap[categoryKeyOf(expense)] ?? catMap.other ?? NEUTRAL_CATEGORY_META;
+    const dateLabel = new Date(expense.date).toLocaleDateString("es-ES", {
+        timeZone: "Europe/Madrid", weekday: "long", day: "numeric", month: "long", year: "numeric",
+    });
+    const backHref = isPersonal ? "/expenses/list?scope=personal" : "/expenses/list";
+    const avatar = (u: { avatar: string | null; name: string }) =>
+        isAvatarUrl(u.avatar)
+            // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
+            ? <img src={u.avatar} alt={u.name} className="h-full w-full object-cover" />
+            : (u.avatar || "👤");
+
     return (
-        <div className="flex flex-col min-h-screen p-3 sm:p-4 space-y-6 max-w-md mx-auto relative pb-24 w-full overflow-x-hidden">
-            <header className="flex items-center gap-2 pt-2">
-                <Link href="/dashboard">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
-                        <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                </Link>
-                <div className="flex-1 min-w-0">
-                    <h1 className="text-xl font-bold truncate text-foreground">{expense.description}</h1>
-                    <p className="text-xs text-[color:var(--ink-3)]">{new Date(expense.date).toLocaleDateString("es-ES")}</p>
-                </div>
+        <div className="eq-in flex flex-col min-h-screen w-full pt-3 pb-10 overflow-x-hidden">
+            <EqHeader title={expense.description} back={backHref}>
                 {!isReadOnly && (
-                    <>
-                        <Link href={`/expense/${expense.id}/edit`}>
-                            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                                <Pencil className="h-4 w-4 sm:mr-2" />
-                                <span className="hidden sm:inline">Editar</span>
-                            </Button>
+                    <div className="flex flex-none items-center gap-1">
+                        <Link
+                            href={`/expense/${expense.id}/edit`}
+                            aria-label="Editar"
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-[var(--track)] hover:text-foreground"
+                        >
+                            <Pencil className="h-4 w-4" />
                         </Link>
                         {canPromote && <PromoteButton expenseId={expense.id} />}
                         <DeleteExpenseButton expenseId={expense.id} />
-                    </>
+                    </div>
                 )}
-            </header>
+            </EqHeader>
 
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="text-center py-6 bg-card rounded-3xl border border-[color:var(--line)]">
-                    <p className="text-[11px] text-muted-foreground uppercase tracking-[0.08em] font-bold mb-2">Importe Total</p>
-                    <h2 className="text-4xl sm:text-5xl md:text-6xl font-mono font-semibold tracking-[-0.02em] text-foreground">
+            <div className="flex flex-col gap-5 px-5 pt-5">
+                <EqCard className="flex flex-col items-center gap-3 px-5 py-6 text-center">
+                    <span className="flex items-center gap-1.5 rounded-full bg-[var(--accent-tint)] px-2.5 py-1 text-xs font-semibold text-primary">
+                        <span aria-hidden>{categoryMeta.emoji}</span> {categoryMeta.label}
+                    </span>
+                    <h2 className="text-[44px] font-bold leading-none tracking-[-0.03em] text-foreground">
                         {formatCurrency(expense.amount)}
                     </h2>
-                    <div className="mt-4 flex items-center justify-center gap-2">
-                        <div className="h-6 w-6 rounded-full bg-secondary flex items-center justify-center overflow-hidden">
-                            {isAvatarUrl(expense.paidBy.avatar) ? (
-                                // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
-                                <img src={expense.paidBy.avatar} alt={expense.paidBy.name} className="h-full w-full object-cover" />
-                            ) : (
-                                expense.paidBy.avatar || "👤"
-                            )}
+                    <p className="text-[13px] text-muted-foreground first-letter:uppercase">{dateLabel}</p>
+                    <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-sm">
+                            {avatar(expense.paidBy)}
                         </div>
                         <p className="text-sm font-medium text-[color:var(--body-ink)]">Pagado por <span className="text-primary">{isMe ? "Ti" : expense.paidBy.name}</span></p>
                     </div>
                     {expense.createdBy && expense.createdById !== expense.paidById && (
-                        <p className="text-[11px] text-muted-foreground mt-1.5">
+                        <p className="text-xs text-muted-foreground">
                             Añadido por {expense.createdById === userId ? "ti" : expense.createdBy.name}
                         </p>
                     )}
-                </div>
+                </EqCard>
 
                 {isReadOnly && (
-                    <div className="flex items-center justify-center gap-2 py-2.5 rounded-2xl bg-secondary border border-[color:var(--line)] text-[13px] text-muted-foreground">
+                    <div className="rounded-[14px] bg-[var(--track)] px-3 py-2.5 text-center text-[13px] text-muted-foreground">
                         Este espacio está {space?.status === "ARCHIVED" ? "archivado" : "liquidando"} — solo lectura.
                     </div>
                 )}
 
                 {isPersonal ? (
-                    <div className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-card border border-[color:var(--line)] text-sm text-muted-foreground">
+                    <EqCard className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
                         <User className="h-4 w-4 text-primary" />
                         Gasto personal — privado, solo tú lo ves
-                    </div>
+                    </EqCard>
                 ) : (
-                <div className="space-y-4">
-                    <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground ml-1 flex items-center gap-2">
-                        <Heart className="h-4 w-4 fill-primary text-primary" />
-                        Reparto del gasto
-                    </h3>
-                    <div className="bg-card border border-[color:var(--line)] rounded-2xl overflow-hidden">
-                        {expense.splits.length === 0 ? (
-                            <div className="p-8 text-center text-muted-foreground border-dashed border-[color:var(--line-strong)]">
-                                No hay detalles de reparto para este gasto.
-                            </div>
-                        ) : (
-                            <div className="divide-y divide-[color:var(--line-2)]">
-                                {expense.splits.map((split) => (
-                                    <div key={split.id} className="flex items-center justify-between px-3 py-3 sm:p-4 bg-card">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center text-xs overflow-hidden text-lg">
-                                                {isAvatarUrl(split.user.avatar) ? (
-                                                    // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
-                                                    <img src={split.user.avatar} alt={split.user.name} className="h-full w-full object-cover" />
-                                                ) : (
-                                                    split.user.avatar || "👤"
-                                                )}
+                    <section className="space-y-2">
+                        <EqLabel className="px-1">Reparto del gasto</EqLabel>
+                        <EqCard className="px-4">
+                            {expense.splits.length === 0 ? (
+                                <p className="py-6 text-center text-sm text-muted-foreground">No hay detalles de reparto para este gasto.</p>
+                            ) : (
+                                <div className="divide-y divide-[color:var(--line-2)]">
+                                    {expense.splits.map((split) => (
+                                        <div key={split.id} className="flex items-center justify-between py-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-8 w-8 rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-base">
+                                                    {avatar(split.user)}
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-semibold text-foreground">{split.userId === userId ? "Ti" : split.user.name}</p>
+                                                    {split.userId === expense.paidById && (
+                                                        <p className="text-[11px] font-semibold text-primary">Pagó</p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div>
-                                                <p className="font-medium text-xs sm:text-sm text-foreground">{split.userId === userId ? "Ti" : split.user.name}</p>
-                                                {split.userId === expense.paidById && (
-                                                    <p className="text-[10px] text-[color:var(--positive)] font-bold uppercase tracking-tighter">Pagó</p>
-                                                )}
+                                            <div className="text-right">
+                                                <p className="text-[15px] font-semibold tabular-nums text-foreground">{formatCurrency(split.amount)}</p>
+                                                <p className="text-[11px] text-muted-foreground">{split.userId === expense.paidById ? "Su parte" : "Cargo"}</p>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="font-mono font-semibold tracking-[-0.02em] text-foreground">{formatCurrency(split.amount)}</p>
-                                            <p className="text-[10px] text-muted-foreground uppercase">{split.userId === expense.paidById ? "Su parte" : "Cargo"}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
+                                    ))}
+                                </div>
+                            )}
+                        </EqCard>
+                    </section>
+                )}
+
+                {expense.notes && (
+                    <section className="space-y-2">
+                        <EqLabel className="px-1">Notas</EqLabel>
+                        <EqCard className="p-4 text-sm whitespace-pre-wrap text-[color:var(--body-ink)]">{expense.notes}</EqCard>
+                    </section>
                 )}
 
                 {expense.tags.length > 0 && (
-                    <div className="space-y-4">
-                        <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground ml-1 flex items-center gap-2">
-                            <Tag className="h-4 w-4 text-primary" />
-                            Etiquetas
-                        </h3>
+                    <section className="space-y-2">
+                        <EqLabel className="px-1">Etiquetas</EqLabel>
                         <div className="flex flex-wrap gap-2">
                             {expense.tags.map(({ tag }) => (
                                 <span
                                     key={tag.id}
-                                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border"
-                                    style={{
-                                        backgroundColor: `${tag.color}20`,
-                                        borderColor: `${tag.color}66`,
-                                        color: tag.color,
-                                    }}
+                                    className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold"
+                                    style={{ backgroundColor: `${tag.color}20`, borderColor: `${tag.color}66`, color: tag.color }}
                                 >
                                     {tag.name}
                                 </span>
                             ))}
                         </div>
-                    </div>
+                    </section>
                 )}
 
                 {receiptItems.length > 0 && (
-                    <div className="space-y-4">
-                        <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground ml-1 flex items-center gap-2">
-                            <Calculator className="h-4 w-4 text-primary" />
-                            Desglose de Compra
-                        </h3>
-                        <div className="rounded-2xl border border-[color:var(--line)] overflow-hidden bg-card">
+                    <section className="space-y-2">
+                        <EqLabel className="px-1">Desglose de compra</EqLabel>
+                        <EqCard className="overflow-hidden">
                             <div className="divide-y divide-[color:var(--line-2)]">
                                 {receiptItems.map((item, idx) => (
-                                    <div key={idx} className="grid grid-cols-[auto_1fr_auto_auto] gap-1.5 sm:gap-3 p-2.5 sm:p-3 items-center text-xs sm:text-sm">
-                                        {/* Assignment indicator */}
-                                        <div className={`h-6 w-6 rounded-full flex-shrink-0 flex items-center justify-center ${item.assignedTo ? 'bg-[var(--accent-tint)] text-primary' : 'bg-secondary text-muted-foreground'}`}>
+                                    <div key={idx} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 px-4 py-2.5 text-sm">
+                                        <div className={`flex h-6 w-6 items-center justify-center rounded-full ${item.assignedTo ? "bg-[var(--accent-tint)] text-primary" : "bg-[var(--track)] text-muted-foreground"}`}>
                                             {item.assignedTo ? <User className="h-3.5 w-3.5" /> : <Heart className="h-3.5 w-3.5" />}
                                         </div>
-                                        <div className="font-medium break-words leading-tight py-1 min-w-0 text-foreground">{item.description}</div>
-                                        <div className="text-right text-muted-foreground text-[10px] leading-tight min-w-[45px] sm:min-w-[60px]">
+                                        <div className="min-w-0 break-words font-medium leading-tight text-foreground">{item.description}</div>
+                                        <div className="min-w-[45px] text-right text-[11px] leading-tight text-muted-foreground">
                                             {item.quantity > 1 && (
-                                                <div className="flex flex-col font-mono">
-                                                    <span>{item.quantity} x</span>
+                                                <div className="flex flex-col tabular-nums">
+                                                    <span>{item.quantity} ×</span>
                                                     <span>{formatEuros(item.price)}</span>
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="font-mono font-semibold tracking-[-0.02em] text-right w-fit min-w-[3.5rem] sm:w-16 flex-shrink-0 ml-1 text-foreground">
-                                            {formatEuros(item.total)}
-                                        </div>
+                                        <div className="min-w-[3.5rem] text-right font-semibold tabular-nums text-foreground">{formatEuros(item.total)}</div>
                                     </div>
                                 ))}
                             </div>
                             {/* Summary footer: shared part + one row per real assignee
-                                (Fase 1 fix — the old footer hard-coded "Solo {partner}",
-                                which was wrong for N-way / multi-assignee tickets). */}
+                                (N-way / multi-assignee tickets). */}
                             {receiptItems.some(i => i.assignedTo) && (() => {
                                 const sharedTotal = receiptItems.filter(i => !i.assignedTo).reduce((acc, i) => acc + i.total, 0);
                                 const byAssignee = new Map<string, number>();
@@ -238,11 +231,11 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                     byAssignee.set(i.assignedTo, (byAssignee.get(i.assignedTo) ?? 0) + i.total);
                                 }
                                 return (
-                                    <div className="bg-secondary p-3 space-y-2 border-t border-[color:var(--line)]">
+                                    <div className="space-y-1.5 border-t border-[color:var(--line)] bg-background px-4 py-3">
                                         {sharedTotal > 0 && (
                                             <div className="flex justify-between text-xs text-muted-foreground">
                                                 <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> Común</span>
-                                                <span className="font-mono">{formatEuros(sharedTotal)}</span>
+                                                <span className="tabular-nums">{formatEuros(sharedTotal)}</span>
                                             </div>
                                         )}
                                         {[...byAssignee.entries()].map(([uid, total]) => (
@@ -250,34 +243,30 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                                 <span className="flex items-center gap-1">
                                                     <User className="h-3 w-3" /> Solo {uid === userId ? "tú" : memberName(uid)}
                                                 </span>
-                                                <span className="font-mono">{formatEuros(total)}</span>
+                                                <span className="tabular-nums">{formatEuros(total)}</span>
                                             </div>
                                         ))}
                                     </div>
                                 );
                             })()}
-                            <div className="bg-secondary p-3 flex justify-between items-center border-t border-[color:var(--line)]">
-                                <span className="font-bold text-sm text-muted-foreground">Total Detallado</span>
-                                <span className="font-mono font-semibold tracking-[-0.02em] text-foreground">
+                            <div className="flex items-center justify-between border-t border-[color:var(--line)] bg-background px-4 py-3">
+                                <span className="text-sm font-semibold text-muted-foreground">Total detallado</span>
+                                <span className="font-semibold tabular-nums text-foreground">
                                     {formatEuros(receiptItems.reduce((acc, i) => acc + i.total, 0))}
                                 </span>
                             </div>
-                        </div>
-                    </div>
+                        </EqCard>
+                    </section>
                 )}
 
                 {expense.receiptUrl && (
-                    <div className="space-y-4">
-                        <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground ml-1">Ticket de Compra</h3>
-                        <div className="rounded-2xl border border-[color:var(--line)] overflow-hidden bg-card">
+                    <section className="space-y-2">
+                        <EqLabel className="px-1">Ticket de compra</EqLabel>
+                        <EqCard className="overflow-hidden">
                             {/* oxlint-disable-next-line nextjs/no-img-element -- user-uploaded receipt image of unknown dimensions; next/image would change layout/runtime */}
-                            <img
-                                src={expense.receiptUrl}
-                                alt="Ticket"
-                                className="w-full h-auto max-h-[400px] object-contain mx-auto"
-                            />
-                        </div>
-                    </div>
+                            <img src={expense.receiptUrl} alt="Ticket" className="mx-auto h-auto max-h-[400px] w-full object-contain" />
+                        </EqCard>
+                    </section>
                 )}
             </div>
         </div>

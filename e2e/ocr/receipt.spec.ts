@@ -33,11 +33,12 @@ test('scan, review, correct and assign a receipt before saving exact cents', asy
       { description: 'Leche', total: 1.2, assignedTo: null },
     ],
   });
-  await expect(page.getByRole('heading', { name: 'Recibo detectado' })).toBeVisible();
-  await expect(page.getByText('Tienda E2E · 3 productos')).toBeVisible();
-  await expect(page.getByText('6.75 €', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Usar estos datos' }).click();
+  // The scan returns straight to the prefilled form (EQUIL): badge + amount +
+  // concept; the receipt lines are reviewed under "Más opciones".
+  await expect(page.getByText('Ticket leído · revisa y guarda')).toBeVisible();
+  await expect(page.getByTestId('expense-amount')).toHaveValue('6,75');
   await expect(page.getByTestId('expense-description')).toHaveValue('Tienda E2E');
+  await page.getByRole('button', { name: /Más opciones/ }).click();
   await expect(page.getByRole('textbox', { name: 'Precio del producto 2', exact: true })).toHaveValue('2,15');
   await page.getByRole('textbox', { name: 'Precio del producto 2', exact: true }).fill('2,65');
   await page.getByRole('textbox', { name: 'Precio del producto 3', exact: true }).fill('1,21');
@@ -47,6 +48,9 @@ test('scan, review, correct and assign a receipt before saving exact cents', asy
   await expect(page.getByRole('button', { name: 'Solo mío', exact: true }).nth(0)).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Solo User B', exact: true }).nth(1)).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('button', { name: 'Compartido 50/50', exact: true }).nth(2)).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Listo', exact: true }).click();
+  await expect(page.getByTestId('expense-amount')).toHaveValue('8,47');
+  await expect(page.getByTestId('expense-split')).toContainText('Por productos');
   await page.getByTestId('expense-description').fill('Compra revisada OCR');
 
   const uploadResponse = page.waitForResponse(response => response.url().endsWith('/api/upload') && response.request().method() === 'POST');

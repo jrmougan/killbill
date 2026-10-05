@@ -2,11 +2,10 @@
 
 import { useMemo, useState, useEffect } from "react";
 import Papa from "papaparse";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Upload, CheckCircle2, AlertTriangle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { GlassCard } from "@/components/ui/glass-card";
+import Link from "next/link";
+import { Upload, CheckCircle2, AlertTriangle } from "lucide-react";
+import { EqCard, EqCta, EqHeader, EqLabel } from "@/components/ui/eq";
 import { normalizeRow, type ColumnMapping, type DateFormat } from "@/lib/bank-csv";
 import { formatEuros } from "@/lib/currency";
 import { CategoryPicker } from "@/components/category/category-picker";
@@ -114,18 +113,12 @@ export default function ImportCsvPage() {
     }, [result, router]);
 
     return (
-        <div className="flex flex-col min-h-screen p-4 pb-24 space-y-5 max-w-md mx-auto w-full">
-            <header className="flex items-center gap-2 pt-2">
-                <Link href="/dashboard?scope=personal">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
-                        <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                </Link>
-                <h1 className="text-xl font-bold">Importar CSV del banco</h1>
-            </header>
+        <div className="eq-in flex flex-col min-h-screen pt-3 pb-10 w-full">
+            <EqHeader title="Importar movimientos" back="/settings" />
+            <div className="flex flex-col gap-4 px-5 pt-5">
 
             {result ? (
-                <GlassCard className="text-center py-10 px-6 space-y-4">
+                <EqCard className="text-center py-10 px-6 space-y-4">
                     <CheckCircle2 className="h-12 w-12 text-[color:var(--positive)] mx-auto" />
                     <div className="space-y-1">
                         <h2 className="text-lg font-bold">Importación completada</h2>
@@ -134,10 +127,10 @@ export default function ImportCsvPage() {
                             {result.skipped > 0 && ` · ${result.skipped} omitidos (duplicados o ingresos)`}.
                         </p>
                     </div>
-                    <Link href="/dashboard?scope=personal"><Button className="w-full">Ver mis gastos</Button></Link>
-                </GlassCard>
+                    <Link href="/expenses/list?scope=personal" className="flex h-14 w-full items-center justify-center rounded-[18px] bg-primary text-base font-semibold text-primary-foreground">Ver mis gastos</Link>
+                </EqCard>
             ) : !parsed ? (
-                <GlassCard className="py-10 px-6 text-center space-y-4">
+                <EqCard className="py-10 px-6 text-center space-y-4">
                     <Upload className="h-10 w-10 text-primary mx-auto" />
                     <div className="space-y-1">
                         <h2 className="font-bold text-foreground">Sube el CSV de tu banco</h2>
@@ -150,14 +143,14 @@ export default function ImportCsvPage() {
                             className="hidden"
                             onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
                         />
-                        <span className="inline-flex items-center justify-center gap-2 w-full h-11 rounded-xl bg-primary text-white font-semibold cursor-pointer hover:bg-primary/90 transition-colors">
+                        <span className="inline-flex items-center justify-center gap-2 w-full h-14 rounded-[18px] bg-primary text-primary-foreground text-base font-semibold cursor-pointer transition-transform active:scale-[0.98]">
                             <Upload className="h-4 w-4" /> Elegir archivo
                         </span>
                     </label>
-                </GlassCard>
+                </EqCard>
             ) : (
                 <>
-                    <GlassCard className="p-4 space-y-3">
+                    <EqCard className="p-4 space-y-3">
                         <p className="text-[13px] text-muted-foreground truncate">{fileName} · {parsed.rows.length} filas</p>
                         {mapping && (
                             <div className="space-y-3">
@@ -183,9 +176,9 @@ export default function ImportCsvPage() {
                                 </div>
                             </div>
                         )}
-                    </GlassCard>
+                    </EqCard>
 
-                    <GlassCard className="p-4 space-y-3">
+                    <EqCard className="p-4 space-y-3">
                         <div className="space-y-0.5">
                             <h2 className="text-sm font-semibold text-foreground">Categoría por defecto</h2>
                             <p className="text-[12px] text-muted-foreground">Se aplica a todos los gastos importados; puedes cambiarla en cada uno después.</p>
@@ -195,10 +188,10 @@ export default function ImportCsvPage() {
                             value={defaultCategory}
                             onChange={setDefaultCategory}
                         />
-                    </GlassCard>
+                    </EqCard>
 
                     <div className="flex items-center justify-between px-1">
-                        <h2 className="text-[13px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">
+                        <h2 className="text-xs font-semibold text-muted-foreground">
                             {toImport.length} de {expenses.length} a importar
                         </h2>
                         {skippedCount > 0 && (
@@ -225,7 +218,7 @@ export default function ImportCsvPage() {
                                     <p className="text-[14px] text-foreground truncate">{e.description}</p>
                                     <p className="text-[11px] text-muted-foreground">{e.dateISO}</p>
                                 </div>
-                                <span className="text-[14px] font-mono font-semibold tracking-[-0.02em] text-foreground shrink-0">{formatEuros(e.amountCents / 100)}</span>
+                                <span className="text-[15px] font-semibold tabular-nums text-foreground shrink-0">{formatEuros(e.amountCents / 100)}</span>
                             </label>
                         ))}
                         {expenses.length > 100 && (
@@ -238,13 +231,14 @@ export default function ImportCsvPage() {
 
                     {error && <p className="text-sm text-destructive text-center">{error}</p>}
 
-                    <div className="sticky bottom-0 pt-2 pb-1 bg-gradient-to-t from-background to-transparent">
-                        <Button className="w-full h-12" disabled={importing || toImport.length === 0} onClick={doImport}>
+                    <div className="sticky bottom-0 pt-2 pb-4 bg-background">
+                        <EqCta disabled={importing || toImport.length === 0} onClick={doImport}>
                             {importing ? "Importando…" : `Importar ${toImport.length} ${toImport.length === 1 ? "gasto" : "gastos"}`}
-                        </Button>
+                        </EqCta>
                     </div>
                 </>
             )}
+            </div>
         </div>
     );
 }
@@ -252,7 +246,7 @@ export default function ImportCsvPage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div className="space-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
+            <EqLabel>{label}</EqLabel>
             {children}
         </div>
     );
@@ -263,7 +257,7 @@ function Select({ value, options, labels, onChange }: { value: string; options: 
         <select
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="w-full h-10 rounded-lg bg-card border border-[color:var(--line)] px-2 text-[13px] text-foreground focus:outline-none focus:border-[color:var(--accent-border)]"
+            className="w-full h-10 rounded-[10px] bg-card border border-[color:var(--line)] px-2 text-[13px] text-foreground focus:outline-none focus:border-[color:var(--accent-border)]"
         >
             {options.map((o) => (
                 <option key={o} value={o}>{labels?.[o] ?? o}</option>
