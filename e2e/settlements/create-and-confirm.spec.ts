@@ -250,7 +250,9 @@ test.describe('Settlements - Create and Confirm', () => {
     const pageA = await ctxA.newPage();
     await pageA.goto('/settle');
     await expect(pageA.getByTestId('settle-ticket')).toContainText('Te deben');
-    await expect(pageA.getByTestId('settle-ticket')).toContainText('A cada uno (÷3)');
+    // 100 € ÷ 3 is not the same for everybody (33,34 / 33,33 / 33,33): "Tu parte".
+    await expect(pageA.getByTestId('settle-ticket')).toContainText('Tu parte');
+    await expect(pageA.getByTestId('settle-ticket')).not.toContainText('A cada uno');
     await expect(pageA.getByTestId('settle-balance')).toHaveText(/66,66\s*€|66,67\s*€/);
     const transfers = pageA.getByTestId('settle-transfers').getByRole('radio');
     await expect(transfers).toHaveCount(2);

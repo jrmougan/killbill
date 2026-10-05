@@ -7,8 +7,10 @@ import { EqCta } from "@/components/ui/eq";
 /**
  * Confirm / reject a PENDING settlement as its receiver (the creditor). The
  * status route enforces that only the receiver may act; this is just the UI.
+ * The amount on screen travels as `expectedAmountCents`: if the payer edited it
+ * meanwhile the API answers 409 SETTLEMENT_CHANGED and we reload the detail.
  */
-export function SettlementActions({ id, fromName }: { id: string; fromName: string }) {
+export function SettlementActions({ id, fromName, amountCents }: { id: string; fromName: string; amountCents: number }) {
     const router = useRouter();
     const [busy, setBusy] = useState<"CONFIRMED" | "REJECTED" | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -21,10 +23,13 @@ export function SettlementActions({ id, fromName }: { id: string; fromName: stri
             const res = await fetch(`/api/settle/${id}/status`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status }),
+                body: JSON.stringify({ status, expectedAmountCents: amountCents }),
             });
             if (!res.ok) {
                 const json = await res.json().catch(() => ({}));
+                // The settlement changed under us (edited/resolved): show the error
+                // and refresh so the detail reflects the current state.
+                if (res.status === 409) router.refresh();
                 throw new Error(json.error || "No se pudo actualizar el pago");
             }
             router.refresh();

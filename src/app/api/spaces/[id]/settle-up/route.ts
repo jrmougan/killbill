@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
 import { getGroupBalances } from "@/lib/ledger-read";
 import { resolveMyDebts } from "@/lib/finance";
 import { assertStatusTransition, SpacePolicyError } from "@/lib/space-policy";
 import { SpaceStatus } from "@/generated/prisma/enums";
+import { SettlementError } from "@/lib/settlement-rules";
+import { withSpaceLock } from "@/lib/settlement-service";
 
 /**
  * Close the space for settling (Fase 1): move ACTIVE -> SETTLING and create the
@@ -55,45 +56,50 @@ export async function POST(
         }
     }
 
-    // Compute what the caller owes from the ledger-sourced balances.
-    const balances = await getGroupBalances(id);
-    const myDebts = resolveMyDebts(balances, auth.userId); // { creditorId: cents }
+    // Under the space lock (same one every settlement mutation takes) so the
+    // debts read here cannot race a concurrent confirm/"Ya he pagado".
+    let created: { toUserId: string; amount: number }[];
+    try {
+        created = await withSpaceLock(id, async (tx, lockedStatus) => {
+            if (lockedStatus === SpaceStatus.ARCHIVED) {
+                throw new SettlementError(409, "SPACE_NOT_WRITABLE", "El espacio está archivado (solo lectura)");
+            }
+            if (willTransition) {
+                await tx.couple.update({ where: { id }, data: { status: SpaceStatus.SETTLING } });
+            }
 
-    const created = await prisma.$transaction(async (tx) => {
-        if (willTransition) {
-            await tx.couple.update({ where: { id }, data: { status: SpaceStatus.SETTLING } });
-        }
+            // What the caller owes, from the ledger-sourced balances.
+            const balances = await getGroupBalances(id, tx);
+            const myDebts = resolveMyDebts(balances, auth.userId); // { creditorId: cents }
 
-        const rows: { toUserId: string; amount: number }[] = [];
-        for (const [toUserId, amount] of Object.entries(myDebts)) {
-            if (amount <= 0) continue;
-            // Skip if an equal PENDING settlement to this creditor already exists
-            // (idempotent re-run).
-            const existing = await tx.settlement.findFirst({
-                where: {
-                    coupleId: id,
-                    fromUserId: auth.userId,
-                    toUserId,
-                    amount,
-                    status: "PENDING",
-                },
-                select: { id: true },
-            });
-            if (existing) continue;
-            await tx.settlement.create({
-                data: {
-                    coupleId: id,
-                    fromUserId: auth.userId,
-                    toUserId,
-                    amount,
-                    method: "CASH",
-                    status: "PENDING",
-                },
-            });
-            rows.push({ toUserId, amount });
-        }
-        return rows;
-    });
+            const rows: { toUserId: string; amount: number }[] = [];
+            for (const [toUserId, amount] of Object.entries(myDebts)) {
+                if (amount <= 0) continue;
+                // Skip if an equal PENDING settlement to this creditor already
+                // exists (idempotent re-run).
+                const existing = await tx.settlement.findFirst({
+                    where: { coupleId: id, fromUserId: auth.userId, toUserId, amount, status: "PENDING" },
+                    select: { id: true },
+                });
+                if (existing) continue;
+                await tx.settlement.create({
+                    data: {
+                        coupleId: id,
+                        fromUserId: auth.userId,
+                        toUserId,
+                        amount,
+                        method: "CASH",
+                        status: "PENDING",
+                    },
+                });
+                rows.push({ toUserId, amount });
+            }
+            return rows;
+        });
+    } catch (e) {
+        if (e instanceof SettlementError) return NextResponse.json(e.toJSON(), { status: e.status });
+        throw e;
+    }
 
     return NextResponse.json({
         success: true,

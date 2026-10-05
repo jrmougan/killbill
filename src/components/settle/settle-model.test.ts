@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { buildTicket, formatPeriod, isAtPeace, myTransfers, ticketMeta } from "./settle-model";
+import {
+    buildTicket,
+    everyoneAtPeace,
+    formatPeriod,
+    isAtPeace,
+    methodName,
+    myTransfers,
+    shareLabel,
+    ticketMeta,
+    ticketPeriod,
+    type LedgerEvent,
+} from "./settle-model";
 
 describe("myTransfers", () => {
     it("couple: the debtor pays the creditor and the creditor sees the same amount", () => {
@@ -21,8 +32,20 @@ describe("myTransfers", () => {
 
     it("at peace: no transfers", () => {
         expect(myTransfers({ a: 0, b: 1, c: -1 }, "a")).toEqual([]);
-        expect(isAtPeace(1)).toBe(true);
+        expect(isAtPeace(0)).toBe(true);
         expect(isAtPeace(-2)).toBe(false);
+    });
+
+    it("1 cent is a debt, like Inicio/Espacios (S-14)", () => {
+        expect(isAtPeace(1)).toBe(false);
+        expect(isAtPeace(-1)).toBe(false);
+        expect(myTransfers({ a: 1, b: -1 }, "b")).toEqual([{ userId: "a", direction: "pay", amount: 1 }]);
+        expect(myTransfers({ a: 1, b: -1 }, "a")).toEqual([{ userId: "b", direction: "receive", amount: 1 }]);
+    });
+
+    it("everyoneAtPeace looks at every member (S-15)", () => {
+        expect(everyoneAtPeace({ a: 0, b: 0 })).toBe(true);
+        expect(everyoneAtPeace({ a: 0, b: 2667, c: -2667 })).toBe(false);
     });
 });
 
@@ -45,6 +68,47 @@ describe("buildTicket", () => {
         const t = buildTicket([{ amount: 1000, paidById: "lu", myShare: 700, equal: false }], "me", -700);
         expect(t.allEqual).toBe(false);
         expect(t.carry).toBe(0);
+    });
+});
+
+describe("ticketPeriod (S-03 / S-11)", () => {
+    const at = (m: number) => new Date(Date.UTC(2026, 9, 1, 10, m));
+    const ev = (m: number, amount: number, kind: LedgerEvent["kind"] = "EXPENSE"): LedgerEvent => ({ at: at(m), amount, kind, key: `k${m}` });
+
+    it("never at zero → whole history, no payments", () => {
+        expect(ticketPeriod([ev(1, 5000)])).toEqual({ since: null, payments: 0 });
+    });
+
+    it("a partial payment does not reset the period; it shows as a payment", () => {
+        // Expense: I'm owed 50; then I receive 20 (my entry −2000).
+        const r = ticketPeriod([ev(1, 5000), ev(2, -2000, "SETTLEMENT")]);
+        expect(r).toEqual({ since: null, payments: -2000 });
+        const t = buildTicket([{ amount: 10000, paidById: "me", myShare: 5000, equal: true }], "me", 3000, r.payments);
+        expect(t.carry).toBe(0);
+        expect(t.paidByMe - t.myShare + t.payments + t.carry).toBe(t.balance);
+    });
+
+    it("starts after the last time the balance was exactly 0", () => {
+        const r = ticketPeriod([ev(3, 3000), ev(1, 5000), ev(2, -5000, "SETTLEMENT"), ev(4, -1000, "SETTLEMENT")]);
+        expect(r.since).toEqual(at(2));
+        expect(r.payments).toBe(-1000);
+    });
+});
+
+describe("shareLabel (S-20)", () => {
+    it("'A cada uno' only when it is literally the same for everybody", () => {
+        expect(shareLabel({ allEqual: true }, 3)).toBe("A cada uno (÷3)");
+        expect(shareLabel({ allEqual: true }, 2)).toBe("A cada uno");
+        // e.g. 100 € + 10,01 € ÷ 3 → shares differ by a cent between members.
+        expect(shareLabel({ allEqual: false }, 3)).toBe("Tu parte");
+    });
+});
+
+describe("methodName (S-16)", () => {
+    it("matches settlement-labels: BIZUM and TRANSFER are different", () => {
+        expect(methodName("BIZUM")).toBe("Bizum");
+        expect(methodName("TRANSFER")).toBe("Transferencia");
+        expect(methodName("CASH")).toBe("Efectivo");
     });
 });
 

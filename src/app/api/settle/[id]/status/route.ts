@@ -1,85 +1,61 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
-import { postSettlementLedger } from '@/lib/ledger';
+import { SettlementError } from '@/lib/settlement-rules';
+import { resolveSettlement } from '@/lib/settlement-service';
 
+/**
+ * Confirm or reject a PENDING settlement as its RECEIVER (guests included: a
+ * guest owed money confirming receipt only reduces the debt to them).
+ *
+ * Body: `{ status: 'CONFIRMED' | 'REJECTED', expectedAmountCents?: number }`.
+ * `expectedAmountCents` is the amount the receiver saw: if the payer edited it
+ * meanwhile → 409 SETTLEMENT_CHANGED (`amountCents` = current amount).
+ *
+ * Errors: 409 SETTLEMENT_NOT_PENDING (already confirmed/rejected),
+ * SETTLEMENT_EXCEEDS_DEBT / NOTHING_TO_SETTLE (confirming would flip the debt),
+ * SPACE_NOT_WRITABLE (ARCHIVED); 403 NOT_RECEIVER.
+ * The transition is a conditional update under the space lock and the ledger is
+ * posted only by the request that wins it.
+ */
 export async function PATCH(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params;
 
-    const ctx = await getSessionCtx();
-    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const userId = ctx.userId;
-
-    const body = await request.json();
-    const { status } = body;
-
-    if (!["CONFIRMED", "REJECTED", "PENDING"].includes(status)) {
-        return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
-    }
-
-    const settlement = await prisma.settlement.findUnique({
-        where: { id },
-    });
-
-    if (!settlement) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    // Authorize against the settlement's OWN group (not the active-group cookie):
-    // confirming a settlement from a SETTLING/ARCHIVED space must not 403 in
-    // multi-group. Settling is permitted while the space is closing/archived.
-    const auth = await requireSpaceAccess(ctx, settlement.coupleId, { allowArchived: true });
-    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
-
-    if (settlement.toUserId !== userId) {
-        return NextResponse.json({ error: 'Only the receiver can update status' }, { status: 403 });
-    }
-
-    // Enforce valid status transitions. Only a PENDING settlement may be acted
-    // upon (CONFIRMED or REJECTED). Reverting a resolved settlement back to
-    // PENDING, or any other transition, is not allowed.
-    const allowedTransitions: Record<string, string[]> = {
-        PENDING: ["CONFIRMED", "REJECTED"],
-    };
-
-    if (!allowedTransitions[settlement.status]?.includes(status)) {
-        return NextResponse.json(
-            { error: `Invalid status transition from ${settlement.status} to ${status}` },
-            { status: 400 }
-        );
-    }
-
     try {
-        const updated = await prisma.$transaction(async (tx) => {
-            const claimed = await tx.settlement.updateMany({
-                where: { id, status: "PENDING" },
-                data: { status }
-            });
-            if (claimed.count === 0) return null;
-            const u = await tx.settlement.findUniqueOrThrow({ where: { id } });
-            // Phase 3 dual-write: PENDING->CONFIRMED is the moment the settlement
-            // enters the balance, so post its ledger transaction here. REJECTED
-            // posts nothing (representation-by-absence), matching
-            // effectiveSettlements = status === 'CONFIRMED' in finance/dashboard.
-            if (status === 'CONFIRMED') {
-                await postSettlementLedger(tx, {
-                    id: u.id,
-                    coupleId: u.coupleId,
-                    amount: u.amount,
-                    fromUserId: u.fromUserId,
-                    toUserId: u.toUserId,
-                    date: u.date,
-                });
-            }
-            return u;
-        });
-        if (!updated) {
-            return NextResponse.json({ error: 'Settlement already resolved' }, { status: 400 });
+        const ctx = await getSessionCtx();
+        if (!ctx) return NextResponse.json({ error: 'No has iniciado sesión' }, { status: 401 });
+
+        const body = await request.json().catch(() => null);
+        const { status, expectedAmountCents } = (body ?? {}) as Record<string, unknown>;
+
+        if (status !== 'CONFIRMED' && status !== 'REJECTED') {
+            return NextResponse.json({ error: 'Estado no válido', code: 'INVALID_INPUT' }, { status: 400 });
         }
+        if (expectedAmountCents !== undefined && !Number.isSafeInteger(expectedAmountCents)) {
+            return NextResponse.json({ error: 'expectedAmountCents no válido', code: 'INVALID_INPUT' }, { status: 400 });
+        }
+
+        const settlement = await prisma.settlement.findUnique({ where: { id }, select: { coupleId: true } });
+        if (!settlement) return NextResponse.json({ error: 'Pago no encontrado' }, { status: 404 });
+
+        // Authorize against the settlement's OWN group (not the active-group cookie).
+        const auth = await requireSpaceAccess(ctx, settlement.coupleId, { allowArchived: true, allowGuest: true });
+        if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
+
+        const updated = await resolveSettlement({
+            settlementId: id,
+            groupId: settlement.coupleId,
+            callerId: ctx.userId,
+            status,
+            expectedAmountCents: expectedAmountCents as number | undefined,
+        });
         return NextResponse.json({ success: true, settlement: updated });
     } catch (e) {
-        console.error(e);
-        return NextResponse.json({ error: 'Update failed' }, { status: 500 });
+        if (e instanceof SettlementError) return NextResponse.json(e.toJSON(), { status: e.status });
+        console.error('Error al actualizar el pago:', e);
+        return NextResponse.json({ error: 'No se pudo actualizar el pago' }, { status: 500 });
     }
 }
