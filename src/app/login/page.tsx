@@ -1,10 +1,10 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { EqCta } from "@/components/ui/eq";
+import { AuthShell, AuthField, AuthError } from "@/components/auth/auth-shell";
 import { loginAction } from "./actions";
 import type { AuthState } from "@/lib/auth-types";
 
@@ -12,72 +12,61 @@ function LoginForm() {
     const searchParams = useSearchParams();
     const inviteCode = searchParams.get("code");
 
-    // Server Action handles auth + cookie + redirect("/dashboard") in a single
-    // server response, so navigation never races the cookie write (the old
-    // "tap login twice on mobile" bug). Errors come back as form state.
+    // Server Action handles auth + cookie + redirect in a single server response,
+    // so navigation never races the cookie write (the old "tap login twice on
+    // mobile" bug). Errors come back as form state.
     const [state, formAction, pending] = useActionState<AuthState, FormData>(loginAction, {});
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-8 max-w-md mx-auto">
-            <div className="text-center space-y-2">
-                <h1 className="text-4xl font-bold tracking-tighter text-primary italic">
-                    EQUIL
-                </h1>
-                <p className="text-muted-foreground">
-                    {inviteCode ? "Has sido invitado a un grupo. Inicia sesión para unirte." : "Entra para gestionar tus gastos."}
+        <AuthShell
+            title={inviteCode ? "Entra para unirte" : "Hola de nuevo"}
+            subtitle={
+                inviteCode
+                    ? "Te han invitado a un espacio. Inicia sesión y confirma que quieres unirte."
+                    : "Entra para ver vuestras cuentas."
+            }
+            footer={
+                <p className="text-sm text-muted-foreground">
+                    ¿No tienes cuenta?{" "}
+                    <Link
+                        href={`/register${inviteCode ? `?code=${encodeURIComponent(inviteCode)}` : ""}`}
+                        className="font-semibold text-primary"
+                    >
+                        Regístrate
+                    </Link>
                 </p>
-            </div>
-
-            <form action={formAction} className="w-full space-y-4">
-                {state.error && (
-                    <div data-testid="login-error" className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
-                        {state.error}
-                    </div>
-                )}
+            }
+        >
+            <form action={formAction} className="flex flex-col gap-3">
+                {state.error && <AuthError data-testid="login-error">{state.error}</AuthError>}
 
                 {inviteCode && <input type="hidden" name="inviteCode" defaultValue={inviteCode} />}
 
-                <div className="space-y-4">
-                    <Input
-                        data-testid="login-email"
-                        name="email"
-                        type="email"
-                        placeholder="Email"
-                        required
-                        // oxlint-disable-next-line jsx-a11y/no-autofocus -- focuses primary email field on login form load (intentional UX)
-                        autoFocus
-                        autoComplete="email"
-                        className="text-lg h-12"
-                    />
-                    <Input
-                        data-testid="login-password"
-                        name="password"
-                        type="password"
-                        placeholder="Contraseña"
-                        required
-                        autoComplete="current-password"
-                        className="text-lg h-12"
-                    />
-                </div>
+                <AuthField
+                    data-testid="login-email"
+                    label="Email"
+                    name="email"
+                    type="email"
+                    required
+                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- focuses primary email field on login form load (intentional UX)
+                    autoFocus
+                    autoComplete="email"
+                    inputMode="email"
+                />
+                <AuthField
+                    data-testid="login-password"
+                    label="Contraseña"
+                    name="password"
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                />
 
-                <Button
-                    data-testid="login-submit"
-                    type="submit"
-                    size="lg"
-                    className="w-full h-12 text-lg shadow-xl shadow-primary/20"
-                    isLoading={pending}
-                >
-                    Entrar
-                </Button>
-
-                <div className="text-center text-sm text-muted-foreground mt-4">
-                    ¿No tienes cuenta?{" "}
-                    <Link href={`/register${inviteCode ? `?code=${inviteCode}` : ''}`} className="text-primary hover:underline">
-                        Regístrate
-                    </Link>
-                </div>
+                <EqCta data-testid="login-submit" type="submit" disabled={pending} aria-busy={pending} className="mt-3">
+                    {pending ? "Entrando…" : "Entrar"}
+                </EqCta>
             </form>
-        </div>
+        </AuthShell>
     );
 }
 
@@ -86,5 +75,5 @@ export default function LoginPage() {
         <Suspense>
             <LoginForm />
         </Suspense>
-    )
+    );
 }

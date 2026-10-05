@@ -24,10 +24,10 @@ function getMcpTokenTtlDays(value: string | undefined): number {
 export async function POST() {
   const session = await getSession();
   if (!session?.userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
   if (session.kind !== undefined) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Acción no permitida con este tipo de sesión" }, { status: 403 });
   }
 
   const ttlDays = getMcpTokenTtlDays(process.env.MCP_TOKEN_TTL_DAYS);
@@ -54,6 +54,6 @@ export async function POST() {
       },
     );
   } catch {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: "No se pudo generar el token" }, { status: 500 });
   }
 }

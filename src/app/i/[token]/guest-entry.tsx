@@ -2,25 +2,54 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Check, Copy } from "lucide-react";
+import { EqCta } from "@/components/ui/eq";
+import { AuthError, AuthField } from "@/components/auth/auth-shell";
 
 /**
- * "Entrar como invitado" (Fase 3). Renders on `/i/[token]` for a GUEST invite:
- * the visitor types only a name and enters — no email, no password. On success
- * the API opens a guest session and returns a ONE-TIME personal recovery link,
- * which we surface immediately ("Guarda tu enlace personal") before moving on,
- * so the guest can restore access from another device.
+ * Guest access on `/i/[token]` (EPHEMERAL trips).
+ *
+ * - `mode="invite"`: the visitor types only a name and enters — no email, no
+ *   password. The API opens a guest session and returns a ONE-TIME personal
+ *   recovery link, shown immediately ("Guarda tu enlace personal").
+ * - `mode="recovery"`: the visitor opened their personal recovery link on a new
+ *   device; one tap re-opens the guest session as `guestName`.
+ *
+ * `replacesSessionOf` is set when a REGISTERED session is present: entering as a
+ * guest would close it, so the action is collapsed behind "Entrar como
+ * invitado", spells out the consequence and sends `replaceSession: true` only
+ * after that explicit confirmation (IE-02). The API refuses with 409 otherwise.
  */
-export function GuestEntry({ token, spaceName }: { token: string; spaceName: string }) {
+export function GuestEntry({
+    token,
+    spaceName,
+    mode = "invite",
+    guestName,
+    replacesSessionOf,
+}: {
+    token: string;
+    spaceName: string;
+    mode?: "invite" | "recovery";
+    guestName?: string;
+    replacesSessionOf?: string | null;
+}) {
     const router = useRouter();
+    const confirmNeeded = replacesSessionOf != null;
+    const [open, setOpen] = useState(!confirmNeeded);
     const [name, setName] = useState("");
     const [pending, setPending] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [recoveryToken, setRecoveryToken] = useState<string | null>(null);
+    const [copied, setCopied] = useState(false);
+
+    const goIn = () => {
+        router.push("/dashboard");
+        router.refresh();
+    };
 
     async function enter() {
         const trimmed = name.trim();
-        if (!trimmed) {
+        if (mode === "invite" && !trimmed) {
             setError("Escribe tu nombre para entrar");
             return;
         }
@@ -30,16 +59,24 @@ export function GuestEntry({ token, spaceName }: { token: string; spaceName: str
             const res = await fetch("/api/invites/claim", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token, name: trimmed }),
+                body: JSON.stringify({
+                    token,
+                    ...(mode === "invite" ? { name: trimmed } : {}),
+                    ...(confirmNeeded ? { replaceSession: true } : {}),
+                }),
             });
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             if (!res.ok) {
                 setError(data.error ?? "No se pudo entrar como invitado");
                 setPending(false);
                 return;
             }
-            setRecoveryToken(data.recoveryToken ?? null);
-            setPending(false);
+            if (data.recoveryToken) {
+                setRecoveryToken(data.recoveryToken);
+                setPending(false);
+                return;
+            }
+            goIn();
         } catch {
             setError("Error de red. Inténtalo de nuevo.");
             setPending(false);
@@ -49,47 +86,85 @@ export function GuestEntry({ token, spaceName }: { token: string; spaceName: str
     // Interstitial: show the one-time recovery link before entering the space.
     if (recoveryToken) {
         const recoveryUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/i/${encodeURIComponent(recoveryToken)}`;
+        const copy = async () => {
+            try {
+                await navigator.clipboard.writeText(recoveryUrl);
+                setCopied(true);
+            } catch {
+                /* clipboard unavailable: the link stays selectable */
+            }
+        };
         return (
-            <div className="w-full space-y-4 text-center">
-                <p className="text-lg font-semibold">Guarda tu enlace personal</p>
-                <p className="text-sm text-muted-foreground">
+            <div className="flex flex-col gap-3 eq-in" data-testid="guest-recovery">
+                <h2 className="text-lg font-semibold">Guarda tu enlace personal</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
                     Es la única forma de volver a entrar desde otro dispositivo. No se mostrará de nuevo.
                 </p>
-                <div className="bg-muted text-xs p-3 rounded-md break-all select-all font-mono">
+                <div className="rounded-[14px] border border-[color:var(--line)] bg-card p-3.5 font-mono text-xs break-all select-all">
                     {recoveryUrl}
                 </div>
-                <Button
-                    size="lg"
-                    className="w-full h-12 text-lg"
-                    onClick={() => {
-                        router.push("/dashboard");
-                        router.refresh();
-                    }}
-                >
-                    Guardado, entrar a {spaceName}
-                </Button>
+                <EqCta variant="outline" onClick={copy}>
+                    {copied ? <Check className="h-4 w-4" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+                    {copied ? "Enlace copiado" : "Copiar enlace"}
+                </EqCta>
+                <EqCta onClick={goIn} className="h-auto min-h-14 px-4 py-3 leading-snug text-balance">
+                    Guardado, entrar
+                </EqCta>
             </div>
         );
     }
 
+    if (!open) {
+        return (
+            <EqCta variant="outline" onClick={() => setOpen(true)} aria-expanded={false}>
+                {mode === "recovery" ? `Entrar como ${guestName ?? "invitado"}` : "Entrar como invitado"}
+            </EqCta>
+        );
+    }
+
+    const cta = confirmNeeded
+        ? "Cerrar sesión y entrar como invitado"
+        : mode === "recovery"
+            ? `Entrar como ${guestName ?? "invitado"}`
+            : "Entrar como invitado";
+
     return (
-        <div className="w-full space-y-3">
-            {error && (
-                <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
-                    {error}
+        <div className="flex flex-col gap-3 eq-in">
+            {confirmNeeded && (
+                <div
+                    role="note"
+                    className="rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 py-3 text-sm leading-relaxed text-pretty"
+                >
+                    Si entras como invitado se <strong>cerrará tu sesión</strong>
+                    {replacesSessionOf ? <> de <strong className="break-all">{replacesSessionOf}</strong></> : null}.
+                    Tus espacios no se borran: podrás volver a iniciar sesión cuando quieras.
                 </div>
             )}
-            <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Tu nombre"
-                maxLength={40}
-                className="w-full h-12 px-4 rounded-md border border-input bg-background text-lg"
-            />
-            <Button onClick={enter} size="lg" className="w-full h-12 text-lg" isLoading={pending}>
-                Entrar como invitado
-            </Button>
+            {error && <AuthError>{error}</AuthError>}
+            {mode === "invite" && (
+                <AuthField
+                    label="Tu nombre"
+                    hint={`Así te verán en ${spaceName}.`}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter") void enter();
+                    }}
+                    maxLength={40}
+                    autoComplete="given-name"
+                    data-testid="guest-name"
+                />
+            )}
+            <EqCta
+                onClick={enter}
+                disabled={pending}
+                aria-busy={pending}
+                variant={confirmNeeded ? "ink" : "primary"}
+                className="h-auto min-h-14 px-4 py-3 leading-snug text-balance"
+                data-testid="guest-enter"
+            >
+                {pending ? "Entrando…" : cta}
+            </EqCta>
         </div>
     );
 }

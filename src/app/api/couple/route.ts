@@ -7,7 +7,8 @@ import { randomBytes } from 'crypto';
 
 export async function GET(_request: Request) {
     const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    if (session.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
     const userId = session.userId as string;
 
     // Resolve the caller's ACTIVE group + members via the Membership layer (F4).
@@ -30,7 +31,8 @@ export async function GET(_request: Request) {
  */
 export async function POST(request: Request) {
     const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    if (session.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
     const userId = session.userId as string;
 
     // F4 (multi-group): no blanket "already in a group" block — a user may own or

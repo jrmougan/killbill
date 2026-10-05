@@ -1,148 +1,208 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { evaluateInvite, hashInviteToken, inviteInvalidMessage } from "@/lib/invite-token";
-import { allowsGuests, joinByCodeAllowed } from "@/lib/space-policy";
-import { ephemeralSpacesEnabled } from "@/lib/flags";
-import { InviteKind, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
-import { Button } from "@/components/ui/button";
+import { resolveInviteToken } from "@/lib/invite-resolve";
+import { sessionKindOf } from "@/lib/invite-policy";
+import { MembershipStatus } from "@/generated/prisma/enums";
+import { AuthShell, AuthNote } from "@/components/auth/auth-shell";
 import { ClaimButton } from "./claim-button";
 import { GuestEntry } from "./guest-entry";
 
 /**
- * Public invite consent screen (Fase 2). Reached from an invite link and from
- * the post-login redirect that replaced the silent `?code=` auto-join. It shows
- * the space, then either lets an authenticated visitor join EXPLICITLY, or points
- * an anonymous visitor to login/register (carrying the token). It resolves both
- * GroupInvite tokens and the legacy classic `Couple.code` so old links keep
- * working. Guest entry (EPHEMERAL) is Fase 3 and intentionally absent here.
+ * Public invite consent screen. Reached from an invite link and from the
+ * post-login redirect (`/login?code=` → here): no join ever happens without an
+ * explicit tap.
+ *
+ * Resolves (see `resolveInviteToken`): MEMBER links (COUPLE/GROUP), GUEST links
+ * (EPHEMERAL trips — enter by name, or "Unirme con mi cuenta" when logged in),
+ * and a guest's personal RECOVERY link (IE-03). The legacy 6-hex `Couple.code`
+ * is not an invitation any more (IE-04): it resolves to "no encontrado" and
+ * never reveals a space name.
+ *
+ * A registered session is never replaced silently (IE-02): entering as a guest
+ * requires an explicit confirmation ("cerrarás tu sesión").
  */
 
 export const dynamic = "force-dynamic";
 
-type Resolved =
-    | { ok: false; message: string }
-    | { ok: true; kind: "MEMBER" | "GUEST"; spaceName: string };
+const linkCta =
+    "w-full min-h-14 rounded-[18px] px-4 py-3 text-base font-semibold flex items-center justify-center text-center leading-snug transition-transform active:scale-[0.98]";
+const primaryLink = `${linkCta} bg-primary text-primary-foreground`;
+const outlineLink = `${linkCta} bg-card border border-[color:var(--line)] text-foreground`;
 
-async function resolveInvite(token: string): Promise<Resolved> {
-    const invite = await prisma.groupInvite.findUnique({
-        where: { tokenHash: hashInviteToken(token) },
-        include: { group: { select: { name: true, type: true, status: true } } },
-    });
+const CONSENT_NOTE =
+    "Al unirte, las demás personas del espacio verán tu nombre y los gastos que registres. No compartimos tus datos con terceros. Puedes salir del espacio cuando quieras desde Espacios.";
 
-    if (invite) {
-        if (invite.kind === InviteKind.GUEST) {
-            if (!ephemeralSpacesEnabled()) {
-                return { ok: false, message: "Este tipo de invitación no está disponible todavía." };
-            }
-            const validity = evaluateInvite(invite);
-            if (!validity.ok) {
-                return { ok: false, message: inviteInvalidMessage(validity.reason) };
-            }
-            if (
-                !allowsGuests(invite.group.type as SpaceType) ||
-                (invite.group.status as SpaceStatus) !== SpaceStatus.ACTIVE
-            ) {
-                return { ok: false, message: "Este espacio ya no admite invitados." };
-            }
-            return { ok: true, kind: "GUEST", spaceName: invite.group.name ?? "el espacio" };
-        }
-        const validity = evaluateInvite(invite);
-        if (!validity.ok) {
-            return { ok: false, message: inviteInvalidMessage(validity.reason) };
-        }
-        if (!joinByCodeAllowed(invite.group.type as SpaceType, invite.group.status as SpaceStatus)) {
-            return { ok: false, message: "Este espacio ya no admite nuevos miembros." };
-        }
-        return { ok: true, kind: "MEMBER", spaceName: invite.group.name ?? "el espacio" };
-    }
-
-    const couple = await prisma.couple.findUnique({
-        where: { code: token.toUpperCase() },
-        select: { name: true, type: true, status: true },
-    });
-    if (couple) {
-        if (!joinByCodeAllowed(couple.type as SpaceType, couple.status as SpaceStatus)) {
-            return { ok: false, message: "Este espacio ya no admite nuevos miembros." };
-        }
-        return { ok: true, kind: "MEMBER", spaceName: couple.name ?? "el espacio" };
-    }
-
-    return { ok: false, message: "Enlace de invitación no encontrado o caducado." };
-}
-
-export default async function InviteConsentPage({
-    params,
-}: {
-    params: Promise<{ token: string }>;
-}) {
+export default async function InviteConsentPage({ params }: { params: Promise<{ token: string }> }) {
     const { token } = await params;
-    const [resolved, session] = await Promise.all([resolveInvite(token), getSession()]);
+    const [resolved, session] = await Promise.all([resolveInviteToken(token), getSession()]);
+    const kind = sessionKindOf(session);
+    const sessionUserId = kind === "none" ? null : (session!.userId as string);
+    const sessionEmail = kind === "registered" && typeof session?.email === "string" ? session.email : null;
+    const enc = encodeURIComponent(token);
+
+    // IE-24: a registered member reopening a (possibly used-up) link of their own
+    // space sees "ya eres miembro" instead of a misleading "sin usos".
+    const spaceId = resolved.spaceId;
+    if (kind === "registered" && spaceId && sessionUserId) {
+        const membership = await prisma.membership.findUnique({
+            where: { groupId_userId: { groupId: spaceId, userId: sessionUserId } },
+            select: { status: true },
+        });
+        if (membership?.status === MembershipStatus.ACTIVE) {
+            const name = resolved.ok ? resolved.spaceName : (resolved.spaceName ?? "este espacio");
+            return (
+                <AuthShell
+                    title={<>Ya eres miembro de {name}</>}
+                    subtitle="No tienes que hacer nada más."
+                    footer={<Link href="/dashboard" className={primaryLink}>Ir a Inicio</Link>}
+                />
+            );
+        }
+    }
+
+    if (!resolved.ok) {
+        return (
+            <AuthShell
+                title="Este enlace no funciona"
+                subtitle={resolved.message}
+                footer={
+                    <>
+                        <AuthNote>Pide a quien te invitó un enlace nuevo.</AuthNote>
+                        <Link href={kind === "none" ? "/login" : "/dashboard"} className={outlineLink}>
+                            {kind === "none" ? "Iniciar sesión" : "Ir a Inicio"}
+                        </Link>
+                    </>
+                }
+            />
+        );
+    }
+
+    // ── Guest recovery link (personal, multi-device) ─────────────────────────
+    if (resolved.kind === "RECOVERY") {
+        return (
+            <AuthShell
+                title={<>Vuelve a {resolved.spaceName}</>}
+                subtitle={<>Entrarás como <strong className="text-foreground">{resolved.guestName}</strong> en este dispositivo.</>}
+            >
+                <GuestEntry
+                    token={token}
+                    spaceName={resolved.spaceName}
+                    mode="recovery"
+                    guestName={resolved.guestName}
+                    replacesSessionOf={kind === "registered" ? (sessionEmail ?? "") : null}
+                />
+            </AuthShell>
+        );
+    }
+
+    // ── Trip (EPHEMERAL) guest link ──────────────────────────────────────────
+    if (resolved.kind === "GUEST") {
+        if (kind === "guest" && session?.groupId === resolved.spaceId) {
+            return (
+                <AuthShell
+                    title={<>Ya estás en {resolved.spaceName}</>}
+                    subtitle="Has entrado como invitado en este dispositivo."
+                    footer={<Link href="/dashboard" className={primaryLink}>Ir a Inicio</Link>}
+                />
+            );
+        }
+
+        if (kind === "registered") {
+            return (
+                <AuthShell
+                    title={<>Te han invitado a {resolved.spaceName}</>}
+                    subtitle={
+                        sessionEmail
+                            ? <>Has iniciado sesión como <strong className="text-foreground break-all">{sessionEmail}</strong>. Únete con tu cuenta para tener el viaje junto a tus otros espacios.</>
+                            : "Únete con tu cuenta para tener el viaje junto a tus otros espacios."
+                    }
+                    footer={
+                        <>
+                            <AuthNote>{CONSENT_NOTE}</AuthNote>
+                            <Link href="/dashboard" className="text-sm font-semibold text-muted-foreground px-2 py-2">
+                                Ahora no
+                            </Link>
+                        </>
+                    }
+                >
+                    {resolved.accountJoinable && (
+                        <ClaimButton token={token} asMember label="Unirme con mi cuenta" />
+                    )}
+                    <GuestEntry token={token} spaceName={resolved.spaceName} replacesSessionOf={sessionEmail ?? ""} />
+                </AuthShell>
+            );
+        }
+
+        return (
+            <AuthShell
+                title={<>Te han invitado a {resolved.spaceName}</>}
+                subtitle={
+                    kind === "guest"
+                        ? "Entra solo con tu nombre. Saldrás del viaje en el que estás ahora: guarda antes su enlace personal."
+                        : "Entra solo con tu nombre, sin crear una cuenta."
+                }
+                footer={
+                    <>
+                        <AuthNote>{CONSENT_NOTE}</AuthNote>
+                        <p className="text-sm text-muted-foreground">
+                            ¿Prefieres una cuenta?{" "}
+                            <Link href={`/register?code=${enc}`} className="font-semibold text-primary">
+                                Regístrate
+                            </Link>
+                            {" · "}
+                            <Link href={`/login?code=${enc}`} className="font-semibold text-primary">
+                                Inicia sesión
+                            </Link>
+                        </p>
+                    </>
+                }
+            >
+                <GuestEntry token={token} spaceName={resolved.spaceName} />
+            </AuthShell>
+        );
+    }
+
+    // ── Member link (COUPLE / GROUP) ─────────────────────────────────────────
+    if (kind === "guest") {
+        return (
+            <AuthShell
+                title={<>Te han invitado a {resolved.spaceName}</>}
+                subtitle="Ahora estás como invitado. Crea tu cuenta para poder unirte a otros espacios."
+                footer={<Link href="/dashboard" className="text-sm font-semibold text-muted-foreground px-2 py-2">Volver a Inicio</Link>}
+            >
+                <Link href="/guest/upgrade" className={primaryLink}>Crear mi cuenta</Link>
+            </AuthShell>
+        );
+    }
+
+    if (kind === "registered") {
+        return (
+            <AuthShell
+                title={<>Te han invitado a {resolved.spaceName}</>}
+                subtitle="Únete para compartir gastos en este espacio."
+                footer={
+                    <>
+                        <AuthNote>{CONSENT_NOTE}</AuthNote>
+                        <Link href="/dashboard" className="text-sm font-semibold text-muted-foreground px-2 py-2">
+                            Ahora no
+                        </Link>
+                    </>
+                }
+            >
+                <ClaimButton token={token} label="Unirme al espacio" />
+            </AuthShell>
+        );
+    }
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-8 max-w-md mx-auto">
-            <div className="text-center space-y-2">
-                <h1 className="text-4xl font-bold tracking-tighter text-primary italic">EQUIL</h1>
-                <p className="text-muted-foreground">Invitación a un espacio compartido</p>
-            </div>
-
-            {!resolved.ok ? (
-                <div className="w-full space-y-4 text-center">
-                    <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md">
-                        {resolved.message}
-                    </div>
-                    <Link href="/dashboard" className="text-primary hover:underline text-sm">
-                        Ir a mi panel
-                    </Link>
-                </div>
-            ) : resolved.kind === "GUEST" ? (
-                <div className="w-full space-y-4 text-center">
-                    <p className="text-lg">
-                        Te han invitado a <span className="font-semibold">{resolved.spaceName}</span>. Entra con
-                        solo tu nombre, sin crear una cuenta.
-                    </p>
-                    <GuestEntry token={token} spaceName={resolved.spaceName} />
-                    <p className="text-xs text-muted-foreground">
-                        ¿Prefieres una cuenta?{" "}
-                        <Link href={`/register?code=${encodeURIComponent(token)}`} className="text-primary hover:underline">
-                            Regístrate
-                        </Link>
-                    </p>
-                </div>
-            ) : session?.userId ? (
-                <div className="w-full space-y-4 text-center">
-                    <p className="text-lg">
-                        Te han invitado a <span className="font-semibold">{resolved.spaceName}</span>.
-                    </p>
-                    <ClaimButton token={token} spaceName={resolved.spaceName} />
-                    <Link href="/dashboard" className="text-muted-foreground hover:underline text-sm block">
-                        Ahora no
-                    </Link>
-                </div>
-            ) : (
-                <div className="w-full space-y-4 text-center">
-                    <p className="text-lg">
-                        Te han invitado a <span className="font-semibold">{resolved.spaceName}</span>. Inicia
-                        sesión o crea una cuenta para unirte.
-                    </p>
-                    <Link href={`/login?code=${encodeURIComponent(token)}`} className="block">
-                        <Button size="lg" className="w-full h-12 text-lg">Iniciar sesión</Button>
-                    </Link>
-                    <Link href={`/register?code=${encodeURIComponent(token)}`} className="block">
-                        <Button size="lg" variant="secondary" className="w-full h-12 text-lg">
-                            Crear una cuenta
-                        </Button>
-                    </Link>
-                </div>
-            )}
-
-            {resolved.ok && (
-                <p className="text-[11px] leading-relaxed text-muted-foreground text-center max-w-xs">
-                    Al unirte, las demás personas del espacio verán tu nombre y los gastos que
-                    registres. No compartimos tus datos con terceros. Puedes salir del espacio cuando
-                    quieras desde Ajustes.
-                </p>
-            )}
-        </div>
+        <AuthShell
+            title={<>Te han invitado a {resolved.spaceName}</>}
+            subtitle="Inicia sesión o crea una cuenta para unirte."
+            footer={<AuthNote>{CONSENT_NOTE}</AuthNote>}
+        >
+            <Link href={`/login?code=${enc}`} className={primaryLink}>Iniciar sesión</Link>
+            <Link href={`/register?code=${enc}`} className={outlineLink}>Crear una cuenta</Link>
+        </AuthShell>
     );
 }

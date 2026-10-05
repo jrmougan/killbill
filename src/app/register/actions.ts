@@ -6,8 +6,11 @@ import { redirect } from 'next/navigation';
 import bcrypt from 'bcryptjs';
 import { signToken } from '@/lib/auth';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
-import { SPACE_CAPS, joinByCodeAllowed, SpacePolicyError } from '@/lib/space-policy';
+import { SPACE_CAPS, SpacePolicyError } from '@/lib/space-policy';
 import { evaluateInvite, hashInviteToken, inviteInvalidMessage } from '@/lib/invite-token';
+import { accountJoinAllowed } from '@/lib/invite-policy';
+import { ephemeralSpacesEnabled } from '@/lib/flags';
+import { ACTIVE_GROUP_COOKIE } from '@/lib/membership';
 import { InviteKind, MembershipRole, MembershipStatus, SpaceStatus, SpaceType } from '@/generated/prisma/enums';
 import type { AuthState } from '@/lib/auth-types';
 
@@ -24,9 +27,11 @@ const SESSION_COOKIE = {
  * Exactly one of the invite kinds authorizes creating the account:
  *  - adminInviteId: an admin-created InviteCode (instance stays CLOSED — this is
  *    the only self-service-less registration path).
- *  - groupInviteId + couple: a GroupInvite MEMBER link (Fase 2) — doubles as
- *    registration authorization AND a space join.
- *  - couple only: a legacy classic Couple.code link.
+ *  - groupInviteId + couple: a GroupInvite link — doubles as registration
+ *    authorization AND a space join. A MEMBER link joins a COUPLE/GROUP; a GUEST
+ *    link (trip) lets the visitor register and join the EPHEMERAL trip with an
+ *    account instead of as a guest (IE-07).
+ * The legacy 6-hex `Couple.code` is NOT accepted (no short codes, IE-04).
  */
 type JoinTarget = {
     adminInviteId?: string;
@@ -39,8 +44,8 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
     const name = String(formData.get('name') ?? '').trim();
     const email = String(formData.get('email') ?? '').trim();
     const password = String(formData.get('password') ?? '');
-    // Raw token from an invite link (case-sensitive, may be a GroupInvite token
-    // or a legacy classic code). Falls back to the manually-typed code field.
+    // Raw token from an invite link (case-sensitive GroupInvite token). Falls back
+    // to the manually-typed admin invitation code field.
     const inviteToken = String(formData.get('inviteToken') ?? '').trim();
     const manualCode = String(formData.get('inviteCode') ?? '').trim();
     const effective = inviteToken || manualCode;
@@ -54,6 +59,12 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
     if (!name || !email || !password) {
         return { error: 'Nombre, email y contraseña obligatorios' };
     }
+    if (name.length > 60) {
+        return { error: 'El nombre no puede superar los 60 caracteres' };
+    }
+    if (email.length > 191) {
+        return { error: 'El email es demasiado largo' };
+    }
     if (password.length < 8) {
         return { error: 'La contraseña debe tener al menos 8 caracteres' };
     }
@@ -61,9 +72,10 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
         return { error: 'Se requiere código de invitación' };
     }
 
+    let joinedSpace = false;
     try {
-        // Resolve the registration target: GroupInvite → admin InviteCode →
-        // classic Couple.code. Read-only lookups; consumption happens in the tx.
+        // Resolve the registration target: GroupInvite → admin InviteCode.
+        // Read-only lookups; consumption happens in the tx.
         const target: JoinTarget = {};
 
         const groupInvite = await prisma.groupInvite.findUnique({
@@ -72,8 +84,8 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
         });
 
         if (groupInvite) {
-            if (groupInvite.kind !== InviteKind.MEMBER) {
-                return { error: 'Este enlace no es una invitación de miembro' };
+            if (groupInvite.kind === InviteKind.GUEST && !ephemeralSpacesEnabled()) {
+                return { error: 'Este tipo de invitación no está disponible todavía' };
             }
             const validity = evaluateInvite(groupInvite);
             if (!validity.ok) {
@@ -81,7 +93,7 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
             }
             const type = groupInvite.group.type as SpaceType;
             const status = groupInvite.group.status as SpaceStatus;
-            if (!joinByCodeAllowed(type, status)) {
+            if (!accountJoinAllowed(groupInvite.kind, type, status)) {
                 return { error: 'Este espacio no admite unirse mediante este enlace' };
             }
             target.groupInviteId = groupInvite.id;
@@ -99,19 +111,7 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
                 }
                 target.adminInviteId = adminInvite.id;
             } else {
-                const couple = await prisma.couple.findUnique({
-                    where: { code },
-                    select: { id: true, type: true, status: true },
-                });
-                if (!couple) {
-                    return { error: 'Código de invitación inválido' };
-                }
-                const type = couple.type as SpaceType;
-                const status = couple.status as SpaceStatus;
-                if (!joinByCodeAllowed(type, status)) {
-                    return { error: 'Este espacio no admite unirse mediante este código' };
-                }
-                target.couple = { id: couple.id, type, status };
+                return { error: 'Código de invitación inválido' };
             }
         }
 
@@ -184,6 +184,12 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
         const cookieStore = await cookies();
         cookieStore.set('session_token', token, SESSION_COOKIE);
         cookieStore.delete('user_id');
+        joinedSpace = Boolean(coupleTarget);
+        if (coupleTarget) {
+            cookieStore.set(ACTIVE_GROUP_COOKIE, coupleTarget.id, {
+                httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 365,
+            });
+        }
     } catch (error) {
         if (error instanceof Error && error.message === 'INVITE_ALREADY_USED') {
             return { error: 'Este código ya fue utilizado' };
@@ -196,5 +202,7 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
     }
 
     // Outside try/catch so NEXT_REDIRECT propagates (see login action note).
-    redirect('/dashboard');
+    // A brand-new account that did not join a space through an invite lands on
+    // the optional onboarding (`/welcome`: who do you share expenses with?).
+    redirect(joinedSpace ? '/dashboard' : '/welcome');
 }

@@ -94,10 +94,21 @@ describe("POST /api/invites/claim", () => {
         mockRateLimit.mockReturnValue({ allowed: true, retryAfterSeconds: 0 });
     });
 
-    it("401 without a session", async () => {
+    it("401 without a session on a MEMBER invite", async () => {
         mockGetSession.mockResolvedValue(null);
+        mockGroupInviteFindUnique.mockResolvedValue(memberInvite());
         const res = await POST(req({ token: TOKEN }));
         expect(res.status).toBe(401);
+        expect(mockMembershipUpsert).not.toHaveBeenCalled();
+    });
+
+    it("403 for a GUEST session on a MEMBER invite (a shadow user never joins a COUPLE/GROUP)", async () => {
+        mockGetSession.mockResolvedValue({ userId: "guest1", kind: "guest", groupId: "e1" });
+        mockGroupInviteFindUnique.mockResolvedValue(memberInvite());
+        const res = await POST(req({ token: TOKEN }));
+        expect(res.status).toBe(403);
+        expect((await res.json()).code).toBe("GUEST_NOT_ALLOWED");
+        expect(mockMembershipUpsert).not.toHaveBeenCalled();
     });
 
     it("400 when token missing", async () => {
@@ -196,20 +207,17 @@ describe("POST /api/invites/claim", () => {
         expect(data.code).toBe("EXHAUSTED");
     });
 
-    it("falls back to a legacy classic Couple.code and joins without consuming", async () => {
+    it("never accepts a legacy 6-hex Couple.code (no short codes)", async () => {
         mockGroupInviteFindUnique.mockResolvedValue(null);
         mockCoupleFindUnique.mockResolvedValue({ id: "g9", type: "COUPLE", status: "ACTIVE" });
         const res = await POST(req({ token: "ABC123" }));
-        const data = await res.json();
-        expect(res.status).toBe(200);
-        expect(data.groupId).toBe("g9");
-        expect(mockMembershipUpsert).toHaveBeenCalledOnce();
-        expect(mockGroupInviteUpdateMany).not.toHaveBeenCalled();
+        expect(res.status).toBe(404);
+        expect(mockCoupleFindUnique).not.toHaveBeenCalled();
+        expect(mockMembershipUpsert).not.toHaveBeenCalled();
     });
 
-    it("404 when neither an invite nor a classic code resolves", async () => {
+    it("404 when the token does not resolve", async () => {
         mockGroupInviteFindUnique.mockResolvedValue(null);
-        mockCoupleFindUnique.mockResolvedValue(null);
         const res = await POST(req({ token: "nope" }));
         expect(res.status).toBe(404);
     });
@@ -326,5 +334,69 @@ describe("POST /api/invites/claim — GUEST", () => {
         const res = await POST(req({ token: "recovery-token" }));
         expect(res.status).toBe(403);
         expect((await res.json()).code).toBe("GUEST_REVOKED");
+    });
+
+    it("409 SESSION_EXISTS: a registered session is never silently replaced by a guest one (IE-02)", async () => {
+        mockGetSession.mockResolvedValue({ userId: "u1" });
+        mockGroupInviteFindUnique.mockResolvedValue(guestInvite());
+        const res = await POST(req({ token: TOKEN, name: "Ana" }));
+        expect(res.status).toBe(409);
+        expect((await res.json()).code).toBe("SESSION_EXISTS");
+        expect(mockUserCreate).not.toHaveBeenCalled();
+        expect(mockCookieSet).not.toHaveBeenCalled();
+    });
+
+    it("enters as guest over a registered session only with explicit replaceSession", async () => {
+        mockGetSession.mockResolvedValue({ userId: "u1" });
+        mockGroupInviteFindUnique.mockResolvedValue(guestInvite());
+        const res = await POST(req({ token: TOKEN, name: "Ana", replaceSession: true }));
+        expect(res.status).toBe(200);
+        expect(mockUserCreate).toHaveBeenCalledOnce();
+        expect(mockCookieSet).toHaveBeenCalledWith("session_token", "signed.guest.jwt", expect.anything());
+    });
+
+    it("asMember: a registered account joins the trip as MEMBER without touching the session", async () => {
+        mockGetSession.mockResolvedValue({ userId: "u1" });
+        mockMembershipFindFirst.mockResolvedValue(null);
+        mockMembershipUpsert.mockResolvedValue({});
+        mockGroupInviteFindUnique.mockResolvedValue(guestInvite());
+        const res = await POST(req({ token: TOKEN, asMember: true }));
+        const data = await res.json();
+        expect(res.status).toBe(200);
+        expect(data.groupId).toBe("e1");
+        expect(mockMembershipUpsert.mock.calls[0][0].create.role).toBe("MEMBER");
+        expect(mockUserCreate).not.toHaveBeenCalled();
+        expect(mockGroupInviteUpdateMany).toHaveBeenCalledOnce();
+        expect(mockCookieSet).not.toHaveBeenCalledWith("session_token", expect.anything(), expect.anything());
+    });
+
+    it("asMember without a registered session → 401", async () => {
+        mockGroupInviteFindUnique.mockResolvedValue(guestInvite());
+        const res = await POST(req({ token: TOKEN, asMember: true }));
+        expect(res.status).toBe(401);
+        expect(mockMembershipUpsert).not.toHaveBeenCalled();
+    });
+
+    it("a guest already in that trip does not mint a second shadow user", async () => {
+        mockGetSession.mockResolvedValue({ userId: "guest1", kind: "guest", groupId: "e1" });
+        mockGroupInviteFindUnique.mockResolvedValue(guestInvite());
+        const res = await POST(req({ token: TOKEN, name: "Ana" }));
+        expect(res.status).toBe(200);
+        expect((await res.json()).alreadyMember).toBe(true);
+        expect(mockUserCreate).not.toHaveBeenCalled();
+    });
+
+    it("recovery over a registered session → 409 unless replaceSession", async () => {
+        mockGetSession.mockResolvedValue({ userId: "u1" });
+        mockGroupInviteFindUnique.mockResolvedValue(null);
+        mockMembershipFindUnique.mockResolvedValue({
+            userId: "guest1",
+            role: "GUEST",
+            status: "ACTIVE",
+            group: { id: "e1", status: "ACTIVE", expiresAt: null },
+        });
+        expect((await POST(req({ token: "recovery-token" }))).status).toBe(409);
+        expect(mockCookieSet).not.toHaveBeenCalled();
+        expect((await POST(req({ token: "recovery-token", replaceSession: true }))).status).toBe(200);
     });
 });

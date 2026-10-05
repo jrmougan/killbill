@@ -5,7 +5,8 @@ import { getActiveGroup, getMembership } from '@/lib/membership';
 
 export async function POST(request: Request) {
     const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    if (session.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
     const userId = session.userId as string;
 
     try {
@@ -82,6 +83,6 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error unlinking couple:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        return NextResponse.json({ error: 'No se pudo salir del espacio. Inténtalo de nuevo.' }, { status: 500 });
     }
 }

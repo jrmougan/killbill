@@ -8,10 +8,11 @@ export async function DELETE(
 ) {
     const { id } = await params;
     const ctx = await getSessionCtx();
-    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    if (ctx.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
 
     const tag = await prisma.tag.findUnique({ where: { id } });
-    if (!tag) return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
+    if (!tag) return NextResponse.json({ error: 'Etiqueta no encontrada' }, { status: 404 });
 
     // Fase 1: authorize against the tag's OWN scope, never the active-group cookie.
     // A personal tag (ownerId) is authorized by ownership; a group tag (coupleId)

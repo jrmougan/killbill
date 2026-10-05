@@ -1,10 +1,10 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { EqCta } from "@/components/ui/eq";
+import { AuthShell, AuthField, AuthError } from "@/components/auth/auth-shell";
 import { registerAction } from "./actions";
 import type { AuthState } from "@/lib/auth-types";
 
@@ -12,94 +12,83 @@ function RegisterForm() {
     const searchParams = useSearchParams();
     const urlCode = searchParams.get("code");
 
-    // Server Action handles register + cookie + redirect("/dashboard") in one
-    // server response (no client cookie/cache race). Errors come back as state.
+    // Server Action handles register + cookie + redirect in one server response
+    // (no client cookie/cache race). Errors come back as state.
     const [state, formAction, pending] = useActionState<AuthState, FormData>(registerAction, {});
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-8 max-w-md mx-auto">
-            <div className="text-center space-y-2">
-                <h1 className="text-4xl font-bold tracking-tighter text-primary italic">
-                    EQUIL
-                </h1>
-                <p className="text-muted-foreground">
-                    {urlCode
-                        ? "Te han invitado a compartir gastos. ¡Regístrate!"
-                        : "Necesitas un código de invitación para registrarte."}
-                </p>
-            </div>
-
-            <form action={formAction} className="w-full space-y-4">
-                {state.error && (
-                    <div data-testid="register-error" className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
-                        {state.error}
-                    </div>
-                )}
-
-                <div className="space-y-4">
-                    {urlCode ? (
-                        // From an invite link: carry the raw token/code (may be a
-                        // long GroupInvite token, so NOT the 8-char manual input).
-                        <input type="hidden" name="inviteToken" defaultValue={urlCode} />
-                    ) : (
-                        <Input
-                            data-testid="register-invite-code"
-                            name="inviteCode"
-                            placeholder="Código de invitación"
-                            required
-                            className="text-lg h-12 font-mono text-center tracking-widest uppercase placeholder:normal-case"
-                            maxLength={8}
-                        />
-                    )}
-                    <Input
-                        data-testid="register-name"
-                        name="name"
-                        placeholder="Nombre"
-                        required
-                        className="text-lg h-12"
-                    />
-                    <Input
-                        data-testid="register-email"
-                        name="email"
-                        type="email"
-                        placeholder="Email"
-                        required
-                        autoComplete="email"
-                        className="text-lg h-12"
-                    />
-                    <Input
-                        data-testid="register-password"
-                        name="password"
-                        type="password"
-                        placeholder="Contraseña"
-                        required
-                        minLength={8}
-                        autoComplete="new-password"
-                        className="text-lg h-12"
-                    />
-                </div>
-
-                <Button
-                    data-testid="register-submit"
-                    type="submit"
-                    size="lg"
-                    className="w-full h-12 text-lg shadow-xl shadow-primary/20"
-                    isLoading={pending}
-                >
-                    Registrarse
-                </Button>
-
-                <div className="text-center text-sm text-muted-foreground mt-4">
+        <AuthShell
+            title="Crea tu cuenta"
+            subtitle={
+                urlCode
+                    ? "Te han invitado a compartir gastos. Con tu cuenta entrarás directamente en el espacio."
+                    : "EQUIL funciona por invitación: necesitas el código que te ha dado la administración."
+            }
+            footer={
+                <p className="text-sm text-muted-foreground">
                     ¿Ya tienes cuenta?{" "}
                     <Link
-                        href="/login"
-                        className="text-primary hover:underline"
+                        href={`/login${urlCode ? `?code=${encodeURIComponent(urlCode)}` : ""}`}
+                        className="font-semibold text-primary"
                     >
                         Inicia sesión
                     </Link>
-                </div>
+                </p>
+            }
+        >
+            <form action={formAction} className="flex flex-col gap-3">
+                {state.error && <AuthError data-testid="register-error">{state.error}</AuthError>}
+
+                {urlCode ? (
+                    // From an invite link: carry the raw token (a long GroupInvite
+                    // token, so NOT the 8-char manual input).
+                    <input type="hidden" name="inviteToken" defaultValue={urlCode} />
+                ) : (
+                    <AuthField
+                        data-testid="register-invite-code"
+                        label="Código de invitación"
+                        name="inviteCode"
+                        required
+                        maxLength={8}
+                        autoCapitalize="characters"
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="font-mono tracking-[0.2em] uppercase"
+                    />
+                )}
+                <AuthField
+                    data-testid="register-name"
+                    label="Nombre"
+                    name="name"
+                    required
+                    maxLength={60}
+                    autoComplete="name"
+                />
+                <AuthField
+                    data-testid="register-email"
+                    label="Email"
+                    name="email"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    inputMode="email"
+                />
+                <AuthField
+                    data-testid="register-password"
+                    label="Contraseña"
+                    name="password"
+                    type="password"
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    hint="Al menos 8 caracteres."
+                />
+
+                <EqCta data-testid="register-submit" type="submit" disabled={pending} aria-busy={pending} className="mt-3">
+                    {pending ? "Creando cuenta…" : "Crear cuenta"}
+                </EqCta>
             </form>
-        </div>
+        </AuthShell>
     );
 }
 

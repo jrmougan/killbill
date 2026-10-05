@@ -1,38 +1,40 @@
 "use client";
 
 import { useEffect } from "react";
-import { AlertTriangle, RotateCw } from "lucide-react";
+import Link from "next/link";
+import { RotateCw } from "lucide-react";
+import { EqCta } from "@/components/ui/eq";
 
+/** Route error boundary (EQUIL). Retry first; Inicio as the way out. */
 export default function Error({
-  error,
-  reset,
+    error,
+    reset,
 }: {
-  error: Error & { digest?: string };
-  reset: () => void;
+    error: Error & { digest?: string };
+    reset: () => void;
 }) {
-  useEffect(() => {
-    console.error(error);
-  }, [error]);
+    useEffect(() => {
+        console.error(error);
+    }, [error]);
 
-  return (
-    <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 text-center">
-      <div className="glass-card p-8 rounded-2xl border border-[color:var(--line)] bg-card max-w-[320px] w-full space-y-6">
-        <div className="h-14 w-14 mx-auto rounded-2xl bg-[var(--negative-tint)] flex items-center justify-center">
-          <AlertTriangle className="h-7 w-7 text-destructive" />
+    return (
+        <div className="min-h-dvh flex flex-col eq-in px-6 pt-12 pb-[calc(34px+env(safe-area-inset-bottom))]">
+            <span className="text-[15px] font-extrabold tracking-[0.14em] text-primary">EQUIL</span>
+            <h1 className="mt-6 text-[32px] font-bold tracking-[-0.03em] leading-[1.08] text-pretty">Algo ha fallado</h1>
+            <p className="mt-3 text-[15px] text-muted-foreground leading-[1.45] text-pretty">
+                No hemos podido cargar esta pantalla. Tus datos están a salvo: vuelve a intentarlo.
+            </p>
+            {error.digest && (
+                <p className="mt-4 font-mono text-xs text-muted-foreground">Referencia: {error.digest}</p>
+            )}
+            <div className="mt-auto pt-10 flex flex-col items-center gap-3.5">
+                <EqCta onClick={reset}>
+                    <RotateCw className="h-4 w-4" aria-hidden="true" /> Reintentar
+                </EqCta>
+                <Link href="/dashboard" className="text-sm font-semibold text-primary px-2 py-2">
+                    Ir a Inicio
+                </Link>
+            </div>
         </div>
-        <div className="space-y-2">
-          <h1 className="text-xl font-bold tracking-tight text-foreground">Algo salió mal</h1>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Ha ocurrido un error inesperado. Puedes intentarlo de nuevo.
-          </p>
-        </div>
-        <button
-          onClick={reset}
-          className="w-full h-12 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition-all active:scale-95 shadow-[0_12px_28px_-8px_rgba(47,125,91,0.35)]"
-        >
-          <RotateCw className="h-4 w-4" /> Reintentar
-        </button>
-      </div>
-    </div>
-  );
+    );
 }
