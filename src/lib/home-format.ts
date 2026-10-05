@@ -194,9 +194,13 @@ export function parseInviteToken(raw: string): string | null {
     const match = trimmed.match(/\/i\/([^/?#\s]+)/);
     const token = match ? match[1] : trimmed;
     if (!token || /\s/.test(token)) return null;
+    let decoded: string;
     try {
-        return decodeURIComponent(token);
+        decoded = decodeURIComponent(token);
     } catch {
         return null;
     }
+    // Invite tokens are base64url. Anything else ("..", "%2F…") would make the
+    // browser normalise `/i/<token>` to another route (IE-26).
+    return /^[A-Za-z0-9_-]+$/.test(decoded) ? decoded : null;
 }

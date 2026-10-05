@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { ACTIVE_GROUP_COOKIE } from "@/lib/membership";
+import { normalizeSpaceName, parseTripEndDate, SpacePolicyError } from "@/lib/space-policy";
 import { SpaceType } from "@/generated/prisma/enums";
 
 /**
@@ -23,7 +24,8 @@ export async function GET() {
 
     // All spaces where the caller is an ACTIVE member, in a stable order, with
     // type/status so the UI can section them (active vs Archived). ACTIVE-only
-    // member count mirrors getGroupMembers semantics.
+    // member count mirrors getGroupMembers semantics. The legacy `Couple.code`
+    // is never exposed (no short codes: invites are /i/<token> links only).
     const memberships = await prisma.membership.findMany({
         where: { userId, status: "ACTIVE" },
         orderBy: [{ joinedAt: "asc" }, { groupId: "asc" }],
@@ -32,7 +34,6 @@ export async function GET() {
                 select: {
                     id: true,
                     name: true,
-                    code: true,
                     type: true,
                     status: true,
                     archivedAt: true,
@@ -47,7 +48,6 @@ export async function GET() {
     const spaces = memberships.map((m) => ({
         id: m.group.id,
         name: m.group.name,
-        code: m.group.code,
         type: m.group.type,
         status: m.group.status,
         archivedAt: m.group.archivedAt,
@@ -63,12 +63,19 @@ export async function GET() {
 export async function POST(request: Request) {
     const session = await getSession();
     if (!session?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // A guest session is caged to its EPHEMERAL space: it can never own a space.
+    if (session.kind === "guest") {
+        return NextResponse.json({ error: "Acción no permitida para invitados" }, { status: 403 });
+    }
     const userId = session.userId as string;
 
     let body: { name?: unknown; type?: unknown; expiresAt?: unknown };
     try {
         body = await request.json();
     } catch {
+        return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
+    }
+    if (!body || typeof body !== "object") {
         return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
     }
 
@@ -81,21 +88,29 @@ export async function POST(request: Request) {
     }
     const spaceType = type as SpaceType;
 
-    // expiresAt only makes sense for EPHEMERAL (a close SUGGESTION, no cron in v1).
     let expiresAt: Date | null = null;
-    if (spaceType === SpaceType.EPHEMERAL && body.expiresAt != null) {
-        const parsed = new Date(body.expiresAt as string);
-        if (Number.isNaN(parsed.getTime())) {
-            return NextResponse.json({ error: "expiresAt inválido" }, { status: 400 });
+    let name: string;
+    try {
+        // expiresAt only makes sense for EPHEMERAL. A calendar date is stored as
+        // the END of that day in Europe/Madrid; past dates are rejected. It caps
+        // guest sessions (see jwt.ts) but never closes the space by itself.
+        if (spaceType === SpaceType.EPHEMERAL && body.expiresAt != null && body.expiresAt !== "") {
+            expiresAt = parseTripEndDate(body.expiresAt);
         }
-        expiresAt = parsed;
+        name = body.name == null || (typeof body.name === "string" && body.name.trim() === "")
+            ? defaultName(spaceType)
+            : normalizeSpaceName(body.name);
+    } catch (e) {
+        if (e instanceof SpacePolicyError) {
+            return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
+        }
+        throw e;
     }
 
-    const name = typeof body.name === "string" && body.name.trim().length > 0
-        ? body.name.trim()
-        : defaultName(spaceType);
-
-    const code = randomBytes(3).toString("hex").toUpperCase();
+    // `Couple.code` is a legacy UNIQUE column. No short codes any more: fill it
+    // with an unguessable 128-bit value that is never shown nor accepted as an
+    // invite (invites are hashed /i/<token> links).
+    const code = randomBytes(16).toString("hex").toUpperCase();
 
     // Create the space + the creator's OWNER membership atomically. Membership is
     // the sole linkage (User.coupleId no longer written).
@@ -109,6 +124,9 @@ export async function POST(request: Request) {
                 createdById: userId,
                 // status defaults to ACTIVE.
             },
+            // `code` is still returned to the creator only for the deprecated /api/couple/join
+            // path (removed with the legacy join API); it is 128-bit, never shown in the UI.
+            select: { id: true, name: true, code: true, type: true, status: true, expiresAt: true, createdAt: true },
         });
         await tx.membership.create({
             data: { groupId: created.id, userId, role: "OWNER", status: "ACTIVE" },

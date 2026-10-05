@@ -2,15 +2,17 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { Check } from "lucide-react";
+import { Check, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useActivateSpace } from "@/components/space/use-activate-space";
 
 /** One card of the Inicio carousel (a shared space or the personal context). */
 export type SpaceCardData = {
     key: string;
-    /** "💑 Casa" */
-    title: string;
+    /** "💑" */
+    emoji: string;
+    /** "Casa" (no emoji — also used for assistive tech). */
+    name: string;
     /** "con Lucía" / "4 personas" / "Solo tú" */
     sub: string;
     /** "Lucía te debe" / "Personal este mes"… */
@@ -24,8 +26,10 @@ export type SpaceCardData = {
      * couple still waiting for its second member.
      */
     signed: string | null;
-    /** Show the "Quedar en paz" shortcut (active, shared, non-zero balance). */
-    showSettle: boolean;
+    /** "Quedar en paz" target (active, shared, open balance); null hides it. */
+    settleHref: string | null;
+    /** A payment I sent is waiting for confirmation (debtor side). */
+    pendingNote?: string | null;
 };
 
 /**
@@ -60,9 +64,13 @@ export function SpaceCarousel({
                     const active = c.key === activeKey;
                     const body = (
                         <>
-                            <div className="flex items-center justify-between gap-1.5 whitespace-nowrap text-sm font-semibold">
-                                <span className="truncate">{c.title}</span>
-                                <span className="truncate text-xs font-medium opacity-75">{c.sub}</span>
+                            {/* Title and subtitle on their own lines so neither is cut to "Perso…". */}
+                            <div className="min-w-0 text-sm font-semibold">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                    <span aria-hidden="true" className="flex-none">{c.emoji}</span>
+                                    <span className="truncate">{c.name}</span>
+                                </div>
+                                <div className="truncate text-xs font-medium opacity-75">{c.sub}</div>
                             </div>
                             <div className="min-w-0">
                                 <div className="text-[13px] opacity-80 truncate">{c.label}</div>
@@ -90,18 +98,27 @@ export function SpaceCarousel({
                                 ref={activeRef}
                                 aria-current="true"
                                 data-testid="space-card-active"
-                                className="snap-center flex-none w-[236px] h-[150px] rounded-[22px] bg-primary text-primary-foreground border border-primary p-4 flex flex-col justify-between transition-[width,background-color] duration-250"
+                                className="snap-center flex-none w-[248px] min-h-[150px] rounded-[22px] bg-primary text-primary-foreground border border-primary p-4 flex flex-col justify-between gap-2 transition-[width,background-color] duration-250"
                             >
                                 {body}
-                                {c.showSettle && (
+                                {c.pendingNote ? (
                                     <Link
-                                        href="/settle"
-                                        className="-mt-1 self-start flex items-center gap-1.5 text-[13px] font-semibold"
+                                        href={c.settleHref ?? "/settle"}
+                                        data-testid="pending-out-note"
+                                        className="-my-2 -ml-1 self-start min-h-11 px-1 flex items-center gap-1.5 text-[13px] font-semibold"
+                                    >
+                                        <Clock className="h-[15px] w-[15px] flex-none" aria-hidden="true" />
+                                        <span className="line-clamp-2">{c.pendingNote}</span>
+                                    </Link>
+                                ) : c.settleHref ? (
+                                    <Link
+                                        href={c.settleHref}
+                                        className="-my-2 -ml-1 self-start min-h-11 px-1 flex items-center gap-1.5 text-[13px] font-semibold"
                                     >
                                         <Check className="h-[15px] w-[15px]" aria-hidden="true" />
                                         Quedar en paz
                                     </Link>
-                                )}
+                                ) : null}
                             </div>
                         );
                     }
@@ -111,8 +128,9 @@ export function SpaceCarousel({
                             type="button"
                             disabled={locked || pending}
                             onClick={() => activate(c.key)}
-                            aria-label={`Cambiar a ${c.title}`}
-                            className="snap-center flex-none w-[150px] h-[150px] rounded-[22px] bg-card text-foreground border border-[color:var(--line)] p-4 flex flex-col justify-between text-left transition-[width,opacity] duration-250 disabled:opacity-60 active:scale-[0.98]"
+                            // Full content for screen readers (name, people, balance), no emoji.
+                            aria-label={`Cambiar a ${c.name}. ${c.sub}. ${c.label}: ${c.signed ?? c.amount}`}
+                            className="snap-center flex-none w-[156px] min-h-[150px] rounded-[22px] bg-card text-foreground border border-[color:var(--line)] p-4 flex flex-col justify-between gap-2 text-left transition-[width,opacity] duration-250 disabled:opacity-60 active:scale-[0.98]"
                         >
                             {body}
                         </button>
@@ -120,7 +138,7 @@ export function SpaceCarousel({
                 })}
             </div>
 
-            <div className="flex items-center justify-between px-5 pt-3">
+            <div className="flex items-center justify-between px-5 pt-1">
                 <div className="flex gap-[5px]" aria-hidden="true">
                     {cards.map((c) => (
                         <span
@@ -133,7 +151,7 @@ export function SpaceCarousel({
                     ))}
                 </div>
                 {spacesHref && (
-                    <Link href={spacesHref} className="text-[13px] font-semibold text-primary">
+                    <Link href={spacesHref} className="min-h-11 -mr-2 px-2 flex items-center text-[13px] font-semibold text-primary">
                         Ver espacios
                     </Link>
                 )}

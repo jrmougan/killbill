@@ -1,22 +1,34 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
+import { getGroupBalances } from "@/lib/ledger-read";
 import {
+    assertCanArchive,
+    assertNotArchived,
     assertStatusTransition,
     assertTypeUpgrade,
+    normalizeSpaceName,
+    settleUrlFor,
     SpacePolicyError,
 } from "@/lib/space-policy";
 import { SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 
 /**
- * Space lifecycle management (Fase 1): status transitions
- * (ACTIVE<->SETTLING, ->ARCHIVED) and the single "Convertir en grupo"
- * (COUPLE->GROUP) upgrade. OWNER/ADMIN only. Optional rename.
+ * Space management (OWNER/ADMIN only): lifecycle transitions
+ * (ACTIVE<->SETTLING, ->ARCHIVED), the single "Convertir en grupo"
+ * (COUPLE->GROUP) upgrade and renaming.
  *
- * Body (one of):
+ * Body (any combination):
  *   { status: "SETTLING" | "ACTIVE" | "ARCHIVED" }   // lifecycle transition
  *   { type: "GROUP" }                                 // upgrade (COUPLE->GROUP)
- *   { name: "..." }                                   // rename
+ *   { name: "..." }                                   // rename (1–60 chars)
+ *
+ * Rules:
+ * - ARCHIVED is terminal and read-only: no transition, no upgrade, no rename
+ *   (409 SPACE_NOT_WRITABLE / 400 INVALID_TRANSITION).
+ * - Archiving requires closed accounts: no PENDING settlement (409
+ *   PENDING_SETTLEMENTS) and every ACTIVE member at peace (409 OPEN_BALANCES).
+ *   Both carry `settleUrl` so the UI can link straight to /settle?space=<id>.
  */
 export async function PATCH(
     request: Request,
@@ -26,7 +38,7 @@ export async function PATCH(
     const ctx = await getSessionCtx();
 
     // allowArchived: true so we can operate on SETTLING/ARCHIVED spaces (e.g.
-    // reopen a SETTLING space). The policy transition rules do the real gating.
+    // reopen a SETTLING space). The policy rules below do the real gating.
     const auth = await requireSpaceAccess(ctx, id, {
         roles: ["OWNER", "ADMIN"],
         allowArchived: true,
@@ -41,7 +53,11 @@ export async function PATCH(
     } catch {
         return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
     }
+    if (!body || typeof body !== "object") {
+        return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
+    }
 
+    const currentStatus = auth.space.status as SpaceStatus;
     const data: { status?: SpaceStatus; type?: SpaceType; name?: string; archivedAt?: Date | null } = {};
 
     try {
@@ -49,44 +65,56 @@ export async function PATCH(
         if (body.status !== undefined) {
             const to = body.status;
             if (typeof to !== "string" || !(to in SpaceStatus)) {
-                return NextResponse.json({ error: "status inválido" }, { status: 400 });
+                return NextResponse.json({ error: "Estado no válido" }, { status: 400 });
             }
             const toStatus = to as SpaceStatus;
-            assertStatusTransition(auth.space.status as SpaceStatus, toStatus);
+            assertStatusTransition(currentStatus, toStatus);
+            if (toStatus === SpaceStatus.ARCHIVED) {
+                const [balances, pendingSettlements] = await Promise.all([
+                    getGroupBalances(id),
+                    prisma.settlement.count({ where: { coupleId: id, status: "PENDING" } }),
+                ]);
+                assertCanArchive({ balances, pendingSettlements });
+            }
             data.status = toStatus;
             // Stamp archivedAt on archive; clear it when reopening to ACTIVE.
             if (toStatus === SpaceStatus.ARCHIVED) data.archivedAt = new Date();
             else if (toStatus === SpaceStatus.ACTIVE) data.archivedAt = null;
         }
 
-        // Type upgrade (COUPLE -> GROUP only).
+        // Type upgrade (COUPLE -> GROUP only, never on an archived space).
         if (body.type !== undefined) {
             const to = body.type;
             if (typeof to !== "string" || !(to in SpaceType)) {
-                return NextResponse.json({ error: "type inválido" }, { status: 400 });
+                return NextResponse.json({ error: "Tipo no válido" }, { status: 400 });
             }
+            assertNotArchived(currentStatus);
             assertTypeUpgrade(auth.space.type as SpaceType, to as SpaceType);
             data.type = to as SpaceType;
         }
+
+        // Rename (never on an archived space).
+        if (body.name !== undefined) {
+            assertNotArchived(currentStatus);
+            data.name = normalizeSpaceName(body.name);
+        }
     } catch (e) {
         if (e instanceof SpacePolicyError) {
-            return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
+            const settleUrl =
+                e.code === "OPEN_BALANCES" || e.code === "PENDING_SETTLEMENTS" ? settleUrlFor(id) : undefined;
+            return NextResponse.json({ error: e.message, code: e.code, settleUrl }, { status: e.status });
         }
         throw e;
-    }
-
-    // Optional rename.
-    if (body.name !== undefined) {
-        if (typeof body.name !== "string" || body.name.trim().length === 0) {
-            return NextResponse.json({ error: "name inválido" }, { status: 400 });
-        }
-        data.name = body.name.trim();
     }
 
     if (Object.keys(data).length === 0) {
         return NextResponse.json({ error: "Nada que actualizar" }, { status: 400 });
     }
 
-    const space = await prisma.couple.update({ where: { id }, data });
+    const space = await prisma.couple.update({
+        where: { id },
+        data,
+        select: { id: true, name: true, type: true, status: true, archivedAt: true, expiresAt: true },
+    });
     return NextResponse.json({ success: true, space });
 }

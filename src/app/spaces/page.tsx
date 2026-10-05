@@ -5,8 +5,11 @@ import { formatCurrency } from "@/lib/currency";
 import { spaceTypeMeta } from "@/lib/space-ui";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
 import { getPersonalMonthTotal, getSpaceSummaries, type SpaceSummary } from "@/lib/space-summaries";
-import { APP_TZ, balanceTone, firstName, madridMonthStart, rowBalance } from "@/lib/home-format";
-import { EqHeader, EqLabel } from "@/components/ui/eq";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { APP_TZ, balanceTone, firstName, rowBalance } from "@/lib/home-format";
+import { monthRange } from "@/lib/month-range";
+import { EqLabel } from "@/components/ui/eq";
 import { SpacesList, type SpaceRowData } from "@/components/space/spaces-list";
 import { SpaceActionTiles } from "@/components/space/space-action-tiles";
 import { SpaceInviteCard } from "@/components/space/space-invite-card";
@@ -60,10 +63,10 @@ export default async function SpacesPage({
     const userId = session.userId as string;
     const params = await searchParams;
 
-    const monthStart = madridMonthStart();
+    const month = monthRange();
     const [summaries, personalMonthCents, activeGroupId] = await Promise.all([
-        getSpaceSummaries(userId, monthStart),
-        getPersonalMonthTotal(userId, monthStart),
+        getSpaceSummaries(userId, month),
+        getPersonalMonthTotal(userId, month),
         getActiveGroup(userId),
     ]);
 
@@ -88,7 +91,17 @@ export default async function SpacesPage({
 
     return (
         <div className="min-h-screen pb-10 eq-in">
-            <EqHeader title="Espacios" back="/dashboard" className="pt-4" />
+            {/* Back keeps the context Inicio came from (personal vs shared). */}
+            <header className="px-5 pt-3 flex items-center gap-1">
+                <Link
+                    href={params.active === PERSONAL_KEY ? "/dashboard?scope=personal" : "/dashboard"}
+                    aria-label="Volver a Inicio"
+                    className="-ml-2.5 h-11 w-11 flex-none flex items-center justify-center"
+                >
+                    <ArrowLeft className="h-6 w-6" aria-hidden="true" />
+                </Link>
+                <h1 className="text-2xl font-bold tracking-[-0.02em] flex-1 min-w-0 truncate">Espacios</h1>
+            </header>
             <div className="flex flex-col gap-2.5 px-5 pt-5">
                 <SpacesList rows={rows} activeKey={activeKey} />
 
