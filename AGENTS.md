@@ -82,7 +82,9 @@ Categories live in the `Category` table on three levels: **system** (8 seeded ro
 
 **Aisle** (`aisle`, nullable): an OPTIONAL per-item supermarket-aisle key, **orthogonal to the 8 expense categories** — it organizes the physical walk through the shop, it does NOT classify spend and never touches the expense `CategoryPicker`. Its own static vocabulary (slug + emoji + `sortOrder` + keywords) lives in `src/lib/aisles.ts`; `autoAssignAisle(name)` best-effort assigns it from the item name (accent-folded keyword match, longest keyword wins, unmatched stays `null` — never forced to "otros"), and an explicit value is validated via `normalizeAisle`.
 
-Routes: space `/api/spaces/[id]/lists/**` (authorized via `requireSpaceAccess`, `allowGuest:false`, writability blocks SETTLING/ARCHIVED) and personal `/api/me/lists/**` (session-scoped by `ownerId`), each with `…/[listId]/clear-checked` (deletes the checked items to recycle the weekly list). `clear-checked`/item routes all re-assert the list belongs to the scope (`getListWithItems`/`loadListInScope`) after the space-access gate. UI under `/lists` (índice Común/Personal + detalle) — `/lists` is proxy-protected.
+Routes: space `/api/spaces/[id]/lists/**` (authorized via `requireSpaceAccess`, `allowGuest:false`, writability blocks SETTLING/ARCHIVED) and personal `/api/me/lists/**` (session-scoped by `ownerId`), each with `…/[listId]/clear-checked` (deletes the checked items to recycle the weekly list). `clear-checked`/item routes all re-assert the list belongs to the scope (`getListWithItems`/`loadListInScope`) after the space-access gate. UI under `/lists` (the Listas tab): a chip per list (Común first, then Personal, with the pending count) and the selected list as the main view (`/lists` opens the first one, `/lists/[listId]` deep-links; server loader `src/app/lists/load.ts`, client `src/components/shopping/lists-hub.tsx`); pending items grouped by aisle, checked ones under "En el carro", ~6 s poll + refresh on focus — `/lists` is proxy-protected.
+
+**"Terminar y apuntar gasto" is a shortcut WITHOUT link.** It only (1) calls `…/[listId]/clear-checked` and then (2) navigates to `/expenses/new?title=<list name>&category=shopping&space=<groupId|personal>&returnTo=/lists/<listId>&scan=1` (built by `buildFinishExpenseUrl` in `src/components/shopping/finish-url.ts`; `shopping` is the seeded system category the OCR also uses for supermarket receipts). The add-expense form is merely prefilled; the user still enters/scans the amount and saves it like any other expense. Nothing is persisted that ties the list to the expense (still no `linkedExpenseId`, no prices), and abandoning the form creates nothing — the list itself never generates an expense.
 
 ### OCR flow
 
@@ -119,3 +121,13 @@ GitHub Actions (`.github/workflows/deploy.yml`) on push to `main`: runs the e2e 
 ## Testing
 
 Unit tests live alongside the code in `src/lib/` (`.test.ts` files), using Vitest with jsdom. The `finance.ts` and `splits.ts` files are the most critical to keep tested — they contain the core financial math. End-to-end tests live in `e2e/` (Playwright) and run in CI against a MariaDB service; both unit tests and lint are blocking gates for the deploy. Test-only API routes (`/api/test/*`) and the login rate limiter are gated on `TEST_ROUTES_ENABLED=true`.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
