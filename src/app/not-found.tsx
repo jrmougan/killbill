@@ -17,7 +17,7 @@ export default function NotFound() {
           </p>
         </div>
         <Link href="/dashboard">
-          <button className="w-full h-12 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition-all active:scale-95 shadow-[0_12px_28px_-8px_rgba(189,93,58,0.35)]">
+          <button className="w-full h-12 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition-all active:scale-95 shadow-[0_12px_28px_-8px_rgba(47,125,91,0.35)]">
             Volver al inicio <ArrowRight className="h-4 w-4" />
           </button>
         </Link>

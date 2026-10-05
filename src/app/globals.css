@@ -95,7 +95,8 @@
 
   --ink: #1B1C1A;      /* primary text */
   --ink-2: #6E706B;    /* muted labels */
-  --ink-3: #A5A79F;    /* faint meta, placeholders */
+  --ink-3: #737570;    /* faint meta text (≥4.3:1 on paper, 4.6:1 on white) */
+  --placeholder: #8A8C85; /* input placeholders / decorative only — never body text */
   --ink-4: #C9CBC4;    /* disabled, chevrons, checkbox borders */
   --body-ink: #3A3B38; /* body copy */
 
@@ -131,7 +132,20 @@
 }
 .eq-in { animation: eq-in .25s ease-out; }
 
-input::placeholder, textarea::placeholder { color: var(--ink-3); }
+input::placeholder, textarea::placeholder { color: var(--placeholder); }
+
+/* Schibsted Grotesk's tabular figures also widen the decimal comma ("30 , 00 €").
+   The prototype uses proportional figures, so neutralise the utility app-wide. */
+.tabular-nums { font-variant-numeric: normal; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* Global styles */
 body {

@@ -103,7 +103,26 @@ export function EqSegmented<T extends string>({
     className?: string;
 }) {
     return (
-        <div role="tablist" className={cn("flex rounded-xl bg-[var(--track)] p-[3px] text-sm font-semibold", className)}>
+        <div
+            role="tablist"
+            tabIndex={-1}
+            className={cn("flex rounded-xl bg-[var(--track)] p-[3px] text-sm font-semibold", className)}
+            onKeyDown={(e) => {
+                // WAI-ARIA tabs: arrows move the selection, Home/End jump to the ends.
+                const i = options.findIndex((o) => o.value === value);
+                const next =
+                    e.key === "ArrowRight" ? (i + 1) % options.length
+                    : e.key === "ArrowLeft" ? (i - 1 + options.length) % options.length
+                    : e.key === "Home" ? 0
+                    : e.key === "End" ? options.length - 1
+                    : -1;
+                if (next < 0) return;
+                e.preventDefault();
+                onChange(options[next].value);
+                const tabs = e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+                tabs[next]?.focus();
+            }}
+        >
             {options.map((o) => {
                 const active = o.value === value;
                 return (
@@ -112,6 +131,7 @@ export function EqSegmented<T extends string>({
                         type="button"
                         role="tab"
                         aria-selected={active}
+                        tabIndex={active ? 0 : -1}
                         onClick={() => onChange(o.value)}
                         className={cn(
                             "flex-1 rounded-[10px] py-2 text-center transition-colors",

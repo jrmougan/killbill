@@ -32,7 +32,7 @@ export default function Home() {
 
         <div className="grid gap-4 w-full max-w-[320px] mx-auto pt-4">
           <Link href="/dashboard">
-            <button className="w-full h-14 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition-all active:scale-95 shadow-[0_12px_28px_-8px_rgba(189,93,58,0.35)]">
+            <button className="w-full h-14 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition-all active:scale-95 shadow-[0_12px_28px_-8px_rgba(47,125,91,0.35)]">
               Empezar ahora <ArrowRight className="h-4 w-4" />
             </button>
           </Link>
