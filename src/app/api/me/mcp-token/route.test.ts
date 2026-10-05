@@ -76,6 +76,6 @@ describe("POST /api/me/mcp-token", () => {
     const response = await POST();
 
     expect(response.status).toBe(500);
-    await expect(response.json()).resolves.toEqual({ error: "Internal server error" });
+    await expect(response.json()).resolves.toEqual({ error: "No se pudo generar el token" });
   });
 });
