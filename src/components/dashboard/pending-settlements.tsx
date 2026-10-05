@@ -30,14 +30,15 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
     const [loadingIds, setLoadingIds] = useState<string[]>([]);
     const [error, setError] = useState<string | null>(null);
 
-    const handleStatusUpdate = async (id: string, newStatus: "CONFIRMED" | "REJECTED") => {
+    const handleStatusUpdate = async (id: string, newStatus: "CONFIRMED" | "REJECTED", expectedAmountCents: number) => {
         setLoadingIds((prev) => [...prev, id]);
         setError(null);
         try {
             const res = await fetch(`/api/settle/${id}/status`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status: newStatus }),
+                // expectedAmountCents: confirm exactly the amount on screen (409 if the payer edited it meanwhile).
+                body: JSON.stringify({ status: newStatus, expectedAmountCents }),
             });
 
             if (res.ok) {
@@ -95,7 +96,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
                                 <button
                                     type="button"
                                     className="h-11 flex-1 rounded-xl bg-primary px-3.5 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-1.5 disabled:opacity-50 active:scale-[0.97]"
-                                    onClick={() => handleStatusUpdate(s.id, "CONFIRMED")}
+                                    onClick={() => handleStatusUpdate(s.id, "CONFIRMED", s.amount)}
                                     disabled={busy}
                                 >
                                     <Check className="h-4 w-4" aria-hidden="true" /> Confirmar
@@ -104,7 +105,7 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
                                     type="button"
                                     aria-label={`Rechazar el pago de ${s.fromUser.name}`}
                                     className="h-11 w-11 flex-none rounded-xl bg-[var(--negative-tint)] text-destructive flex items-center justify-center disabled:opacity-50 active:scale-[0.97]"
-                                    onClick={() => handleStatusUpdate(s.id, "REJECTED")}
+                                    onClick={() => handleStatusUpdate(s.id, "REJECTED", s.amount)}
                                     disabled={busy}
                                 >
                                     <X className="h-4 w-4" aria-hidden="true" />

@@ -206,8 +206,8 @@ export const registerFinanceTools: ToolRegistrar = (server, api) => {
       inputSchema: {
         amount: z
           .number()
-          .nonnegative()
-          .describe("Amount paid in euros (0 allowed for a checkpoint with no outstanding debt)."),
+          .positive()
+          .describe("Amount paid in euros (≥ 0,01 €, never more than the current debt to the receiver)."),
         toUserId: z
           .string()
           .describe("User id of the receiver (must be an active member of the active space)."),
@@ -238,11 +238,17 @@ export const registerFinanceTools: ToolRegistrar = (server, api) => {
         status: z
           .enum(["CONFIRMED", "REJECTED"])
           .describe("CONFIRMED to accept the payment, REJECTED to decline it."),
+        expectedAmount: z
+          .number()
+          .positive()
+          .optional()
+          .describe("Optional amount in euros the receiver expects; the API refuses (409 SETTLEMENT_CHANGED) if the payer edited it."),
       },
     },
     async (args) => {
       const result = await api.patch(`/api/settle/${args.id}/status`, {
         status: args.status,
+        ...(args.expectedAmount !== undefined ? { expectedAmountCents: toCents(args.expectedAmount) } : {}),
       });
       return toToolResult(result);
     },

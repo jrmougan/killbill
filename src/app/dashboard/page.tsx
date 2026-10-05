@@ -313,7 +313,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     />
                 )}
 
-                {pending.length > 0 && <PendingSettlements settlements={pending} />}
+                {pending.length > 0 && active?.status !== "ARCHIVED" && <PendingSettlements settlements={pending} />}
 
                 {active && invite && (
                     <SpaceInviteCard spaceId={active.id} spaceName={spaceName(active)} kind={invite.kind} maxUses={invite.maxUses} />
