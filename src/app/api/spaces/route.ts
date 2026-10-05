@@ -124,9 +124,7 @@ export async function POST(request: Request) {
                 createdById: userId,
                 // status defaults to ACTIVE.
             },
-            // `code` is still returned to the creator only for the deprecated /api/couple/join
-            // path (removed with the legacy join API); it is 128-bit, never shown in the UI.
-            select: { id: true, name: true, code: true, type: true, status: true, expiresAt: true, createdAt: true },
+            select: { id: true, name: true, type: true, status: true, expiresAt: true, createdAt: true },
         });
         await tx.membership.create({
             data: { groupId: created.id, userId, role: "OWNER", status: "ACTIVE" },
