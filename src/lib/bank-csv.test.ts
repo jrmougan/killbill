@@ -17,6 +17,11 @@ describe('parseDateISO', () => {
     it('rejects invalid', () => {
         expect(parseDateISO('nope', 'DMY')).toBeNull();
         expect(parseDateISO('32/13/2026', 'DMY')).toBeNull();
+        // Impossible calendar days are rejected instead of rolling over (G-06).
+        expect(parseDateISO('31/02/2026', 'DMY')).toBeNull();
+        expect(parseDateISO('29/02/2025', 'DMY')).toBeNull();
+        expect(parseDateISO('29/02/2024', 'DMY')).toBe('2024-02-29');
+        expect(parseDateISO('2026-04-31', 'YMD')).toBeNull();
         expect(parseDateISO('09/07', 'DMY')).toBeNull();
     });
 });
@@ -66,5 +71,7 @@ describe('normalizeRow', () => {
         expect(normalizeRow({ Fecha: 'bad', Importe: '-1,00', Concepto: 'x' }, mapping).error).toMatch(/Fecha/);
         expect(normalizeRow({ Fecha: '09/07/2026', Importe: 'bad', Concepto: 'x' }, mapping).error).toMatch(/Importe/);
         expect(normalizeRow({ Fecha: '09/07/2026', Importe: '-1,00', Concepto: '' }, mapping).error).toMatch(/Concepto/);
+        expect(normalizeRow({ Fecha: '31/02/2026', Importe: '-3,00', Concepto: 'Fecha rara' }, mapping).error).toMatch(/Fecha inválida/);
+        expect(normalizeRow({ Fecha: '01/01/1990', Importe: '-3,00', Concepto: 'Antiguo' }, mapping).error).toMatch(/2000/);
     });
 });

@@ -5,12 +5,12 @@ import { materializeDueRecurringExpenses } from '@/lib/recurring';
 
 export async function POST() {
     const ctx = await getSessionCtx();
-    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     const userId = ctx.userId;
 
     // Phase 4 selector switch: resolve my group via the Membership layer.
     const groupId = await getActiveGroup(userId);
-    if (!groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+    if (!groupId) return NextResponse.json({ error: 'No perteneces a ningún espacio' }, { status: 400 });
 
     // Fase 1: materializing recurring expenses WRITES new expenses, so require an
     // ACTIVE (writable) space — no catch-up bursts into a SETTLING/ARCHIVED space.

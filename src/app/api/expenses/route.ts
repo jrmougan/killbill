@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { toCents } from '@/lib/currency';
-import { calculateSplitAmounts, hasExclusiveReceiptItems } from '@/lib/splits';
+import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from '@/lib/splits';
 import { getGroupMembers, getActiveGroup } from '@/lib/membership';
 import { resolveCategoryId } from '@/lib/category-db';
 import { buildReceiptLineItems } from '@/lib/receipt';
 import { postExpenseLedger } from '@/lib/ledger';
-import { assertSpaceWritable, SpacePolicyError } from '@/lib/space-policy';
-import { Prisma } from '@/generated/prisma/client';
-import type { SpaceStatus } from '@/generated/prisma/enums';
+import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
+import { runLedgerTransaction } from '@/lib/expense-tx';
+import { isRecurringInterval, nextRecurringRun, parseExpenseDate } from '@/lib/expense-input';
+import type { Prisma } from '@/generated/prisma/client';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -17,7 +18,7 @@ const MAX_LIMIT = 200;
 export async function GET(request: Request) {
     try {
         const session = await getSession();
-        if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
         const userId = session.userId as string;
 
         const { searchParams } = new URL(request.url);
@@ -79,214 +80,187 @@ export async function GET(request: Request) {
     }
 }
 
+/** Upper bound for one expense (999.999,99 €, the numpad ceiling; Int column safe). */
+const MAX_AMOUNT_CENTS = 99_999_999;
+
+type SplitInput = { userId: string; amount: number };
+
+const bad = (error: string, status = 400, code?: string) =>
+    NextResponse.json(code ? { error, code } : { error }, { status });
+
+/**
+ * Create an expense.
+ *
+ * Destination (G-02): a shared expense goes to the space named by `groupId`
+ * — authorized against THAT space via requireSpaceAccess (DB membership +
+ * writability), never the `active_group` UI cookie. `groupId` is optional for
+ * backwards compatibility (MCP tools, old clients): when absent the caller's
+ * active space is used, still authorized the same way. `isPersonal: true` (or
+ * `visibility: 'PERSONAL'`) creates a private expense instead.
+ *
+ * `date` (optional, "YYYY-MM-DD") must be a real calendar day in
+ * [2000-01-01, today + 1 year] (G-06/T-03).
+ */
 export async function POST(request: Request) {
     try {
-        const session = await getSession();
-        if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        const userId = session.userId as string;
+        const ctx = await getSessionCtx();
+        if (!ctx?.userId) return bad('No autorizado', 401);
+        const userId = ctx.userId;
 
-        const body = await request.json();
-        const { description, amount, category, beneficiaryId, customSplits, receiptUrl, receiptData, notes, isRecurring, recurringInterval, paidById: paidByIdInput, visibility: visibilityInput, isPersonal, date: dateInput } = body;
+        let body: Record<string, unknown>;
+        try {
+            body = await request.json();
+        } catch {
+            return bad('Petición no válida');
+        }
+        if (!body || typeof body !== 'object') return bad('Petición no válida');
+        const {
+            description, amount, category, beneficiaryId, customSplits, receiptUrl, receiptData, notes,
+            isRecurring, recurringInterval, paidById: paidByIdInput, visibility: visibilityInput, isPersonal,
+            date: dateInput, groupId: groupIdInput,
+        } = body as Record<string, unknown> & { customSplits?: unknown };
 
-        const user = await prisma.user.findUnique({
-            where: { id: userId },
-        });
-        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-        // Personal expenses are a private ledger and never touch the couple; shared
-        // expenses require a couple (existing behaviour). Phase 4 selector switch:
-        // the caller's group is resolved via the Membership layer once per request.
+        // Personal expenses are a private ledger and never touch a space.
         const isPersonalExpense = isPersonal === true || visibilityInput === 'PERSONAL';
-        const groupId = isPersonalExpense ? null : await getActiveGroup(userId);
-        if (!isPersonalExpense && !groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
-
-        // A shared expense may only be created in a WRITABLE (ACTIVE) space —
-        // SETTLING blocks new expenses, ARCHIVED is read-only (space-policy).
-        if (!isPersonalExpense && groupId) {
-            const space = await prisma.couple.findUnique({ where: { id: groupId }, select: { status: true } });
-            if (!space) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
-            try {
-                assertSpaceWritable(space.status as SpaceStatus);
-            } catch (e) {
-                if (e instanceof SpacePolicyError) {
-                    return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
-                }
-                throw e;
-            }
+        if (isPersonalExpense && ctx.kind === 'guest') {
+            return bad('Los invitados no pueden crear gastos personales', 403);
         }
 
-        // Validate description is a non-empty string (missing/empty previously 500'd at the DB layer).
+        let groupId: string | null = null;
+        if (!isPersonalExpense) {
+            if (groupIdInput !== undefined && groupIdInput !== null && (typeof groupIdInput !== 'string' || groupIdInput === '')) {
+                return bad('Espacio no válido');
+            }
+            groupId = typeof groupIdInput === 'string' ? groupIdInput : await getActiveGroup(userId);
+            if (!groupId) return bad('No perteneces a ningún espacio');
+            // Membership (DB row), guest cage and writability (SETTLING/ARCHIVED
+            // reject new expenses) of the RESOURCE's space.
+            const access = await requireSpaceAccess(ctx, groupId, { allowGuest: true });
+            if (!access.ok) return bad(access.error, access.status, access.code);
+        } else {
+            const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+            if (!user) return bad('No autorizado', 401);
+        }
+
         if (typeof description !== 'string' || description.trim().length === 0) {
-            return NextResponse.json({ error: 'Invalid description' }, { status: 400 });
+            return bad('El concepto es obligatorio');
         }
 
-        // Optional expense date ("YYYY-MM-DD", from "Más opciones"). Absent → now.
-        // Stored at 12:00 UTC so the calendar day is stable in Europe/Madrid.
-        let expenseDate: Date | undefined;
-        if (dateInput !== undefined && dateInput !== null && dateInput !== '') {
-            const valid = typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput);
-            expenseDate = valid ? new Date(`${dateInput}T12:00:00.000Z`) : undefined;
-            if (!expenseDate || Number.isNaN(expenseDate.getTime())) {
-                return NextResponse.json({ error: 'Invalid date' }, { status: 400 });
+        const parsedDate = parseExpenseDate(dateInput);
+        if (!parsedDate.ok) return bad(parsedDate.error);
+        const expenseDate = parsedDate.date;
+
+        // Euros (number, or numeric string from old clients) → cents.
+        const amountCents = toCents(Number(amount));
+        if (amount === null || amount === '' || !Number.isFinite(amountCents) || amountCents <= 0) {
+            return bad('Importe no válido');
+        }
+        if (amountCents > MAX_AMOUNT_CENTS) return bad('El importe máximo es 999.999,99 €');
+
+        // Members of the destination space (ACTIVE, ordered — split order matters
+        // for the remainder cent). Personal expenses have none.
+        const coupleMembers = groupId ? (await getGroupMembers(groupId)).map((m) => ({ id: m.id })) : [];
+        const memberIds = new Set(coupleMembers.map((m) => m.id));
+
+        // The payer defaults to the creator; the client may attribute it to another
+        // member ("¿Quién pagó?"). Personal expenses are always paid by the owner.
+        let paidById = userId;
+        if (!isPersonalExpense && paidByIdInput !== undefined && paidByIdInput !== null) {
+            if (typeof paidByIdInput !== 'string' || !memberIds.has(paidByIdInput)) {
+                return bad('Quien pagó no es miembro del espacio');
             }
+            paidById = paidByIdInput;
         }
 
-        // Convert euros to cents
-        const amountCents = toCents(amount);
-        if (!Number.isFinite(amountCents) || amountCents <= 0) {
-            return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
+        const wantsRecurring = isRecurring === true;
+        if (wantsRecurring && !isRecurringInterval(recurringInterval)) {
+            return bad('Periodicidad no válida');
         }
+        const normalizedInterval = wantsRecurring && isRecurringInterval(recurringInterval) ? recurringInterval : null;
+        // G-12: the series is anchored on the expense date, not on "now".
+        const nextRecurringDate = normalizedInterval
+            ? nextRecurringRun(expenseDate ?? new Date(), normalizedInterval)
+            : undefined;
 
-        // Load couple members up-front so we can validate any client-supplied
-        // userId/beneficiaryId actually belongs to the caller's couple (prevents IDOR).
-        // Members come from the Membership layer (ACTIVE, ordered) — split order
-        // must match. Personal expenses have no couple, so there are no members.
-        const coupleMembers = (!isPersonalExpense && groupId)
-            ? (await getGroupMembers(groupId)).map(m => ({ id: m.id }))
-            : [];
-        const memberIds = new Set(coupleMembers.map(m => m.id));
-
-        // The payer defaults to the creator, but the client may attribute the expense
-        // to the partner ("¿Quién pagó?"). Only honour an id that belongs to the couple.
-        // Personal expenses are always paid by (and owned by) the creator.
-        const paidById = (!isPersonalExpense && typeof paidByIdInput === 'string' && memberIds.has(paidByIdInput))
-            ? paidByIdInput
-            : userId;
-
-        // Calculate nextRecurringDate if recurring
-        let nextRecurringDate: Date | undefined = undefined;
-        if (isRecurring && recurringInterval) {
-            const base = new Date();
-            if (recurringInterval === 'weekly') {
-                nextRecurringDate = new Date(base.getTime() + 7 * 24 * 60 * 60 * 1000);
-            } else if (recurringInterval === 'monthly') {
-                nextRecurringDate = new Date(base);
-                nextRecurringDate.setMonth(nextRecurringDate.getMonth() + 1);
-            } else if (recurringInterval === 'yearly') {
-                nextRecurringDate = new Date(base);
-                nextRecurringDate.setFullYear(nextRecurringDate.getFullYear() + 1);
-            }
-        }
-
-        const VALID_INTERVALS = ['weekly', 'monthly', 'yearly'];
-        const normalizedInterval = VALID_INTERVALS.includes(recurringInterval) ? recurringInterval : null;
-
-        // Fase 3: the category is validated against the EFFECTIVE set of the
-        // context (system ∪ context-custom) via resolveCategoryId — an unknown key
-        // is a 400, NEVER silently normalized to 'other'. resolveCategoryId returns
-        // null exactly when the key exists in neither the context-custom nor the
-        // system layer, which is the effective-list membership check.
+        // Category validated against the EFFECTIVE set of the context (system ∪
+        // context-custom) — an unknown key is a 400, never silently 'other'.
         if (typeof category !== 'string' || category.trim().length === 0) {
-            return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+            return bad('Categoría no válida');
         }
         const categoryId = await resolveCategoryId(
             category,
             isPersonalExpense ? { ownerId: userId } : { groupId },
         );
-        if (!categoryId) {
-            return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
-        }
+        if (!categoryId) return bad('Categoría no válida');
 
         const expenseData: Prisma.ExpenseUncheckedCreateInput = {
-            description,
+            description: description.trim(),
             amount: amountCents,
-            // Phase 5 (WS5): the enum category column is no longer written; categoryId
-            // (the relational Category) is the sole category source.
             categoryId,
             paidById,
             ownerId: userId,
-            // Fase 1: authorship. Imprescindible para que un GUEST solo pueda
-            // editar/borrar los suyos; siempre = usuario actual en creación.
+            // Authorship: a GUEST may only edit/delete their own.
             createdById: userId,
             visibility: isPersonalExpense ? 'PERSONAL' : 'SHARED',
             coupleId: isPersonalExpense ? null : groupId,
-            receiptUrl: receiptUrl || null,
-            notes: notes || null,
+            receiptUrl: typeof receiptUrl === 'string' && receiptUrl ? receiptUrl : null,
+            notes: typeof notes === 'string' && notes.trim() ? notes : null,
             ...(expenseDate ? { date: expenseDate } : {}),
-            // Phase 5 (stop-dual-write): the recurrence schedule lives on
-            // RecurringSeries (created below); Expense.isRecurring/recurringInterval/
-            // nextRecurringDate are no longer written. The template is identified by
-            // RecurringSeries.templateId, set once the expense id exists.
         };
 
+        const receiptItems = Array.isArray(receiptData) ? (receiptData as ReceiptItemForSplit[]) : null;
+
         if (isPersonalExpense) {
-            // Personal expenses are a private ledger — never split, never settled.
-            // splitStrategy stays null (no splits created).
-        } else if (customSplits && Array.isArray(customSplits) && customSplits.length > 0) {
-            if (customSplits.some((s: { amount: number }) => (s?.amount ?? 0) < 0)) {
-                return NextResponse.json({ error: 'Split amounts must not be negative' }, { status: 400 });
+            // Personal expenses are never split nor settled (splitStrategy null).
+        } else if (Array.isArray(customSplits) && customSplits.length > 0) {
+            const splits = customSplits as SplitInput[];
+            if (splits.some((s) => !Number.isInteger(s?.amount))) {
+                return bad('Los importes del reparto no son válidos');
             }
-            if (customSplits.some((s: { userId: string }) => !memberIds.has(s?.userId))) {
-                return NextResponse.json({ error: 'Split user is not a member of your couple' }, { status: 400 });
+            if (splits.some((s) => s.amount < 0)) {
+                return bad('Los importes del reparto no pueden ser negativos');
             }
-            const splitsTotal = customSplits.reduce(
-                (sum: number, s: { amount: number }) => sum + (s?.amount ?? 0),
-                0
-            );
-            if (splitsTotal !== amountCents) {
-                return NextResponse.json({ error: 'Splits must sum to the total amount' }, { status: 400 });
+            if (splits.some((s) => !memberIds.has(s?.userId))) {
+                return bad('El reparto incluye a alguien que no es miembro del espacio');
+            }
+            if (splits.reduce((sum, s) => sum + s.amount, 0) !== amountCents) {
+                return bad('El reparto no suma el importe total');
             }
             expenseData.splitStrategy = 'CUSTOM';
-            expenseData.splits = {
-                create: customSplits.map((s: { userId: string; amount: number }) => ({
-                    userId: s.userId,
-                    amount: s.amount,
-                })),
-            };
+            expenseData.splits = { create: splits.map((s) => ({ userId: s.userId, amount: s.amount })) };
         } else if (beneficiaryId) {
-            if (!memberIds.has(beneficiaryId)) {
-                return NextResponse.json({ error: 'Beneficiary is not a member of your couple' }, { status: 400 });
+            if (typeof beneficiaryId !== 'string' || !memberIds.has(beneficiaryId)) {
+                return bad('La persona elegida no es miembro del espacio');
             }
             expenseData.splitStrategy = 'EXCLUSIVE';
-            expenseData.splits = {
-                create: [
-                    {
-                        userId: beneficiaryId,
-                        amount: amountCents
-                    }
-                ]
-            };
-        } else {
-            // Split among couple members, accounting for exclusive items. If the
-            // receipt assigns any item to a specific member the split is ITEMIZED,
-            // otherwise it's a plain EQUAL division.
-            if (coupleMembers.length > 0) {
-                expenseData.splitStrategy = hasExclusiveReceiptItems(receiptData) ? 'ITEMIZED' : 'EQUAL';
-                const splits = calculateSplitAmounts(amountCents, receiptData, coupleMembers);
-                expenseData.splits = {
-                    create: splits.map(s => ({
-                        userId: s.userId,
-                        amount: s.amount,
-                    }))
-                };
-            }
+            expenseData.splits = { create: [{ userId: beneficiaryId, amount: amountCents }] };
+        } else if (coupleMembers.length > 0) {
+            // EQUAL, or ITEMIZED when receipt lines are assigned to members (the
+            // lines are rescaled to the amount if their sum differs — G-03).
+            expenseData.splitStrategy = hasExclusiveReceiptItems(receiptItems) ? 'ITEMIZED' : 'EQUAL';
+            const splits = calculateSplitAmounts(amountCents, receiptItems, coupleMembers);
+            expenseData.splits = { create: splits.map((s) => ({ userId: s.userId, amount: s.amount })) };
         }
 
-        // Persist relational receipt line items (the source of truth; the legacy
-        // receiptData JSON column is no longer written — Phase 5 stop-dual-write)
-        // (Phase 2c). assignedTo is validated against couple members.
+        // Relational receipt line items; assignedTo validated against members.
         const lineItems = buildReceiptLineItems(receiptData, memberIds);
         if (lineItems.length > 0) {
             expenseData.lineItems = { create: lineItems };
         }
 
-        // Phase 2d dual-write: a recurring expense is the TEMPLATE of a series.
-        // Persist the rule/template in RecurringSeries and link the template via
-        // seriesId. Expense.isRecurring/recurringInterval/nextRecurringDate stay the
-        // source of truth this phase (read-switch deferred). Both writes share one
-        // transaction so a failed expense.create can't leave an orphan series.
-        const expense = await prisma.$transaction(async (tx) => {
+        // Expense + optional RecurringSeries + ledger post in one transaction,
+        // READ COMMITTED and retried on write conflicts (G-04).
+        const expense = await runLedgerTransaction(async (tx) => {
             let newSeriesId: string | null = null;
-            if (isRecurring && normalizedInterval && nextRecurringDate) {
+            if (normalizedInterval && nextRecurringDate) {
                 const series = await tx.recurringSeries.create({
                     data: {
-                        description,
+                        description: expenseData.description,
                         amount: amountCents,
-                        // Phase 5 (WS5): enum category no longer written; categoryId only.
                         categoryId,
                         visibility: isPersonalExpense ? 'PERSONAL' : 'SHARED',
                         splitStrategy: expenseData.splitStrategy ?? null,
-                        notes: notes || null,
+                        notes: expenseData.notes ?? null,
                         interval: normalizedInterval,
                         nextRunDate: nextRecurringDate,
                         coupleId: isPersonalExpense ? null : groupId,
@@ -294,16 +268,16 @@ export async function POST(request: Request) {
                         paidById,
                     },
                 });
-                expenseData.seriesId = series.id;
                 newSeriesId = series.id;
             }
-            const created = await tx.expense.create({ data: expenseData, include: { splits: true } });
-            // Phase 5: set the durable template pointer now that the template id exists.
+            const created = await tx.expense.create({
+                data: { ...expenseData, seriesId: newSeriesId },
+                include: { splits: true },
+            });
             if (newSeriesId) {
                 await tx.recurringSeries.update({ where: { id: newSeriesId }, data: { templateId: created.id } });
             }
-            // Phase 3 dual-write: a SHARED expense posts its balanced ledger
-            // transaction in the same tx. PERSONAL expenses post nothing.
+            // A SHARED expense posts its balanced ledger transaction in the same tx.
             if (created.visibility === 'SHARED' && created.coupleId) {
                 await postExpenseLedger(tx, {
                     expenseId: created.id,
@@ -318,7 +292,7 @@ export async function POST(request: Request) {
             return created;
         });
 
-        return NextResponse.json({ success: true, expenseId: expense.id });
+        return NextResponse.json({ success: true, expenseId: expense.id, groupId: expense.coupleId });
     } catch (error) {
         console.error("Error creating expense:", error);
         return NextResponse.json({ error: "Error al crear el gasto" }, { status: 500 });

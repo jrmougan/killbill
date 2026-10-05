@@ -15,7 +15,7 @@ interface ReceiptItem {
 export async function POST(request: Request) {
     const session = await getSession();
     if (!session?.userId) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
     // Rate limit the paid AI OCR call: 10 requests / 5 minutes, keyed per
@@ -46,15 +46,15 @@ export async function POST(request: Request) {
         const file = formData.get('image') as File;
 
         if (!file) {
-            return NextResponse.json({ error: 'No image provided' }, { status: 400 });
+            return NextResponse.json({ error: 'No se ha enviado ninguna imagen' }, { status: 400 });
         }
 
         if (!ALLOWED_TYPES.includes(file.type)) {
-            return NextResponse.json({ error: 'Invalid file type. Only PNG, JPEG and WEBP images are allowed.' }, { status: 400 });
+            return NextResponse.json({ error: 'Tipo de archivo no válido: solo se admiten imágenes PNG, JPEG y WEBP.' }, { status: 400 });
         }
 
         if (file.size > MAX_SIZE_BYTES) {
-            return NextResponse.json({ error: 'File too large. Maximum size is 8 MB.' }, { status: 413 });
+            return NextResponse.json({ error: 'El archivo es demasiado grande (máximo 8 MB).' }, { status: 413 });
         }
 
         // Convert file to base64
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 
         // Defensively validate the actual bytes before spending a provider call.
         if (!isAllowedImage(buffer)) {
-            return NextResponse.json({ error: 'Invalid image file' }, { status: 400 });
+            return NextResponse.json({ error: 'El archivo no es una imagen válida' }, { status: 400 });
         }
 
         const base64 = buffer.toString('base64');
@@ -93,6 +93,6 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: error.message }, { status: 502 });
         }
         console.error('OCR Error:', error);
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+        return NextResponse.json({ error: 'Error al procesar el ticket' }, { status: 500 });
     }
 }

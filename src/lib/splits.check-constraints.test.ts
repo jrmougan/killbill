@@ -19,19 +19,33 @@ import { calculateSplitAmounts } from './splits';
  *     member), so any future Split CHECK must be `>= 0`, never `> 0`.
  */
 describe('split amounts — CHECK-constraint boundary conditions', () => {
-    it('ITEMIZED diff-adjust can drive splits[0] NEGATIVE (why Split.amount has no CHECK yet)', () => {
+    it('ITEMIZED mismatch is rescaled proportionally — no negative split (G-03)', () => {
         // 1€ expense, but an exclusive 100€ item assigned to u2: the receipt items
-        // sum to 10000c, far above amountCents=100. The diff (-9900) lands on
-        // splits[0] at splits.ts:86, so u1's split is negative.
+        // sum to 10000c, far above amountCents=100. The diff used to land on
+        // splits[0] (u1 → -9900); it is now spread proportionally, so u2 (the
+        // only one with a share) carries the whole 1€ and nobody goes negative.
+        // Mixed-sign promotion lines can still fall back to the first-member
+        // adjust, so the Split.amount CHECK stays omitted.
         const splits = calculateSplitAmounts(
             100,
             [{ total: 100, assignedTo: 'u2' }],
             [{ id: 'u1' }, { id: 'u2' }],
         );
-        expect(splits[0].amount).toBe(-9900);
-        expect(splits[0].amount).toBeLessThan(0);
-        // The set still sums to the (small) total — the negativity is the artifact.
+        expect(splits.map((s) => s.amount)).toEqual([0, 100]);
+        expect(splits.every((s) => s.amount >= 0)).toBe(true);
         expect(splits.reduce((s, x) => s + x.amount, 0)).toBe(100);
+    });
+
+    it('ITEMIZED amount raised after itemizing keeps each share proportional', () => {
+        // Lines 6,75 € (me 5,07 €, partner 1,68 €) but the amount is typed as 20 €.
+        const splits = calculateSplitAmounts(
+            2000,
+            [{ total: 3.39, assignedTo: 'u1' }, { total: 3.36, assignedTo: null }],
+            [{ id: 'u1' }, { id: 'u2' }],
+        );
+        expect(splits.reduce((s, x) => s + x.amount, 0)).toBe(2000);
+        // u2 owned 168/675 of the lines → ~498c of 2000, not 1493c.
+        expect(splits[1].amount).toBe(Math.floor((168 * 2000) / 675));
     });
 
     it('EQUAL split of 1 cent across 2 members yields [1, 0] (zero splits are legitimate)', () => {
