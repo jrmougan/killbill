@@ -128,7 +128,7 @@ test.describe('Shopping Lists - UI Happy Path', () => {
     // "+ Nueva" → sheet → personal list.
     await page.getByRole('button', { name: '+ Nueva' }).click();
     const sheet = page.getByRole('dialog', { name: 'Nueva lista' });
-    await sheet.getByRole('button', { name: 'Personal' }).click();
+    await sheet.getByRole('radio', { name: 'Personal' }).check();
     await sheet.getByLabel('Nombre').fill('Ferretería');
     const createPromise = page.waitForResponse(
       (res) => res.url().includes('/api/me/lists') && res.request().method() === 'POST'

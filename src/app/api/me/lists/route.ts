@@ -13,6 +13,8 @@ import { listErrorResponse } from "@/lib/list-http";
 export async function GET() {
     const ctx = await getSessionCtx();
     if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Guests (shadow users caged to one ephemeral space) have no personal lists.
+    if (ctx.kind === "guest") return NextResponse.json({ error: "Acción no permitida para invitados" }, { status: 403 });
     const lists = await getListsForScope({ kind: "owner", ownerId: ctx.userId });
     return NextResponse.json({ lists });
 }
@@ -20,6 +22,8 @@ export async function GET() {
 export async function POST(request: Request) {
     const ctx = await getSessionCtx();
     if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Guests (shadow users caged to one ephemeral space) have no personal lists.
+    if (ctx.kind === "guest") return NextResponse.json({ error: "Acción no permitida para invitados" }, { status: 403 });
     const scope: ListWriteScope = { kind: "owner", ownerId: ctx.userId };
     try {
         const body = await request.json();
@@ -33,6 +37,8 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
     const ctx = await getSessionCtx();
     if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Guests (shadow users caged to one ephemeral space) have no personal lists.
+    if (ctx.kind === "guest") return NextResponse.json({ error: "Acción no permitida para invitados" }, { status: 403 });
     const scope: ListWriteScope = { kind: "owner", ownerId: ctx.userId };
     try {
         const body = await request.json();

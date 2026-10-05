@@ -697,7 +697,7 @@ model ShoppingListItem {
   list   ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
 
   name       String
-  quantity   Int?    // opcional
+  quantity   Float?  // opcional; admite decimales (1,5 kg)
   unit       String? // libre en v1 (ud/kg/g/L/pack); no enum todavía
   note       String? // nota opcional a nivel de item
   aisle      String? // clave de pasillo del súper (vocabulario en src/lib/aisles.ts); nullable, auto-asignada

@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { EqCta } from "@/components/ui/eq";
 import { AISLES } from "@/lib/aisles";
+import { formatQuantity, parseQuantityInput } from "@/lib/list-quantity";
 import { Sheet, SheetField } from "./sheet";
 import type { ItemPatch, ShoppingItem } from "./shopping-item-row";
 
@@ -21,22 +22,30 @@ export function ItemEditSheet({
     onDelete: () => Promise<string | null>;
 }) {
     const [name, setName] = useState(item.name);
-    const [quantity, setQuantity] = useState(item.quantity != null ? String(item.quantity) : "");
+    const [quantity, setQuantity] = useState(item.quantity != null ? formatQuantity(item.quantity) : "");
     const [unit, setUnit] = useState(item.unit ?? "");
     const [note, setNote] = useState(item.note ?? "");
     const [aisle, setAisle] = useState(item.aisle ?? "");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [qtyError, setQtyError] = useState<string | null>(null);
     const aisleId = useId();
+    const qtyErrorId = useId();
 
     const save = async () => {
         if (busy || !name.trim()) return;
+        // Never truncate or silently clear: a bad quantity keeps the sheet open.
+        const qty = parseQuantityInput(quantity);
+        if (!qty.ok) {
+            setQtyError(qty.error);
+            return;
+        }
+        setQtyError(null);
         setBusy(true);
         setError(null);
-        const qty = quantity.trim();
         const err = await onSave({
             name: name.trim(),
-            quantity: qty === "" ? null : Math.trunc(Number(qty.replace(",", "."))),
+            quantity: qty.value,
             unit: unit.trim() === "" ? null : unit.trim(),
             note: note.trim() === "" ? null : note.trim(),
             aisle: aisle === "" ? null : aisle,
@@ -59,11 +68,27 @@ export function ItemEditSheet({
     return (
         <Sheet title="Editar producto" onClose={onClose}>
             <div className="flex flex-col gap-3">
-                <SheetField label="Nombre" value={name} onChange={(e) => setName(e.target.value)} />
+                <SheetField label="Nombre" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
                 <div className="grid grid-cols-2 gap-2.5">
-                    <SheetField label="Cantidad" value={quantity} onChange={(e) => setQuantity(e.target.value)} inputMode="numeric" placeholder="—" />
-                    <SheetField label="Unidad" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="ud, kg, pack…" />
+                    <SheetField
+                        label="Cantidad"
+                        value={quantity}
+                        onChange={(e) => {
+                            setQuantity(e.target.value);
+                            setQtyError(null);
+                        }}
+                        inputMode="decimal"
+                        placeholder="—"
+                        aria-invalid={qtyError ? true : undefined}
+                        aria-describedby={qtyError ? qtyErrorId : undefined}
+                    />
+                    <SheetField label="Unidad" maxLength={20} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="ud, kg, pack…" />
                 </div>
+                {qtyError && (
+                    <p id={qtyErrorId} role="alert" className="-mt-1 pl-1 text-sm text-destructive">
+                        {qtyError}
+                    </p>
+                )}
                 <div className="flex flex-col gap-1.5">
                     <label htmlFor={aisleId} className="text-xs font-semibold text-muted-foreground pl-1">
                         Pasillo
@@ -82,7 +107,7 @@ export function ItemEditSheet({
                         ))}
                     </select>
                 </div>
-                <SheetField label="Nota" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Opcional" />
+                <SheetField label="Nota" maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Opcional" />
                 {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
                 <EqCta className="mt-2" onClick={save} disabled={busy || !name.trim()}>
                     Guardar

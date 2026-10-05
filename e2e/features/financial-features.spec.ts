@@ -50,7 +50,7 @@ test.describe('Financial feature UI journeys', () => {
     await page.goto('/budget');
     await expect(page).toHaveURL(/\/month\?view=budget/);
     await page.getByRole('button', { name: 'Añadir presupuesto de Comida', exact: true }).click();
-    await page.getByRole('spinbutton', { name: 'Importe del presupuesto' }).fill('100.08');
+    await page.getByRole('textbox', { name: 'Importe del presupuesto' }).fill('100.08');
     const created = page.waitForResponse(response =>
       new URL(response.url()).pathname === '/api/budget' && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Guardar presupuesto', exact: true }).click();
@@ -60,8 +60,8 @@ test.describe('Financial feature UI journeys', () => {
     await expect(page.getByTestId('budget-remaining')).toHaveText(/75,06\s*€/);
 
     await page.getByRole('button', { name: 'Editar presupuesto de Comida', exact: true }).click();
-    await expect(page.getByRole('spinbutton', { name: 'Importe del presupuesto' })).toHaveValue('100.08');
-    await page.getByRole('spinbutton', { name: 'Importe del presupuesto' }).fill('125.10');
+    await expect(page.getByRole('textbox', { name: 'Importe del presupuesto' })).toHaveValue('100,08');
+    await page.getByRole('textbox', { name: 'Importe del presupuesto' }).fill('125.10');
     const edited = page.waitForResponse(response =>
       new URL(response.url()).pathname === '/api/budget' && response.request().method() === 'POST');
     await page.getByRole('button', { name: 'Guardar presupuesto', exact: true }).click();
@@ -112,7 +112,7 @@ test.describe('Financial feature UI journeys', () => {
 
     const personalCategoriesLoaded = page.waitForResponse(response =>
       new URL(response.url()).pathname === '/api/me/categories' && response.request().method() === 'GET');
-    await page.getByRole('button', { name: 'Personal', exact: true }).click();
+    await page.getByRole('radio', { name: 'Personal', exact: true }).check();
     expect((await personalCategoriesLoaded).ok()).toBe(true);
     await expect(page.getByText('Viajes QA', { exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Nueva categoría', exact: true }).click();
@@ -153,7 +153,7 @@ test.describe('Financial feature UI journeys', () => {
     await expect(memberPage.getByText('Secreto QA', { exact: true })).toHaveCount(0);
     const memberPersonalLoaded = memberPage.waitForResponse(response =>
       new URL(response.url()).pathname === '/api/me/categories' && response.request().method() === 'GET');
-    await memberPage.getByRole('button', { name: 'Personal', exact: true }).click();
+    await memberPage.getByRole('radio', { name: 'Personal', exact: true }).check();
     expect((await memberPersonalLoaded).ok()).toBe(true);
     await expect(memberPage.getByText('Secreto QA', { exact: true })).toHaveCount(0);
     await memberPage.goto('/dashboard?scope=personal');

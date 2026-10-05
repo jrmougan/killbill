@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Pencil, Receipt, Trash2, ListX } from "lucide-react";
+import { Lock, MoreHorizontal, Pencil, Receipt, Trash2, ListX, X } from "lucide-react";
 import { EqChip, EqCta, EqHeader, EqLabel, useEqToast } from "@/components/ui/eq";
 import { cn } from "@/lib/utils";
 import { AISLES, getAisle } from "@/lib/aisles";
@@ -12,9 +12,14 @@ import { ShoppingItemRow, type ItemPatch, type ShoppingItem } from "./shopping-i
 import { ItemEditSheet } from "./item-edit-sheet";
 import { Sheet, SheetField } from "./sheet";
 import { buildFinishExpenseUrl } from "./finish-url";
+import { findDuplicate, bumpedQuantity } from "./duplicates";
+import { formatQuantity } from "@/lib/list-quantity";
+import { ScopeRadio } from "@/components/category/scope-radio";
 
 interface ListsHubProps {
     groupId: string | null;
+    /** Lifecycle of `groupId`: ARCHIVED → its Común lists are read-only. */
+    groupStatus?: string | null;
     groupLists: HubList[];
     personalLists: HubList[];
     selected: HubSelected | null;
@@ -62,12 +67,17 @@ type SheetState =
  * "Terminar y apuntar gasto" shortcut (clears the checked items and opens the
  * add-expense form prefilled; a list NEVER creates an expense by itself).
  */
-export function ListsHub({ groupId, groupLists, personalLists, selected }: ListsHubProps) {
+export function ListsHub({ groupId, groupStatus = null, groupLists, personalLists, selected }: ListsHubProps) {
     const router = useRouter();
     const [items, setItems] = useState<ShoppingItem[]>(selected?.items ?? []);
     const [sheet, setSheet] = useState<SheetState>(null);
     const [finishing, setFinishing] = useState(false);
-    const [toast, showToast] = useEqToast(2400);
+    const [dup, setDup] = useState<{ name: string; item: ShoppingItem } | null>(null);
+    const [toast, showToast] = useEqToast(3200);
+    // Lists are planning, not spending: they stay editable while the space is
+    // SETTLING. Only an ARCHIVED space makes its Común lists read-only.
+    const archived = !!selected?.groupId && groupStatus === "ARCHIVED";
+    const settling = !!selected?.groupId && groupStatus === "SETTLING";
 
     // Server re-renders (poll / focus / navigation to another list) are the
     // source of truth: resync the local optimistic copy.
@@ -79,10 +89,17 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
         const refresh = () => {
             if (document.visibilityState === "visible") router.refresh();
         };
+        // Browser back restores the list from the router cache / bfcache: re-read
+        // it right away instead of showing already-cleared items until the poll.
+        refresh();
         window.addEventListener("focus", refresh);
+        window.addEventListener("pageshow", refresh);
+        document.addEventListener("visibilitychange", refresh);
         const timer = setInterval(refresh, POLL_MS);
         return () => {
             window.removeEventListener("focus", refresh);
+            window.removeEventListener("pageshow", refresh);
+            document.removeEventListener("visibilitychange", refresh);
             clearInterval(timer);
         };
     }, [router]);
@@ -104,7 +121,7 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
         if (id !== selected?.id) router.push(`/lists/${id}`);
     };
 
-    const handleAdd = useCallback(
+    const addItem = useCallback(
         async (input: { name: string }): Promise<boolean> => {
             if (!apiBase) return false;
             try {
@@ -138,6 +155,21 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
             }
         },
         [apiBase, router, showToast],
+    );
+
+    // Soft duplicate guard: a pending item with the same name asks first
+    // ("Ya está en la lista") — add anyway or bump its quantity.
+    const handleAdd = useCallback(
+        async (input: { name: string }): Promise<boolean> => {
+            const existing = findDuplicate(items, input.name);
+            if (existing) {
+                setDup({ name: input.name, item: existing });
+                return true;
+            }
+            setDup(null);
+            return addItem(input);
+        },
+        [items, addItem],
     );
 
     // Optimistic toggle; the API is idempotent (condition-by-id updateMany), so a
@@ -242,6 +274,13 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
             setFinishing(false);
             return;
         }
+        if (settling) {
+            // No new expenses while settling: just close the shop run.
+            setFinishing(false);
+            showToast("Carro vaciado. El espacio se está liquidando: apunta el gasto cuando se reabra.");
+            router.refresh();
+            return;
+        }
         router.push(buildFinishExpenseUrl(selected));
     };
 
@@ -260,7 +299,7 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
         <div className="flex flex-col min-h-screen pb-[calc(170px+env(safe-area-inset-bottom))]">
             <div className="pt-[max(12px,env(safe-area-inset-top))] flex flex-col gap-3">
                 <EqHeader title="Listas">
-                    {selected && (
+                    {selected && !archived && (
                         <button
                             type="button"
                             onClick={() => setSheet({ kind: "menu" })}
@@ -288,7 +327,69 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
 
             {selected ? (
                 <div className="flex flex-col gap-3 px-5 pt-4">
-                    <AddItemInput key={selected.id} onAdd={handleAdd} />
+                    {archived && (
+                        <output
+                            data-testid="list-readonly-banner"
+                            className="flex items-start gap-2.5 rounded-[14px] border border-[color:var(--line-2)] bg-card px-3.5 py-3 text-[13px]"
+                        >
+                            <Lock className="h-4 w-4 flex-none mt-px text-muted-foreground" aria-hidden />
+                            <span className="min-w-0">
+                                <span className="block font-semibold">Espacio archivado</span>
+                                <span className="block text-muted-foreground">Esta lista es de solo lectura.</span>
+                            </span>
+                        </output>
+                    )}
+                    {!archived && <AddItemInput key={selected.id} onAdd={handleAdd} />}
+                    {dup && !archived && (
+                        <div
+                            role="alert"
+                            data-testid="duplicate-warning"
+                            className="flex flex-col gap-2.5 rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 py-3"
+                        >
+                            <div className="flex items-start gap-2">
+                                <p className="flex-1 min-w-0 text-sm">
+                                    <span className="font-semibold">«{dup.item.name}»</span> ya está en la lista
+                                    {itemQuantityLabel(dup.item)}.
+                                </p>
+                                <button
+                                    type="button"
+                                    aria-label="Descartar"
+                                    onClick={() => setDup(null)}
+                                    className="-mr-1.5 -mt-1 h-9 w-9 flex-none flex items-center justify-center text-muted-foreground"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+                            <div className="flex gap-2">
+                                <EqChip
+                                    tone="accent"
+                                    selected
+                                    onClick={async () => {
+                                        const d = dup;
+                                        setDup(null);
+                                        const q = bumpedQuantity(d.item.quantity);
+                                        if (q === null) {
+                                            showToast("La cantidad máxima es 100.000");
+                                            return;
+                                        }
+                                        const err = await handleSave(d.item, { quantity: q });
+                                        if (err) showToast(err);
+                                    }}
+                                >
+                                    Sumar 1
+                                </EqChip>
+                                <EqChip
+                                    onClick={async () => {
+                                        const d = dup;
+                                        setDup(null);
+                                        await addItem({ name: d.name });
+                                    }}
+                                >
+                                    Añadir igualmente
+                                </EqChip>
+                            </div>
+                        </div>
+                    )}
 
                     {pending.length > 0 && (
                         <section aria-label="Pendientes" className="bg-card rounded-[18px] border border-[color:var(--line-2)] px-4">
@@ -314,6 +415,7 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
                                                 divider={i < g.items.length - 1}
                                                 onToggle={() => handleToggle(it)}
                                                 onEdit={() => setSheet({ kind: "item", id: it.id })}
+                                                readOnly={archived}
                                             />
                                         ))}
                                     </Fragment>
@@ -323,7 +425,9 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
                     )}
 
                     {items.length === 0 && (
-                        <p className="py-6 text-center text-sm text-muted-foreground">Lista vacía. Añade el primer producto.</p>
+                        <p className="py-6 text-center text-sm text-muted-foreground">
+                            {archived ? "Lista vacía." : "Lista vacía. Añade el primer producto."}
+                        </p>
                     )}
 
                     {done.length > 0 && (
@@ -336,6 +440,7 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
                                         item={it}
                                         onToggle={() => handleToggle(it)}
                                         onEdit={() => setSheet({ kind: "item", id: it.id })}
+                                        readOnly={archived}
                                     />
                                 ))}
                             </div>
@@ -355,7 +460,7 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
                 </div>
             )}
 
-            {selected && (
+            {selected && !archived && (
                 <div className="fixed inset-x-0 z-30 sm:max-w-md sm:mx-auto bottom-[calc(74px+env(safe-area-inset-bottom))] px-5 pt-2.5 pb-3 bg-gradient-to-t from-background via-background to-transparent">
                     <EqCta
                         variant="ink"
@@ -365,14 +470,14 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
                         className={cn("h-[50px] rounded-2xl text-[15px]", (done.length === 0 || finishing) && "opacity-35")}
                     >
                         <Receipt className="h-[18px] w-[18px]" />
-                        Terminar y apuntar gasto
+                        {settling ? "Terminar compra" : "Terminar y apuntar gasto"}
                     </EqCta>
                 </div>
             )}
 
             {toast && (
                 <output
-                    className="eq-in fixed left-1/2 bottom-[calc(160px+env(safe-area-inset-bottom))] -translate-x-1/2 z-50 whitespace-nowrap rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]"
+                    className="eq-in fixed left-1/2 bottom-[calc(160px+env(safe-area-inset-bottom))] -translate-x-1/2 z-50 w-max max-w-[calc(100vw-32px)] sm:max-w-sm text-center text-balance rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]"
                 >
                     {toast}
                 </output>
@@ -381,6 +486,7 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
             {sheet?.kind === "new" && (
                 <NewListSheet
                     groupId={groupId}
+                    groupArchived={groupStatus === "ARCHIVED"}
                     onClose={() => setSheet(null)}
                     onCreated={(id) => {
                         setSheet(null);
@@ -439,7 +545,7 @@ export function ListsHub({ groupId, groupLists, personalLists, selected }: Lists
                 />
             )}
 
-            {editingItem && (
+            {editingItem && !archived && (
                 <ItemEditSheet
                     key={editingItem.id}
                     item={editingItem}
@@ -486,15 +592,18 @@ function MenuRow({
 
 function NewListSheet({
     groupId,
+    groupArchived = false,
     onClose,
     onCreated,
 }: {
     groupId: string | null;
+    groupArchived?: boolean;
     onClose: () => void;
     onCreated: (id: string) => void;
 }) {
     const [name, setName] = useState("");
-    const [personal, setPersonal] = useState(!groupId);
+    // An archived space takes no new Común lists: default (and lock) to Personal.
+    const [personal, setPersonal] = useState(!groupId || groupArchived);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -529,6 +638,7 @@ function NewListSheet({
                     label="Nombre"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    maxLength={60}
                     onKeyDown={(e) => {
                         if (e.key === "Enter") create();
                     }}
@@ -538,17 +648,19 @@ function NewListSheet({
                 />
                 {groupId && (
                     <div className="flex flex-col gap-1.5">
-                        <EqLabel className="pl-1">Para</EqLabel>
-                        <div className="flex gap-1.5">
-                            <EqChip tone="accent" selected={!personal} onClick={() => setPersonal(false)}>
-                                Común
-                            </EqChip>
-                            <EqChip tone="accent" selected={personal} onClick={() => setPersonal(true)}>
-                                Personal
-                            </EqChip>
-                        </div>
+                        <EqLabel className="pl-1" aria-hidden>Para</EqLabel>
+                        <ScopeRadio
+                            label="Para"
+                            personal={personal}
+                            onChange={setPersonal}
+                            sharedDisabled={groupArchived}
+                        />
                         <p className="pl-1 text-xs text-muted-foreground">
-                            {personal ? "Solo tú ves esta lista." : "Compartida con el espacio."}
+                            {groupArchived
+                                ? "El espacio está archivado: solo puedes crear listas personales."
+                                : personal
+                                    ? "Solo tú ves esta lista."
+                                    : "Compartida con el espacio."}
                         </p>
                     </div>
                 )}
@@ -606,6 +718,7 @@ function RenameSheet({
                     label="Nombre"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    maxLength={60}
                     onKeyDown={(e) => {
                         if (e.key === "Enter") save();
                     }}
@@ -667,4 +780,10 @@ function DeleteListSheet({
             </div>
         </Sheet>
     );
+}
+
+/** " (2 kg)" for the duplicate prompt, or "" without a quantity/unit. */
+function itemQuantityLabel(item: ShoppingItem): string {
+    const meta = [item.quantity != null ? formatQuantity(item.quantity) : null, item.unit].filter(Boolean).join(" ");
+    return meta ? ` (${meta})` : "";
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
     Plus,
     Pencil,
@@ -13,12 +13,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EqCard, EqCta, EqHeader } from "@/components/ui/eq";
-import { cn } from "@/lib/utils";
 import { CategoryBadge } from "@/components/category/category-badge";
 import { CategoryEditor } from "@/components/category/category-editor";
 import { DeleteCategoryModal } from "@/components/category/delete-category-modal";
 import { useCategoryList } from "@/components/category/use-category-list";
-import { Sheet } from "@/components/shopping/sheet";
+import { Sheet } from "@/components/ui/sheet";
+import { ScopeRadio } from "@/components/category/scope-radio";
+import { usePersonalMode } from "@/app/settings/personal-mode";
+import { withPersonal } from "@/app/settings/personal-scope";
 import {
     type CategoryContext,
     type CategoryListItem,
@@ -39,6 +41,8 @@ interface CategoriesClientProps {
     canManageShared: boolean;
     sharedInitial: CategoryListItem[];
     personalInitial: CategoryListItem[];
+    /** Came from personal mode (`?scope=personal`): open on Personal, back keeps it. */
+    personalParam?: boolean;
 }
 
 export function CategoriesClient({
@@ -49,8 +53,15 @@ export function CategoriesClient({
     canManageShared,
     sharedInitial,
     personalInitial,
+    personalParam = false,
 }: CategoriesClientProps) {
-    const [scope, setScope] = useState<Scope>(hasGroup ? "shared" : "personal");
+    const personalMode = usePersonalMode(personalParam);
+    const [scope, setScope] = useState<Scope>(hasGroup && !personalParam ? "shared" : "personal");
+    // The nav's remembered personal mode resolves after mount.
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot sync with sessionStorage
+        if (personalMode) setScope("personal");
+    }, [personalMode]);
 
     const context: CategoryContext =
         scope === "shared" && groupId ? { kind: "shared", groupId } : { kind: "personal" };
@@ -131,26 +142,15 @@ export function CategoriesClient({
 
     return (
         <div className="flex flex-col min-h-screen pt-[max(12px,env(safe-area-inset-top))] pb-24">
-            <EqHeader title="Categorías" back="/settings" />
+            <EqHeader title="Categorías" back={withPersonal("/settings", personalMode)} />
             <div className="flex flex-col gap-4 px-5 pt-5">
 
                 {hasGroup && (
-                    <div className="flex rounded-xl bg-[var(--track)] p-[3px]">
-                        {([["shared", "Común"], ["personal", "Personal"]] as const).map(([key, label]) => (
-                            <button
-                                key={key}
-                                type="button"
-                                onClick={() => { setScope(key); setEditing(undefined); setDeleting(null); }}
-                                aria-pressed={scope === key}
-                                className={cn(
-                                    "flex-1 rounded-[10px] py-2 text-sm font-semibold transition-colors",
-                                    scope === key ? "bg-card text-foreground" : "text-muted-foreground"
-                                )}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
+                    <ScopeRadio
+                        label="Ámbito de las categorías"
+                        personal={scope === "personal"}
+                        onChange={(p) => { setScope(p ? "personal" : "shared"); setEditing(undefined); setDeleting(null); }}
+                    />
                 )}
 
                 {canManage && (

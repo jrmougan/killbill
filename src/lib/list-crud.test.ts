@@ -170,11 +170,30 @@ describe("createItemForScope", () => {
         expect(err.code).toBe("INVALID_AISLE");
     });
 
-    it("rejects a non-integer quantity with 400", async () => {
+    it("accepts a decimal quantity (number or es-ES text) for weighed goods", async () => {
         mList.findUnique.mockResolvedValue(groupList);
-        const err = await expectError(() => createItemForScope(GROUP, "l1", { name: "leche", quantity: 1.5 }));
-        expect(err.status).toBe(400);
-        expect(err.code).toBe("INVALID_QUANTITY");
+        mItem.aggregate.mockResolvedValue({ _max: { sortOrder: 0 } });
+        mItem.create.mockResolvedValue({ id: "i1" });
+        await createItemForScope(GROUP, "l1", { name: "patatas", quantity: 1.5 });
+        expect(mItem.create.mock.calls[0][0].data.quantity).toBe(1.5);
+        await createItemForScope(GROUP, "l1", { name: "patatas", quantity: "0,25" });
+        expect(mItem.create.mock.calls[1][0].data.quantity).toBe(0.25);
+    });
+
+    it("rejects garbage, non-positive and over-max quantities with an explicit 400", async () => {
+        mList.findUnique.mockResolvedValue(groupList);
+        for (const [quantity, msg] of [
+            ["abc", /número mayor que 0/],
+            [-1, /número mayor que 0/],
+            [Number.NaN, /número mayor que 0/],
+            [200000, /máxima es 100\.000/],
+            [1.2345, /3 decimales/],
+        ] as const) {
+            const err = await expectError(() => createItemForScope(GROUP, "l1", { name: "leche", quantity }));
+            expect(err.status).toBe(400);
+            expect(err.code).toBe("INVALID_QUANTITY");
+            expect(err.message).toMatch(msg);
+        }
     });
 });
 

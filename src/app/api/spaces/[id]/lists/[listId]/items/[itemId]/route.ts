@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
 import { updateItemForScope, setItemChecked, deleteItemForScope, type ListWriteScope } from "@/lib/list-crud";
-import { listErrorResponse } from "@/lib/list-http";
+import { listErrorResponse, requireListWriteAccess } from "@/lib/list-http";
 
 /**
  * A single item. PATCH either TOGGLES `checked` (idempotent condition-by-id
  * updateMany — the `checked` flag is a system field derived server-side, actor =
- * caller) or edits its fields. DELETE removes it. Any ACTIVE member; writability
- * blocks SETTLING/ARCHIVED.
+ * caller) or edits its fields. DELETE removes it. Any ACTIVE member; writes blocked
+ * only when ARCHIVED (SETTLING allows list edits: planning is not spending).
  */
 
 export async function PATCH(
@@ -15,16 +14,15 @@ export async function PATCH(
     { params }: { params: Promise<{ id: string; listId: string; itemId: string }> },
 ) {
     const { id, listId, itemId } = await params;
-    const ctx = await getSessionCtx();
-    const auth = await requireSpaceAccess(ctx, id);
-    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
+    const gate = await requireListWriteAccess(id);
+    if (!gate.ok) return gate.response;
 
     const scope: ListWriteScope = { kind: "group", groupId: id };
     try {
         const body = await request.json();
         // Toggle mode: a boolean `checked` is the sole system-derived field.
         if (typeof body?.checked === "boolean") {
-            const result = await setItemChecked(scope, listId, itemId, body.checked, auth.userId);
+            const result = await setItemChecked(scope, listId, itemId, body.checked, gate.auth.userId);
             return NextResponse.json(result);
         }
         const item = await updateItemForScope(scope, listId, itemId, body);
@@ -39,9 +37,8 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string; listId: string; itemId: string }> },
 ) {
     const { id, listId, itemId } = await params;
-    const ctx = await getSessionCtx();
-    const auth = await requireSpaceAccess(ctx, id);
-    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
+    const gate = await requireListWriteAccess(id);
+    if (!gate.ok) return gate.response;
 
     const scope: ListWriteScope = { kind: "group", groupId: id };
     try {
