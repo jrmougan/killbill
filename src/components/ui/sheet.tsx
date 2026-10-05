@@ -7,17 +7,21 @@ import { X } from "lucide-react";
  * Small bottom sheet (EQUIL style): a native modal `<dialog>` (focus trap,
  * Escape and top layer for free) anchored to the bottom, dimmed backdrop that
  * closes on tap. `title` labels the dialog; without it pass `label` and render
- * your own heading inside.
+ * your own heading inside. `dismissible={false}` ignores backdrop taps and
+ * Escape and hides the X — for content that must be acknowledged explicitly
+ * (e.g. a secret shown once); the content then provides its own close action.
  */
 export function Sheet({
     title,
     label,
     onClose,
+    dismissible = true,
     children,
 }: {
     title?: string;
     label?: string;
     onClose: () => void;
+    dismissible?: boolean;
     children: React.ReactNode;
 }) {
     const titleId = useId();
@@ -50,11 +54,11 @@ export function Sheet({
             onCancel={(e) => {
                 // Escape: let React own the unmount instead of the UA closing it.
                 e.preventDefault();
-                onCloseRef.current();
+                if (dismissible) onCloseRef.current();
             }}
             onClick={(e) => {
                 // A click on the dialog box itself (not its content) is the backdrop.
-                if (e.target === e.currentTarget) onCloseRef.current();
+                if (dismissible && e.target === e.currentTarget) onCloseRef.current();
             }}
             className="eq-in fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-md max-h-[90vh] overflow-y-auto rounded-t-[24px] bg-card p-0 text-foreground backdrop:bg-black/35"
         >
@@ -68,14 +72,16 @@ export function Sheet({
                     ) : (
                         <span className="flex-1" />
                     )}
-                    <button
-                        type="button"
-                        onClick={() => onCloseRef.current()}
-                        aria-label="Cerrar"
-                        className="h-8 w-8 -mr-1 flex items-center justify-center text-muted-foreground"
-                    >
-                        <X className="h-5 w-5" />
-                    </button>
+                    {dismissible && (
+                        <button
+                            type="button"
+                            onClick={() => onCloseRef.current()}
+                            aria-label="Cerrar"
+                            className="h-8 w-8 -mr-1 flex items-center justify-center text-muted-foreground"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                    )}
                 </div>
                 {children}
             </div>

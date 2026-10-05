@@ -4,13 +4,18 @@ import { getUserGroups, getActiveGroup } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { SettingsClient } from "./settings-client";
 import { Metadata } from "next";
+import { isPersonalParam } from "./personal-scope";
 
 export const metadata: Metadata = {
     title: "Ajustes · EQUIL - Finanzas Compartidas",
     description: "Configura tu perfil y tu grupo en EQUIL.",
 };
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+    searchParams,
+}: {
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
     const session = await getSession();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
@@ -43,6 +48,7 @@ export default async function SettingsPage() {
                 status: g.status,
             }))}
             activeGroupId={activeGroupId}
+            personalParam={isPersonalParam(await searchParams)}
         />
     );
 }

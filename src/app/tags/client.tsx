@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X, Plus, Check } from "lucide-react";
 import { EqCard, EqCta, EqHeader, EqLabel } from "@/components/ui/eq";
-import { cn } from "@/lib/utils";
+import { ScopeRadio } from "@/components/category/scope-radio";
+import { usePersonalMode } from "@/app/settings/personal-mode";
+import { withPersonal } from "@/app/settings/personal-scope";
 
 interface Tag {
     id: string;
@@ -18,6 +20,8 @@ interface TagsClientProps {
     initialTags: Tag[];
     /** Whether the user belongs to a group — gates the "Común" scope. */
     hasGroup: boolean;
+    /** Came from personal mode (`?scope=personal`). */
+    personalParam?: boolean;
 }
 
 const PRESET_COLORS = [
@@ -42,14 +46,19 @@ const COLOR_NAMES: Record<string, string> = {
     "#84cc16": "Lima",
 };
 
-export function TagsClient({ initialTags, hasGroup }: TagsClientProps) {
+export function TagsClient({ initialTags, hasGroup, personalParam = false }: TagsClientProps) {
+    const personalMode = usePersonalMode(personalParam);
     const router = useRouter();
     const [tags, setTags] = useState<Tag[]>(initialTags);
     const [newName, setNewName] = useState("");
     const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
     // Scope of the tag being created: common (group) or personal. Defaults to
     // common when the user has a group, else personal.
-    const [newPersonal, setNewPersonal] = useState(!hasGroup);
+    const [newPersonal, setNewPersonal] = useState(!hasGroup || personalParam);
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot sync with sessionStorage
+        if (personalMode) setNewPersonal(true);
+    }, [personalMode]);
     const [saving, setSaving] = useState(false);
     const [deleting, setDeleting] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -57,6 +66,11 @@ export function TagsClient({ initialTags, hasGroup }: TagsClientProps) {
     const handleCreate = async () => {
         if (saving || !newName.trim()) return;
         const trimmed = newName.trim();
+        // Same name in the same scope already exists → say so (no request).
+        if (tags.some((t) => t.personal === newPersonal && t.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+            setError(`Ya existe una etiqueta «${trimmed}»${newPersonal ? " personal" : " común"}.`);
+            return;
+        }
         setSaving(true);
         setError(null);
         try {
@@ -73,10 +87,17 @@ export function TagsClient({ initialTags, hasGroup }: TagsClientProps) {
                 setNewColor(PRESET_COLORS[0]);
                 router.refresh();
             } else {
-                setError("No se pudo crear la etiqueta. Inténtalo de nuevo.");
+                const data = await res.json().catch(() => null);
+                setError(
+                    res.status === 409
+                        ? `Ya existe una etiqueta «${trimmed}».`
+                        : res.status < 500 && typeof data?.error === "string"
+                            ? data.error
+                            : "No se pudo crear la etiqueta. Inténtalo de nuevo.",
+                );
             }
         } catch {
-            setError("No se pudo crear la etiqueta. Inténtalo de nuevo.");
+            setError("No se pudo crear la etiqueta. Comprueba tu conexión e inténtalo de nuevo.");
         } finally {
             setSaving(false);
         }
@@ -103,7 +124,7 @@ export function TagsClient({ initialTags, hasGroup }: TagsClientProps) {
 
     return (
         <div className="flex flex-col min-h-screen pt-[max(12px,env(safe-area-inset-top))] pb-10">
-            <EqHeader title="Etiquetas" back="/settings" />
+            <EqHeader title="Etiquetas" back={withPersonal("/settings", personalMode)} />
             <div className="flex flex-col gap-5 px-5 pt-5">
                 <EqCard className="p-4 space-y-4">
                     <h2 className="text-[15px] font-semibold">Nueva etiqueta</h2>
@@ -112,7 +133,11 @@ export function TagsClient({ initialTags, hasGroup }: TagsClientProps) {
                         aria-label="Nombre de la etiqueta"
                         className="w-full h-12 rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 text-[15px] outline-none focus:border-[color:var(--accent-border)]"
                         value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
+                        maxLength={40}
+                        onChange={(e) => {
+                            setNewName(e.target.value);
+                            setError(null);
+                        }}
                         placeholder="Nombre de la etiqueta"
                         onKeyDown={(e) => {
                             if (e.key === "Enter" && !saving) handleCreate();
@@ -121,23 +146,8 @@ export function TagsClient({ initialTags, hasGroup }: TagsClientProps) {
 
                     {hasGroup && (
                         <div className="space-y-2">
-                            <EqLabel>Ámbito</EqLabel>
-                            <div className="flex rounded-xl bg-[var(--track)] p-[3px]">
-                                {([["comun", "Común", false], ["personal", "Personal", true]] as const).map(([key, label, personal]) => (
-                                    <button
-                                        key={key}
-                                        type="button"
-                                        onClick={() => setNewPersonal(personal)}
-                                        aria-pressed={newPersonal === personal}
-                                        className={cn(
-                                            "flex-1 rounded-[10px] py-2 text-sm font-semibold transition-colors",
-                                            newPersonal === personal ? "bg-card text-foreground" : "text-muted-foreground",
-                                        )}
-                                    >
-                                        {label}
-                                    </button>
-                                ))}
-                            </div>
+                            <EqLabel aria-hidden>Ámbito</EqLabel>
+                            <ScopeRadio label="Ámbito de la etiqueta" personal={newPersonal} onChange={setNewPersonal} />
                             <p className="text-xs text-muted-foreground">
                                 {newPersonal ? "Solo para tus gastos personales." : "Compartida con el grupo."}
                             </p>
@@ -207,8 +217,9 @@ export function TagsClient({ initialTags, hasGroup }: TagsClientProps) {
                                         type="button"
                                         onClick={() => handleDelete(tag)}
                                         disabled={deleting === tag.id}
-                                        className="ml-1 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                                        aria-label={`Eliminar tag ${tag.name}`}
+                                        // 44×44 hit area around a 14px glyph (negative margins keep the chip compact).
+                                        className="-my-3 -mr-3 h-11 w-11 flex-none flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                                        aria-label={`Eliminar etiqueta ${tag.name}`}
                                     >
                                         <X className="h-3.5 w-3.5" />
                                     </button>

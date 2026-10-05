@@ -7,6 +7,7 @@ import { allowsCustomCategories } from "@/lib/space-policy";
 import { MembershipRole, SpaceStatus } from "@/generated/prisma/enums";
 import type { CategoryListItem } from "@/lib/category-context";
 import { CategoriesClient } from "./client";
+import { isPersonalParam } from "@/app/settings/personal-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,11 @@ export const dynamic = "force-dynamic";
  * and the space status — CRUD is OWNER/ADMIN only (decision #6) and blocked in
  * SETTLING/ARCHIVED. Personal categories are always self-managed (session-auth).
  */
-export default async function CategoriesPage() {
+export default async function CategoriesPage({
+    searchParams,
+}: {
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
     const session = await getSession();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
@@ -63,6 +68,7 @@ export default async function CategoriesPage() {
             canManageShared={canManageShared}
             sharedInitial={sharedInitial}
             personalInitial={personalInitial}
+            personalParam={isPersonalParam(await searchParams)}
         />
     );
 }
