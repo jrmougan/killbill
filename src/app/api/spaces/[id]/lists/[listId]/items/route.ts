@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
 import { createItemForScope, type ListWriteScope } from "@/lib/list-crud";
 import { getListWithItems } from "@/lib/list-read";
-import { listErrorResponse } from "@/lib/list-http";
+import { listErrorResponse, requireListWriteAccess } from "@/lib/list-http";
 
 /**
  * Items of a space list. GET reads (any ACTIVE member, incl. archived spaces);
- * POST adds an item (any ACTIVE member, no role gate; writability blocks
- * SETTLING/ARCHIVED). sortOrder is allocated server-side (max+1).
+ * POST adds an item (any ACTIVE member, no role gate; writes blocked only
+ * when ARCHIVED; SETTLING allows list edits). sortOrder is allocated server-side (max+1).
  */
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string; listId: string }> }) {
@@ -23,9 +23,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; listId: string }> }) {
     const { id, listId } = await params;
-    const ctx = await getSessionCtx();
-    const auth = await requireSpaceAccess(ctx, id);
-    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
+    const gate = await requireListWriteAccess(id);
+    if (!gate.ok) return gate.response;
 
     const scope: ListWriteScope = { kind: "group", groupId: id };
     try {

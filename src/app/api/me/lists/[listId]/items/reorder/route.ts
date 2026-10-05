@@ -8,6 +8,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ li
     const { listId } = await params;
     const ctx = await getSessionCtx();
     if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Guests (shadow users caged to one ephemeral space) have no personal lists.
+    if (ctx.kind === "guest") return NextResponse.json({ error: "Acción no permitida para invitados" }, { status: 403 });
     const scope: ListWriteScope = { kind: "owner", ownerId: ctx.userId };
     try {
         const body = await request.json();

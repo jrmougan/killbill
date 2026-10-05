@@ -10,6 +10,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ lis
     const { listId } = await params;
     const ctx = await getSessionCtx();
     if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Guests (shadow users caged to one ephemeral space) have no personal lists.
+    if (ctx.kind === "guest") return NextResponse.json({ error: "Acción no permitida para invitados" }, { status: 403 });
     const list = await getListWithItems({ kind: "owner", ownerId: ctx.userId }, listId);
     if (!list) return NextResponse.json({ error: "Lista no encontrada", code: "LIST_NOT_FOUND" }, { status: 404 });
     return NextResponse.json({ list: { id: list.id, name: list.name, description: list.description }, items: list.items });
@@ -19,6 +21,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
     const { listId } = await params;
     const ctx = await getSessionCtx();
     if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Guests (shadow users caged to one ephemeral space) have no personal lists.
+    if (ctx.kind === "guest") return NextResponse.json({ error: "Acción no permitida para invitados" }, { status: 403 });
     const scope: ListWriteScope = { kind: "owner", ownerId: ctx.userId };
     try {
         const body = await request.json();

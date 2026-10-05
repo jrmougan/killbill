@@ -23,6 +23,11 @@ export interface HubSelected {
 export interface ListsHubData {
     /** Group whose Común lists are shown (null → personal only). */
     groupId: string | null;
+    /**
+     * Lifecycle of that group. Lists stay editable while SETTLING (planning is
+     * not spending); ARCHIVED makes its Común lists read-only.
+     */
+    groupStatus: string | null;
     groupLists: HubList[];
     personalLists: HubList[];
     selected: HubSelected | null;
@@ -73,9 +78,10 @@ export async function loadListsHub(userId: string, listId?: string): Promise<Lis
     // active space); otherwise the active space's lists.
     const groupId = selectedScope?.kind === "group" ? selectedScope.groupId : await getActiveGroup(userId);
 
-    const [groupSummaries, personalSummaries] = await Promise.all([
+    const [groupSummaries, personalSummaries, group] = await Promise.all([
         groupId ? getListsForScope({ kind: "group", groupId }) : Promise.resolve([]),
         getListsForScope({ kind: "owner", ownerId: userId }),
+        groupId ? prisma.couple.findUnique({ where: { id: groupId }, select: { status: true } }) : Promise.resolve(null),
     ]);
     const groupLists = groupSummaries.map(toHub(groupId));
     const personalLists = personalSummaries.map(toHub(null));
@@ -108,5 +114,5 @@ export async function loadListsHub(userId: string, listId?: string): Promise<Lis
         };
     }
 
-    return { groupId, groupLists, personalLists, selected };
+    return { groupId, groupStatus: group?.status ?? null, groupLists, personalLists, selected };
 }

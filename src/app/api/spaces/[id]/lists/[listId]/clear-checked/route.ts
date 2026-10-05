@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
-import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
 import { clearCheckedForScope, type ListWriteScope } from "@/lib/list-crud";
-import { listErrorResponse } from "@/lib/list-http";
+import { listErrorResponse, requireListWriteAccess } from "@/lib/list-http";
 
 /**
  * "Vaciar comprados" de una lista de grupo: BORRA (deleteMany) los items marcados
- * como comprados para reciclar la lista semanal. Cualquier miembro ACTIVE; la
- * escribibilidad bloquea SETTLING/ARCHIVED.
+ * como comprados para reciclar la lista semanal. Cualquier miembro ACTIVE; solo un
+ * espacio ARCHIVED bloquea la escritura (SETTLING la permite).
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string; listId: string }> }) {
     const { id, listId } = await params;
-    const ctx = await getSessionCtx();
-    const auth = await requireSpaceAccess(ctx, id);
-    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
+    const gate = await requireListWriteAccess(id);
+    if (!gate.ok) return gate.response;
 
     const scope: ListWriteScope = { kind: "group", groupId: id };
     try {

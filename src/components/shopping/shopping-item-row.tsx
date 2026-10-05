@@ -2,6 +2,7 @@
 
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatQuantity } from "@/lib/list-quantity";
 
 export interface ShoppingItem {
     id: string;
@@ -24,7 +25,7 @@ export interface ItemPatch {
 /** "2 kg · sin lactosa" — quantity/unit and note, or "" when there is none. */
 export function itemMeta(item: Pick<ShoppingItem, "quantity" | "unit" | "note">): string {
     const parts: string[] = [];
-    if (item.quantity != null) parts.push(`${item.quantity}${item.unit ? ` ${item.unit}` : ""}`);
+    if (item.quantity != null) parts.push(`${formatQuantity(item.quantity)}${item.unit ? ` ${item.unit}` : ""}`);
     else if (item.unit) parts.push(item.unit);
     if (item.note) parts.push(item.note);
     return parts.join(" · ");
@@ -36,13 +37,15 @@ interface ShoppingItemRowProps {
     divider?: boolean;
     onToggle: () => void;
     onEdit: () => void;
+    /** Archived space: show the row but allow neither ticking nor editing. */
+    readOnly?: boolean;
 }
 
 /**
  * One list row: a 22px rounded checkbox (idempotent toggle) and the item text,
  * which opens the edit sheet. Checked rows render faint and struck through.
  */
-export function ShoppingItemRow({ item, divider, onToggle, onEdit }: ShoppingItemRowProps) {
+export function ShoppingItemRow({ item, divider, onToggle, onEdit, readOnly }: ShoppingItemRowProps) {
     const meta = itemMeta(item);
     return (
         <div
@@ -57,6 +60,7 @@ export function ShoppingItemRow({ item, divider, onToggle, onEdit }: ShoppingIte
                     type="checkbox"
                     checked={item.checked}
                     onChange={onToggle}
+                    disabled={readOnly}
                     aria-label={item.name}
                     className="peer absolute inset-0 z-10 m-0 h-full w-full cursor-pointer appearance-none opacity-0"
                 />
@@ -73,6 +77,7 @@ export function ShoppingItemRow({ item, divider, onToggle, onEdit }: ShoppingIte
             <button
                 type="button"
                 onClick={onEdit}
+                disabled={readOnly}
                 aria-label={`Editar ${item.name}`}
                 className={cn("flex-1 min-w-0 text-left", item.checked ? "py-[9px]" : "py-[13px]")}
             >
