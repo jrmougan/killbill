@@ -5,34 +5,49 @@ import { useRouter } from "next/navigation";
 import { EqCta, EqHeader } from "@/components/ui/eq";
 import { MethodPicker } from "@/components/settle/method-picker";
 import type { SettleMethod } from "@/components/settle/settle-model";
-import { parseAmountInput } from "@/lib/currency";
+import { parseEuroInput } from "@/lib/currency";
+import { MAX_SETTLEMENT_CENTS } from "@/lib/settlement-rules";
 
 interface EditSettleClientProps {
     settlementId: string;
-    initialAmount: number;
+    /** Current amount in cents. */
+    initialCents: number;
     initialMethod: SettleMethod;
     toName: string;
 }
 
-export function EditSettleClient({ settlementId, initialAmount, initialMethod, toName }: EditSettleClientProps) {
+/** Strict es-ES amount → cents, or an error message for the field. */
+function validate(text: string): { cents: number | null; error: string | null } {
+    if (!text.trim()) return { cents: null, error: "Escribe un importe" };
+    const cents = parseEuroInput(text);
+    if (cents === null) return { cents: null, error: "Importe no válido. Usa, por ejemplo, 12,50" };
+    if (cents < 1) return { cents: null, error: "El importe debe ser de al menos 0,01 €" };
+    if (cents > MAX_SETTLEMENT_CENTS) return { cents: null, error: "El importe no puede superar 1.000.000 €" };
+    return { cents, error: null };
+}
+
+export function EditSettleClient({ settlementId, initialCents, initialMethod, toName }: EditSettleClientProps) {
     const router = useRouter();
-    const [amount, setAmount] = useState<string>(initialAmount.toFixed(2).replace(".", ","));
+    const [amount, setAmount] = useState<string>((initialCents / 100).toFixed(2).replace(".", ","));
     const [method, setMethod] = useState<SettleMethod>(initialMethod);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const numeric = parseAmountInput(amount);
-    const valid = numeric > 0;
+    const [touched, setTouched] = useState(false);
+    const check = validate(amount);
+    const valid = check.cents !== null;
+    const fieldError = touched ? check.error : null;
 
     const handleSubmit = async () => {
-        if (!valid) return;
+        setTouched(true);
+        if (check.cents === null) return;
         setSubmitting(true);
         setError(null);
         try {
             const res = await fetch(`/api/settle/${settlementId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ method, amount: numeric }),
+                body: JSON.stringify({ method, amount: check.cents / 100 }),
             });
             if (!res.ok) {
                 const json = await res.json().catch(() => ({}));
@@ -62,13 +77,18 @@ export function EditSettleClient({ settlementId, initialAmount, initialMethod, t
                             inputMode="decimal"
                             autoComplete="off"
                             value={amount}
-                            onChange={(e) => setAmount(e.target.value)}
-                            aria-invalid={!valid}
+                            onChange={(e) => { setAmount(e.target.value); setTouched(true); }}
+                            onBlur={() => setTouched(true)}
+                            aria-invalid={!!fieldError}
+                            aria-describedby={fieldError ? "settle-amount-error" : undefined}
                             className="w-[200px] bg-transparent text-center text-[44px] font-bold tracking-[-0.03em] tabular-nums outline-none border-b border-[color:var(--line)] focus:border-primary transition-colors"
                             placeholder="0,00"
                         />
                         <span className="text-[28px] font-bold text-muted-foreground">€</span>
                     </div>
+                    {fieldError && (
+                        <p id="settle-amount-error" role="alert" className="text-[13px] text-destructive" data-testid="settle-amount-error">{fieldError}</p>
+                    )}
                     <p className="text-[13px] text-muted-foreground">Seguirá pendiente hasta que {toName} lo confirme.</p>
                 </div>
 

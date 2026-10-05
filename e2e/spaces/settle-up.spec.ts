@@ -259,11 +259,11 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await confirmFromDashboard(pageB, 'User A');
     await expect(pageB.getByTestId('balance-amount')).toHaveText(ZERO);
 
-    // ...and a second confirmation of the same settlement is refused (400).
+    // ...and a second confirmation of the same settlement is refused (409 SETTLEMENT_NOT_PENDING).
     const second = await pageB.request.patch(`/api/settle/${settlementId}/status`, {
       data: { status: 'CONFIRMED' },
     });
-    expect(second.status()).toBe(400);
+    expect(second.status()).toBe(409);
 
     // Settle-up after full payment suggests nothing new.
     const afterPaid = await pageA.request.post(`/api/spaces/${spaceId}/settle-up`);

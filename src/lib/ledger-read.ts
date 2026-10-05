@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db';
 import { getGroupMembers } from '@/lib/membership';
+import type { Prisma } from '@/generated/prisma/client';
 
 /**
  * Ledger-sourced net balances (integer CENTS) for a group's ACTIVE members.
@@ -9,10 +10,16 @@ import { getGroupMembers } from '@/lib/membership';
  * Restricted to ACTIVE members (result keyed only by them), defaulting to 0 when
  * a member has no account/entries — identical to reconcile GATE A. Positive =
  * member is owed; negative = member owes.
+ *
+ * Pass a transaction client to read inside a transaction (e.g. under the
+ * settlement space lock) instead of the global client.
  */
-export async function getGroupBalances(groupId: string): Promise<Record<string, number>> {
+export async function getGroupBalances(
+  groupId: string,
+  db: Prisma.TransactionClient = prisma,
+): Promise<Record<string, number>> {
   const members = await getGroupMembers(groupId);
-  const accounts = await prisma.account.findMany({
+  const accounts = await db.account.findMany({
     where: { groupId },
     include: { entries: { select: { amount: true } } },
   });

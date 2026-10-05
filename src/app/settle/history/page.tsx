@@ -1,11 +1,10 @@
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ArrowDownLeft, ArrowUpRight, Clock } from "lucide-react";
-import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
-import { getActiveGroup } from "@/lib/membership";
+import { getSessionCtx } from "@/lib/authz";
+import { resolveSettleSpace } from "@/lib/settlement-space";
 import { spaceTypeMeta } from "@/lib/space-ui";
 import { formatCurrency } from "@/lib/currency";
-import { SpaceType } from "@/generated/prisma/enums";
 import { EqHeader, EqLabel, EqRow } from "@/components/ui/eq";
 import { SettlementStatusChip } from "@/components/settle/status-chip";
 import { methodName } from "@/components/settle/settle-model";
@@ -15,16 +14,20 @@ export const dynamic = 'force-dynamic';
 const dayFmt = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short", year: "numeric" });
 const monthFmt = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", month: "long", year: "numeric" });
 
-export default async function SettlementHistoryPage() {
+/**
+ * Every settlement of a space (all statuses: pending, confirmed, rejected) —
+ * `?space=<groupId>` when given (authorized against that space), else the
+ * active space. Legacy zero-amount "checkpoint" rows are hidden.
+ */
+export default async function SettlementHistoryPage({ searchParams }: { searchParams: Promise<{ space?: string | string[] }> }) {
     const ctx = await getSessionCtx();
     if (!ctx) redirect("/login");
     const userId = ctx.userId;
 
     // Personal mode has no settlements.
-    const groupId = await getActiveGroup(userId);
-    if (!groupId) redirect("/dashboard");
-    const auth = await requireSpaceAccess(ctx, groupId, { allowArchived: true, allowGuest: true });
-    if (!auth.ok || auth.space.type === SpaceType.INDIVIDUAL) redirect("/dashboard");
+    const resolved = await resolveSettleSpace(ctx, (await searchParams).space);
+    if (!resolved) redirect("/dashboard");
+    const { groupId, auth } = resolved;
     const spaceName = auth.space.name ?? spaceTypeMeta(auth.space.type).label;
 
     const settlements = await prisma.settlement.findMany({
@@ -44,7 +47,7 @@ export default async function SettlementHistoryPage() {
 
     return (
         <main className="eq-in min-h-dvh max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)] pb-10">
-            <EqHeader back="/settle" title="Pagos" meta={spaceName} />
+            <EqHeader back={`/settle?space=${encodeURIComponent(groupId)}`} title="Pagos" meta={spaceName} />
 
             {settlements.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-3 px-8 text-center" data-testid="settle-history-empty">

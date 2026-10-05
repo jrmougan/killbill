@@ -52,7 +52,7 @@ test('simultaneous confirmations post exactly one settlement in integer cents', 
       expect(transactions).toHaveLength(1);
       const entries = await db.query('SELECT amount FROM LedgerEntry WHERE transactionId = ? ORDER BY amount', [transactions[0].id]);
       expect(entries.map((entry: { amount: number }) => entry.amount)).toEqual([-5000, 5000]);
-      expect(responses.map(response => response.status()).sort()).toEqual([200, 400]);
+      expect(responses.map(response => response.status()).sort()).toEqual([200, 409]);
     } finally {
       await first.close();
       await second.close();

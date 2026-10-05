@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
 import { getActiveGroup, getGroupMembers } from '@/lib/membership';
-import { toCents } from '@/lib/currency';
-import { postSettlementLedger } from '@/lib/ledger';
-import { SpaceStatus } from '@/generated/prisma/enums';
+import { isSettlementMethod, parseSettlementAmount, SettlementError } from '@/lib/settlement-rules';
+import { createSettlement } from '@/lib/settlement-service';
+
+const bad = (error: string, code = 'INVALID_INPUT') => NextResponse.json({ error, code }, { status: 400 });
 
 /**
  * Record a settlement in a space.
@@ -13,104 +13,85 @@ import { SpaceStatus } from '@/generated/prisma/enums';
  *
  * - **Paid** (default, `{ toUserId }`): the caller says "Ya he pagado". The
  *   settlement is created PENDING (caller → toUserId) and only enters the balance
- *   when the receiver confirms it via /api/settle/[id]/status (two-step
- *   confirmation is kept: the debtor's word alone never moves the balance).
+ *   when the receiver confirms it via /api/settle/[id]/status.
  *
  * - **Received** (`{ fromUserId }`): the caller is the CREDITOR and says "Ya me
  *   ha pagado". The settlement (fromUserId → caller) is created CONFIRMED and its
- *   ledger transaction posted in the same DB transaction. This is consistent with
- *   the authz model of the status route, where only the receiver may confirm:
- *   the creditor acknowledging receipt is exactly the trustworthy side, and it can
- *   only ever reduce the counterparty's debt. Guests cannot confirm settlements
- *   (status route denies them), so they cannot use this direction either.
+ *   ledger transaction posted in the same DB transaction. If the debtor already
+ *   registered a PENDING for the same amount, that one is confirmed instead
+ *   (`merged: true`) so the payment is never counted twice.
  *
- * The space is the optional `groupId` (authorized against the resource's own
- * group) or, failing that, the caller's active group. SETTLING spaces allow
- * settling; ARCHIVED ones are read-only.
+ * Body: `{ amount: number (euros, > 0, ≤ 1.000.000), toUserId | fromUserId,
+ * method?: 'CASH'|'BIZUM'|'TRANSFER', groupId?: string }`. The space is
+ * `groupId` (authorized against that space) or the caller's active group.
+ * Response: `{ success, settlement: { id, status, amount (cents) }, merged }`.
+ * Rule failures are `{ error, code }` (see settlement-service.ts): 409
+ * SPACE_NOT_WRITABLE / SETTLEMENT_EXCEEDS_DEBT / NOTHING_TO_SETTLE /
+ * SETTLEMENT_PENDING_EXISTS.
+ *
+ * Guests may use both directions: "received" can only ever reduce what is owed
+ * to the guest, and it is capped to the current debt.
  */
 export async function POST(request: Request) {
     try {
         const ctx = await getSessionCtx();
-        if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        if (!ctx) return NextResponse.json({ error: 'No has iniciado sesión' }, { status: 401 });
         const userId = ctx.userId;
 
-        const body = await request.json();
-        const { amount, toUserId, fromUserId, method, groupId } = body ?? {};
+        const body = await request.json().catch(() => null);
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return bad('Petición no válida');
+        const { amount, toUserId, fromUserId, method, groupId } = body as Record<string, unknown>;
 
         const received = fromUserId !== undefined && fromUserId !== null;
         if (received) {
-            if (typeof fromUserId !== 'string' || !fromUserId) {
-                return NextResponse.json({ error: 'Invalid fromUserId' }, { status: 400 });
+            if (typeof fromUserId !== 'string' || !fromUserId) return bad('fromUserId no válido');
+            if (toUserId !== undefined && toUserId !== null && toUserId !== userId) {
+                return bad('Un pago recibido debe ir dirigido a ti');
             }
-            if (toUserId !== undefined && toUserId !== userId) {
-                return NextResponse.json({ error: 'A received payment must be addressed to you' }, { status: 400 });
-            }
-            if (fromUserId === userId) return NextResponse.json({ error: 'Cannot settle with yourself' }, { status: 400 });
+            if (fromUserId === userId) return bad('No puedes saldar contigo mismo');
         } else {
-            if (!toUserId) return NextResponse.json({ error: 'toUserId is required' }, { status: 400 });
-            if (toUserId === userId) return NextResponse.json({ error: 'Cannot settle with yourself' }, { status: 400 });
+            if (typeof toUserId !== 'string' || !toUserId) return bad('Falta toUserId');
+            if (toUserId === userId) return bad('No puedes saldar contigo mismo');
         }
         const counterpartyId = (received ? fromUserId : toUserId) as string;
 
-        const numericAmount = Number(amount);
-        // amount === 0 is allowed for a paid settlement: it records a "checkpoint"
-        // used to archive/clear the pending list when there are no outstanding
-        // debts. A received (auto-confirmed) settlement must move money.
-        if (!Number.isFinite(numericAmount) || numericAmount < 0 || (received && numericAmount <= 0)) {
-            return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
-        }
+        const parsed = parseSettlementAmount(amount);
+        if (!parsed.ok) return bad(parsed.error, 'INVALID_AMOUNT');
 
-        if (method !== undefined && !['CASH', 'BIZUM', 'TRANSFER'].includes(method)) {
-            return NextResponse.json({ error: 'Invalid method' }, { status: 400 });
-        }
+        if (method !== undefined && method !== null && !isSettlementMethod(method)) return bad('Método de pago no válido');
 
-        const coupleId = typeof groupId === 'string' && groupId ? groupId : await getActiveGroup(userId);
-        if (!coupleId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+        if (groupId !== undefined && groupId !== null && (typeof groupId !== 'string' || !groupId)) {
+            return bad('groupId no válido');
+        }
+        const coupleId = (groupId as string | null | undefined) || (await getActiveGroup(userId));
+        if (!coupleId) return bad('No tienes ningún espacio compartido activo', 'NO_SPACE');
 
         // Authorize against the space itself (DB membership, not the JWT claim).
-        // Guests may record a payment they made, never confirm one received.
-        const auth = await requireSpaceAccess(ctx, coupleId, { allowArchived: true, allowGuest: !received });
+        // The ARCHIVED check happens under the space lock in the service.
+        const auth = await requireSpaceAccess(ctx, coupleId, { allowArchived: true, allowGuest: true });
         if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
-
-        if (auth.space.status === SpaceStatus.ARCHIVED) {
-            return NextResponse.json(
-                { error: 'Este espacio está archivado (solo lectura)', code: 'SPACE_NOT_WRITABLE' },
-                { status: 409 },
-            );
-        }
 
         const members = await getGroupMembers(coupleId);
         if (!members.some((m) => m.id === counterpartyId)) {
-            return NextResponse.json({ error: 'The other user is not a member of this space' }, { status: 403 });
+            return NextResponse.json({ error: 'La otra persona no es miembro de este espacio' }, { status: 403 });
         }
 
-        const settlement = await prisma.$transaction(async (tx) => {
-            const created = await tx.settlement.create({
-                data: {
-                    amount: toCents(numericAmount),
-                    fromUserId: received ? counterpartyId : userId,
-                    toUserId: received ? userId : counterpartyId,
-                    coupleId,
-                    method: method || 'CASH',
-                    status: received ? 'CONFIRMED' : 'PENDING',
-                },
-            });
-            if (received) {
-                // Same posting the status route does on PENDING→CONFIRMED.
-                await postSettlementLedger(tx, {
-                    id: created.id,
-                    coupleId: created.coupleId,
-                    amount: created.amount,
-                    fromUserId: created.fromUserId,
-                    toUserId: created.toUserId,
-                    date: created.date,
-                });
-            }
-            return created;
+        const result = await createSettlement({
+            groupId: coupleId,
+            callerId: userId,
+            counterpartyId,
+            direction: received ? 'received' : 'paid',
+            cents: parsed.cents,
+            method: isSettlementMethod(method) ? method : 'CASH',
         });
 
-        return NextResponse.json({ success: true, settlement: { id: settlement.id, status: settlement.status } });
+        return NextResponse.json({
+            success: true,
+            settlement: { id: result.id, status: result.status, amount: result.amount },
+            merged: result.merged,
+        });
     } catch (error) {
+        if (error instanceof SettlementError) return NextResponse.json(error.toJSON(), { status: error.status });
         console.error('Error al registrar el pago:', error);
         return NextResponse.json({ error: 'Error al registrar el pago' }, { status: 500 });
     }

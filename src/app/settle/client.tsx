@@ -8,14 +8,14 @@ import { EqCta, EqHeader, EqLabel, EqRow, EqToast, useEqToast } from "@/componen
 import { GuestBanner } from "@/components/guest/guest-banner";
 import { MethodPicker } from "@/components/settle/method-picker";
 import { ReceiptTicket, TicketRow, TicketRule } from "@/components/settle/receipt-ticket";
-import { isAtPeace, methodPhrase, type SettleMethod, type Ticket, type Transfer } from "@/components/settle/settle-model";
+import { isAtPeace, methodPhrase, shareLabel, type SettleMethod, type Ticket, type Transfer } from "@/components/settle/settle-model";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
 type PendingSettlement = { id: string; fromUserId: string; toUserId: string; amount: number; method: string };
 
 type Done =
-    | { kind: "confirmed"; method: string; remaining: boolean }
+    | { kind: "confirmed"; method: string; /** What is still owed to me after this payment (cents). */ remaining: number }
     | { kind: "pending"; id: string | null; name: string; amount: number; method: string };
 
 interface SettleClientProps {
@@ -28,13 +28,33 @@ interface SettleClientProps {
     names: Record<string, string>;
     /** My net balance in cents (positive = I'm owed). */
     balance: number;
+    /** Every member of the space is at peace (not only me). */
+    everyoneSettled: boolean;
     ticket: Ticket;
     meta: string;
     transfers: Transfer[];
     pending: PendingSettlement[];
 }
 
-export function SettleClient({ space, me, isGuest, memberCount, partnerId, names, balance, ticket, meta, transfers, pending }: SettleClientProps) {
+/** Rule failures after which the screen is stale: refresh it so it shows the truth. */
+const STALE_CODES = new Set([
+    "SETTLEMENT_PENDING_EXISTS",
+    "SETTLEMENT_CHANGED",
+    "SETTLEMENT_NOT_PENDING",
+    "SETTLEMENT_EXCEEDS_DEBT",
+    "NOTHING_TO_SETTLE",
+    "SPACE_NOT_WRITABLE",
+]);
+
+class StaleError extends Error {}
+
+async function failure(res: Response, fallback: string): Promise<Error> {
+    const json = await res.json().catch(() => ({}));
+    const message = typeof json.error === "string" ? json.error : fallback;
+    return STALE_CODES.has(json.code) ? new StaleError(message) : new Error(message);
+}
+
+export function SettleClient({ space, me, isGuest, memberCount, partnerId, names, balance, everyoneSettled, ticket, meta, transfers, pending }: SettleClientProps) {
     const router = useRouter();
     const [toast, showToast] = useEqToast(2400);
     const [method, setMethod] = useState<SettleMethod>("BIZUM");
@@ -64,9 +84,8 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ...body, groupId: space.id }),
         });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(json.error || "No se pudo registrar el pago");
-        return json as { settlement?: { id: string; status: string } };
+        if (!res.ok) throw await failure(res, "No se pudo registrar el pago");
+        return (await res.json()) as { settlement?: { id: string; status: string; amount: number }; merged?: boolean };
     }
 
     async function run(action: () => Promise<Done>) {
@@ -77,6 +96,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
             router.refresh();
         } catch (e) {
             setError(e instanceof Error ? e.message : "Algo ha fallado. Inténtalo de nuevo.");
+            if (e instanceof StaleError) router.refresh();
         } finally {
             setSubmitting(false);
         }
@@ -90,8 +110,9 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
 
     const theyPaid = () => run(async () => {
         if (!t) throw new Error("No hay nada que cobrar");
-        await post({ fromUserId: t.userId, amount: t.amount / 100, method });
-        return { kind: "confirmed", method, remaining: transfers.length > 1 };
+        const json = await post({ fromUserId: t.userId, amount: t.amount / 100, method });
+        const paid = json.settlement?.amount ?? t.amount;
+        return { kind: "confirmed", method, remaining: balance - paid };
     });
 
     const confirmIncoming = () => run(async () => {
@@ -99,18 +120,16 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
         const res = await fetch(`/api/settle/${incoming.id}/status`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "CONFIRMED" }),
+            // The amount I am looking at: 409 SETTLEMENT_CHANGED if it was edited.
+            body: JSON.stringify({ status: "CONFIRMED", expectedAmountCents: incoming.amount }),
         });
-        if (!res.ok) {
-            const json = await res.json().catch(() => ({}));
-            throw new Error(json.error || "No se pudo confirmar el pago");
-        }
-        return { kind: "confirmed", method: incoming.method, remaining: transfers.length > 1 };
+        if (!res.ok) throw await failure(res, "No se pudo confirmar el pago");
+        return { kind: "confirmed", method: incoming.method, remaining: balance - incoming.amount };
     });
 
     async function remind() {
         const amount = formatCurrency(Math.abs(balance));
-        const url = `${window.location.origin}/settle`;
+        const url = `${window.location.origin}/settle?space=${encodeURIComponent(space.id)}`;
         const text = isCouple
             ? `¡Hola, ${partnerName}! Para quedar en paz en ${space.name} me debes ${amount}. Lo tienes en EQUIL.`
             : `Cuentas de ${space.name}: me quedan ${amount} por cobrar. Entrad en EQUIL para quedar en paz.`;
@@ -136,7 +155,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
     const header = (
         <EqHeader back="/dashboard">
             <h1 className="sr-only">Quedar en paz</h1>
-            <Link href="/settle/history" className="ml-auto text-sm font-semibold text-primary px-1">
+            <Link href={`/settle/history?space=${encodeURIComponent(space.id)}`} className="ml-auto text-sm font-semibold text-primary px-1">
                 Historial
             </Link>
         </EqHeader>
@@ -167,17 +186,28 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
 
     if (done?.kind === "confirmed" || isAtPeace(balance)) {
         const registered = done?.kind === "confirmed";
-        const stillOpen = registered && done.remaining;
+        const stillOpen = registered && !isAtPeace(done.remaining);
+        // In a group I can be at peace while others still owe each other.
+        const onlyMe = !stillOpen && !isCouple && !everyoneSettled;
+        const title = stillOpen ? "Pago registrado" : onlyMe ? "Tú estás en paz" : "Estáis en paz";
+        let sub: string;
+        if (stillOpen) {
+            sub = `Pago registrado ${methodPhrase(done.method)}. Aún te ${isCouple ? "debe" : "deben"} ${formatCurrency(done.remaining)}.`;
+        } else if (registered) {
+            sub = `Pago registrado ${methodPhrase(done.method)}. Lo verás en Gastos.`;
+        } else if (onlyMe) {
+            sub = `No tienes nada pendiente, pero aún quedan cuentas entre otros miembros de ${space.name}.`;
+        } else {
+            sub = `No hay nada pendiente en ${space.name}.`;
+        }
         return (
             <Screen>
                 {header}
                 <Centered
                     testId="settle-peace"
                     icon={<Check className="h-10 w-10" strokeWidth={2.5} />}
-                    title={stillOpen ? "Pago registrado" : "Estáis en paz"}
-                    sub={registered
-                        ? `Pago registrado ${methodPhrase(done.method)}. Lo verás en Gastos.`
-                        : `No hay nada pendiente en ${space.name}.`}
+                    title={title}
+                    sub={sub}
                 >
                     {!registered && <PendingList pending={pending} me={me} nameOf={nameOf} />}
                 </Centered>
@@ -200,9 +230,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
     const balLabel = isCouple
         ? owed ? `${partnerName} te debe` : `Le debes a ${partnerName}`
         : owed ? "Te deben" : "Debes";
-    const eachLabel = ticket.allEqual
-        ? isCouple ? "A cada uno" : `A cada uno (÷${memberCount})`
-        : "Tu parte";
+    const eachLabel = shareLabel(ticket, memberCount);
     const showTransfers = !isCouple || transfers.length > 1;
 
     let cta: React.ReactNode = null;
@@ -218,7 +246,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
             );
         } else if (t.direction === "pay") {
             cta = <EqCta onClick={iPaid} disabled={submitting} aria-busy={submitting}>Ya he pagado</EqCta>;
-        } else if (incoming && !isGuest) {
+        } else if (incoming) {
             cta = (
                 <>
                     <EqCta onClick={confirmIncoming} disabled={submitting} aria-busy={submitting}>
@@ -229,12 +257,12 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                     </Link>
                 </>
             );
-        } else if (!isGuest) {
+        } else {
             cta = <EqCta onClick={theyPaid} disabled={submitting} aria-busy={submitting}>Ya me ha pagado</EqCta>;
         }
     }
     const canRemind = !archived && owed && !incoming;
-    const usesMethod = !archived && !!t && !outgoing && !incoming && !(t.direction === "receive" && isGuest);
+    const usesMethod = !archived && !!t && !outgoing && !incoming;
 
     return (
         <Screen>
@@ -256,9 +284,17 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                     <TicketRule />
                     <TicketRow label="Pagaste tú" value={formatCurrency(ticket.paidByMe)} />
                     <TicketRow label={isCouple ? `Pagó ${partnerName}` : "Pagaron los demás"} value={formatCurrency(ticket.paidByOthers)} />
-                    {Math.abs(ticket.carry) > 1 && (
+                    {ticket.payments !== 0 && (
                         <TicketRow
-                            label="Saldo anterior y pagos"
+                            label={ticket.payments > 0 ? "Pagos que hiciste" : "Pagos recibidos"}
+                            value={`${ticket.payments > 0 ? "+" : "−"}${formatCurrency(Math.abs(ticket.payments))}`}
+                            muted
+                            testId="settle-ticket-payments"
+                        />
+                    )}
+                    {ticket.carry !== 0 && (
+                        <TicketRow
+                            label="Saldo anterior"
                             value={`${ticket.carry > 0 ? "+" : "−"}${formatCurrency(Math.abs(ticket.carry))}`}
                             muted
                             testId="settle-ticket-carry"

@@ -56,9 +56,11 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
     const isPending = settlement.status === "PENDING";
     const iReceive = settlement.toUserId === me;
     const iPay = settlement.fromUserId === me;
-    // The status route lets only the receiver act, never a guest.
-    const canResolve = isPending && iReceive && !auth.isGuest;
-    const canEdit = isPending && iPay;
+    // Only the receiver confirms/rejects and only the payer edits (guests
+    // included); nothing moves in an ARCHIVED (read-only) space.
+    const archived = settlement.couple.status === "ARCHIVED";
+    const canResolve = isPending && iReceive && !archived;
+    const canEdit = isPending && iPay && !archived;
 
     const fromName = iPay ? "Tú" : settlement.fromUser.name;
     const toName = iReceive ? "Tú" : settlement.toUser.name;
@@ -74,6 +76,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
     else if (isPending && iPay) explanation = `Pendiente de que ${settlement.toUser.name} confirme. Contará en el saldo cuando lo haga.`;
     else if (isPending) explanation = `Pendiente de que ${settlement.toUser.name} confirme.`;
     else if (settlement.status === "REJECTED") explanation = "Este pago se rechazó y no cuenta en el saldo.";
+    if (isPending && archived) explanation = `${explanation ?? ""} El espacio está archivado: ya no se puede confirmar ni editar.`.trim();
 
     // Legacy settlements may link covered expenses (pre running-balance model).
     const members = settlement.expenses.length > 0 ? await getGroupMembers(settlement.coupleId) : [];
@@ -84,7 +87,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
 
     return (
         <main className="eq-in min-h-dvh max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">
-            <SettleHeader fallback="/settle/history" title="Pago">
+            <SettleHeader fallback={`/settle/history?space=${encodeURIComponent(settlement.coupleId)}`} title="Pago">
                 {canEdit && (
                     <Link href={`/settle/${id}/edit`} className="text-sm font-semibold text-primary px-1">
                         Editar
@@ -140,7 +143,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
 
             {canResolve && (
                 <div className="px-5 pb-[max(env(safe-area-inset-bottom),30px)]">
-                    <SettlementActions id={settlement.id} fromName={settlement.fromUser.name} />
+                    <SettlementActions id={settlement.id} fromName={settlement.fromUser.name} amountCents={settlement.amount} />
                 </div>
             )}
         </main>
