@@ -11,7 +11,7 @@ export type SpaceTypeMeta = { emoji: string; label: string; blurb: string };
 export const SPACE_TYPE_META: Record<SpaceType, SpaceTypeMeta> = {
     [SpaceType.INDIVIDUAL]: { emoji: "👤", label: "Personal", blurb: "Solo para ti" },
     [SpaceType.COUPLE]: { emoji: "💑", label: "Pareja", blurb: "Para dos personas" },
-    [SpaceType.GROUP]: { emoji: "👪", label: "Grupo", blurb: "Familia, piso o amigos" },
+    [SpaceType.GROUP]: { emoji: "🏢", label: "Grupo", blurb: "Familia, piso o amigos" },
     [SpaceType.EPHEMERAL]: { emoji: "✈️", label: "Viaje", blurb: "Temporal, con invitados" },
 };
 

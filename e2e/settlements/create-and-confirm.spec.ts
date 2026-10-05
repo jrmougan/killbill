@@ -82,7 +82,7 @@ test.describe('Settlements - Create and Confirm', () => {
     const confirmSection = pageA.getByText(/Confirmar Pagos/i);
     await expect(confirmSection).toBeVisible({ timeout: 10000 });
     await expect(pageA.getByText(/User B te ha pagado/i)).toBeVisible();
-    await expect(pageA.getByText(/50\.00\s*€/)).toBeVisible();
+    await expect(pageA.getByTestId('pending-settlement').getByText(/^50,00\s€$/)).toBeVisible();
 
     // ...and on /settle the creditor confirms the pending one instead of a new "Ya me ha pagado".
     await pageA.goto('/settle');

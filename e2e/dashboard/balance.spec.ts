@@ -80,14 +80,19 @@ test.describe('Dashboard - Balance', () => {
     await expect(page.getByTestId('month-summary')).toContainText('en Debt Couple');
 
     // Carousel → personal context.
-    await page.getByRole('button', { name: /Cambiar a 👤 Personal/ }).click();
+    // The inactive card announces its balance (no emoji) to assistive tech.
+    await expect(page.getByRole('button', { name: /^Cambiar a Personal\. Solo tú\. Personal este mes: 0,00\s€$/ })).toBeVisible();
+    await page.getByRole('button', { name: /Cambiar a Personal/ }).click();
     await expect(page).toHaveURL(/\/dashboard\?scope=personal/);
     await expect(page.getByTestId('space-card-active')).toContainText('Personal este mes');
     await expect(page.getByTestId('balance-amount')).toHaveCount(0);
+    // "Ver todo" keeps the personal scope.
+    await expect(page.getByRole('link', { name: 'Ver todo' })).toHaveAttribute('href', '/expenses/list?scope=personal');
 
-    // Espacios marks Personal active; tapping the couple row goes back home.
+    // Espacios marks Personal active; its back arrow returns to the personal context.
     await page.getByRole('link', { name: 'Ver espacios' }).click();
     await expect(page).toHaveURL(/\/spaces\?active=personal/);
+    await expect(page.getByRole('link', { name: 'Volver a Inicio' })).toHaveAttribute('href', '/dashboard?scope=personal');
     const rows = page.getByTestId('space-row');
     await expect(rows.filter({ hasText: 'Personal' })).toHaveAttribute('data-active', 'true');
     const coupleRow = rows.filter({ hasText: 'Debt Couple' });

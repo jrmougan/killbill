@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { EqCta } from "@/components/ui/eq";
 import { cn } from "@/lib/utils";
+import { SPACE_TYPE_META } from "@/lib/space-ui";
 import { JoinLinkForm } from "./join-link-form";
 
 type Choice = "pareja" | "piso" | "viaje" | "solo";
@@ -13,32 +14,41 @@ type ApiType = "COUPLE" | "GROUP" | "EPHEMERAL";
 
 type Option = { key: Choice; emoji: string; title: string; sub: string; type: ApiType | null; defaultName: string };
 
+const NAME_MAX = 60;
+
 /**
  * Space-type chooser shared by the onboarding (`/welcome`) and "Crear espacio"
  * (`/spaces/new`) — prototype `is.welcome`. Mapping (docs/design/README.md):
  * Pareja→COUPLE, Piso→GROUP, Viaje→EPHEMERAL only behind the ephemeral flag
  * (otherwise a GROUP "Con amigos"), Solo yo→INDIVIDUAL (virtual: no row is
- * created, it just opens the personal context). Creation reuses
+ * created, it just opens the personal context). Emojis come from the type
+ * metadata so the card shown after creating matches the choice. Creation reuses
  * `POST /api/spaces`, which also makes the new space the active one.
  */
 function optionsFor(ephemeralEnabled: boolean): Option[] {
     return [
-        { key: "pareja", emoji: "💑", title: "Mi pareja", sub: "2 personas", type: "COUPLE", defaultName: "Casa" },
-        { key: "piso", emoji: "🏢", title: "Mi piso", sub: "Compañeros", type: "GROUP", defaultName: "Piso" },
+        { key: "pareja", emoji: SPACE_TYPE_META.COUPLE.emoji, title: "Mi pareja", sub: "2 personas", type: "COUPLE", defaultName: "Casa" },
+        { key: "piso", emoji: SPACE_TYPE_META.GROUP.emoji, title: "Mi piso", sub: "Compañeros", type: "GROUP", defaultName: "Piso" },
         ephemeralEnabled
-            ? { key: "viaje", emoji: "✈️", title: "Un viaje", sub: "Con fecha de fin", type: "EPHEMERAL", defaultName: "Viaje" }
-            : { key: "viaje", emoji: "🎉", title: "Con amigos", sub: "Viajes y planes", type: "GROUP", defaultName: "Amigos" },
-        { key: "solo", emoji: "👤", title: "Solo yo", sub: "Finanzas personales", type: null, defaultName: "" },
+            ? { key: "viaje", emoji: SPACE_TYPE_META.EPHEMERAL.emoji, title: "Un viaje", sub: "Con fecha de fin", type: "EPHEMERAL", defaultName: "Viaje" }
+            : { key: "viaje", emoji: SPACE_TYPE_META.GROUP.emoji, title: "Con amigos", sub: "Viajes y planes", type: "GROUP", defaultName: "Amigos" },
+        { key: "solo", emoji: SPACE_TYPE_META.INDIVIDUAL.emoji, title: "Solo yo", sub: "Finanzas personales", type: null, defaultName: "" },
     ];
 }
 
 export function CreateSpaceFlow({
     mode,
     ephemeralEnabled,
+    backHref,
+    today,
 }: {
-    /** `onboard` = first run (/welcome); `create` = another space (/spaces/new). */
+    /** `onboard` = first run (/welcome); `create` = another space. */
     mode: "onboard" | "create";
     ephemeralEnabled: boolean;
+    /** Back arrow target; none on a first-run onboarding. */
+    backHref?: string;
+    /** Today's Madrid date ("YYYY-MM-DD"), the earliest trip end date. */
+    today: string;
 }) {
     const router = useRouter();
     const options = optionsFor(ephemeralEnabled);
@@ -58,6 +68,10 @@ export function CreateSpaceFlow({
             router.push("/dashboard?scope=personal");
             return;
         }
+        if (selected.type === "EPHEMERAL" && expiresAt && expiresAt < today) {
+            setError("La fecha de fin no puede estar en el pasado");
+            return;
+        }
         setSaving(true);
         try {
             const res = await fetch("/api/spaces", {
@@ -66,6 +80,7 @@ export function CreateSpaceFlow({
                 body: JSON.stringify({
                     type: selected.type,
                     name: effectiveName.trim() || undefined,
+                    // A calendar date: the API stores the END of that day (Madrid).
                     expiresAt: selected.type === "EPHEMERAL" && expiresAt ? expiresAt : undefined,
                 }),
             });
@@ -77,22 +92,22 @@ export function CreateSpaceFlow({
             }
             setError(data?.error || "No se pudo crear el espacio");
         } catch {
-            setError("Error de conexión");
+            setError("Sin conexión. Inténtalo de nuevo.");
         }
         setSaving(false);
     };
 
     return (
         <div className="min-h-dvh flex flex-col eq-in">
-            {mode === "create" && (
-                <div className="px-6 pt-4">
-                    <Link href="/spaces" aria-label="Volver" className="block h-6 w-6">
-                        <ArrowLeft className="h-6 w-6" />
+            {backHref && (
+                <div className="px-6 pt-3">
+                    <Link href={backHref} aria-label="Volver" className="-ml-2.5 flex h-11 w-11 items-center justify-center">
+                        <ArrowLeft className="h-6 w-6" aria-hidden="true" />
                     </Link>
                 </div>
             )}
 
-            <div className={cn("px-6 flex flex-col gap-3.5", mode === "create" ? "pt-8" : "pt-12")}>
+            <div className={cn("px-6 flex flex-col gap-3.5", backHref ? "pt-5" : "pt-12")}>
                 <span className="text-[15px] font-extrabold tracking-[0.14em] text-primary">EQUIL</span>
                 <h1 className="text-[36px] font-bold tracking-[-0.03em] leading-[1.05] text-pretty">
                     ¿Con quién compartes gastos?
@@ -139,21 +154,28 @@ export function CreateSpaceFlow({
                         <input
                             value={effectiveName}
                             onChange={(e) => setName(e.target.value)}
-                            maxLength={60}
+                            maxLength={NAME_MAX}
                             placeholder={selected.defaultName}
                             className="h-12 rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 text-[15px] outline-none focus:border-primary"
                         />
                     </label>
                     {selected.type === "EPHEMERAL" && (
                         <label className="flex flex-col gap-1.5">
-                            <span className="text-xs font-semibold text-muted-foreground">Hasta (opcional)</span>
+                            <span className="text-xs font-semibold text-muted-foreground">Último día del viaje (opcional)</span>
                             <input
                                 type="date"
                                 value={expiresAt}
-                                onChange={(e) => setExpiresAt(e.target.value)}
+                                min={today}
+                                onChange={(e) => {
+                                    setExpiresAt(e.target.value);
+                                    setError(null);
+                                }}
+                                aria-describedby="trip-end-hint"
                                 className="h-12 rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 text-[15px] outline-none focus:border-primary"
                             />
-                            <span className="text-xs text-muted-foreground">Es un recordatorio: el viaje no se cierra solo.</span>
+                            <span id="trip-end-hint" className="text-xs text-muted-foreground">
+                                Los invitados sin cuenta podrán entrar hasta el final de ese día. El espacio no se cierra solo: lo cerráis cuando estéis en paz.
+                            </span>
                         </label>
                     )}
                 </div>
@@ -170,7 +192,7 @@ export function CreateSpaceFlow({
                     type="button"
                     aria-expanded={joinOpen}
                     onClick={() => setJoinOpen((v) => !v)}
-                    className="text-sm font-semibold text-primary px-1.5 py-1.5"
+                    className="min-h-11 text-sm font-semibold text-primary px-2"
                 >
                     Me han invitado · tengo un enlace
                 </button>

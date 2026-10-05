@@ -94,8 +94,12 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await expect(page.getByTestId('space-action-settle')).toHaveCount(0);
     await expect(page.getByTestId('space-action-reopen')).toBeVisible();
     await expect(page.getByTestId('space-action-archive')).toBeVisible();
+    // No upgrade while closing; settling targets THIS space explicitly.
+    await expect(page.getByTestId('space-action-convert')).toHaveCount(0);
+    await expect(page.getByTestId('space-action-go-settle')).toHaveAttribute('href', `/settle?space=${spaceId}`);
     // The space page renders the banner too.
     await expect(page.getByTestId('space-status-banner')).toHaveAttribute('data-status', 'SETTLING');
+    await expect(page.getByTestId('space-status-settle-link')).toHaveAttribute('href', `/settle?space=${spaceId}`);
 
     // Dashboard: SETTLING banner with the OWNER close CTA; the balance is untouched.
     await page.goto('/dashboard');
@@ -162,11 +166,13 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await expect(page.getByText('Gasto tras reabrir')).toBeVisible();
   });
 
-  test('SETTLING → ARCHIVED: OWNER archives; banner shown and the UI is read-only', async ({ page }) => {
+  test('SETTLING → ARCHIVED: blocked while a payment is pending/debts are open, then archives; UI read-only', async ({ page }) => {
+    // space-settling: B owes A 50 € and has a PENDING 50 € settlement.
     const data = await seedScenario(apiContext, 'space-settling');
     const userA = data.userA as Creds; // OWNER
     const spaceId = data.coupleId as string;
     const expenseId = data.expenseId as string;
+    const settlementId = data.settlementId as string;
 
     await loginAs(page, userA);
     await page.goto(`/spaces/${spaceId}`);
@@ -174,11 +180,39 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     const header = page.getByTestId('space-header-status');
     await expect(header).toHaveText('Pareja · Liquidando');
 
-    // Archiving asks for confirmation through window.confirm.
-    page.once('dialog', (dialog) => void dialog.accept());
-    const patchPromise = spacePatch(page, spaceId);
+    // Archiving asks for confirmation in a sheet; with a PENDING payment the API refuses (409).
     await page.getByTestId('space-action-archive').click();
-    const patch = await patchPromise;
+    const sheet = page.getByTestId('archive-sheet');
+    await expect(sheet).toBeVisible();
+    let patchPromise = spacePatch(page, spaceId);
+    await sheet.getByTestId('confirm-sheet-confirm').click();
+    let patch = await patchPromise;
+    expect(patch.status()).toBe(409);
+    const blocked = await patch.json();
+    expect(blocked.code).toBe('PENDING_SETTLEMENTS');
+    expect(blocked.settleUrl).toBe(`/settle?space=${spaceId}`);
+    await expect(sheet.getByTestId('confirm-sheet-error')).toContainText('pago pendiente de confirmar');
+    await expect(sheet.getByRole('link', { name: /Ir a liquidar/ })).toHaveAttribute('href', `/settle?space=${spaceId}`);
+    await expect(header).toHaveText('Pareja · Liquidando');
+
+    // Rejecting the payment leaves the 50 € debt open → still 409, now OPEN_BALANCES.
+    const reject = await page.request.patch(`/api/settle/${settlementId}/status`, { data: { status: 'REJECTED' } });
+    expect(reject.ok()).toBeTruthy();
+    const stillOpen = await page.request.patch(`/api/spaces/${spaceId}`, { data: { status: 'ARCHIVED' } });
+    expect(stillOpen.status()).toBe(409);
+    expect((await stillOpen.json()).code).toBe('OPEN_BALANCES');
+
+    // The creditor records the payment ("Ya me ha pagado") → everyone at peace.
+    const received = await page.request.post('/api/settle', {
+      data: { groupId: spaceId, fromUserId: (data.userB as Creds).id, amount: 50, method: 'CASH' },
+    });
+    expect(received.ok(), await received.text()).toBeTruthy();
+
+    await page.reload();
+    await page.getByTestId('space-action-archive').click();
+    patchPromise = spacePatch(page, spaceId);
+    await page.getByTestId('archive-sheet').getByTestId('confirm-sheet-confirm').click();
+    patch = await patchPromise;
     expect(patch.status()).toBe(200);
     expect(JSON.parse(patch.request().postData() ?? '{}')).toEqual({ status: 'ARCHIVED' });
 

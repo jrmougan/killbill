@@ -52,7 +52,7 @@ async function confirmFromDashboard(page: Page, fromName: string) {
   await page.goto('/dashboard');
   await expect(page.getByText('Confirmar Pagos')).toBeVisible();
   await expect(page.getByText(`${fromName} te ha pagado`)).toBeVisible();
-  await expect(page.getByText('50.00€', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('pending-settlement').getByText(/^50,00\s€$/)).toBeVisible();
   const patchPromise = settlementStatusPatch(page);
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   const patch = await patchPromise;
@@ -94,7 +94,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     const debtRow = pageB.getByTestId('close-debt-row');
     await expect(debtRow).toHaveCount(1);
     await expect(debtRow).toContainText('Debes a User A');
-    await expect(debtRow.locator('span.font-mono')).toHaveText(FIFTY);
+    await expect(debtRow.getByTestId('close-amount')).toHaveText(FIFTY);
     await expect(pageB.getByTestId('close-start-settling')).toHaveCount(0);
 
     // Creditor/OWNER: owes nothing, starts the settle-up.
@@ -133,7 +133,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toHaveAttribute('data-status', 'PENDING');
     await expect(rows.first()).toContainText('User B → User A');
-    await expect(rows.first().locator('span.font-mono')).toHaveText(FIFTY);
+    await expect(rows.first().getByTestId('close-amount')).toHaveText(FIFTY);
     await expect(pageA.getByTestId('close-progress')).toHaveText('0/1 confirmadas');
 
     // PENDING does not move balances.
@@ -220,7 +220,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await pageA.goto(`/spaces/${spaceId}/close`);
     const debtRow = pageA.getByTestId('close-debt-row');
     await expect(debtRow).toContainText('Debes a User B');
-    await expect(debtRow.locator('span.font-mono')).toHaveText(FIFTY);
+    await expect(debtRow.getByTestId('close-amount')).toHaveText(FIFTY);
 
     const settleUp = await startSettleUp(pageA, spaceId);
     expect(settleUp.status).toBe(200);
@@ -234,7 +234,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toHaveAttribute('data-status', 'PENDING');
     await expect(rows.first()).toContainText('User A → User B');
-    await expect(rows.first().locator('span.font-mono')).toHaveText(FIFTY);
+    await expect(rows.first().getByTestId('close-amount')).toHaveText(FIFTY);
 
     // Re-running settle-up (twice) is idempotent: no new PENDING row.
     for (let i = 0; i < 2; i++) {

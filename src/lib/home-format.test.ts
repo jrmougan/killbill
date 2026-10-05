@@ -99,4 +99,10 @@ describe("invite token parsing", () => {
         expect(parseInviteToken("   ")).toBeNull();
         expect(parseInviteToken("two words")).toBeNull();
     });
+    it("rejects path tricks that would leave /i/ (IE-26)", () => {
+        expect(parseInviteToken("https://evil.com/i/../../dashboard")).toBeNull();
+        expect(parseInviteToken("..")).toBeNull();
+        expect(parseInviteToken("/i/%2E%2E")).toBeNull();
+        expect(parseInviteToken("/i/a%2Fb")).toBeNull();
+    });
 });

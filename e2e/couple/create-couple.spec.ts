@@ -28,6 +28,8 @@ test.describe('Couple - Create', () => {
     // A space-less user is fully usable in the personal context (no onboarding
     // wall): the personal card is active and sharing is an optional action.
     await expect(page.getByTestId('space-card-active')).toContainText('Personal este mes');
+    // A brand-new account is pointed to the welcome chooser (never forced).
+    await expect(page.getByTestId('welcome-card')).toHaveAttribute('href', '/welcome');
     await expect(page.getByRole('link', { name: 'Crear espacio' })).toBeVisible({ timeout: 10000 });
     await page.getByRole('button', { name: 'Unirme con enlace' }).click();
     await expect(page.getByLabel('Pega el enlace de invitación')).toBeVisible();

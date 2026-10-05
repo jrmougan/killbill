@@ -6,6 +6,7 @@ import { getGroupMembers } from "@/lib/membership";
 import { getGroupBalances } from "@/lib/ledger-read";
 import { resolveMyDebts } from "@/lib/finance";
 import { spaceTypeMeta } from "@/lib/space-ui";
+import { hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
 import { CloseSpaceClient } from "./client";
 
 export const dynamic = "force-dynamic";
@@ -14,14 +15,15 @@ export default async function CloseSpacePage({ params }: { params: Promise<{ id:
     const { id } = await params;
     const session = await getSession();
     if (!session?.userId) redirect("/login");
+    if (session.kind === "guest") redirect("/dashboard");
     const userId = session.userId as string;
 
     const [space, myMembership] = await Promise.all([
         prisma.couple.findUnique({ where: { id } }),
         prisma.membership.findUnique({ where: { groupId_userId: { groupId: id, userId } } }),
     ]);
-    if (!space) redirect("/settings");
-    if (!myMembership || myMembership.status !== MembershipStatus.ACTIVE) redirect("/settings");
+    if (!space) redirect("/spaces");
+    if (!myMembership || myMembership.status !== MembershipStatus.ACTIVE) redirect("/spaces");
 
     const [members, balances, settlements] = await Promise.all([
         getGroupMembers(id),
@@ -45,6 +47,8 @@ export default async function CloseSpacePage({ params }: { params: Promise<{ id:
     }));
 
     const canManage = myMembership.role === "OWNER" || myMembership.role === "ADMIN";
+    const canArchive =
+        !Object.values(balances).some(hasOpenBalance) && !settlements.some((s) => s.status === "PENDING");
 
     return (
         <CloseSpaceClient
@@ -56,6 +60,8 @@ export default async function CloseSpacePage({ params }: { params: Promise<{ id:
             myDebts={myDebts}
             settlements={settlementRows}
             canManage={canManage}
+            settleHref={settleUrlFor(space.id)}
+            canArchive={canArchive}
         />
     );
 }
