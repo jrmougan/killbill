@@ -69,7 +69,11 @@ function NavTab({ tab, active, personal }: { tab: Tab; active: boolean; personal
     );
 }
 
-export function BottomNav({ isGuest = false }: { isGuest?: boolean }) {
+/**
+ * Record the Común/Personal mode of a scoped route in sessionStorage and return
+ * the effective mode for the nav (URL on scoped routes, else the remembered one).
+ */
+function useScopeMemory(): { pathname: string; personal: boolean } {
     const pathname = usePathname();
     const scopeParam = useSearchParams().get("scope");
     const scopedRoute = [...SCOPED_ROUTES].some((r) => isActive(pathname, r));
@@ -81,7 +85,22 @@ export function BottomNav({ isGuest = false }: { isGuest?: boolean }) {
             setRemembered(sessionStorage.getItem(SCOPE_KEY) === "1");
         } catch { /* storage unavailable: URL param only */ }
     }, [scopedRoute, scopeParam]);
-    const personal = scopedRoute ? scopeParam === "personal" : remembered;
+    return { pathname, personal: scopedRoute ? scopeParam === "personal" : remembered };
+}
+
+/**
+ * Global, render-less scope recorder (root layout). The nav itself is only
+ * mounted on the tab routes, but the mode must also be remembered on every
+ * scoped route (e.g. /expenses/new) and as soon as the app shell hydrates, so
+ * Ajustes → Categorías / Presupuestos keep it (see settings/personal-mode.ts).
+ */
+export function ScopeMemory() {
+    useScopeMemory();
+    return null;
+}
+
+export function BottomNav({ isGuest = false }: { isGuest?: boolean }) {
+    const { pathname, personal } = useScopeMemory();
     const isTabRoute = TAB_ROUTES.some((r) => isActive(pathname, r));
     if (!isTabRoute) return null;
 

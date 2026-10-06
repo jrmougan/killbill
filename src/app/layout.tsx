@@ -3,6 +3,8 @@ import { Schibsted_Grotesk, DM_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Suspense } from "react";
+import { ScopeMemory } from "@/components/nav/bottom-nav";
 
 // EQUIL design fonts.
 const schibstedGrotesk = Schibsted_Grotesk({
@@ -50,6 +52,10 @@ export default function RootLayout({
           <main className="relative flex flex-col min-h-screen overflow-hidden sm:max-w-md sm:mx-auto sm:border-x sm:border-[color:var(--line)] bg-background">
             {children}
           </main>
+          {/* Remembers Común/Personal on every scoped route (no session needed). */}
+          <Suspense fallback={null}>
+            <ScopeMemory />
+          </Suspense>
         </ThemeProvider>
       </body>
     </html>
