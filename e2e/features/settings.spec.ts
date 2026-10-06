@@ -17,7 +17,8 @@ test.describe('Ajustes', () => {
     await page.getByRole('button', { name: 'Conectar' }).click();
     const confirm = page.getByRole('dialog', { name: 'Conectar Hermes Agent' });
     await expect(confirm).toContainText('90 días');
-    await expect(confirm).toContainText('no se puede revocar');
+    // MCP tokens are revocable via User.tokenVersion ("cerrar sesión en todos los dispositivos").
+    await expect(confirm).toContainText('Cerrar sesión en todos los dispositivos');
     await confirm.getByRole('button', { name: 'Cancelar' }).click();
     await expect(confirm).toHaveCount(0);
     expect(issued).toBe(0);
