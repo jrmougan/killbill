@@ -107,7 +107,7 @@ describe("formReducer — categories (G-14/G-15)", () => {
     });
 
     it("OCR fills the category only while untouched", () => {
-        const scan = { type: "scanSucceeded", items: [], total: 10, store: null, category: "shopping" } as const;
+        const scan: FormAction = { type: "scanSucceeded", items: [], total: 10, store: null, category: "shopping" };
         expect(run({ ...fresh(), category: "food" }, scan).category).toBe("shopping");
         expect(run(run(fresh(), { type: "categoryPicked", key: "food" }), scan).category).toBe("food");
     });
