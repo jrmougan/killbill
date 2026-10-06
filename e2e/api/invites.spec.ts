@@ -296,8 +296,11 @@ test.describe('API Invites - Enlaces de invitación de espacio', () => {
   }) => {
     const seed = await seedScenario(request, 'couple-with-debt');
     const userA = await createAuthenticatedContext(newContext, seed.userA as { email: string; password: string });
+    // /api/couple no longer exposes the legacy code; the gated seed route returns it.
     const couple = await userA.request.get('/api/couple');
-    const { code, name } = (await couple.json()).couple as { code: string; name: string };
+    expect(couple.ok()).toBeTruthy();
+    expect((await couple.json()).couple).not.toHaveProperty('code');
+    const { coupleCode: code, coupleName: name } = seed as unknown as { coupleCode: string; coupleName: string };
     expect(code).toMatch(/^[0-9A-Z]+$/);
 
     const outsiderSeed = await seedScenario(request, 'solo-user');

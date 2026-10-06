@@ -271,6 +271,9 @@ export async function POST(request: Request) {
         userA: { email: emailA, password: PASSWORD, id: userA.id },
         userB: { email: emailB, password: PASSWORD, id: userB.id },
         coupleId: couple.id,
+        // Legacy short code: only the (gated) test route reveals it, never /api/couple.
+        coupleCode: couple.code,
+        coupleName: couple.name,
         expenseId: expense.id,
       });
     }
