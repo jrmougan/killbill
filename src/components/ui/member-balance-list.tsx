@@ -52,7 +52,7 @@ export function MemberBalanceList({
                             <span className="h-9 w-9 flex-none rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-sm font-bold text-muted-foreground" aria-hidden="true">
                                 {isAvatarUrl(m.avatar) ? (
                                     // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions
-                                    <img src={m.avatar!} alt="" className="h-full w-full object-cover" />
+                                    <img src={m.avatar!} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                                 ) : (
                                     avatarText
                                 )}

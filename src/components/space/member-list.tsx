@@ -108,7 +108,7 @@ export function MemberList({
                             <span className="h-10 w-10 flex-none rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-sm font-bold text-muted-foreground" aria-hidden="true">
                                 {isAvatarUrl(m.avatar) ? (
                                     // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions
-                                    <img src={m.avatar!} alt="" className="w-full h-full object-cover" />
+                                    <img src={m.avatar!} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                 ) : (
                                     (m.avatar ?? "").trim() || m.name.charAt(0).toUpperCase()
                                 )}
