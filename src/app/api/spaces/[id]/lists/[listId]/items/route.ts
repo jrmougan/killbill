@@ -1,37 +1,34 @@
 import { NextResponse } from "next/server";
-import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
 import { createItemForScope, type ListWriteScope } from "@/lib/list-crud";
 import { getListWithItems } from "@/lib/list-read";
-import { listErrorResponse, requireListWriteAccess } from "@/lib/list-http";
+import { LIST_ERROR_LOG_LABEL, LIST_ERROR_MESSAGE, requireListWrite } from "@/lib/list-http";
+import { ItemBody, spaceListParams } from "@/lib/list-schemas";
+import { notFound, parseJson, requireSpace, route } from "@/lib/http";
 
 /**
  * Items of a space list. GET reads (any ACTIVE member, incl. archived spaces);
  * POST adds an item (any ACTIVE member, no role gate; writes blocked only
  * when ARCHIVED; SETTLING allows list edits). sortOrder is allocated server-side (max+1).
  */
+const options = {
+    auth: "user",
+    params: spaceListParams,
+    unauthorizedMessage: "Unauthorized",
+    errorMessage: LIST_ERROR_MESSAGE,
+    logLabel: LIST_ERROR_LOG_LABEL,
+} as const;
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string; listId: string }> }) {
-    const { id, listId } = await params;
-    const ctx = await getSessionCtx();
-    const auth = await requireSpaceAccess(ctx, id, { allowArchived: true });
-    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
-
+export const GET = route(options, async ({ ctx, params: { id, listId } }) => {
+    await requireSpace(ctx, id, { allowArchived: true });
     const list = await getListWithItems({ kind: "group", groupId: id }, listId);
-    if (!list) return NextResponse.json({ error: "Lista no encontrada", code: "LIST_NOT_FOUND" }, { status: 404 });
+    if (!list) throw notFound("Lista no encontrada", "LIST_NOT_FOUND");
     return NextResponse.json({ list: { id: list.id, name: list.name, description: list.description }, items: list.items });
-}
+});
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string; listId: string }> }) {
-    const { id, listId } = await params;
-    const gate = await requireListWriteAccess(id);
-    if (!gate.ok) return gate.response;
-
+export const POST = route(options, async ({ req, ctx, params: { id, listId } }) => {
+    await requireListWrite(ctx, id);
+    const body = await parseJson(req, ItemBody);
     const scope: ListWriteScope = { kind: "group", groupId: id };
-    try {
-        const body = await request.json();
-        const item = await createItemForScope(scope, listId, body);
-        return NextResponse.json({ item }, { status: 201 });
-    } catch (e) {
-        return listErrorResponse(e);
-    }
-}
+    const item = await createItemForScope(scope, listId, body);
+    return NextResponse.json({ item }, { status: 201 });
+});

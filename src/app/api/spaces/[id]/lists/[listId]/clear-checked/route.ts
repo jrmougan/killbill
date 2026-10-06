@@ -1,22 +1,25 @@
 import { NextResponse } from "next/server";
 import { clearCheckedForScope, type ListWriteScope } from "@/lib/list-crud";
-import { listErrorResponse, requireListWriteAccess } from "@/lib/list-http";
+import { LIST_ERROR_LOG_LABEL, LIST_ERROR_MESSAGE, requireListWrite } from "@/lib/list-http";
+import { spaceListParams } from "@/lib/list-schemas";
+import { route } from "@/lib/http";
 
 /**
  * "Vaciar comprados" de una lista de grupo: BORRA (deleteMany) los items marcados
  * como comprados para reciclar la lista semanal. Cualquier miembro ACTIVE; solo un
  * espacio ARCHIVED bloquea la escritura (SETTLING la permite).
  */
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string; listId: string }> }) {
-    const { id, listId } = await params;
-    const gate = await requireListWriteAccess(id);
-    if (!gate.ok) return gate.response;
-
-    const scope: ListWriteScope = { kind: "group", groupId: id };
-    try {
-        const result = await clearCheckedForScope(scope, listId);
-        return NextResponse.json(result);
-    } catch (e) {
-        return listErrorResponse(e);
-    }
-}
+export const POST = route(
+    {
+        auth: "user",
+        params: spaceListParams,
+        unauthorizedMessage: "Unauthorized",
+        errorMessage: LIST_ERROR_MESSAGE,
+        logLabel: LIST_ERROR_LOG_LABEL,
+    },
+    async ({ ctx, params: { id, listId } }) => {
+        await requireListWrite(ctx, id);
+        const scope: ListWriteScope = { kind: "group", groupId: id };
+        return NextResponse.json(await clearCheckedForScope(scope, listId));
+    },
+);
