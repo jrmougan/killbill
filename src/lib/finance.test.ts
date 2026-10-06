@@ -17,7 +17,7 @@ describe('resolveMyDebts (pure boundary — fed ledger or finance balances)', ()
         expect(resolveMyDebts({ a: 1000, b: -1000 }, 'a')).toEqual({});
     });
 
-    it('treats sub-cent balances as settled (dead-band)', () => {
+    it('owes nothing at exactly zero', () => {
         expect(resolveMyDebts({ a: 0, b: 0 }, 'b')).toEqual({});
     });
 });
@@ -162,15 +162,15 @@ describe('finance utilities', () => {
             expect(debts['user2']).toBe(50);
         });
 
-        it('treats a 1-cent imbalance as settled (rounding dead-band)', () => {
+        it('reports a 1-cent debt (integer cents: no dead-band, consistent with Inicio)', () => {
             // user2 paid 1 cent; the leftover cent makes user1's share 1c and user2's 0c,
-            // so user1's net balance is exactly -1 cent. The dead-band must treat this as settled.
+            // so user1's net balance is exactly -1 cent — a real, settleable debt.
             const expenses = [{ id: 'tiny', paidById: 'user2', amount: 1 }];
             const debts = getMyDebts(users, expenses, [], 'user1');
-            expect(debts).toEqual({});
+            expect(debts).toEqual({ user2: 1 });
         });
 
-        it('reports a debt of exactly 2 cents (just outside the dead-band)', () => {
+        it('reports a debt of exactly 2 cents', () => {
             // user2 paid 4 cents, split 2/2 → user1 owes 2 cents.
             const expenses = [{ id: 'small', paidById: 'user2', amount: 4 }];
             const debts = getMyDebts(users, expenses, [], 'user1');

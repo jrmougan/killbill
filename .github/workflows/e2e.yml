@@ -12,22 +12,6 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
 
-    services:
-      mariadb:
-        image: mariadb:10.11
-        env:
-          MYSQL_ROOT_PASSWORD: test_root
-          MYSQL_DATABASE: killbill_test
-          MYSQL_USER: killbill_test
-          MYSQL_PASSWORD: test_password
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h localhost -u root -ptest_root"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
-
     env:
       DATABASE_URL: mysql://killbill_test:test_password@127.0.0.1:3306/killbill_test
       DATABASE_HOST: 127.0.0.1
@@ -35,8 +19,10 @@ jobs:
       DATABASE_PASSWORD: test_password
       DATABASE_NAME: killbill_test
       DATABASE_PORT: "3306"
+      # Consumed by compose.dev.yaml (same MySQL 8.0 service as local dev).
+      COMPOSE_PROJECT_NAME: killbill-ci
+      MYSQL_ROOT_PASSWORD: test_root
       JWT_SECRET: e2e_test_jwt_secret_not_for_production
-      NODE_ENV: test
       TEST_ROUTES_ENABLED: 'true'
       GEMINI_API_KEY: fake_key_not_needed_for_e2e
 
@@ -57,6 +43,14 @@ jobs:
 
       - name: Install dependencies
         run: mise exec -- npm ci
+
+      # MySQL 8.0 from compose.dev.yaml rather than a `services:` container: a
+      # service container can't receive the server flags we need
+      # (--default-authentication-plugin=mysql_native_password, required by
+      # @prisma/adapter-mariadb, exactly like production). Compose waits for its
+      # healthcheck (a real `SELECT 1` as the app user over TCP).
+      - name: Start MySQL 8.0
+        run: mise exec -- node scripts/dev-compose.mjs up --detach --wait --wait-timeout 180
 
       - name: Verify E2E fixtures and CI reporting
         run: mise exec -- npx vitest run --config e2e/fixtures/vitest.config.ts
@@ -81,8 +75,16 @@ jobs:
           cp -r .next/static .next/standalone/.next/static
           cp -r public .next/standalone/public
 
+      # NODE_ENV=test only here: the build above must stay production, like the
+      # deployed image.
       - name: Run E2E tests
         run: mise run e2e
+        env:
+          NODE_ENV: test
+
+      - name: Dump MySQL logs on failure
+        if: failure()
+        run: mise exec -- node scripts/dev-compose.mjs logs db
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4

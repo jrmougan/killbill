@@ -3,6 +3,8 @@ import { request as playwrightRequest } from '@playwright/test';
 import { seedScenario, resetDb } from '../fixtures/db.fixture';
 import { createAuthenticatedContext } from '../fixtures/auth.fixture';
 
+type Creds = { email: string; password: string; id: string };
+
 test.describe('Settlements - Create and Confirm', () => {
   let apiContext: Awaited<ReturnType<typeof playwrightRequest.newContext>>;
 
@@ -17,12 +19,12 @@ test.describe('Settlements - Create and Confirm', () => {
     await apiContext.dispose();
   });
 
-  test('userB creates a settlement - appears as PENDING', async ({ newContext }) => {
+  test('userB (debtor) says "Ya he pagado" - settlement stays PENDING', async ({ newContext }) => {
     // Seed isolated scenario: userB owes userA 50€
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'couple-with-debt');
-    const userA = data.userA as { email: string; password: string; id: string };
-    const userB = data.userB as { email: string; password: string; id: string };
+    const userA = data.userA as Creds;
+    const userB = data.userB as Creds;
 
     const ctxB = await createAuthenticatedContext(newContext, userB);
     const pageB = await ctxB.newPage();
@@ -31,28 +33,28 @@ test.describe('Settlements - Create and Confirm', () => {
 
     await pageB.goto('/settle');
 
-    // Step 1: select creditor (userA) and continue
-    const continueBtn = pageB.getByRole('button', { name: /Continuar/i });
-    await expect(continueBtn).toBeVisible({ timeout: 10000 });
-    await continueBtn.click();
+    // Receipt ticket: the debtor sees what they owe and to whom.
+    const ticket = pageB.getByTestId('settle-ticket');
+    await expect(ticket).toBeVisible({ timeout: 10000 });
+    await expect(ticket).toContainText('Cuenta de Debt Couple');
+    await expect(ticket).toContainText('Le debes a User A');
+    await expect(pageB.getByTestId('settle-ticket-meta')).toContainText('1 GASTO');
+    await expect(pageB.getByTestId('settle-balance')).toHaveText(/50,00\s*€/);
 
-    // Step 2: fill amount using accessible label and submit
-    const amountInput = pageB.getByLabel(/importe/i);
-    await expect(amountInput).toBeVisible({ timeout: 10000 });
-    await amountInput.fill('50');
-
-    const confirmBtn = pageB.getByRole('button', { name: /Confirmar Pago/i });
-    await expect(confirmBtn).toBeEnabled();
+    // Method is a radio group; pick Transferencia.
+    await pageB.getByRole('radio', { name: 'Transferencia' }).check();
+    await expect(pageB.getByRole('radio', { name: 'Transferencia' })).toBeChecked();
 
     const settleResponsePromise = pageB.waitForResponse(
-      (res) => res.url().includes('/api/settle') && res.request().method() === 'POST'
+      (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST'
     );
-    await confirmBtn.click();
+    await pageB.getByRole('button', { name: 'Ya he pagado' }).click();
     const settleResponse = await settleResponsePromise;
     expect(settleResponse.ok()).toBeTruthy();
+    expect(settleResponse.request().postDataJSON()).toMatchObject({ toUserId: userA.id, amount: 50, method: 'TRANSFER' });
 
-    // Should redirect to dashboard
-    await expect(pageB).toHaveURL(/\/dashboard/, { timeout: 10000 });
+    // Two-step confirmation: the debtor sees it as pending on the creditor.
+    await expect(pageB.getByTestId('settle-pending')).toContainText('Pendiente de que User A confirme');
 
     // Navigate to expenses/list to verify settlement appears as PENDING with exact amount
     await pageB.goto('/expenses/list');
@@ -60,6 +62,13 @@ test.describe('Settlements - Create and Confirm', () => {
     await expect(settlementCard).toBeVisible({ timeout: 10000 });
     await expect(settlementCard).toContainText(/50,00\s*€/);
     await expect(settlementCard).toContainText('Pendiente');
+
+    // Back on /settle the debt is still there (PENDING does not move balances),
+    // but a second "Ya he pagado" is not offered for the same transfer.
+    await pageB.goto('/settle');
+    await expect(pageB.getByTestId('settle-balance')).toHaveText(/50,00\s*€/);
+    await expect(pageB.getByTestId('settle-outgoing-pending')).toBeVisible();
+    await expect(pageB.getByRole('button', { name: 'Ya he pagado' })).toHaveCount(0);
     expect(pageErrors, 'el flujo de liquidación debe hidratar sin errores del navegador').toEqual([]);
 
     await pageB.close();
@@ -73,7 +82,12 @@ test.describe('Settlements - Create and Confirm', () => {
     const confirmSection = pageA.getByText(/Confirmar Pagos/i);
     await expect(confirmSection).toBeVisible({ timeout: 10000 });
     await expect(pageA.getByText(/User B te ha pagado/i)).toBeVisible();
-    await expect(pageA.getByText(/50\.00\s*€/)).toBeVisible();
+    await expect(pageA.getByTestId('pending-settlement').getByText(/^50,00\s€$/)).toBeVisible();
+
+    // ...and on /settle the creditor confirms the pending one instead of a new "Ya me ha pagado".
+    await pageA.goto('/settle');
+    await expect(pageA.getByRole('button', { name: 'Confirmar pago de User B' })).toBeVisible();
+    await expect(pageA.getByRole('button', { name: 'Ya me ha pagado' })).toHaveCount(0);
     expect(pageErrors, 'el acreedor debe ver el pago pendiente sin errores del navegador').toEqual([]);
 
     await pageA.close();
@@ -84,8 +98,8 @@ test.describe('Settlements - Create and Confirm', () => {
     // Seed isolated scenario: couple with an existing 50€ pending settlement from userB to userA
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'couple-with-pending-settlement');
-    const userA = data.userA as { email: string; password: string; id: string };
-    const userB = data.userB as { email: string; password: string; id: string };
+    const userA = data.userA as Creds;
+    const userB = data.userB as Creds;
 
     // Creditor / receiver (userA) confirms the settlement from dashboard
     const ctxA = await createAuthenticatedContext(newContext, userA);
@@ -142,7 +156,123 @@ test.describe('Settlements - Create and Confirm', () => {
     await expect(settlementCardB).toContainText(/50,00\s*€/);
     await expect(settlementCardB).toContainText('Confirmado');
 
+    // And /settle tells the debtor they are at peace.
+    await pageB.goto('/settle');
+    await expect(pageB.getByTestId('settle-peace')).toContainText('Estáis en paz');
+    await expect(pageB.getByTestId('settle-peace')).toContainText('No hay nada pendiente en Settlement Couple');
+
     await pageB.close();
+    await ctxB.close();
+  });
+
+  test('creditor confirms from /settle/[id] detail', async ({ newContext }) => {
+    await resetDb(apiContext);
+    const data = await seedScenario(apiContext, 'couple-with-pending-settlement');
+    const userA = data.userA as Creds;
+    const userB = data.userB as Creds;
+    const settlementId = data.settlementId as string;
+
+    // The debtor sees the detail as pending, without confirm actions but with Editar.
+    const ctxB = await createAuthenticatedContext(newContext, userB);
+    const pageB = await ctxB.newPage();
+    await pageB.goto(`/settle/${settlementId}`);
+    await expect(pageB.getByTestId('settlement-amount')).toHaveText(/50,00\s*€/);
+    await expect(pageB.getByText('Pendiente de que User A confirme.', { exact: false })).toBeVisible();
+    await expect(pageB.getByRole('button', { name: /Confirmar/ })).toHaveCount(0);
+    await expect(pageB.getByRole('link', { name: 'Editar' })).toBeVisible();
+    await ctxB.close();
+
+    const ctxA = await createAuthenticatedContext(newContext, userA);
+    const pageA = await ctxA.newPage();
+    await pageA.goto(`/settle/${settlementId}`);
+    await expect(pageA.getByText('User B te pagó')).toBeVisible();
+    const patch = pageA.waitForResponse(
+      (res) => res.url().endsWith(`/api/settle/${settlementId}/status`) && res.request().method() === 'PATCH'
+    );
+    await pageA.getByRole('button', { name: 'Confirmar, lo he recibido' }).click();
+    expect((await patch).ok()).toBeTruthy();
+    await expect(pageA.locator('[data-status="CONFIRMED"]')).toHaveText('Confirmado');
+    await expect(pageA.getByRole('button', { name: /Confirmar/ })).toHaveCount(0);
+
+    // History lists it as confirmed.
+    await pageA.goto('/settle/history');
+    const row = pageA.getByTestId('settle-history-row').first();
+    await expect(row).toHaveAttribute('data-status', 'CONFIRMED');
+    await expect(row).toContainText('User B te pagó');
+    await ctxA.close();
+  });
+
+  test('creditor says "Ya me ha pagado" - confirmed at once, both at peace', async ({ newContext }) => {
+    await resetDb(apiContext);
+    const data = await seedScenario(apiContext, 'couple-with-debt');
+    const userA = data.userA as Creds;
+    const userB = data.userB as Creds;
+
+    const ctxA = await createAuthenticatedContext(newContext, userA);
+    const pageA = await ctxA.newPage();
+    await pageA.goto('/settle');
+    await expect(pageA.getByTestId('settle-ticket')).toContainText('User B te debe');
+    await expect(pageA.getByTestId('settle-balance')).toHaveText(/50,00\s*€/);
+    await expect(pageA.getByRole('button', { name: 'Recordárselo a User B' })).toBeVisible();
+
+    await pageA.getByRole('radio', { name: 'Efectivo' }).check();
+    const post = pageA.waitForResponse(
+      (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST'
+    );
+    await pageA.getByRole('button', { name: 'Ya me ha pagado' }).click();
+    const res = await post;
+    expect(res.ok()).toBeTruthy();
+    expect((await res.json()).settlement.status).toBe('CONFIRMED');
+
+    const peace = pageA.getByTestId('settle-peace');
+    await expect(peace).toContainText('Estáis en paz');
+    await expect(peace).toContainText('Pago registrado en efectivo');
+
+    await pageA.goto('/dashboard');
+    await expect(pageA.locator('[data-testid="balance-amount"]')).toHaveText(/0,00\s*€/, { timeout: 10000 });
+    await ctxA.close();
+
+    const ctxB = await createAuthenticatedContext(newContext, userB);
+    const pageB = await ctxB.newPage();
+    await pageB.goto('/settle');
+    await expect(pageB.getByTestId('settle-peace')).toContainText('Estáis en paz');
+    await ctxB.close();
+  });
+
+  test('group: pairwise transfers that involve me', async ({ newContext }) => {
+    await resetDb(apiContext);
+    const data = await seedScenario(apiContext, 'group-of-3');
+    const userA = data.userA as Creds;
+    const userB = data.userB as Creds;
+
+    // Creditor A: owed by B and C.
+    const ctxA = await createAuthenticatedContext(newContext, userA);
+    const pageA = await ctxA.newPage();
+    await pageA.goto('/settle');
+    await expect(pageA.getByTestId('settle-ticket')).toContainText('Te deben');
+    // 100 € ÷ 3 is not the same for everybody (33,34 / 33,33 / 33,33): "Tu parte".
+    await expect(pageA.getByTestId('settle-ticket')).toContainText('Tu parte');
+    await expect(pageA.getByTestId('settle-ticket')).not.toContainText('A cada uno');
+    await expect(pageA.getByTestId('settle-balance')).toHaveText(/66,66\s*€|66,67\s*€/);
+    const transfers = pageA.getByTestId('settle-transfers').getByRole('radio');
+    await expect(transfers).toHaveCount(2);
+    await expect(pageA.getByRole('button', { name: 'Recordárselo al grupo' })).toBeVisible();
+    await ctxA.close();
+
+    // Debtor B: a single transfer to A.
+    const ctxB = await createAuthenticatedContext(newContext, userB);
+    const pageB = await ctxB.newPage();
+    await pageB.goto('/settle');
+    await expect(pageB.getByTestId('settle-ticket')).toContainText('Debes');
+    await expect(pageB.getByRole('radio', { name: /Pagas a User A: 33,33/ })).toBeChecked();
+    const post = pageB.waitForResponse(
+      (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST'
+    );
+    await pageB.getByRole('button', { name: 'Ya he pagado' }).click();
+    const res = await post;
+    expect(res.ok()).toBeTruthy();
+    expect(res.request().postDataJSON()).toMatchObject({ toUserId: userA.id, amount: 33.33 });
+    await expect(pageB.getByTestId('settle-pending')).toContainText('Pendiente de que User A confirme');
     await ctxB.close();
   });
 });

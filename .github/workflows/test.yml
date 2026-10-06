@@ -1,4 +1,4 @@
-name: Unit Tests & Lint
+name: Unit Tests, Typecheck & Lint
 
 on:
   # Runs on PRs (gate) and is called by deploy.yml on push to main (workflow_call).
@@ -23,12 +23,17 @@ jobs:
       - name: Install dependencies
         run: mise exec -- npm ci
 
-      # Reports known vulnerabilities but never fails the build.
-      - name: Security audit (non-blocking)
-        run: npm audit --audit-level=high || true
+      # Blocks on critical advisories in production dependencies. Highs are
+      # reported (see the audit output) but don't fail the gate yet.
+      - name: Security audit (runtime deps, critical blocks)
+        run: mise exec -- npm audit --omit=dev --audit-level=critical
 
       - name: Generate Prisma client
         run: mise run db:generate
+
+      # next typegen + tsc for the app, then tsc for e2e/ + playwright.config.ts.
+      - name: Typecheck
+        run: mise run typecheck
 
       - name: Run unit tests
         run: mise run test

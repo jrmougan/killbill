@@ -1,85 +1,49 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
-import { postSettlementLedger } from '@/lib/ledger';
+import { notFound, requireSpace, route } from '@/lib/http';
+import { idParams } from '@/lib/http/schemas';
+import { parseSettlementInput, ResolveSettlementBody } from '@/lib/settlement-schemas';
+import { resolveSettlement } from '@/lib/settlement-service';
 
-export async function PATCH(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    const { id } = await params;
+/**
+ * Confirm or reject a PENDING settlement as its RECEIVER (guests included: a
+ * guest owed money confirming receipt only reduces the debt to them).
+ *
+ * Body: `{ status: 'CONFIRMED' | 'REJECTED', expectedAmountCents?: number }`.
+ * `expectedAmountCents` is the amount the receiver saw: if the payer edited it
+ * meanwhile → 409 SETTLEMENT_CHANGED (`amountCents` = current amount).
+ *
+ * Errors: 409 SETTLEMENT_NOT_PENDING (already confirmed/rejected),
+ * SETTLEMENT_EXCEEDS_DEBT / NOTHING_TO_SETTLE (confirming would flip the debt),
+ * SPACE_NOT_WRITABLE (ARCHIVED); 403 NOT_RECEIVER.
+ * The transition is a conditional update under the space lock and the ledger is
+ * posted only by the request that wins it.
+ */
+export const PATCH = route(
+    {
+        auth: 'user-or-guest',
+        params: idParams,
+        unauthorizedMessage: 'No has iniciado sesión',
+        errorMessage: 'No se pudo actualizar el pago',
+        logLabel: 'Error al actualizar el pago:',
+    },
+    async ({ req, ctx, params: { id } }) => {
+        // Parsed in the handler (not options.body) so every 400 keeps its `code`.
+        const { status, expectedAmountCents } = await parseSettlementInput(req, ResolveSettlementBody);
 
-    const ctx = await getSessionCtx();
-    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const userId = ctx.userId;
+        const settlement = await prisma.settlement.findUnique({ where: { id }, select: { coupleId: true } });
+        if (!settlement) throw notFound('Pago no encontrado');
 
-    const body = await request.json();
-    const { status } = body;
+        // Authorize against the settlement's OWN group (not the active-group cookie).
+        await requireSpace(ctx, settlement.coupleId, { allowArchived: true, allowGuest: true });
 
-    if (!["CONFIRMED", "REJECTED", "PENDING"].includes(status)) {
-        return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
-    }
-
-    const settlement = await prisma.settlement.findUnique({
-        where: { id },
-    });
-
-    if (!settlement) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    // Authorize against the settlement's OWN group (not the active-group cookie):
-    // confirming a settlement from a SETTLING/ARCHIVED space must not 403 in
-    // multi-group. Settling is permitted while the space is closing/archived.
-    const auth = await requireSpaceAccess(ctx, settlement.coupleId, { allowArchived: true });
-    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
-
-    if (settlement.toUserId !== userId) {
-        return NextResponse.json({ error: 'Only the receiver can update status' }, { status: 403 });
-    }
-
-    // Enforce valid status transitions. Only a PENDING settlement may be acted
-    // upon (CONFIRMED or REJECTED). Reverting a resolved settlement back to
-    // PENDING, or any other transition, is not allowed.
-    const allowedTransitions: Record<string, string[]> = {
-        PENDING: ["CONFIRMED", "REJECTED"],
-    };
-
-    if (!allowedTransitions[settlement.status]?.includes(status)) {
-        return NextResponse.json(
-            { error: `Invalid status transition from ${settlement.status} to ${status}` },
-            { status: 400 }
-        );
-    }
-
-    try {
-        const updated = await prisma.$transaction(async (tx) => {
-            const claimed = await tx.settlement.updateMany({
-                where: { id, status: "PENDING" },
-                data: { status }
-            });
-            if (claimed.count === 0) return null;
-            const u = await tx.settlement.findUniqueOrThrow({ where: { id } });
-            // Phase 3 dual-write: PENDING->CONFIRMED is the moment the settlement
-            // enters the balance, so post its ledger transaction here. REJECTED
-            // posts nothing (representation-by-absence), matching
-            // effectiveSettlements = status === 'CONFIRMED' in finance/dashboard.
-            if (status === 'CONFIRMED') {
-                await postSettlementLedger(tx, {
-                    id: u.id,
-                    coupleId: u.coupleId,
-                    amount: u.amount,
-                    fromUserId: u.fromUserId,
-                    toUserId: u.toUserId,
-                    date: u.date,
-                });
-            }
-            return u;
+        const updated = await resolveSettlement({
+            settlementId: id,
+            groupId: settlement.coupleId,
+            callerId: ctx.userId,
+            status,
+            expectedAmountCents,
         });
-        if (!updated) {
-            return NextResponse.json({ error: 'Settlement already resolved' }, { status: 400 });
-        }
         return NextResponse.json({ success: true, settlement: updated });
-    } catch (e) {
-        console.error(e);
-        return NextResponse.json({ error: 'Update failed' }, { status: 500 });
-    }
-}
+    },
+);

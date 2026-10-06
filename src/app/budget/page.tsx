@@ -1,89 +1,9 @@
-import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
-import { getActiveGroup } from "@/lib/membership";
 import { redirect } from "next/navigation";
-import { toEuros } from "@/lib/currency";
-import { categoryKeyOf, CATEGORY_REF_SELECT } from "@/lib/category-read";
-import { getEffectiveCategories } from "@/lib/category-db";
-import { BudgetClient } from "./client";
 
-export const dynamic = "force-dynamic";
-
-export default async function BudgetPage() {
-    const session = await getSession();
-    if (!session?.userId) redirect("/login");
-    const userId = session.userId as string;
-
-    // Phase 5 (WS1): resolve the group via the Membership layer.
-    const coupleId = await getActiveGroup(userId);
-    const hasCouple = Boolean(coupleId);
-
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-    // Server-render the SHARED (couple) budgets for first paint; the Personal tab
-    // is loaded client-side. A user with no couple starts on the Personal tab.
-    const [budgets, expenses] = hasCouple
-        ? await Promise.all([
-            prisma.budget.findMany({
-                // Phase 4/5: select by half-open [periodStart, periodEnd) overlap
-                // with the current month (same as the GET route), not `month`.
-                where: { coupleId: coupleId!, periodStart: { lt: monthEnd }, periodEnd: { gt: monthStart } },
-                orderBy: { categoryId: "asc" },
-                include: CATEGORY_REF_SELECT,
-            }),
-            prisma.expense.findMany({
-                where: {
-                    coupleId: coupleId!,
-                    visibility: "SHARED",
-                    date: { gte: monthStart, lt: monthEnd },
-                },
-                select: { amount: true, ...CATEGORY_REF_SELECT },
-            }),
-        ])
-        : [[], []] as const;
-
-    // Phase 4 read-switch: spend-by-category keys on the relational Category
-    // (categoryRef.key, enum fallback) on BOTH sides of the budget↔expense match.
-    const spentByCategory: Record<string, number> = {};
-    for (const e of expenses) {
-        const key = categoryKeyOf(e);
-        spentByCategory[key] = (spentByCategory[key] ?? 0) + e.amount;
-    }
-
-    const budgetData = budgets.map((budget) => {
-        const spentCents = spentByCategory[categoryKeyOf(budget)] ?? 0;
-        const percentage = budget.amount > 0 ? Math.round((spentCents / budget.amount) * 100) : 0;
-        return {
-            budget: {
-                id: budget.id,
-                category: categoryKeyOf(budget),
-                amount: parseFloat(toEuros(budget.amount).toFixed(2)),
-                month: budget.periodStart.toISOString(),
-            },
-            spent: parseFloat(toEuros(spentCents).toFixed(2)),
-            percentage,
-        };
-    });
-
-    const rawMonthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-    const monthLabel = rawMonthLabel.charAt(0).toUpperCase() + rawMonthLabel.slice(1);
-
-    // Effective category set for the DEFAULT scope (shared when in a couple, else
-    // personal), seeded to the client so the first paint isn't a flash. The
-    // `editable` flag matches the CRUD GET shape the client's hook consumes.
-    const initialCategories = (
-        await getEffectiveCategories(hasCouple ? { groupId: coupleId! } : { ownerId: userId })
-    ).map((c) => ({ ...c, editable: !c.isSystem }));
-
-    return (
-        <BudgetClient
-            budgetData={budgetData}
-            monthLabel={monthLabel}
-            hasCouple={hasCouple}
-            groupId={coupleId ?? null}
-            initialCategories={initialCategories}
-        />
-    );
+// Legacy route: budgets now live in the "Mes" tab. Keeps old links working and
+// forwards the personal lens (`?scope=personal`).
+export default async function BudgetPage({ searchParams }: { searchParams: Promise<{ scope?: string | string[] }> }) {
+    const { scope } = await searchParams;
+    const personal = (Array.isArray(scope) ? scope[0] : scope) === "personal";
+    redirect(personal ? "/month?view=budget&scope=personal" : "/month?view=budget");
 }

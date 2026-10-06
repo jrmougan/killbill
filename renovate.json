@@ -10,11 +10,48 @@
   "prConcurrentLimit": 5,
   "packageRules": [
     {
+      "description": "Minor/patch updates of everything not covered by a dedicated group below",
       "matchUpdateTypes": [
         "minor",
         "patch"
       ],
       "groupName": "minor and patch updates"
+    },
+    {
+      "description": "Next.js and React move together (React types included)",
+      "matchPackageNames": [
+        "next",
+        "react",
+        "react-dom",
+        "@types/react",
+        "@types/react-dom"
+      ],
+      "groupName": "next and react"
+    },
+    {
+      "description": "Prisma CLI, client and adapter must always share the exact same version (Dockerfile pins /prisma-tools from the lockfile)",
+      "matchPackageNames": [
+        "prisma",
+        "@prisma/**"
+      ],
+      "groupName": "prisma"
+    },
+    {
+      "description": "Automerge patch updates of devDependencies once CI is green (Prisma and React types stay in their own groups)",
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "matchPackageNames": [
+        "!prisma",
+        "!@prisma/**",
+        "!@types/react",
+        "!@types/react-dom"
+      ],
+      "groupName": "devDependencies patches",
+      "automerge": true
     }
   ]
 }

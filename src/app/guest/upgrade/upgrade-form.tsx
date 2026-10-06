@@ -3,12 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { EqCta } from "@/components/ui/eq";
+import { AuthError, AuthField } from "@/components/auth/auth-shell";
 
 /**
  * Guest → account upgrade form (Fase 3). Collects an email + password and POSTs
  * to /api/guest/upgrade, which promotes the SAME shadow user in place. On the
  * P2002 ("email taken") case it surfaces a link to log in instead (v1: no merge).
+ * Inputs carry visible labels (IE-17).
  */
 export function UpgradeForm() {
     const router = useRouter();
@@ -29,7 +31,7 @@ export function UpgradeForm() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
             });
-            const data = await res.json();
+            const data = await res.json().catch(() => ({}));
             if (!res.ok) {
                 setError(data.error ?? "No se pudo crear la cuenta");
                 setEmailTaken(data.code === "EMAIL_TAKEN");
@@ -45,39 +47,43 @@ export function UpgradeForm() {
     }
 
     return (
-        <form onSubmit={submit} className="w-full space-y-3">
+        <form onSubmit={submit} className="flex flex-col gap-3">
             {error && (
-                <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center space-y-1">
-                    <p>{error}</p>
+                <AuthError>
+                    {error}
                     {emailTaken && (
-                        <Link href="/login" className="text-primary underline font-medium">
-                            Iniciar sesión
-                        </Link>
+                        <>
+                            {" "}
+                            <Link href="/login" className="font-semibold underline">
+                                Iniciar sesión
+                            </Link>
+                        </>
                     )}
-                </div>
+                </AuthError>
             )}
-            <input
+            <AuthField
+                label="Email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email"
                 autoComplete="email"
-                className="w-full h-12 px-4 rounded-md border border-input bg-background text-lg"
+                inputMode="email"
+                maxLength={191}
                 required
             />
-            <input
+            <AuthField
+                label="Contraseña"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Contraseña (mín. 8 caracteres)"
                 autoComplete="new-password"
                 minLength={8}
-                className="w-full h-12 px-4 rounded-md border border-input bg-background text-lg"
+                hint="Al menos 8 caracteres."
                 required
             />
-            <Button type="submit" size="lg" className="w-full h-12 text-lg" isLoading={pending}>
-                Crear mi cuenta
-            </Button>
+            <EqCta type="submit" disabled={pending} aria-busy={pending} className="mt-3">
+                {pending ? "Creando cuenta…" : "Crear mi cuenta"}
+            </EqCta>
         </form>
     );
 }

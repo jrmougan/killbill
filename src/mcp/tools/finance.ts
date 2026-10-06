@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolRegistrar } from "@/mcp/server";
-import { toToolResult } from "@/mcp/internal-client";
+import { apiPath, toToolResult } from "@/mcp/internal-client";
 import { toCents } from "@/lib/currency";
 
 const customSplitShape = {
@@ -35,7 +35,7 @@ export const registerFinanceTools: ToolRegistrar = (server, api) => {
       },
     },
     async (args) => {
-      const result = await api.get(`/api/spaces/${args.groupId}/balance`);
+      const result = await api.get(apiPath`/api/spaces/${args.groupId}/balance`);
       return toToolResult(result);
     },
   );
@@ -178,7 +178,7 @@ export const registerFinanceTools: ToolRegistrar = (server, api) => {
         isRecurring: args.isRecurring,
         recurringInterval: args.recurringInterval,
       };
-      const result = await api.patch(`/api/expenses/${args.id}`, body);
+      const result = await api.patch(apiPath`/api/expenses/${args.id}`, body);
       return toToolResult(result);
     },
   );
@@ -193,7 +193,7 @@ export const registerFinanceTools: ToolRegistrar = (server, api) => {
       },
     },
     async (args) => {
-      const result = await api.delete(`/api/expenses/${args.id}`);
+      const result = await api.delete(apiPath`/api/expenses/${args.id}`);
       return toToolResult(result);
     },
   );
@@ -206,8 +206,8 @@ export const registerFinanceTools: ToolRegistrar = (server, api) => {
       inputSchema: {
         amount: z
           .number()
-          .nonnegative()
-          .describe("Amount paid in euros (0 allowed for a checkpoint with no outstanding debt)."),
+          .positive()
+          .describe("Amount paid in euros (≥ 0,01 €, never more than the current debt to the receiver)."),
         toUserId: z
           .string()
           .describe("User id of the receiver (must be an active member of the active space)."),
@@ -238,11 +238,17 @@ export const registerFinanceTools: ToolRegistrar = (server, api) => {
         status: z
           .enum(["CONFIRMED", "REJECTED"])
           .describe("CONFIRMED to accept the payment, REJECTED to decline it."),
+        expectedAmount: z
+          .number()
+          .positive()
+          .optional()
+          .describe("Optional amount in euros the receiver expects; the API refuses (409 SETTLEMENT_CHANGED) if the payer edited it."),
       },
     },
     async (args) => {
-      const result = await api.patch(`/api/settle/${args.id}/status`, {
+      const result = await api.patch(apiPath`/api/settle/${args.id}/status`, {
         status: args.status,
+        ...(args.expectedAmount !== undefined ? { expectedAmountCents: toCents(args.expectedAmount) } : {}),
       });
       return toToolResult(result);
     },
@@ -258,7 +264,7 @@ export const registerFinanceTools: ToolRegistrar = (server, api) => {
       },
     },
     async (args) => {
-      const result = await api.get(`/api/expenses/${args.expenseId}/receipt-lines`);
+      const result = await api.get(apiPath`/api/expenses/${args.expenseId}/receipt-lines`);
       return toToolResult(result);
     },
   );

@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
-import { getSessionCtx } from "@/lib/authz";
 import { getEffectiveCategories } from "@/lib/category-db";
 import {
     createCategoryForScope,
     updateCategoryForScope,
     deleteCategoryForScope,
     reorderCategoriesForScope,
-    CategoryError,
     type CategoryWriteScope,
 } from "@/lib/category-crud";
+import { badRequest, route } from "@/lib/http";
+import {
+    CATEGORY_ID_REQUIRED,
+    CategoryCreateBody,
+    CategoryDeleteQuery,
+    CategoryPatchBody,
+} from "@/lib/category-schemas";
 
 /**
  * Personal category CRUD (Fase 3) — the INDIVIDUAL-mode home for categories
@@ -17,73 +22,43 @@ import {
  *
  * Mirrors the space route's operations: GET = MERGE (system ∪ personal) with an
  * `editable` flag; POST/PATCH/DELETE own the caller's personal categories only.
+ * CategoryError → `{ error, code }` with its status (mapped by route()).
  */
 
-function errorResponse(e: unknown) {
-    if (e instanceof CategoryError) {
-        return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
-    }
-    console.error("Personal category CRUD error:", e);
-    return NextResponse.json({ error: "Error en categorías" }, { status: 500 });
-}
+// Historical contract: any revalidated session (no guest gate here; the proxy
+// keeps guests out of /api/me/**) and a 401 "Unauthorized".
+const OPTS = {
+    auth: "user-or-guest",
+    unauthorizedMessage: "Unauthorized",
+    errorMessage: "Error en categorías",
+    logLabel: "Personal category CRUD error:",
+} as const;
 
-export async function GET() {
-    const ctx = await getSessionCtx();
-    if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const ownerScope = (ownerId: string): CategoryWriteScope => ({ kind: "owner", ownerId });
 
+export const GET = route(OPTS, async ({ ctx }) => {
     const merged = await getEffectiveCategories({ ownerId: ctx.userId });
     const categories = merged.map((c) => ({ ...c, editable: !c.isSystem }));
     return NextResponse.json({ categories });
-}
+});
 
-export async function POST(request: Request) {
-    const ctx = await getSessionCtx();
-    if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export const POST = route({ ...OPTS, body: CategoryCreateBody }, async ({ ctx, body }) => {
+    const category = await createCategoryForScope(ownerScope(ctx.userId), body);
+    return NextResponse.json({ category }, { status: 201 });
+});
 
-    const scope: CategoryWriteScope = { kind: "owner", ownerId: ctx.userId };
-    try {
-        const body = await request.json();
-        const category = await createCategoryForScope(scope, body);
-        return NextResponse.json({ category }, { status: 201 });
-    } catch (e) {
-        return errorResponse(e);
-    }
-}
-
-export async function PATCH(request: Request) {
-    const ctx = await getSessionCtx();
-    if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const scope: CategoryWriteScope = { kind: "owner", ownerId: ctx.userId };
-    try {
-        const body = await request.json();
-        if (Array.isArray(body?.order)) {
-            const result = await reorderCategoriesForScope(scope, body.order);
-            return NextResponse.json(result);
-        }
-        if (typeof body?.id !== "string") {
-            return NextResponse.json({ error: "Falta el id de la categoría" }, { status: 400 });
-        }
-        const category = await updateCategoryForScope(scope, body.id, body);
-        return NextResponse.json({ category });
-    } catch (e) {
-        return errorResponse(e);
-    }
-}
-
-export async function DELETE(request: Request) {
-    const ctx = await getSessionCtx();
-    if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const scope: CategoryWriteScope = { kind: "owner", ownerId: ctx.userId };
-    const { searchParams } = new URL(request.url);
-    const catId = searchParams.get("id");
-    const reassignTo = searchParams.get("reassignTo");
-    if (!catId) return NextResponse.json({ error: "Falta el id de la categoría" }, { status: 400 });
-    try {
-        const result = await deleteCategoryForScope(scope, catId, reassignTo);
+export const PATCH = route({ ...OPTS, body: CategoryPatchBody }, async ({ ctx, body }) => {
+    const scope = ownerScope(ctx.userId);
+    if (Array.isArray(body.order)) {
+        const result = await reorderCategoriesForScope(scope, body.order);
         return NextResponse.json(result);
-    } catch (e) {
-        return errorResponse(e);
     }
-}
+    if (typeof body.id !== "string") throw badRequest(CATEGORY_ID_REQUIRED);
+    const category = await updateCategoryForScope(scope, body.id, body);
+    return NextResponse.json({ category });
+});
+
+export const DELETE = route({ ...OPTS, query: CategoryDeleteQuery }, async ({ ctx, query }) => {
+    const result = await deleteCategoryForScope(ownerScope(ctx.userId), query.id, query.reassignTo ?? null);
+    return NextResponse.json(result);
+});

@@ -23,13 +23,13 @@
  */
 import { prisma } from "./db";
 import { normalizeAisle, autoAssignAisle } from "./aisles";
+import { normalizeQuantity } from "./list-quantity";
 
 const MAX_LIST_NAME = 60;
 const MAX_DESCRIPTION = 200;
 const MAX_ITEM_NAME = 80;
 const MAX_UNIT = 20;
 const MAX_NOTE = 200;
-const MAX_QUANTITY = 100000;
 
 /**
  * Write scope for a list mutation. XOR by construction (discriminated union): a
@@ -114,13 +114,15 @@ function validateOptionalText(raw: unknown, max: number, code: string): string |
     return t;
 }
 
-/** Optional positive integer quantity → int or null. */
+/**
+ * Optional positive quantity (up to 3 decimals, ≤ 100 000) → number or null.
+ * Accepts a JSON number or typed text ("1,5"); the message says WHAT is wrong
+ * (not a number / too big / too many decimals).
+ */
 function validateQuantity(raw: unknown): number | null {
-    if (raw === undefined || raw === null || raw === "") return null;
-    if (typeof raw !== "number" || !Number.isInteger(raw) || raw <= 0 || raw > MAX_QUANTITY) {
-        throw new ListError(400, "INVALID_QUANTITY", "La cantidad debe ser un entero positivo");
-    }
-    return raw;
+    const r = normalizeQuantity(raw);
+    if (!r.ok) throw new ListError(400, "INVALID_QUANTITY", r.error);
+    return r.value;
 }
 
 /**

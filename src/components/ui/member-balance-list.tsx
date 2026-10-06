@@ -1,79 +1,87 @@
-"use client";
-
 import { cn } from "@/lib/utils";
-import { formatEuros, toEuros } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
+import { firstName } from "@/lib/home-format";
+import { hasOpenBalance } from "@/lib/space-policy";
+import { EqLabel } from "@/components/ui/eq";
 
-interface Member {
+export type MemberBalance = {
     id: string;
     name: string;
     avatar: string | null;
     /** Shadow guest (EPHEMERAL) — gets an "Invitado" badge. */
     isGuest?: boolean;
-}
+    /** Net cents from the ledger (+ the group owes them, − they owe the group). */
+    balanceCents: number;
+};
 
 /**
- * Per-member net-balance list for groups of more than two members, where the
- * two-pan {@link VisualBalance} seesaw no longer maps to a single relationship.
- * Each row shows a member's global net position (green = owed by the group,
- * primary = owes the group). Balances are net cents keyed by userId — the same
- * map calculateBalances/the ledger produce, so the rows sum to zero.
+ * "Saldos del grupo" (EQUIL): one compact row per ACTIVE member with their net
+ * position in the space, for GROUP/EPHEMERAL spaces where a single "X te debe"
+ * no longer tells the whole story. Balances come from the ledger and sum to zero.
+ * Restores the per-member list the pre-redesign group dashboard had.
  */
 export function MemberBalanceList({
     members,
-    balances,
     currentUserId,
+    title = "Saldos del grupo",
     className,
 }: {
-    members: Member[];
-    balances: Record<string, number>;
+    members: MemberBalance[];
     currentUserId: string;
+    title?: string;
     className?: string;
 }) {
+    const sorted = [...members].sort((a, b) => b.balanceCents - a.balanceCents);
     return (
-        <ul className={cn("w-full px-6 pb-[22px] space-y-2", className)}>
-            {members.map((m) => {
-                let cents = balances[m.id] || 0;
-                if (Math.abs(cents) < 1) cents = 0; // sub-cent noise = settled
-                const isMe = m.id === currentUserId;
-                return (
-                    <li
-                        key={m.id}
-                        className="flex items-center justify-between gap-3 rounded-xl bg-card border border-[color:var(--line-2)] px-3 py-2.5"
-                    >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="w-8 h-8 shrink-0 rounded-full bg-secondary border border-[color:var(--line)] flex items-center justify-center overflow-hidden text-sm font-bold text-muted-foreground">
-                                {isAvatarUrl(m.avatar) ? (
-                                    // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
-                                    <img src={m.avatar!} alt={m.name} className="w-full h-full object-cover" />
-                                ) : (
-                                    m.name.charAt(0).toUpperCase()
-                                )}
-                            </span>
-                            <span className="text-sm font-medium text-foreground truncate flex items-center gap-1.5">
-                                <span className="truncate">
-                                    {m.name}
-                                    {isMe && <span className="text-muted-foreground font-normal"> (tú)</span>}
-                                </span>
-                                {m.isGuest && (
-                                    <span className="shrink-0 px-1.5 py-px rounded bg-secondary text-[10px] font-semibold text-muted-foreground">
-                                        Invitado
-                                    </span>
-                                )}
-                            </span>
-                        </div>
-                        <span
-                            className={cn(
-                                "text-sm font-mono font-semibold shrink-0",
-                                cents > 0 ? "text-[color:var(--positive)]" : cents < 0 ? "text-destructive" : "text-muted-foreground"
-                            )}
+        <section aria-labelledby="member-balances-title" data-testid="member-balances" className={cn("flex flex-col", className)}>
+            <EqLabel id="member-balances-title" className="pb-1">{title}</EqLabel>
+            <ul className="flex flex-col divide-y divide-[color:var(--line-2)]">
+                {sorted.map((m) => {
+                    const open = hasOpenBalance(m.balanceCents);
+                    const cents = open ? m.balanceCents : 0;
+                    const isMe = m.id === currentUserId;
+                    const words = !open ? "En paz" : cents > 0 ? (isMe ? "Te deben" : "Le deben") : isMe ? "Debes" : "Debe";
+                    const avatarText = (m.avatar ?? "").trim() && !isAvatarUrl(m.avatar) ? m.avatar : m.name.charAt(0).toUpperCase();
+                    return (
+                        <li
+                            key={m.id}
+                            data-testid="member-balance-row"
+                            className="flex items-center gap-3 py-2.5"
                         >
-                            {cents > 0 ? "+" : ""}
-                            {formatEuros(toEuros(cents))}
-                        </span>
-                    </li>
-                );
-            })}
-        </ul>
+                            <span className="h-9 w-9 flex-none rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-sm font-bold text-muted-foreground" aria-hidden="true">
+                                {isAvatarUrl(m.avatar) ? (
+                                    // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions
+                                    <img src={m.avatar!} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                                ) : (
+                                    avatarText
+                                )}
+                            </span>
+                            <span className="flex-1 min-w-0">
+                                <span className="flex items-center gap-1.5 text-[15px] font-semibold">
+                                    <span className="truncate">{isMe ? "Tú" : firstName(m.name)}</span>
+                                    {m.isGuest && (
+                                        <span className="flex-none rounded-md bg-[var(--track)] px-1.5 py-px text-[11px] font-semibold text-muted-foreground">
+                                            Invitado
+                                        </span>
+                                    )}
+                                </span>
+                                <span className="block text-[12.5px] text-muted-foreground">{words}</span>
+                            </span>
+                            <span
+                                className={cn(
+                                    "flex-none text-[15px] font-semibold tabular-nums",
+                                    cents > 0 && "text-[color:var(--positive)]",
+                                    cents < 0 && "text-[color:var(--negative)]",
+                                    cents === 0 && "text-muted-foreground",
+                                )}
+                            >
+                                {cents === 0 ? formatCurrency(0) : `${cents > 0 ? "+" : "−"}${formatCurrency(Math.abs(cents))}`}
+                            </span>
+                        </li>
+                    );
+                })}
+            </ul>
+        </section>
     );
 }

@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
 import { ACTIVE_GROUP_COOKIE } from "@/lib/membership";
+import { normalizeSpaceName, parseTripEndDate } from "@/lib/space-policy";
 import { SpaceType } from "@/generated/prisma/enums";
+import { route } from "@/lib/http";
+import { CreateSpaceBody, SPACE_BODY_OPTIONS } from "@/lib/space-schemas";
 
 /**
  * Typed space creation + listing (Fase 1). Replaces the untyped POST /api/couple
@@ -12,18 +14,14 @@ import { SpaceType } from "@/generated/prisma/enums";
  * never inferred from member count.
  */
 
-// Types a user may create directly. INDIVIDUAL is a virtual mode (no rows) and
-// is never materialized here.
-const CREATABLE_TYPES: SpaceType[] = [SpaceType.COUPLE, SpaceType.GROUP, SpaceType.EPHEMERAL];
-
-export async function GET() {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const userId = session.userId as string;
+// A guest session may list its (single) space.
+export const GET = route({ auth: "user-or-guest", unauthorizedMessage: "Unauthorized" }, async ({ ctx }) => {
+    const userId = ctx.userId;
 
     // All spaces where the caller is an ACTIVE member, in a stable order, with
     // type/status so the UI can section them (active vs Archived). ACTIVE-only
-    // member count mirrors getGroupMembers semantics.
+    // member count mirrors getGroupMembers semantics. The legacy `Couple.code`
+    // is never exposed (no short codes: invites are /i/<token> links only).
     const memberships = await prisma.membership.findMany({
         where: { userId, status: "ACTIVE" },
         orderBy: [{ joinedAt: "asc" }, { groupId: "asc" }],
@@ -32,7 +30,6 @@ export async function GET() {
                 select: {
                     id: true,
                     name: true,
-                    code: true,
                     type: true,
                     status: true,
                     archivedAt: true,
@@ -47,7 +44,6 @@ export async function GET() {
     const spaces = memberships.map((m) => ({
         id: m.group.id,
         name: m.group.name,
-        code: m.group.code,
         type: m.group.type,
         status: m.group.status,
         archivedAt: m.group.archivedAt,
@@ -58,71 +54,62 @@ export async function GET() {
     }));
 
     return NextResponse.json({ spaces, userId });
-}
+});
 
-export async function POST(request: Request) {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const userId = session.userId as string;
+// A guest session is caged to its EPHEMERAL space: it can never own a space (403).
+// Only a type (COUPLE/GROUP/EPHEMERAL) is required; INDIVIDUAL is virtual and
+// never materialized here.
+export const POST = route(
+    { auth: "user", unauthorizedMessage: "Unauthorized", body: CreateSpaceBody, bodyOptions: SPACE_BODY_OPTIONS },
+    async ({ ctx, body }) => {
+        const userId = ctx.userId;
+        const spaceType = body.type;
 
-    let body: { name?: unknown; type?: unknown; expiresAt?: unknown };
-    try {
-        body = await request.json();
-    } catch {
-        return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
-    }
+        // expiresAt only makes sense for EPHEMERAL. A calendar date is stored as
+        // the END of that day in Europe/Madrid; past dates are rejected. It caps
+        // guest sessions (see jwt.ts) but never closes the space by itself.
+        // SpacePolicyError (INVALID_END_DATE / INVALID_NAME) maps to its 400 + code.
+        const expiresAt: Date | null =
+            spaceType === SpaceType.EPHEMERAL && body.expiresAt != null && body.expiresAt !== ""
+                ? parseTripEndDate(body.expiresAt)
+                : null;
+        const name = body.name == null || (typeof body.name === "string" && body.name.trim() === "")
+            ? defaultName(spaceType)
+            : normalizeSpaceName(body.name);
 
-    const type = body.type;
-    if (typeof type !== "string" || !CREATABLE_TYPES.includes(type as SpaceType)) {
-        return NextResponse.json(
-            { error: "type es obligatorio y debe ser COUPLE, GROUP o EPHEMERAL" },
-            { status: 400 },
-        );
-    }
-    const spaceType = type as SpaceType;
+        // `Couple.code` is a legacy UNIQUE column. No short codes any more: fill it
+        // with an unguessable 128-bit value that is never shown nor accepted as an
+        // invite (invites are hashed /i/<token> links).
+        const code = randomBytes(16).toString("hex").toUpperCase();
 
-    // expiresAt only makes sense for EPHEMERAL (a close SUGGESTION, no cron in v1).
-    let expiresAt: Date | null = null;
-    if (spaceType === SpaceType.EPHEMERAL && body.expiresAt != null) {
-        const parsed = new Date(body.expiresAt as string);
-        if (Number.isNaN(parsed.getTime())) {
-            return NextResponse.json({ error: "expiresAt inválido" }, { status: 400 });
-        }
-        expiresAt = parsed;
-    }
-
-    const name = typeof body.name === "string" && body.name.trim().length > 0
-        ? body.name.trim()
-        : defaultName(spaceType);
-
-    const code = randomBytes(3).toString("hex").toUpperCase();
-
-    // Create the space + the creator's OWNER membership atomically. Membership is
-    // the sole linkage (User.coupleId no longer written).
-    const space = await prisma.$transaction(async (tx) => {
-        const created = await tx.couple.create({
-            data: {
-                name,
-                code,
-                type: spaceType,
-                expiresAt,
-                createdById: userId,
-                // status defaults to ACTIVE.
-            },
+        // Create the space + the creator's OWNER membership atomically. Membership is
+        // the sole linkage (User.coupleId no longer written).
+        const space = await prisma.$transaction(async (tx) => {
+            const created = await tx.couple.create({
+                data: {
+                    name,
+                    code,
+                    type: spaceType,
+                    expiresAt,
+                    createdById: userId,
+                    // status defaults to ACTIVE.
+                },
+                select: { id: true, name: true, type: true, status: true, expiresAt: true, createdAt: true },
+            });
+            await tx.membership.create({
+                data: { groupId: created.id, userId, role: "OWNER", status: "ACTIVE" },
+            });
+            return created;
         });
-        await tx.membership.create({
-            data: { groupId: created.id, userId, role: "OWNER", status: "ACTIVE" },
+
+        // Make the new space the active one.
+        (await cookies()).set(ACTIVE_GROUP_COOKIE, space.id, {
+            httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365,
         });
-        return created;
-    });
 
-    // Make the new space the active one.
-    (await cookies()).set(ACTIVE_GROUP_COOKIE, space.id, {
-        httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 365,
-    });
-
-    return NextResponse.json({ success: true, space });
-}
+        return NextResponse.json({ success: true, space });
+    },
+);
 
 function defaultName(type: SpaceType): string {
     switch (type) {

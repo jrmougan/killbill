@@ -12,7 +12,7 @@ test.describe('Expenses - Create', () => {
       baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
     });
     const data = await seedScenario(apiContext, 'couple-no-expenses');
-    userA = data.userA;
+    userA = data.userA!;
   });
 
   test.afterAll(async () => {
@@ -20,49 +20,72 @@ test.describe('Expenses - Create', () => {
     await apiContext.dispose();
   });
 
-  // The add-expense flow is a 2-step wizard: step 1 = amount (+ keypad / scan),
-  // step 2 = details (description, category, split). "Siguiente" advances; "Guardar gasto" submits.
+  // The add-expense flow is a single numpad screen (EQUIL): amount via the
+  // on-screen keypad (or typing), optional concept, category chips, Pagó/Reparto
+  // tiles and "Guardar". Advanced options live under "Más opciones".
 
-  test('create expense with description and amount - appears in expense list', async ({ page }) => {
+  test('create expense with the numpad - appears in expense list', async ({ page }) => {
     await loginAs(page, userA);
 
     await page.goto('/expenses/new');
-    // Step 1: amount
-    await page.fill('[data-testid="expense-amount"]', '25.50');
-    await page.click('[data-testid="expense-next"]');
-    // Step 2: details
-    await page.fill('[data-testid="expense-description"]', 'Test E2E Expense');
-    await page.click('[data-testid="expense-submit"]');
+    for (const key of ['2', '5', 'Coma decimal', '5']) {
+      await page.getByRole('button', { name: key, exact: true }).click();
+    }
+    await expect(page.getByTestId('expense-amount')).toHaveValue('25,5');
+    // Couple space, paid by me, split in half → the partner owes me half.
+    await expect(page.getByTestId('expense-preview')).toContainText('te deberá 12,75');
+    await page.getByTestId('expense-description').fill('Test E2E Expense');
+    await page.getByTestId('expense-submit').click();
 
-    // Should redirect to dashboard after saving
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
+    await expect(page).toHaveURL(/\/dashboard\?saved=2550/, { timeout: 10000 });
 
-    // Navigate to expenses list and verify the expense appears
     await page.goto('/expenses/list');
     await expect(page.getByText('Test E2E Expense')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Pagaste tú · a medias').first()).toBeVisible();
   });
 
-  test('amount 0 - next button is disabled (cannot reach details)', async ({ page }) => {
+  test('amount 0 - Guardar is disabled', async ({ page }) => {
     await loginAs(page, userA);
 
     await page.goto('/expenses/new');
-    await page.fill('[data-testid="expense-amount"]', '0');
-
-    // The "Siguiente" button gates the amount step; with 0 it must be disabled.
-    const nextBtn = page.locator('[data-testid="expense-next"]');
-    await expect(nextBtn).toBeDisabled();
+    await page.getByTestId('expense-amount').fill('0');
+    await expect(page.getByTestId('expense-submit')).toBeDisabled();
+    await page.getByRole('button', { name: 'Borrar', exact: true }).click();
+    await expect(page.getByTestId('expense-submit')).toBeDisabled();
   });
 
-  test('empty description - submit button is disabled', async ({ page }) => {
+  test('empty concept - saves with the category label as title', async ({ page }) => {
     await loginAs(page, userA);
 
     await page.goto('/expenses/new');
-    // Step 1: provide a valid amount and advance
-    await page.fill('[data-testid="expense-amount"]', '15.00');
-    await page.click('[data-testid="expense-next"]');
+    await page.getByTestId('expense-amount').fill('15.00');
+    await page.getByTestId('category-chip-transport').click();
+    // "Solo para mí" → nothing owed either way.
+    await page.getByTestId('expense-split').click();
+    await expect(page.getByTestId('expense-split')).toContainText('Solo para mí');
+    await expect(page.getByTestId('expense-preview')).toHaveText('No cambia el saldo');
+    const created = page.waitForResponse(r => r.url().endsWith('/api/expenses') && r.request().method() === 'POST');
+    await page.getByTestId('expense-submit').click();
+    const res = await created;
+    expect(res.status()).toBe(200);
+    const body = JSON.parse(res.request().postData() || '{}');
+    expect(body).toMatchObject({ description: 'Transporte', category: 'transport', amount: 15, beneficiaryId: userA.id });
+  });
 
-    // Step 2: leave description empty -> Guardar must be disabled
-    const submitBtn = page.locator('[data-testid="expense-submit"]');
-    await expect(submitBtn).toBeDisabled();
+  test('prefill contract: title, category, personal space and returnTo', async ({ page }) => {
+    await loginAs(page, userA);
+
+    await page.goto('/expenses/new?title=Mercadona&category=food&space=personal&returnTo=/expenses/list');
+    await expect(page.getByTestId('expense-description')).toHaveValue('Mercadona');
+    await expect(page.getByTestId('space-chip-personal')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('category-chip-food')).toHaveAttribute('aria-pressed', 'true');
+    // Personal space: no payer / split tiles.
+    await expect(page.getByTestId('expense-split')).toHaveCount(0);
+    await page.getByTestId('expense-amount').fill('7');
+    const created = page.waitForResponse(r => r.url().endsWith('/api/expenses') && r.request().method() === 'POST');
+    await page.getByTestId('expense-submit').click();
+    const body = JSON.parse((await created).request().postData() || '{}');
+    expect(body).toMatchObject({ visibility: 'PERSONAL', description: 'Mercadona', category: 'food' });
+    await expect(page).toHaveURL(/\/expenses\/list\?saved=700/, { timeout: 10000 });
   });
 });

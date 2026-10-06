@@ -24,7 +24,9 @@ services:
       # Volumen nombrado (NO bind mount): un volumen nombrado hereda la propiedad
       # del punto de montaje de la imagen (nextjs:nodejs), así el usuario no-root
       # puede escribir. Un bind mount `./uploads` quedaría como root → EACCES.
-      - killbill_uploads:/app/public/uploads
+      # Fuera de public/ (UPLOAD_DIR=/app/uploads en la imagen). Antes se montaba
+      # en /app/public/uploads: el mismo volumen montado aquí conserva los ficheros.
+      - killbill_uploads:/app/uploads
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.killbill.rule=Host(`finanzas.mougan.es`)"

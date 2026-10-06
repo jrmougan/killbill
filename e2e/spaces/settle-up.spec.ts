@@ -52,7 +52,7 @@ async function confirmFromDashboard(page: Page, fromName: string) {
   await page.goto('/dashboard');
   await expect(page.getByText('Confirmar Pagos')).toBeVisible();
   await expect(page.getByText(`${fromName} te ha pagado`)).toBeVisible();
-  await expect(page.getByText('50.00€', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('pending-settlement').getByText(/^50,00\s€$/)).toBeVisible();
   const patchPromise = settlementStatusPatch(page);
   await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
   const patch = await patchPromise;
@@ -94,7 +94,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     const debtRow = pageB.getByTestId('close-debt-row');
     await expect(debtRow).toHaveCount(1);
     await expect(debtRow).toContainText('Debes a User A');
-    await expect(debtRow.locator('span.font-mono')).toHaveText(FIFTY);
+    await expect(debtRow.getByTestId('close-amount')).toHaveText(FIFTY);
     await expect(pageB.getByTestId('close-start-settling')).toHaveCount(0);
 
     // Creditor/OWNER: owes nothing, starts the settle-up.
@@ -119,14 +119,13 @@ test.describe('Spaces - Settle-up (close flow)', () => {
 
     // ...so they pay from /settle, which SETTLING still allows.
     await pageB.goto('/settle');
-    await pageB.getByRole('button', { name: /Continuar/i }).click();
-    await pageB.getByLabel(/importe/i).fill('50');
+    await expect(pageB.getByTestId('settle-balance')).toHaveText(FIFTY);
     const settlePromise = pageB.waitForResponse(
       (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST',
     );
-    await pageB.getByRole('button', { name: /Confirmar Pago/i }).click();
+    await pageB.getByRole('button', { name: 'Ya he pagado' }).click();
     expect((await settlePromise).ok()).toBeTruthy();
-    await expect(pageB).toHaveURL(/\/dashboard/);
+    await expect(pageB.getByTestId('settle-pending')).toContainText('Pendiente de que User A confirme');
 
     // Creditor's checklist: exactly one PENDING B → A of 50,00 €.
     await pageA.goto(`/spaces/${spaceId}/close`);
@@ -134,7 +133,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toHaveAttribute('data-status', 'PENDING');
     await expect(rows.first()).toContainText('User B → User A');
-    await expect(rows.first().locator('span.font-mono')).toHaveText(FIFTY);
+    await expect(rows.first().getByTestId('close-amount')).toHaveText(FIFTY);
     await expect(pageA.getByTestId('close-progress')).toHaveText('0/1 confirmadas');
 
     // PENDING does not move balances.
@@ -166,7 +165,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await expect(pendingCard).toContainText('Liquidación');
     await expect(pendingCard).toContainText('User B → User A');
     await expect(pendingCard).toContainText('Pendiente');
-    await expect(pendingCard.locator('p.font-mono')).toHaveText(FIFTY);
+    await expect(pendingCard).toContainText(/50,00\s€/);
     // Only the receiver gets the confirm section.
     await expect(pageB.getByText('Confirmar Pagos')).toHaveCount(0);
 
@@ -176,10 +175,12 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await confirmFromDashboard(pageA, 'User B');
     await expect(pageA.getByTestId('balance-amount')).toHaveText(ZERO);
 
-    // Payer: balance 0,00 € and the pending card is gone (feed shows PENDING only).
+    // Payer: balance 0,00 € and the Recientes row now reads as confirmed.
     await pageB.reload();
     await expect(pageB.getByTestId('balance-amount')).toHaveText(ZERO);
-    await expect(pageB.locator(`a[href="/settle/${settlementId}"]`)).toHaveCount(0);
+    const settledRow = pageB.locator(`a[href="/settle/${settlementId}"]`);
+    await expect(settledRow).toContainText('Confirmado');
+    await expect(settledRow).not.toContainText('Pendiente');
 
     // Close checklist: 1/1 confirmed.
     await pageA.goto(`/spaces/${spaceId}/close`);
@@ -206,7 +207,6 @@ test.describe('Spaces - Settle-up (close flow)', () => {
 
     await pageB.goto('/expenses/new');
     await pageB.fill('[data-testid="expense-amount"]', '100.00');
-    await pageB.click('[data-testid="expense-next"]');
     await pageB.fill('[data-testid="expense-description"]', 'Compra compartida');
     const expensePromise = pageB.waitForResponse(
       (res) => new URL(res.url()).pathname === '/api/expenses' && res.request().method() === 'POST',
@@ -220,7 +220,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await pageA.goto(`/spaces/${spaceId}/close`);
     const debtRow = pageA.getByTestId('close-debt-row');
     await expect(debtRow).toContainText('Debes a User B');
-    await expect(debtRow.locator('span.font-mono')).toHaveText(FIFTY);
+    await expect(debtRow.getByTestId('close-amount')).toHaveText(FIFTY);
 
     const settleUp = await startSettleUp(pageA, spaceId);
     expect(settleUp.status).toBe(200);
@@ -234,7 +234,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toHaveAttribute('data-status', 'PENDING');
     await expect(rows.first()).toContainText('User A → User B');
-    await expect(rows.first().locator('span.font-mono')).toHaveText(FIFTY);
+    await expect(rows.first().getByTestId('close-amount')).toHaveText(FIFTY);
 
     // Re-running settle-up (twice) is idempotent: no new PENDING row.
     for (let i = 0; i < 2; i++) {
@@ -259,11 +259,11 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await confirmFromDashboard(pageB, 'User A');
     await expect(pageB.getByTestId('balance-amount')).toHaveText(ZERO);
 
-    // ...and a second confirmation of the same settlement is refused (400).
+    // ...and a second confirmation of the same settlement is refused (409 SETTLEMENT_NOT_PENDING).
     const second = await pageB.request.patch(`/api/settle/${settlementId}/status`, {
       data: { status: 'CONFIRMED' },
     });
-    expect(second.status()).toBe(400);
+    expect(second.status()).toBe(409);
 
     // Settle-up after full payment suggests nothing new.
     const afterPaid = await pageA.request.post(`/api/spaces/${spaceId}/settle-up`);

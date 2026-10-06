@@ -1,83 +1,64 @@
 import { NextResponse } from 'next/server';
 import { mkdir, writeFile } from 'fs/promises';
-import { join } from 'path';
+import { uploadDir, uploadFilePath } from '@/lib/uploads';
 import { randomUUID } from 'crypto';
-import { getSession } from '@/lib/auth';
+import { ephemeralSpacesEnabled } from '@/lib/flags';
+import { isAllowedImage, MAX_IMAGE_BYTES as MAX_SIZE_BYTES } from '@/lib/receipt-image';
+import { HttpError, badRequest, enforceRateLimit, forbidden, route } from '@/lib/http';
+import { readFormFile } from '@/lib/form-file';
 
 // Whitelist of accepted content types mapped to their canonical extension.
 // The extension is derived solely from this map so the stored filename can
-// never be influenced by attacker-controlled input.
+// never be influenced by attacker-controlled input. Keep in sync with
+// ALLOWED_IMAGE_TYPES / isAllowedImage in receipt-image.ts.
 const ALLOWED_TYPES: Record<string, string> = {
     'image/png': 'png',
     'image/jpeg': 'jpg',
     'image/webp': 'webp',
 };
 
-const MAX_SIZE_BYTES = 8 * 1024 * 1024; // 8 MB
+/** Per-user upload budget: 30 receipts per 10 minutes. */
+const UPLOAD_LIMIT = 30;
+const UPLOAD_WINDOW_MS = 10 * 60 * 1000;
 
-// Validate the actual file bytes (magic numbers) rather than trusting the
-// client-supplied MIME type / extension. Accepts JPEG, PNG, WEBP and GIF.
-function isAllowedImage(buffer: Buffer): boolean {
-    if (buffer.length < 12) return false;
-    // JPEG: FF D8 FF
-    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return true;
-    // PNG: 89 50 4E 47
-    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) return true;
-    // GIF: 47 49 46 38 ("GIF8")
-    if (buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38) return true;
-    // WEBP: "RIFF" .... "WEBP"
-    if (
-        buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
-        buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
-    ) return true;
-    return false;
-}
+// getSessionCtx (in route()) revalidates guest sessions against the DB (revoked /
+// archived → null → 401) instead of trusting the JWT claim.
+export const POST = route(
+    { auth: 'user-or-guest', errorMessage: 'No se pudo subir el archivo', logLabel: 'Error uploading file:' },
+    async ({ req, ctx }) => {
+        if (ctx.kind === 'guest' && !ephemeralSpacesEnabled()) throw forbidden('No autorizado');
 
-export async function POST(request: Request) {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        enforceRateLimit(`upload:user:${ctx.userId}`, UPLOAD_LIMIT, UPLOAD_WINDOW_MS);
 
-    try {
-        const formData = await request.formData();
-        const file = formData.get('file') as File;
-
-        if (!file) {
-            return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
-        }
+        const file = await readFormFile(req, 'file');
+        if (!file) throw badRequest('No se ha subido ningún archivo');
 
         const ext = ALLOWED_TYPES[file.type];
         if (!ext) {
-            return NextResponse.json({ error: 'Invalid file type. Only PNG, JPEG and WEBP images are allowed.' }, { status: 400 });
+            throw badRequest('Tipo de archivo no válido: solo se admiten imágenes PNG, JPEG y WEBP.');
         }
 
         if (file.size > MAX_SIZE_BYTES) {
-            return NextResponse.json({ error: 'File too large. Maximum size is 8 MB.' }, { status: 413 });
+            throw new HttpError(413, 'El archivo es demasiado grande (máximo 8 MB).');
         }
 
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
 
         // Validate the actual bytes, not just the client-supplied MIME/extension.
-        if (!isAllowedImage(buffer)) {
-            return NextResponse.json({ error: 'Invalid image file' }, { status: 400 });
-        }
+        if (!isAllowedImage(buffer)) throw badRequest('El archivo no es una imagen válida');
 
         // Unpredictable filename with a whitelisted extension. It does NOT embed
-        // the user id, so the public URL leaks no information about the uploader.
+        // the user id, so the URL leaks no information about the uploader.
         const filename = `${randomUUID()}.${ext}`;
-        const directory = join(process.cwd(), 'public', 'uploads');
+        // Outside public/ (served only through the authenticated /uploads route).
+        const directory = uploadDir();
         await mkdir(directory, { recursive: true });
-        const path = join(directory, filename);
-
-        await writeFile(path, buffer);
-        console.log(`File uploaded to ${path}`);
+        await writeFile(uploadFilePath(filename), buffer);
 
         return NextResponse.json({
             success: true,
             url: `/uploads/${filename}`
         });
-    } catch (error) {
-        console.error('Error uploading file:', error);
-        return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
-    }
-}
+    },
+);

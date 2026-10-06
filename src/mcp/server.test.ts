@@ -8,6 +8,7 @@ vi.mock("@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js", () => (
 }));
 
 import { createServer } from "@/mcp/server";
+import { MAX_IMAGE_BASE64_CHARS } from "@/mcp/tools/ocr";
 
 function getTools(server: ReturnType<typeof createServer>) {
   const registered = (server as unknown as { _registeredTools: Record<string, { description?: string }> })._registeredTools;
@@ -72,6 +73,66 @@ describe("createServer", () => {
     const server = createServer("fake.jwt");
     const tools = getTools(server);
     expect(Object.keys(tools).length).toBeGreaterThanOrEqual(18);
+  });
+
+  it("tools percent-encode ids taken from their input", async () => {
+    const server = createServer("fake.jwt");
+    const tools = (server as unknown as {
+      _registeredTools: Record<string, { handler: (args: unknown, extra: unknown) => Promise<unknown> }>;
+    })._registeredTools;
+    await tools.check_shopping_item.handler(
+      { groupId: "g/1", listId: "l?x", itemId: "i#y", checked: true },
+      {},
+    );
+    await tools.delete_expense.handler({ id: "../settle" }, {});
+    const paths = mockFetch.mock.calls.map((c) => new URL(c[0] as string).pathname);
+    expect(paths).toEqual([
+      "/api/spaces/g%2F1/lists/l%3Fx/items/i%23y",
+      "/api/expenses/..%2Fsettle",
+    ]);
+  });
+
+  it("get_categories without groupId reads personal categories (never /spaces/undefined)", async () => {
+    const server = createServer("fake.jwt");
+    const tools = (server as unknown as {
+      _registeredTools: Record<string, { handler: (args: unknown, extra: unknown) => Promise<unknown> }>;
+    })._registeredTools;
+    await tools.get_categories.handler({}, {});
+    expect(new URL(mockFetch.mock.calls[0][0] as string).pathname).toBe("/api/me/categories");
+  });
+
+  it("parse_receipt caps imageBase64 length in its schema", () => {
+    const server = createServer("fake.jwt");
+    const tool = (server as unknown as {
+      _registeredTools: Record<string, { inputSchema: { safeParse: (v: unknown) => { success: boolean } } }>;
+    })._registeredTools.parse_receipt;
+    expect(tool.inputSchema.safeParse({ imageBase64: "QUJD" }).success).toBe(true);
+    expect(tool.inputSchema.safeParse({ imageBase64: "A".repeat(MAX_IMAGE_BASE64_CHARS + 1) }).success).toBe(false);
+    expect(tool.inputSchema.safeParse({ imageBase64: "QUJD", mimeType: "image/gif" }).success).toBe(false);
+  });
+
+  it("parse_receipt rejects non-base64 input before decoding or calling the API", async () => {
+    const server = createServer("fake.jwt");
+    const tools = (server as unknown as {
+      _registeredTools: Record<string, { handler: (args: unknown, extra: unknown) => Promise<{ isError?: boolean }> }>;
+    })._registeredTools;
+    const result = await tools.parse_receipt.handler({ imageBase64: "data:image/png;base64,AAAA" }, {});
+    expect(result.isError).toBe(true);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("parse_receipt forwards valid base64 as multipart to /api/ocr", async () => {
+    const server = createServer("fake.jwt");
+    const tools = (server as unknown as {
+      _registeredTools: Record<string, { handler: (args: unknown, extra: unknown) => Promise<{ isError?: boolean }> }>;
+    })._registeredTools;
+    const png = Buffer.from("89504e470d0a1a0a0000000d", "hex").toString("base64");
+    await tools.parse_receipt.handler({ imageBase64: png, mimeType: "image/png" }, {});
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(new URL(url as string).pathname).toBe("/api/ocr");
+    const file = (init.body as FormData).get("image") as File;
+    expect(file.type).toBe("image/png");
+    expect(file.size).toBe(12);
   });
 
   it("every tool has a description", () => {

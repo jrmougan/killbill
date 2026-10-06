@@ -1,30 +1,30 @@
-# Dependencies
+# VCS / tooling
+.git
+.github
+.claude
+.DS_Store
+*.pem
+
+# Dependencies (installed inside the image with npm ci)
 node_modules
 .pnp
 .pnp.js
 
-# Testing
-coverage
-
-# Next.js
+# Build output
 .next/
 out/
-
-# Production
 build
 
-# Misc
-.DS_Store
-*.pem
+# Tests, reports and docs (not needed to build or run the app)
+e2e
+coverage
+playwright-report
+test-results
+docs
+*.log
 
-# Debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Local env files
-.env
-.env*.local
+# Local env files (production env comes from Coolify)
+.env*
 
 # Vercel
 .vercel
@@ -33,5 +33,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Prisma
+# Prisma (regenerated in the builder stage)
 src/generated/
+
+# Runtime uploads (persistent volume in production) — current and legacy dirs
+uploads
+public/uploads

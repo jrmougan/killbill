@@ -157,6 +157,10 @@ model User {
   isAdmin   Boolean  @default(false)
   createdAt DateTime @default(now())
 
+  // Revocación de tokens: el claim `tv` de cada JWT de sesión/MCP debe coincidir;
+  // incrementarlo invalida todos los tokens emitidos antes (sin `tv` ⇒ 0).
+  tokenVersion Int @default(0)
+
   // Fase 0: identidad de invitado sombra (EPHEMERAL). isGuest=true → email/
   // password NULL; el upgrade a cuenta real es un UPDATE de la misma fila.
   isGuest    Boolean   @default(false)
@@ -248,7 +252,6 @@ model Membership {
   updatedAt DateTime @updatedAt
 
   @@unique([groupId, userId])
-  @@index([groupId])
   @@index([userId])
   @@index([groupId, status])
 }
@@ -285,8 +288,18 @@ model Category {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // DB-only VIRTUAL generated column (migration 20261006110001_scope_check_constraints):
+  // '_sys' for system rows, else groupId XOR ownerId; NULL when the row breaks that.
+  // CHECK (scopeKey IS NOT NULL) enforces the scope rule (MySQL forbids CHECKs
+  // on columns with FK referential actions). Never written by the app;
+  // Unsupported keeps it out of the generated client.
+  // UNIQUE(scopeKey, key) closes the NULL hole of the two uniques below for
+  // system rows (groupId = ownerId = NULL): one system row per key.
+  scopeKey Unsupported("varchar(191)")?
+
   @@unique([groupId, key])
   @@unique([ownerId, key])
+  @@unique([scopeKey, key])
   @@index([groupId])
   @@index([ownerId])
 }
@@ -362,10 +375,18 @@ model Expense {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([coupleId])
+  // DB-only VIRTUAL generated column (migration 20261006110001_scope_check_constraints):
+  // coupleId for SHARED, ownerId for PERSONAL; NULL when visibility and coupleId disagree.
+  // CHECK (scopeKey IS NOT NULL) enforces the scope rule (MySQL forbids CHECKs
+  // on columns with FK referential actions). Never written by the app;
+  // Unsupported keeps it out of the generated client.
+  scopeKey Unsupported("varchar(191)")?
+
+  // List/pagination indexes (M3): WHERE coupleId|ownerId + visibility ORDER BY date.
+  // They also serve the coupleId / ownerId FKs (leftmost prefix).
+  @@index([coupleId, visibility, date])
+  @@index([ownerId, visibility, date])
   @@index([paidById])
-  @@index([ownerId])
-  @@index([ownerId, visibility])
   @@index([categoryId])
   @@index([seriesId])
   @@index([createdById])
@@ -466,13 +487,14 @@ model Split {
   expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
 
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Restrict (no Cascade) desde User, como paidBy/owner/Account: borrar un User
+  // con repartos destruiría la contabilidad del grupo en silencio.
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([expenseId, userId])
-  @@index([expenseId])
   @@index([userId])
 }
 
@@ -506,7 +528,8 @@ model Settlement {
   expenses Expense[]
   ledgerTransactions LedgerTransaction[]
 
-  @@index([coupleId])
+  // Pending/confirmed lookups per space (M3); also serves the coupleId FK.
+  @@index([coupleId, status])
   @@index([fromUserId])
   @@index([toUserId])
 }
@@ -530,7 +553,17 @@ model Tag {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // DB-only VIRTUAL generated column (migration 20261006110001_scope_check_constraints):
+  // coupleId XOR ownerId; NULL when the row breaks the XOR.
+  // CHECK (scopeKey IS NOT NULL) enforces the scope rule (MySQL forbids CHECKs
+  // on columns with FK referential actions). Never written by the app;
+  // Unsupported keeps it out of the generated client.
+  // UNIQUE(scopeKey, name) also makes PERSONAL tag names unique per owner
+  // (@@unique([name, coupleId]) can't: coupleId is NULL for them).
+  scopeKey Unsupported("varchar(191)")?
+
   @@unique([name, coupleId])
+  @@unique([scopeKey, name])
   @@index([coupleId])
   @@index([ownerId])
 }
@@ -567,7 +600,6 @@ model Account {
   updatedAt DateTime @updatedAt
 
   @@unique([groupId, userId])
-  @@index([groupId])
   @@index([userId])
 }
 
@@ -616,7 +648,6 @@ model LedgerEntry {
   createdAt     DateTime          @default(now())
 
   @@unique([transactionId, accountId])
-  @@index([transactionId])
   @@index([accountId])
 }
 
@@ -648,6 +679,13 @@ model Budget {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // DB-only VIRTUAL generated column (migration 20261006110001_scope_check_constraints):
+  // coupleId XOR ownerId; NULL when the row breaks the XOR.
+  // CHECK (scopeKey IS NOT NULL) enforces the scope rule (MySQL forbids CHECKs
+  // on columns with FK referential actions). Never written by the app;
+  // Unsupported keeps it out of the generated client.
+  scopeKey Unsupported("varchar(191)")?
 
   @@unique([categoryId, periodStart, coupleId])
   @@unique([categoryId, periodStart, ownerId])
@@ -682,6 +720,13 @@ model ShoppingList {
 
   items ShoppingListItem[]
 
+  // DB-only VIRTUAL generated column (migration 20261006110001_scope_check_constraints):
+  // groupId XOR ownerId; NULL when the row breaks the XOR.
+  // CHECK (scopeKey IS NOT NULL) enforces the scope rule (MySQL forbids CHECKs
+  // on columns with FK referential actions). Never written by the app;
+  // Unsupported keeps it out of the generated client.
+  scopeKey Unsupported("varchar(191)")?
+
   @@index([groupId])
   @@index([ownerId])
 }
@@ -697,7 +742,7 @@ model ShoppingListItem {
   list   ShoppingList @relation(fields: [listId], references: [id], onDelete: Cascade)
 
   name       String
-  quantity   Int?    // opcional
+  quantity   Float?  // opcional; admite decimales (1,5 kg)
   unit       String? // libre en v1 (ud/kg/g/L/pack); no enum todavía
   note       String? // nota opcional a nivel de item
   aisle      String? // clave de pasillo del súper (vocabulario en src/lib/aisles.ts); nullable, auto-asignada

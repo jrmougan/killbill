@@ -39,12 +39,15 @@ test.describe('Guest - Full lifecycle in an ephemeral space', () => {
     await expect(banner).toContainText('Estás como invitado');
     await expect(banner.getByRole('link', { name: /Crear cuenta/ })).toHaveAttribute('href', '/guest/upgrade');
 
-    // Reduced bottom nav: only "Inicio" + "Crear cuenta"; none of the member-only tabs
+    // Reduced bottom nav: Inicio, Gastos, the "Añadir gasto" FAB and "Crear
+    // cuenta"; none of the member-only tabs (Mes, Listas).
     const nav = page.locator('nav[aria-label="Navegación principal"]');
     await expect(nav).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Inicio' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Gastos' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Añadir gasto' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Crear cuenta' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: /Presupuestos|Análisis|Ajustes/ })).toHaveCount(0);
+    await expect(nav.getByRole('link', { name: /^(Mes|Listas|Ajustes)$/ })).toHaveCount(0);
 
     await page.close();
     await ctx.close();
@@ -82,7 +85,6 @@ test.describe('Guest - Full lifecycle in an ephemeral space', () => {
     const amountInput = page.locator('[data-testid="expense-amount"]');
     await expect(amountInput).toBeVisible({ timeout: 10000 });
     await amountInput.fill('10');
-    await page.locator('[data-testid="expense-next"]').click();
 
     // Wizard step 2: description + submit
     const descriptionInput = page.locator('[data-testid="expense-description"]');
@@ -137,13 +139,16 @@ test.describe('Guest - Full lifecycle in an ephemeral space', () => {
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
     await expect(page.locator('[data-testid="guest-banner"]')).toHaveCount(0);
 
+    // Full nav: Inicio, Gastos, "Añadir gasto" FAB, Mes, Listas (no "Crear cuenta").
     const nav = page.locator('nav[aria-label="Navegación principal"]');
-    await expect(nav.getByRole('link', { name: 'Presupuestos' })).toBeVisible({ timeout: 10000 });
-    await expect(nav.getByRole('link', { name: 'Análisis' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Ajustes' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Mes', exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(nav.getByRole('link', { name: 'Listas' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Gastos' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Añadir gasto' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Crear cuenta' })).toHaveCount(0);
 
-    // /settings is now reachable (no proxy bounce)
-    await page.goto('/settings');
+    // Ajustes is reached from the dashboard avatar (no proxy bounce any more).
+    await page.locator('a[href="/settings"]').first().click();
     await expect(page).toHaveURL(/\/settings/, { timeout: 10000 });
     await expect(page.getByRole('heading', { name: 'Ajustes' })).toBeVisible({ timeout: 10000 });
 

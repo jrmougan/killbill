@@ -167,7 +167,7 @@ test.describe('API Authorization Matrix (authz & space policy)', () => {
     expect(csvContent).toContain('Viaje (histórico)');
   });
 
-  test('4. Miembro expulsado: JWT sigue válido pero requireSpaceAccess deniega en DB (403)', async ({ page, newContext, context, request }) => {
+  test('4. Miembro expulsado (409 con saldo; tras liquidar): JWT sigue válido pero requireSpaceAccess deniega en DB (403)', async ({ page, newContext, context, request }) => {
     await resetDb(request);
 
     const seed = await seedScenario(request, 'group-of-3');
@@ -188,8 +188,23 @@ test.describe('API Authorization Matrix (authz & space policy)', () => {
     await loginAs(page, userA);
     const apiA = context.request;
 
+    // userB debe 33,33 € (cena a tres pagada por A): con saldo abierto no se le
+    // puede expulsar -> 409 HAS_BALANCE con enlace a liquidar.
+    const blockedRes = await apiA.delete(`/api/spaces/${spaceId}/members/${userB.id}`);
+    expect(blockedRes.status(), 'expulsar con saldo abierto -> 409').toBe(409);
+    const blocked = await blockedRes.json();
+    expect(blocked.code).toBe('HAS_BALANCE');
+    expect(blocked.balanceCents).not.toBe(0);
+
+    // El acreedor (A) registra "Ya me ha pagado" -> CONFIRMED y saldo de B a cero.
+    const settleRes = await apiA.post('/api/settle', {
+      data: { fromUserId: userB.id, amount: 33.33, method: 'CASH', groupId: spaceId },
+    });
+    expect(settleRes.status(), 'A registra el pago recibido de B').toBe(200);
+    expect((await settleRes.json()).settlement.status).toBe('CONFIRMED');
+
     const expelRes = await apiA.delete(`/api/spaces/${spaceId}/members/${userB.id}`);
-    expect(expelRes.status(), 'OWNER expulsa a userB').toBe(200);
+    expect(expelRes.status(), 'OWNER expulsa a userB ya sin deuda').toBe(200);
     const expelJson = await expelRes.json();
     expect(expelJson.status).toBe('REMOVED');
 
@@ -283,4 +298,52 @@ test.describe('API Authorization Matrix (authz & space policy)', () => {
     await guestContext.close();
   });
 
+  for (const scenario of ['space-archived', 'space-settling'] as const) {
+    test(`6. Presupuestos en ${scenario}: POST/DELETE rechazados con 409 SPACE_NOT_WRITABLE`, async ({ newContext, request }) => {
+      await resetDb(request);
+      const seed = await seedScenario(request, scenario);
+      const userA = seed.userA as { email: string; password: string };
+      const ctx = await createAuthenticatedContext(newContext, userA);
+      const api = ctx.request;
+      const spaceId = seed.coupleId as string;
+
+      const create = await api.post('/api/budget', { data: { category: 'food', amount: 30, groupId: spaceId } });
+      expect(create.status()).toBe(409);
+      expect((await create.json()).code).toBe('SPACE_NOT_WRITABLE');
+
+      // Reading the (read-only) space still works.
+      expect((await api.get(`/api/budget?scope=shared&groupId=${spaceId}`)).status()).toBe(200);
+      await ctx.close();
+    });
+  }
+
+  test('7. Presupuestos: un invitado no lee ni borra el presupuesto del dueño; importes absurdos son 400', async ({ newContext, request }) => {
+    await resetDb(request);
+    const seed = await seedScenario(request, 'couple-with-debt');
+    const owner = await createAuthenticatedContext(newContext, seed.userA as { email: string; password: string });
+    const spaceId = seed.coupleId as string;
+
+    const huge = await owner.request.post('/api/budget', { data: { category: 'food', amount: 99999999, groupId: spaceId } });
+    expect(huge.status()).toBe(400);
+    expect((await huge.json()).error).toMatch(/máximo/);
+
+    const created = await owner.request.post('/api/budget', { data: { category: 'food', amount: 100, groupId: spaceId } });
+    expect(created.status()).toBe(201);
+    const budgetId = (await created.json()).budget.id as string;
+
+    const trip = await seedScenario(request, 'ephemeral-with-guest');
+    const guestCtx = await newContext();
+    await guestCtx.addCookies([{ name: 'session_token', value: (trip.guest as { sessionToken: string }).sessionToken, url: process.env.TEST_BASE_URL || 'http://localhost:3000' }]);
+    expect((await guestCtx.request.delete(`/api/budget?id=${budgetId}`)).status()).toBe(403);
+    expect((await guestCtx.request.post('/api/budget', { data: { category: 'food', amount: 5 } })).status()).toBe(403);
+
+    // An outsider cannot even learn the budget exists.
+    const outsider = await createAuthenticatedContext(newContext, trip.owner as { email: string; password: string });
+    expect((await outsider.request.delete(`/api/budget?id=${budgetId}`)).status()).toBe(404);
+
+    expect((await owner.request.delete(`/api/budget?id=${budgetId}`)).status()).toBe(200);
+    await owner.close();
+    await guestCtx.close();
+    await outsider.close();
+  });
 });

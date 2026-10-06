@@ -32,11 +32,19 @@ function expensePost(page: Page) {
   );
 }
 
-/** Fill the 2-step add-expense wizard and submit; returns the POST response. */
+/**
+ * POST a shared expense into the ACTIVE space straight to the API. The add
+ * screen no longer offers SETTLING/ARCHIVED spaces at all, so the server-side
+ * veto is asserted here directly.
+ */
+function postSharedExpense(page: Page, amount: string, description: string) {
+  return page.request.post('/api/expenses', { data: { description, amount, category: 'other' } });
+}
+
+/** Fill the add-expense screen and submit; returns the POST response. */
 async function submitSharedExpense(page: Page, amount: string, description: string) {
   await page.goto('/expenses/new');
   await page.fill('[data-testid="expense-amount"]', amount);
-  await page.click('[data-testid="expense-next"]');
   await page.fill('[data-testid="expense-description"]', description);
   const responsePromise = expensePost(page);
   await page.click('[data-testid="expense-submit"]');
@@ -86,8 +94,12 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await expect(page.getByTestId('space-action-settle')).toHaveCount(0);
     await expect(page.getByTestId('space-action-reopen')).toBeVisible();
     await expect(page.getByTestId('space-action-archive')).toBeVisible();
+    // No upgrade while closing; settling targets THIS space explicitly.
+    await expect(page.getByTestId('space-action-convert')).toHaveCount(0);
+    await expect(page.getByTestId('space-action-go-settle')).toHaveAttribute('href', `/settle?space=${spaceId}`);
     // The space page renders the banner too.
     await expect(page.getByTestId('space-status-banner')).toHaveAttribute('data-status', 'SETTLING');
+    await expect(page.getByTestId('space-status-settle-link')).toHaveAttribute('href', `/settle?space=${spaceId}`);
 
     // Dashboard: SETTLING banner with the OWNER close CTA; the balance is untouched.
     await page.goto('/dashboard');
@@ -98,12 +110,12 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await expect(page.getByTestId('space-status-close-link')).toHaveAttribute('href', `/spaces/${spaceId}/close`);
     await expect(page.getByTestId('balance-amount')).toHaveText(PLUS_50);
 
-    // Adding a shared expense is blocked: the API answers 409 and the form shows why.
-    const expenseRes = await submitSharedExpense(page, '20.00', 'Gasto bloqueado');
+    // Adding a shared expense is blocked: the API answers 409 with the reason.
+    const expenseRes = await postSharedExpense(page, '20.00', 'Gasto bloqueado');
     expect(expenseRes.status()).toBe(409);
-    expect((await expenseRes.json()).code).toBe('SPACE_NOT_WRITABLE');
-    await expect(page.getByText('Este espacio se está liquidando: no se pueden crear gastos nuevos')).toBeVisible();
-    await expect(page).toHaveURL(/\/expenses\/new/);
+    const blocked = await expenseRes.json();
+    expect(blocked.code).toBe('SPACE_NOT_WRITABLE');
+    expect(blocked.error).toBe('Este espacio se está liquidando: no se pueden crear gastos nuevos');
 
     // Existing expenses become read-only (no edit/delete).
     await page.goto(`/expense/${expenseId}`);
@@ -154,11 +166,13 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await expect(page.getByText('Gasto tras reabrir')).toBeVisible();
   });
 
-  test('SETTLING → ARCHIVED: OWNER archives; banner shown and the UI is read-only', async ({ page }) => {
+  test('SETTLING → ARCHIVED: blocked while a payment is pending/debts are open, then archives; UI read-only', async ({ page }) => {
+    // space-settling: B owes A 50 € and has a PENDING 50 € settlement.
     const data = await seedScenario(apiContext, 'space-settling');
     const userA = data.userA as Creds; // OWNER
     const spaceId = data.coupleId as string;
     const expenseId = data.expenseId as string;
+    const settlementId = data.settlementId as string;
 
     await loginAs(page, userA);
     await page.goto(`/spaces/${spaceId}`);
@@ -166,11 +180,39 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     const header = page.getByTestId('space-header-status');
     await expect(header).toHaveText('Pareja · Liquidando');
 
-    // Archiving asks for confirmation through window.confirm.
-    page.once('dialog', (dialog) => void dialog.accept());
-    const patchPromise = spacePatch(page, spaceId);
+    // Archiving asks for confirmation in a sheet; with a PENDING payment the API refuses (409).
     await page.getByTestId('space-action-archive').click();
-    const patch = await patchPromise;
+    const sheet = page.getByTestId('archive-sheet');
+    await expect(sheet).toBeVisible();
+    let patchPromise = spacePatch(page, spaceId);
+    await sheet.getByTestId('confirm-sheet-confirm').click();
+    let patch = await patchPromise;
+    expect(patch.status()).toBe(409);
+    const blocked = await patch.json();
+    expect(blocked.code).toBe('PENDING_SETTLEMENTS');
+    expect(blocked.settleUrl).toBe(`/settle?space=${spaceId}`);
+    await expect(sheet.getByTestId('confirm-sheet-error')).toContainText('pago pendiente de confirmar');
+    await expect(sheet.getByRole('link', { name: /Ir a liquidar/ })).toHaveAttribute('href', `/settle?space=${spaceId}`);
+    await expect(header).toHaveText('Pareja · Liquidando');
+
+    // Rejecting the payment leaves the 50 € debt open → still 409, now OPEN_BALANCES.
+    const reject = await page.request.patch(`/api/settle/${settlementId}/status`, { data: { status: 'REJECTED' } });
+    expect(reject.ok()).toBeTruthy();
+    const stillOpen = await page.request.patch(`/api/spaces/${spaceId}`, { data: { status: 'ARCHIVED' } });
+    expect(stillOpen.status()).toBe(409);
+    expect((await stillOpen.json()).code).toBe('OPEN_BALANCES');
+
+    // The creditor records the payment ("Ya me ha pagado") → everyone at peace.
+    const received = await page.request.post('/api/settle', {
+      data: { groupId: spaceId, fromUserId: (data.userB as Creds).id, amount: 50, method: 'CASH' },
+    });
+    expect(received.ok(), await received.text()).toBeTruthy();
+
+    await page.reload();
+    await page.getByTestId('space-action-archive').click();
+    patchPromise = spacePatch(page, spaceId);
+    await page.getByTestId('archive-sheet').getByTestId('confirm-sheet-confirm').click();
+    patch = await patchPromise;
     expect(patch.status()).toBe(200);
     expect(JSON.parse(patch.request().postData() ?? '{}')).toEqual({ status: 'ARCHIVED' });
 
@@ -201,9 +243,9 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await expect(page.getByTestId('close-archive')).toHaveCount(0);
 
     // New expenses are rejected with the archived message.
-    const expenseRes = await submitSharedExpense(page, '20.00', 'Gasto en archivado');
+    const expenseRes = await postSharedExpense(page, '20.00', 'Gasto en archivado');
     expect(expenseRes.status()).toBe(409);
-    await expect(page.getByText('Este espacio está archivado (solo lectura)')).toBeVisible();
+    expect((await expenseRes.json()).error).toBe('Este espacio está archivado (solo lectura)');
 
     // And the code treats ARCHIVED as terminal: reopening is refused (400 INVALID_TRANSITION).
     const reopen = await page.request.patch(`/api/spaces/${spaceId}`, { data: { status: 'ACTIVE' } });

@@ -1,87 +1,80 @@
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { ExpensesListClient } from "./client";
-import { getSession } from "@/lib/auth";
+import { ExpensesListClient, type ListItem } from "./client";
+import { getSessionCtx } from "@/lib/authz";
 import { getGroupMembers, getActiveGroup } from "@/lib/membership";
-import { NoGroupState } from "@/components/ui/no-group-state";
-import { toEuros } from "@/lib/currency";
 import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { getEffectiveCategories } from "@/lib/category-db";
 import { NEUTRAL_CATEGORY_META, type CategoryBadgeMeta } from "@/components/category/category-badge";
+import { spaceTitle } from "@/components/expenses/space-meta";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-export default async function ExpensesListPage() {
-    const session = await getSession();
+/**
+ * Gastos (EQUIL `is.gastos`). Shared scope = the caller's active space
+ * (expenses + settlements); `?scope=personal` — or having no space at all —
+ * shows the private personal ledger instead. Amounts travel in cents.
+ */
+export default async function ExpensesListPage({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
+    // getSessionCtx: a guest is revalidated against its Membership (expelled/archived → login).
+    const session = await getSessionCtx();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
     const isGuest = session.kind === "guest";
+    const { scope } = await searchParams;
 
-    // Phase 5 (WS1): resolve the group + members via the Membership layer.
-    const groupId = await getActiveGroup(userId);
-    if (!groupId) {
-        return <NoGroupState title="Gastos del grupo" />;
-    }
+    const activeGroupId = await getActiveGroup(userId);
+    const groupId = scope === "personal" && !isGuest ? null : activeGroupId;
+    const personal = !groupId;
 
-    const members = await getGroupMembers(groupId);
-
-    // DB-driven effective category set for the space (system ∪ space-custom).
-    // Built once and used to (a) tag each expense with its render metadata and
-    // (b) feed the filter chips — including any orphaned keys present on items.
-    const catList = await getEffectiveCategories({ groupId });
+    const [space, members, catList] = await Promise.all([
+        groupId ? prisma.couple.findUnique({ where: { id: groupId }, select: { name: true, type: true, status: true } }) : null,
+        groupId ? getGroupMembers(groupId) : Promise.resolve([]),
+        getEffectiveCategories(groupId ? { groupId } : { ownerId: userId }),
+    ]);
     const catMap = categoryMetaMap(catList);
-    const metaFor = (key: string): CategoryBadgeMeta =>
-        catMap[key] ?? catMap.other ?? NEUTRAL_CATEGORY_META;
+    const metaFor = (key: string): CategoryBadgeMeta => catMap[key] ?? catMap.other ?? NEUTRAL_CATEGORY_META;
 
-    // Fetch all expenses
-    const rawExpenses = await prisma.expense.findMany({
-        where: { coupleId: groupId, visibility: "SHARED" },
-        include: { splits: true, ...CATEGORY_REF_SELECT },
-        orderBy: { date: "desc" },
-    });
+    const [rawExpenses, rawSettlements] = await Promise.all([
+        prisma.expense.findMany({
+            where: personal ? { ownerId: userId, visibility: "PERSONAL" } : { coupleId: groupId!, visibility: "SHARED" },
+            include: { splits: { select: { userId: true, amount: true } }, ...CATEGORY_REF_SELECT },
+            orderBy: { date: "desc" },
+        }),
+        personal
+            ? Promise.resolve([])
+            : prisma.settlement.findMany({ where: { coupleId: groupId! }, orderBy: { date: "desc" } }),
+    ]);
 
-    // Fetch all settlements
-    const rawSettlements = await prisma.settlement.findMany({
-        where: { coupleId: groupId },
-        include: { fromUser: true, toUser: true },
-        orderBy: { date: "desc" },
-    });
-
-    // Merge and transform - convert cents to euros
-    const items = [
-        ...rawExpenses.map(e => ({
-            id: e.id,
-            type: "EXPENSE" as const,
-            description: e.description,
-            amount: toEuros(e.amount),
-            date: e.date.toISOString(),
-            // Phase 4 read-switch: the client's category filters key on the
-            // relational Category (enum fallback), not the enum column.
-            category: categoryKeyOf(e),
-            categoryMeta: metaFor(categoryKeyOf(e)),
-            paidBy: e.paidById,
-            receiptUrl: e.receiptUrl,
-            splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
-        })),
-        ...rawSettlements.map(s => ({
+    const items: ListItem[] = [
+        ...rawExpenses.map((e): ListItem => {
+            const key = categoryKeyOf(e);
+            return {
+                id: e.id,
+                type: "EXPENSE",
+                description: e.description,
+                amountCents: e.amount,
+                date: e.date.toISOString(),
+                category: key,
+                categoryMeta: metaFor(key),
+                paidBy: e.paidById,
+                splitStrategy: e.splitStrategy ?? null,
+                splits: e.splits,
+            };
+        }),
+        ...rawSettlements.map((s): ListItem => ({
             id: s.id,
-            type: "SETTLEMENT" as const,
-            description: "Liquidación de deuda",
-            amount: toEuros(s.amount),
+            type: "SETTLEMENT",
+            description: "Liquidación",
+            amountCents: s.amount,
             date: s.date.toISOString(),
             category: "settlement",
             paidBy: s.fromUserId,
             toUserId: s.toUserId,
             method: s.method,
-            status: s.status
-        }))
+            status: s.status,
+        })),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-    // Create users map
-    const usersMap: Record<string, { id: string; name: string; avatar: string | null }> = {};
-    members.forEach(m => {
-        usersMap[m.id] = { id: m.id, name: m.name, avatar: m.avatar };
-    });
 
     // Filter chips = the effective set plus any orphaned keys present on items
     // (a deleted custom category still showing on old expenses stays filterable).
@@ -95,9 +88,14 @@ export default async function ExpensesListPage() {
     return (
         <ExpensesListClient
             items={items}
-            usersMap={usersMap}
+            userId={userId}
+            members={members.map((m) => ({ id: m.id, name: m.name }))}
+            spaceLabel={spaceTitle(space)}
+            personal={personal}
             isGuest={isGuest}
             categories={filterCategories}
+            canSwitchScope={!isGuest && !!activeGroupId}
+            readOnlyStatus={space?.status === "SETTLING" || space?.status === "ARCHIVED" ? space.status : null}
         />
     );
 }

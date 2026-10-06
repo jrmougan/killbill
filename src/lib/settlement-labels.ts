@@ -14,8 +14,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 const METHOD_LABELS: Record<string, string> = {
     CASH: 'Efectivo',
-    BIZUM: 'Bizum / Transferencia',
-    TRANSFER: 'Bizum / Transferencia',
+    BIZUM: 'Bizum',
+    TRANSFER: 'Transferencia',
 };
 
 export function getSettlementStatusLabel(status: string): string {

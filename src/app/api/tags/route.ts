@@ -1,19 +1,58 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
 import { getActiveGroup } from '@/lib/membership';
+import { badRequest, conflict, requireSpace, route } from '@/lib/http';
+import { jsonObject } from '@/lib/http/schemas';
 
-export async function GET() {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const userId = session.userId as string;
+/** Longest tag name accepted (keeps chips readable and well under the column limit). */
+const MAX_TAG_NAME_LEN = 40;
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const DEFAULT_COLOR = '#8b5cf6';
 
-    // Phase 4 selector switch: resolve my group via the Membership layer.
-    // Fase 1: a user always sees their PERSONAL tags (ownerId), plus the tags of
-    // their active group when they belong to one. A user with no group still gets
-    // their personal tags (personal-mode is operative).
+const BODY_INVALID = 'Cuerpo de la petición no válido';
+const NAME_REQUIRED = 'El nombre de la etiqueta es obligatorio';
+const COLOR_INVALID = 'El color no es válido';
+
+const CreateTagBody = jsonObject(
+    {
+        name: z
+            .string({ error: NAME_REQUIRED })
+            .trim()
+            .min(1, NAME_REQUIRED)
+            .max(MAX_TAG_NAME_LEN, `El nombre de la etiqueta no puede superar los ${MAX_TAG_NAME_LEN} caracteres`),
+        /** null / "" / absent → the default colour. */
+        color: z
+            .union([z.string().regex(HEX_COLOR, COLOR_INVALID), z.literal(''), z.null()], { error: COLOR_INVALID })
+            .optional()
+            .transform((v) => v || DEFAULT_COLOR),
+        /** Only `true` makes it personal (lenient, as always). */
+        personal: z.unknown().optional().transform((v) => v === true),
+        /** A non-empty string targets that space; anything else → the active space. */
+        groupId: z.unknown().optional().transform((v) => (typeof v === 'string' && v ? v : null)),
+    },
+    BODY_INVALID,
+);
+
+function isUniqueViolation(e: unknown): boolean {
+    return typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
+}
+
+/**
+ * GET /api/tags — the caller's PERSONAL tags plus the tags of its active space.
+ * A GUEST session only ever sees the tags of the space it is caged to (no
+ * personal surface).
+ */
+export const GET = route({ auth: 'user-or-guest' }, async ({ ctx }) => {
+    if (ctx.kind === 'guest') {
+        const tags = ctx.groupId
+            ? await prisma.tag.findMany({ where: { coupleId: ctx.groupId }, orderBy: { name: 'asc' } })
+            : [];
+        return NextResponse.json({ tags });
+    }
+
+    const userId = ctx.userId;
     const groupId = await getActiveGroup(userId);
-
     const tags = await prisma.tag.findMany({
         where: groupId
             ? { OR: [{ coupleId: groupId }, { ownerId: userId }] }
@@ -22,47 +61,51 @@ export async function GET() {
     });
 
     return NextResponse.json({ tags });
-}
+});
 
-export async function POST(request: Request) {
-    try {
-        const session = await getSession();
-        if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        const userId = session.userId as string;
+/**
+ * POST /api/tags {name, color?, personal?, groupId?}
+ * A tag is EITHER personal (`ownerId`) or space-scoped (`coupleId`). A space tag
+ * targets `groupId` when given (else the active space) and requires ACTIVE,
+ * non-guest membership in that writable space. Guests never create tags.
+ * Errors: 400 invalid input, 403 guest/non-member, 409 duplicate name.
+ */
+export const POST = route(
+    {
+        auth: 'user',
+        body: CreateTagBody,
+        // Unparseable JSON keeps its historical message.
+        bodyOptions: { invalidMessage: BODY_INVALID },
+        errorMessage: 'No se pudo crear la etiqueta',
+        logLabel: 'Error al crear la etiqueta:',
+    },
+    async ({ ctx, body }) => {
+        const userId = ctx.userId;
+        const { name, color, personal, groupId: bodyGroupId } = body;
 
-        const body = await request.json();
-        const { name, color, personal } = body;
+        const duplicate = () => conflict(`Ya existe una etiqueta llamada «${name}»`, 'TAG_EXISTS');
 
-        if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
+        try {
+            if (personal) {
+                // Personal tags have no DB unique (coupleId is NULL), so check explicitly.
+                const existing = await prisma.tag.findFirst({ where: { ownerId: userId, name }, select: { id: true } });
+                if (existing) throw duplicate();
+                const tag = await prisma.tag.create({ data: { name, color, ownerId: userId } });
+                return NextResponse.json({ tag }, { status: 201 });
+            }
 
-        // Fase 1: a tag is EITHER group-scoped (coupleId, XOR ownerId) OR personal
-        // (ownerId, so a PERSONAL expense can carry a tag). `personal: true` forces
-        // the personal variant; otherwise it's a group tag and requires a group.
-        const isPersonal = personal === true;
-        if (!isPersonal) {
-            const groupId = await getActiveGroup(userId);
-            if (!groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+            const groupId = bodyGroupId || (await getActiveGroup(userId));
+            if (!groupId) throw badRequest('No perteneces a ningún espacio compartido', 'NO_SPACE');
+            await requireSpace(ctx, groupId);
 
-            const tag = await prisma.tag.create({
-                data: {
-                    name,
-                    color: color || '#8b5cf6',
-                    coupleId: groupId,
-                },
-            });
+            const existing = await prisma.tag.findFirst({ where: { coupleId: groupId, name }, select: { id: true } });
+            if (existing) throw duplicate();
+            const tag = await prisma.tag.create({ data: { name, color, coupleId: groupId } });
             return NextResponse.json({ tag }, { status: 201 });
+        } catch (error) {
+            // Concurrent create of the same name loses the @@unique([name, coupleId]) race.
+            if (isUniqueViolation(error)) throw duplicate();
+            throw error;
         }
-
-        const tag = await prisma.tag.create({
-            data: {
-                name,
-                color: color || '#8b5cf6',
-                ownerId: userId,
-            },
-        });
-        return NextResponse.json({ tag }, { status: 201 });
-    } catch (error) {
-        console.error('Error al crear la etiqueta:', error);
-        return NextResponse.json({ error: 'Error al crear la etiqueta' }, { status: 500 });
-    }
-}
+    },
+);

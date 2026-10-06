@@ -1,6 +1,13 @@
 const GEMINI_MODEL = "gemini-flash-latest";
 const DEFAULT_OPENROUTER_MODEL = "xiaomi/mimo-v2.6-flash";
 
+/**
+ * Per-provider deadline. A hung provider counts as a failure so the chain can
+ * fall back to the next one (Gemini → OpenRouter) instead of hanging the
+ * request; the worst case stays bounded at ~2× this value.
+ */
+export const PROVIDER_TIMEOUT_MS = 30_000;
+
 const RECEIPT_PROMPT = `Analiza este ticket de compra y extrae los productos en JSON.
 
 REGLAS:
@@ -191,11 +198,13 @@ function testProviderBase(): string | null {
 
 async function callGemini(apiKey: string, base64: string, mimeType: string, testBase: string | null): Promise<ReceiptAIResult> {
     const response = await fetch(
-        testBase ? `${testBase}/gemini` : `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+        testBase ? `${testBase}/gemini` : `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
         {
             method: "POST",
             ...(testBase ? { redirect: "error" as const } : {}),
-            headers: { "Content-Type": "application/json" },
+            // Key in a header, never in the URL (URLs end up in proxy/access logs).
+            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+            signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
             body: JSON.stringify({
                 contents: [{
                     parts: [
@@ -226,6 +235,7 @@ async function callOpenRouter(apiKey: string, base64: string, mimeType: string, 
     const response = await fetch(testBase ? `${testBase}/openrouter` : "https://openrouter.ai/api/v1/chat/completions", {
         ...(testBase ? { redirect: "error" as const } : {}),
         method: "POST",
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
         headers: {
             Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",

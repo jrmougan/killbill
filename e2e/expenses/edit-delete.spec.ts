@@ -29,16 +29,20 @@ test.describe('Expenses - Edit and Delete', () => {
 
     await pageA.goto(`/expense/${expenseId}/edit`);
 
-    const amountInput = pageA.locator('#expense-amount');
-    await expect(amountInput).toBeVisible({ timeout: 10000 });
+    // The edit screen is the same numpad form as "Añadir gasto" (G-11).
+    await expect(pageA.getByRole('heading', { level: 1, name: 'Editar gasto' })).toBeVisible({ timeout: 10000 });
+    const amountInput = pageA.getByTestId('expense-amount');
+    await expect(amountInput).toHaveValue('100');
+    await expect(pageA.getByTestId('expense-split')).toContainText('A medias');
     await amountInput.fill('200');
 
     const patchPromise = pageA.waitForResponse(
       (res) => res.url().includes(`/api/expenses/${expenseId}`) && res.request().method() === 'PATCH'
     );
-    await pageA.getByRole('button', { name: /Guardar Cambios/i }).click();
+    await pageA.getByRole('button', { name: 'Guardar cambios' }).click();
     const patchResponse = await patchPromise;
     expect(patchResponse.ok()).toBeTruthy();
+    expect(JSON.parse(patchResponse.request().postData() || '{}')).toMatchObject({ amount: 200, splitEqual: true });
 
     // Back on the detail page: the total reflects the new amount (100€ -> 200€)
     await expect(pageA).toHaveURL(new RegExp(`/expense/${expenseId}$`), { timeout: 10000 });
@@ -73,6 +77,14 @@ test.describe('Expenses - Edit and Delete', () => {
 
     await pageA.goto(`/expense/${expenseId}`);
 
+    // The confirmation is an accessible modal: focus on Cancelar, Escape closes it (G-23).
+    await pageA.locator('[data-testid="expense-delete"]').click();
+    const dialog = pageA.getByRole('alertdialog', { name: '¿Eliminar gasto?' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Cancelar' })).toBeFocused();
+    await pageA.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+
     await pageA.locator('[data-testid="expense-delete"]').click();
     const deletePromise = pageA.waitForResponse(
       (res) => res.url().includes(`/api/expenses/${expenseId}`) && res.request().method() === 'DELETE'
@@ -81,14 +93,14 @@ test.describe('Expenses - Edit and Delete', () => {
     const deleteResponse = await deletePromise;
     expect(deleteResponse.ok()).toBeTruthy();
 
-    // Redirected to the dashboard; the balance is back to zero
-    await expect(pageA).toHaveURL(/\/dashboard/, { timeout: 10000 });
-    await expect(pageA.locator('[data-testid="balance-amount"]')).toHaveText(/0,00\s*€/, { timeout: 10000 });
-
-    // The expense no longer appears in the movements list
-    await pageA.goto('/expenses/list');
+    // Back to the list it came from (shared scope), without the expense (G-24)
+    await expect(pageA).toHaveURL(/\/expenses\/list$/, { timeout: 10000 });
     await expect(pageA.getByText('Test Expense')).not.toBeVisible({ timeout: 10000 });
-    await expect(pageA.getByText('Sin resultados')).toBeVisible();
+    await expect(pageA.getByText('Todavía no hay gastos.')).toBeVisible();
+
+    // The balance is back to zero
+    await pageA.goto('/dashboard');
+    await expect(pageA.locator('[data-testid="balance-amount"]')).toHaveText(/0,00\s*€/, { timeout: 10000 });
 
     await pageA.close();
     await ctxA.close();
@@ -115,16 +127,16 @@ test.describe('Expenses - Edit and Delete', () => {
 
     await pageA.goto(`/expense/${expenseId}/edit`);
 
-    // Switch the payer from userA ("Yo") to userB
-    const payerB = pageA.locator(`[data-testid="edit-payer-${userB.id}"]`);
-    await expect(payerB).toBeVisible({ timeout: 10000 });
-    await payerB.click();
-    await expect(payerB).toHaveAttribute('aria-pressed', 'true');
+    // Switch the payer from userA ("Tú") to userB
+    const payer = pageA.getByTestId('expense-payer');
+    await expect(payer).toHaveValue(userA.id, { timeout: 10000 });
+    await payer.selectOption(userB.id);
+    await expect(pageA.getByTestId('expense-preview')).toContainText('Deberás 50,00');
 
     const patchPromise = pageA.waitForResponse(
       (res) => res.url().includes(`/api/expenses/${expenseId}`) && res.request().method() === 'PATCH'
     );
-    await pageA.getByRole('button', { name: /Guardar Cambios/i }).click();
+    await pageA.getByRole('button', { name: 'Guardar cambios' }).click();
     const patchResponse = await patchPromise;
     expect(patchResponse.ok()).toBeTruthy();
 

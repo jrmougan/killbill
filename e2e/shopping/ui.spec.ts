@@ -23,93 +23,86 @@ test.describe('Shopping Lists - UI Happy Path', () => {
     await apiContext.dispose();
   });
 
-  test('prefilled group list: view, add item, toggle check, clear checked, and verify no expenses created', async ({ page }) => {
+  test('group list: add, tick off, "Terminar y apuntar gasto" clears the cart and only opens a prefilled form', async ({ page }) => {
     const data = await seedScenario(apiContext, 'lists-prefilled');
     const userA = data.userA as Creds;
     const groupListId = data.groupListId as string;
 
     await loginAs(page, userA);
-
-    // Initial dashboard balance is 0,00 €
     await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.locator('[data-testid="balance-amount"]')).toHaveText(/0,00\s*€/);
 
-    // Go to shopping lists index
+    // The Listas tab opens straight onto the first Común list.
     await page.goto('/lists');
-    await expect(page.getByRole('heading', { name: 'Listas de la compra' })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'Listas' })).toBeVisible({ timeout: 10000 });
+    const mercadonaChip = page.getByRole('button', { name: /^Mercadona, común, 4 pendientes$/ });
+    await expect(mercadonaChip).toHaveAttribute('aria-pressed', 'true');
+    await expect(mercadonaChip).toHaveText('Mercadona · 4');
 
-    // Click on the group list "Mercadona"
-    const mercadonaCard = page.locator(`a[href="/lists/${groupListId}"]`);
-    await expect(mercadonaCard).toBeVisible();
-    await expect(mercadonaCard).toContainText('Mercadona');
-    await mercadonaCard.click();
+    // Prefilled items: pending (aisle-grouped) and the "En el carro" section.
+    await expect(page.getByRole('checkbox', { name: 'Leche' })).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Plátanos' })).toBeChecked();
+    await expect(page.getByText('En el carro · 2')).toBeVisible();
+    await expect(page.getByText('Lácteos y huevos')).toBeVisible();
 
-    await expect(page).toHaveURL(`/lists/${groupListId}`);
-    await expect(page.getByRole('heading', { name: 'Mercadona' })).toBeVisible();
-
-    // Verify existing prefilled items
-    await expect(page.getByText('Leche')).toBeVisible();
-    await expect(page.getByText('Plátanos')).toBeVisible();
-
-    // Add a new item via UI (e.g. "Manzanas")
-    const addItemInput = page.getByPlaceholder('Añadir artículo…');
-    await expect(addItemInput).toBeVisible();
+    // Add an item (Enter adds; the aisle is auto-assigned server-side).
+    const addItemInput = page.getByRole('textbox', { name: 'Añadir producto' });
     await addItemInput.fill('Manzanas');
-
     const postItemPromise = page.waitForResponse(
-      (res) => res.url().includes(`/items`) && res.request().method() === 'POST'
+      (res) => res.url().includes(`/lists/${groupListId}/items`) && res.request().method() === 'POST'
     );
-    await page.getByPlaceholder('Añadir artículo…').press('Enter');
-    const postItemRes = await postItemPromise;
-    expect(postItemRes.ok()).toBeTruthy();
+    await addItemInput.press('Enter');
+    expect((await postItemPromise).ok()).toBeTruthy();
+    await expect(page.getByRole('checkbox', { name: 'Manzanas' })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Fruta y verdura')).toBeVisible();
+    await expect(addItemInput).toHaveValue('');
 
-    await expect(page.getByText('Manzanas')).toBeVisible({ timeout: 10000 });
-
-    // Toggle check on "Leche" (was unchecked)
-    const lecheRow = page.locator('div.bg-card', { hasText: 'Leche' });
-    const toggleLeche = lecheRow.getByRole('button', { name: 'Marcar como comprado' });
-    await expect(toggleLeche).toBeVisible();
-
+    // Tick off "Leche" (idempotent checked API).
     const patchPromise = page.waitForResponse(
       (res) => res.url().includes('/items/') && res.request().method() === 'PATCH'
     );
-    await toggleLeche.click();
-    const patchRes = await patchPromise;
-    expect(patchRes.ok()).toBeTruthy();
+    await page.getByRole('checkbox', { name: 'Leche' }).check();
+    expect((await patchPromise).ok()).toBeTruthy();
+    await expect(page.getByRole('checkbox', { name: 'Leche' })).toBeChecked();
+    await expect(page.getByText('En el carro · 3')).toBeVisible();
 
-    // Now Leche should have the pending toggle label
-    await expect(lecheRow.getByRole('button', { name: 'Marcar como pendiente' })).toBeVisible({ timeout: 10000 });
+    // Edit sheet keeps quantity/unit/note reachable.
+    await page.getByRole('button', { name: 'Editar Pan' }).click();
+    const editSheet = page.getByRole('dialog', { name: 'Editar producto' });
+    await expect(editSheet.getByLabel('Cantidad')).toHaveValue('2');
+    await editSheet.getByRole('button', { name: 'Cerrar' }).click();
+    await expect(editSheet).toHaveCount(0);
 
-    // Clear checked items: click "Vaciar comprados"
-    const clearButton = page.getByRole('button', { name: /Vaciar comprados/ });
-    await expect(clearButton).toBeVisible();
-    await clearButton.click();
-
-    // Modal confirmation appears
-    const confirmButton = page.getByRole('button', { name: /^Vaciar \(\d+\)$/ });
-    await expect(confirmButton).toBeVisible();
-
+    // Shortcut WITHOUT link: clears the checked items, then opens the
+    // add-expense form prefilled — no expense is created by the list.
     const clearPromise = page.waitForResponse(
-      (res) => res.url().includes('/clear-checked') && res.request().method() === 'POST'
+      (res) => res.url().includes(`/lists/${groupListId}/clear-checked`) && res.request().method() === 'POST'
     );
-    await confirmButton.click();
-    const clearRes = await clearPromise;
-    expect(clearRes.ok()).toBeTruthy();
+    await page.getByRole('button', { name: 'Terminar y apuntar gasto' }).click();
+    expect((await clearPromise).ok()).toBeTruthy();
+    await expect(page).toHaveURL(/\/expenses\/new\?/, { timeout: 10000 });
+    const url = new URL(page.url());
+    expect(url.searchParams.get('title')).toBe('Mercadona');
+    expect(url.searchParams.get('category')).toBe('shopping');
+    expect(url.searchParams.get('space')).toBeTruthy();
+    expect(url.searchParams.get('returnTo')).toBe(`/lists/${groupListId}`);
+    expect(url.searchParams.get('scan')).toBe('1');
 
-    // Checked items (like Leche, Plátanos, Pollo) are now gone
-    await expect(page.getByText('Plátanos')).toHaveCount(0);
-    await expect(page.getByText('Leche')).toHaveCount(0);
-    // Unchecked items remain
-    await expect(page.getByText('Manzanas')).toBeVisible();
+    // The cart is gone, the pending items remain.
+    await page.goto(`/lists/${groupListId}`);
+    await expect(page.getByRole('checkbox', { name: 'Manzanas' })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('checkbox', { name: 'Leche' })).toHaveCount(0);
+    await expect(page.getByRole('checkbox', { name: 'Plátanos' })).toHaveCount(0);
+    await expect(page.getByText(/En el carro/)).toHaveCount(0);
 
-    // INVARIANT CHECK: Shopping list actions NEVER create an expense or alter balance
+    // INVARIANT: list actions never create an expense nor alter the balance.
     await page.goto('/dashboard');
     await expect(page.locator('[data-testid="balance-amount"]')).toHaveText(/0,00\s*€/);
     await page.goto('/expenses/list');
-    await expect(page.getByText('Sin resultados')).toBeVisible();
+    await expect(page.getByText('Todavía no hay gastos.')).toBeVisible();
   });
 
-  test('personal shopping list: switch scope tab and create new personal list via UI', async ({ page }) => {
+  test('personal list: switch via chip, dimmed shortcut and create a new personal list', async ({ page }) => {
     const data = await seedScenario(apiContext, 'lists-prefilled');
     const userA = data.userA as Creds;
     const personalListId = data.personalListId as string;
@@ -117,30 +110,33 @@ test.describe('Shopping Lists - UI Happy Path', () => {
     await loginAs(page, userA);
     await page.goto('/lists');
 
-    // Switch to "Personal" tab
-    const personalTab = page.getByRole('button', { name: 'Personal' });
-    await expect(personalTab).toBeVisible();
-    await personalTab.click();
-    await expect(personalTab).toHaveAttribute('aria-pressed', 'true');
+    // Personal lists sit after the Común ones.
+    const farmaciaChip = page.getByRole('button', { name: /^Farmacia, personal, 1 pendientes$/ });
+    await expect(farmaciaChip).toBeVisible({ timeout: 10000 });
+    await farmaciaChip.click();
+    await expect(page).toHaveURL(`/lists/${personalListId}`);
+    await expect(page.getByRole('button', { name: /^Farmacia, personal/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('checkbox', { name: 'Ibuprofeno' })).toBeVisible();
 
-    // Pre-seeded personal list "Farmacia" is displayed
-    const farmaciaCard = page.locator(`a[href="/lists/${personalListId}"]`);
-    await expect(farmaciaCard).toBeVisible();
-    await expect(farmaciaCard).toContainText('Farmacia');
+    // Untick the only checked item → the shortcut is dimmed and only nudges.
+    await page.getByRole('checkbox', { name: 'Agua' }).uncheck();
+    await expect(page.getByRole('checkbox', { name: 'Agua' })).not.toBeChecked();
+    await page.getByRole('button', { name: 'Terminar y apuntar gasto' }).click();
+    await expect(page.getByText('Marca lo que has cogido')).toBeVisible();
+    await expect(page).toHaveURL(`/lists/${personalListId}`);
 
-    // Create a new personal list
-    const listNameInput = page.getByPlaceholder('p. ej. Farmacia');
-    await expect(listNameInput).toBeVisible();
-    await listNameInput.fill('Ferretería');
-
+    // "+ Nueva" → sheet → personal list.
+    await page.getByRole('button', { name: '+ Nueva' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Nueva lista' });
+    await sheet.getByRole('radio', { name: 'Personal' }).check();
+    await sheet.getByLabel('Nombre').fill('Ferretería');
     const createPromise = page.waitForResponse(
       (res) => res.url().includes('/api/me/lists') && res.request().method() === 'POST'
     );
-    await page.getByRole('button', { name: /Crear/ }).click();
-    const createRes = await createPromise;
-    expect(createRes.ok()).toBeTruthy();
+    await sheet.getByRole('button', { name: 'Crear lista' }).click();
+    expect((await createPromise).ok()).toBeTruthy();
 
-    // The new list is now in the list
-    await expect(page.getByText('Ferretería')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: /^Ferretería, personal, 0 pendientes$/ })).toHaveAttribute('aria-pressed', 'true', { timeout: 10000 });
+    await expect(page.getByText('Lista vacía. Añade el primer producto.')).toBeVisible();
   });
 });

@@ -1,18 +1,23 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { verifyToken, refreshGuestToken } from '@/lib/jwt'
+import { guestRouteDecision, underPath } from '@/lib/authz-guest'
 
-// Path prefixes a GUEST session may reach (plan §2.4). Everything else —
-// /settings, /admin, /budget, /analytics, /personal, /tags... — is off-limits.
-const GUEST_ALLOWED_PREFIXES = ['/dashboard', '/expenses', '/expense', '/settle', '/guest']
+/**
+ * Pages (and the admin API) that require ANY valid session. Anonymous visitors
+ * are redirected to /login (pages) or get a 401 (API). Other API routes do their
+ * own session check (some are public: invite preview/claim, cron, test, setup).
+ */
+const PROTECTED_PATHS = [
+    '/dashboard', '/admin', '/api/admin', '/expenses', '/expense', '/personal', '/settle',
+    '/settings', '/lists', '/month', '/budget', '/analytics', '/categories', '/tags',
+    '/spaces', '/welcome',
+]
 
-/** A guest may load /expenses/* but NOT the CSV import (personal-only surface). */
-function isGuestAllowedPath(pathname: string): boolean {
-    if (pathname.startsWith('/expenses/import')) return false
-    return GUEST_ALLOWED_PREFIXES.some(p => pathname.startsWith(p))
-}
+const GUEST_COOKIE_MAX_AGE = 72 * 60 * 60
 
 export async function proxy(request: NextRequest) {
+    const { pathname } = request.nextUrl
 
     // Public invite consent pages (/i/*) live OUTSIDE the auth guard: anyone
     // holding a link must be able to reach the consent screen without a session.
@@ -20,76 +25,68 @@ export async function proxy(request: NextRequest) {
     // the URL never leaks through the Referer header (to sub-resource hosts or the
     // next page the visitor navigates to). No join ever happens here — the page
     // only previews and requires an explicit action to claim.
-    if (request.nextUrl.pathname.startsWith('/i/')) {
+    if (underPath(pathname, '/i')) {
         const res = NextResponse.next()
         res.headers.set('Referrer-Policy', 'no-referrer')
         return res
     }
 
-    // Define protected paths
-    // /setup should NOT be protected as it handles its own logic
-    const protectedPaths = ['/dashboard', '/admin', '/api/admin', '/expenses', '/personal', '/settle', '/settings', '/lists']
-    const isProtected = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
+    const token = request.cookies.get('session_token')?.value
+    const verifiedToken = token ? await verifyToken(token) : null
+    const isApi = underPath(pathname, '/api')
 
-    if (isProtected) {
-        const token = request.cookies.get('session_token')?.value
-        const verifiedToken = token ? await verifyToken(token) : null
-
-        if (!verifiedToken) {
-            // If API request, return JSON error
-            if (request.nextUrl.pathname.startsWith('/api')) {
-                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-            }
-            // If Page request, redirect to login
-            return NextResponse.redirect(new URL('/login', request.url))
+    // GUEST confinement (deny-by-default) + sliding renewal. A guest session is
+    // caged to its single EPHEMERAL space: it may only open the guest pages
+    // (Inicio, gastos, saldar, crear cuenta) and call the API endpoints those
+    // pages use — see `src/lib/authz-guest.ts` for the exact allowlist. Anything
+    // else is a 403 (API) or a redirect to /dashboard (pages), including
+    // /settings, /admin, /month, /lists, /categories, /tags, /spaces/**, and
+    // POST /api/spaces, /api/me/**, /api/budget, /api/user/**. The DB-backed
+    // revocation (expelled / archived) lives in getSessionCtx/requireSpaceAccess;
+    // handlers still authorize every resource against its own group.
+    if (verifiedToken?.kind === 'guest') {
+        const decision = guestRouteDecision(pathname, request.method)
+        if (decision === 'forbid') {
+            return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 })
+        }
+        if (decision === 'redirect') {
+            return NextResponse.redirect(new URL('/dashboard', request.url))
         }
 
-        // GUEST confinement + sliding renewal (Fase 3). A guest is caged to a
-        // handful of pages; anything else bounces to its dashboard. The DB-backed
-        // revocation (expelled / archived) lives in getSessionCtx/requireSpaceAccess
-        // — this branch is only the coarse page-level gate. On every allowed hit we
-        // re-sign the 72h token (capped at the space's expiry) so an active guest
-        // stays logged in without ever exceeding the trip window.
-        if (verifiedToken.kind === 'guest') {
-            const pathname = request.nextUrl.pathname
-            if (!isGuestAllowedPath(pathname)) {
-                if (pathname.startsWith('/api')) {
-                    return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 })
-                }
-                return NextResponse.redirect(new URL('/dashboard', request.url))
-            }
-
-            const res = NextResponse.next()
-            const refreshed = await refreshGuestToken(verifiedToken)
-            if (refreshed) {
-                res.cookies.set({
-                    name: 'session_token',
-                    value: refreshed,
-                    httpOnly: true,
-                    secure: process.env.NODE_ENV === 'production',
-                    sameSite: 'lax',
-                    path: '/',
-                    maxAge: 72 * 60 * 60,
-                })
-            }
-            return res
+        // On every allowed hit re-sign the 72h token (capped at the space's
+        // expiry) so an active guest stays logged in without ever exceeding the
+        // trip window.
+        const res = NextResponse.next()
+        const refreshed = await refreshGuestToken(verifiedToken)
+        if (refreshed) {
+            res.cookies.set({
+                name: 'session_token',
+                value: refreshed,
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                path: '/',
+                maxAge: GUEST_COOKIE_MAX_AGE,
+            })
         }
+        return res
+    }
+
+    const isProtected = PROTECTED_PATHS.some(path => underPath(pathname, path))
+    if (isProtected && !verifiedToken) {
+        if (isApi) {
+            return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+        }
+        return NextResponse.redirect(new URL('/login', request.url))
     }
 
     return NextResponse.next()
 }
 
 export const config = {
+    // Every route except Next internals and static files: the guest fence is
+    // deny-by-default, so it must see every page and every /api call.
     matcher: [
-        '/dashboard/:path*',
-        '/admin/:path*',
-        '/api/admin/:path*',
-        '/expenses/:path*',
-        '/personal/:path*',
-        '/settle/:path*',
-        '/settings/:path*',
-        '/lists/:path*',
-        // Matched only to stamp Referrer-Policy: no-referrer — never guarded.
-        '/i/:path*',
+        '/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|avif|css|js|map|txt|woff2?)$).*)',
     ],
 }

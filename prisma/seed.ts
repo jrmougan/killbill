@@ -1,7 +1,13 @@
-import 'dotenv/config';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../src/generated/prisma/client';
 import bcrypt from 'bcryptjs';
+
+// Carga .env si existe (Node 24); en CI/contenedor las variables ya vienen del entorno.
+try {
+    process.loadEnvFile();
+} catch {
+    // Sin .env: usar el entorno tal cual.
+}
 
 // Parse DATABASE_URL to get connection details
 function parseDbUrl(url: string) {
@@ -48,11 +54,12 @@ const SYSTEM_CATEGORIES = [
 async function main() {
     console.log('🌱 Seeding database...');
 
-    // Idempotent system-category seed (MySQL doesn't enforce UNIQUE across NULL
-    // groupId, so guard by hand). No-op when they already exist.
+    // Idempotent system-category seed. No-op when they already exist. The DB
+    // enforces one system row per key (UNIQUE(scopeKey, key), migration
+    // 20261006110001), so look up exactly the SYSTEM row (not a personal one).
     for (let i = 0; i < SYSTEM_CATEGORIES.length; i++) {
         const c = SYSTEM_CATEGORIES[i];
-        const existing = await prisma.category.findFirst({ where: { groupId: null, key: c.key } });
+        const existing = await prisma.category.findFirst({ where: { groupId: null, ownerId: null, isSystem: true, key: c.key } });
         if (!existing) {
             await prisma.category.create({ data: { ...c, sortOrder: i, isSystem: true, groupId: null } });
         }

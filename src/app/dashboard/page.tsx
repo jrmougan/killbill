@@ -1,615 +1,373 @@
-import { Button } from "@/components/ui/button";
-import { GlassCard } from "@/components/ui/glass-card";
-import { ExpenseCard } from "@/components/dashboard/expense-card";
-import { User, Expense } from "@/types";
-import { InviteCard } from "@/components/dashboard/invite-card";
-import { JoinGroupCard } from "@/components/dashboard/join-group-card";
-import { Plus, Heart, ArrowLeftRight, Lock, ShoppingCart, ChevronRight } from "lucide-react";
+import { Suspense } from "react";
 import Link from "next/link";
-import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { getLastSettlementDate } from "@/lib/finance";
-import { getGroupBalances } from "@/lib/ledger-read";
+import { Check, ChevronRight } from "lucide-react";
+import { prisma } from "@/lib/db";
+import { getSessionCtx } from "@/lib/authz";
+import { getActiveGroup, getGroupMembers } from "@/lib/membership";
 import { materializeDueRecurringExpenses, materializeDueRecurringExpensesForOwner } from "@/lib/recurring";
-import { getGroupMembers, getActiveGroup, getUserGroups } from "@/lib/membership";
-import { SpaceSwitcher } from "@/components/nav/space-switcher";
-import { normalizeScope } from "@/lib/scope";
-import { toEuros, formatEuros } from "@/lib/currency";
 import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { getEffectiveCategories } from "@/lib/category-db";
-import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
-import { getSettlementStatusLabel, getSettlementMethodLabel } from "@/lib/settlement-labels";
-import { cn } from "@/lib/utils";
+import { getIconComponent } from "@/lib/category-icons";
+import { formatCurrency } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
-import { VisualBalanceLazy } from "@/components/ui/visual-balance-lazy";
+import { spaceTypeMeta } from "@/lib/space-ui";
+import { ephemeralSpacesEnabled } from "@/lib/flags";
+import { getSettlementStatusLabel } from "@/lib/settlement-labels";
+import { monthRange } from "@/lib/month-range";
+import { hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
+import { getPersonalMonthTotal, getSpaceSummaries, type SpaceSummary } from "@/lib/space-summaries";
+import {
+    absEuros,
+    balanceTone,
+    balanceWords,
+    cardSub,
+    categorySlices,
+    dayLabel,
+    expenseSub,
+    firstName,
+    madridMonthName,
+    signedEuros,
+} from "@/lib/home-format";
+import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
+import { EqLabel, EqRow } from "@/components/ui/eq";
 import { MemberBalanceList } from "@/components/ui/member-balance-list";
+import { SpaceCarousel, type SpaceCardData } from "@/components/dashboard/space-carousel";
+import { MonthSummary } from "@/components/dashboard/month-summary";
+import { SavedToast } from "@/components/dashboard/saved-toast";
 import { PendingSettlements } from "@/components/dashboard/pending-settlements";
 import { SpaceStatusBanner } from "@/components/space/space-status-banner";
+import { SpaceInviteCard } from "@/components/space/space-invite-card";
+import { SpaceActionTiles } from "@/components/space/space-action-tiles";
+import { inviteConfigFor } from "@/components/space/invite-eligibility";
+import { PERSONAL_KEY } from "@/components/space/space-keys";
 import { GuestBanner } from "@/components/guest/guest-banner";
-import { spaceTypeMeta } from "@/lib/space-ui";
-import { SpaceType } from "@/generated/prisma/enums";
-import { randomBytes } from "crypto";
+import { SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
+/** Display name of a space (falls back to its type label). */
+function spaceName(s: Pick<SpaceSummary, "name" | "type">): string {
+    return s.name ?? spaceTypeMeta(s.type).label;
+}
+
+/**
+ * Inicio (prototype `is.home`). One context at a time: the ACTIVE shared space
+ * (the `active_group` cookie, validated against Membership) or the personal
+ * INDIVIDUAL context (`?scope=personal`). `?scope=comun` and no param both mean
+ * "the active shared space" (the old combined "todo" lens is gone). `?saved=<cents>`
+ * shows a one-shot "Gasto guardado" toast and is then stripped from the URL.
+ *
+ * Month figures use the half-open Madrid month (`monthRange`): an expense dated
+ * in a future month never counts as "este mes".
+ */
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
-    const session = await getSession();
+    // getSessionCtx: a guest is revalidated against its Membership (expelled/archived → login).
+    const session = await getSessionCtx();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
-    // A GUEST session (Fase 3) is caged to a single EPHEMERAL space and has NO
-    // personal economy: force the shared lens, hide the personal tile/import/CSV
-    // and lock the space switcher. Detection is by the JWT `kind` claim only, so
-    // this stays correct even if EPHEMERAL_SPACES_ENABLED is later turned off
-    // (an already-open guest session keeps rendering; upgraded ones are normal).
+    // A GUEST session is caged to its EPHEMERAL space with no personal economy.
     const isGuest = session.kind === "guest";
 
-    // Fetch the user for display; resolve the ACTIVE group via the Membership
-    // layer (F4: honours the group-switcher cookie, else the primary group).
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    const groupId = await getActiveGroup(userId);
-
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, avatar: true } });
     if (!user) {
-        return <div className="p-10 text-center">Usuario no encontrado. <Link href="/login" className="underline">Login de nuevo</Link></div>;
+        return <div className="p-10 text-center">Usuario no encontrado. <Link href="/login" className="underline">Inicia sesión de nuevo</Link></div>;
     }
 
-    // Scope is a lens over the home: 'todo' (default), 'comun' (group only) or
-    // 'personal' (private only). A user with NO group has only the personal lens —
-    // the app is fully usable solo, with an optional "create/join a group" CTA
-    // instead of a blocking onboarding wall.
-    const scope = isGuest ? "comun" : groupId ? normalizeScope((await searchParams).scope) : "personal";
+    const now = new Date();
+    const month = monthRange(now);
+    const activeGroupId = await getActiveGroup(userId);
+    const { scope } = await searchParams;
+    const personalActive = !isGuest && (!activeGroupId || scope === "personal");
 
-    // Resolve the group entity + members only when the user belongs to one.
-    const couple = groupId ? await prisma.couple.findUnique({ where: { id: groupId } }) : null;
-    const userGroups = couple ? await getUserGroups(userId) : [];
-    const members = couple ? await getGroupMembers(couple.id) : [];
-
-    // Spaces for the header switcher: Personal first, then one row per group.
-    // Presentation + navigation only — the actual lens is still `scope` below.
-    const spaces = [
-        // A guest has no personal economy, so omit the Personal row entirely.
-        ...(isGuest ? [] : [{ key: "personal", kind: "personal" as const, name: "Personal", sub: "Economía individual" }]),
-        ...userGroups.map((g) => ({
-            key: g.id,
-            kind: "group" as const,
-            name: g.name ?? spaceTypeMeta(g.type).label,
-            sub: `${spaceTypeMeta(g.type).label} · ${g.memberCount} ${g.memberCount === 1 ? "miembro" : "miembros"}`,
-            spaceType: g.type,
-            status: g.status,
-        })),
-    ];
-    // The active/checked space: the group when we're in a group lens, else Personal.
-    const activeSpaceKey = groupId && scope !== "personal" ? groupId : "personal";
-    const partner = members.find(m => m.id !== userId);
-
-    // Bifurcate by SPACE TYPE, never by member count (Fase 1). A COUPLE waits for
-    // its 2nd member; GROUP/EPHEMERAL are operative from a single member (you can
-    // record shared expenses solo). The two-pan seesaw only maps to COUPLE.
-    const spaceType = couple?.type;
-    const isCoupleType = spaceType === SpaceType.COUPLE;
-    const coupleWaiting = isCoupleType && members.length < 2;
-    const spaceOperative = Boolean(couple) && !coupleWaiting;
-    const myRole = userGroups.find(g => g.id === groupId)?.role;
-    const canManageSpace = myRole === "OWNER" || myRole === "ADMIN";
-
-    // usersMap always includes the current user so personal expenses render even
-    // for a group-less user.
-    const usersMap = members.reduce<Record<string, User>>(
-        (acc, u) => ({ ...acc, [u.id]: u }),
-        { [user.id]: user as unknown as User }
-    );
-
-    // Lazily materialize any due couple recurring expenses (skip when group-less).
-    // A failure here must never block the dashboard render.
-    if (couple) {
+    // Lazily materialize due recurring expenses so balances/totals include them.
+    // A failure here must never block the render. Idempotent and race-safe (each
+    // occurrence is claimed under the space lock), so it coexists with the
+    // scheduled POST /api/cron/recurring; each scope fails independently.
+    const materialize = async (run: () => Promise<number>) => {
         try {
-            await materializeDueRecurringExpenses(couple.id);
+            await run();
         } catch (err) {
             console.error("Failed to materialize recurring expenses", err);
         }
-    }
+    };
+    if (activeGroupId) await materialize(() => materializeDueRecurringExpenses(activeGroupId));
+    if (!isGuest) await materialize(() => materializeDueRecurringExpensesForOwner(userId));
 
-    // Fetch ALL shared Expenses for balance calculation.
-    // Personal expenses (visibility PERSONAL) are private and must never affect
-    // the couple's balances.
-    const allExpenses = couple ? await prisma.expense.findMany({
-        where: { coupleId: couple.id, visibility: "SHARED" },
-        include: { splits: true, ...CATEGORY_REF_SELECT },
-    }) : [];
-
-    // Personal ledger (private to this user). Materialize the user's own recurring
-    // personal sources (the couple runner above never sees them: coupleId is null),
-    // then load them for the unified feed and the "Personal este mes" tile.
-    // Guests have no personal economy — skip the personal ledger entirely.
-    if (!isGuest) {
-        try {
-            await materializeDueRecurringExpensesForOwner(userId);
-        } catch (err) {
-            console.error("Failed to materialize personal recurring expenses", err);
-        }
-    }
-    const personalExpenses = isGuest ? [] : await prisma.expense.findMany({
-        where: { ownerId: userId, visibility: "PERSONAL" },
-        include: { splits: true, ...CATEGORY_REF_SELECT },
-    });
-    const personalMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const personalThisMonth = toEuros(
-        personalExpenses
-            .filter(e => new Date(e.date) >= personalMonthStart)
-            .reduce((sum, e) => sum + e.amount, 0)
-    );
-
-    // Fetch Settlements (none when group-less)
-    const settlements = couple ? await prisma.settlement.findMany({
-        where: { coupleId: couple.id },
-    }) : [];
-
-    // Balances now come from the double-entry ledger (Σ LedgerEntry per active
-    // member's Account). reconcile-ledger.ts proves this equals calculateBalances
-    // exactly, so displayed balances are unchanged — the ledger is now the source
-    // of truth (finance.ts retained for analytics + the debt-matching algorithm).
-    const balances = couple ? await getGroupBalances(couple.id) : {};
-
-    // Balance is in CENTS, convert to euros for display
-    let myBalanceCents = balances[userId] || 0;
-    if (Math.abs(myBalanceCents) < 1) myBalanceCents = 0; // Less than 1 cent = 0
-    const myBalance = toEuros(myBalanceCents);
-
-    // Filter settlements pending for ME to confirm
-    const myPendingSettlements = settlements
-        .filter(s => s.toUserId === userId && s.status === "PENDING")
-        .map(s => ({
-            id: s.id,
-            amount: s.amount,
-            fromUser: {
-                name: members.find(m => m.id === s.fromUserId)?.name || "Alguien",
-                avatar: members.find(m => m.id === s.fromUserId)?.avatar || null
-            },
-            date: s.date.toISOString(),
-            method: s.method
-        }));
-
-    // Calculate last settlement date for filtering (only confirmed settlements mark a clean slate)
-    const confirmedSettlements = settlements.filter(s => s.status === "CONFIRMED");
-    const lastSettlementDate = getLastSettlementDate(confirmedSettlements);
-
-    // DB-driven category metadata for each context's effective set (system ∪
-    // custom). Shared expenses resolve in the group scope; personal ones in the
-    // owner scope. Resolved once per request and attached to each feed item —
-    // no N+1, no client-side re-resolution/flash. The 'other' system row is
-    // always present, so it is the neutral fallback for an orphaned key.
-    const [sharedCatList, personalCatList] = await Promise.all([
-        couple ? getEffectiveCategories({ groupId: couple.id }) : Promise.resolve([]),
-        isGuest ? Promise.resolve([]) : getEffectiveCategories({ ownerId: userId }),
+    const [summaries, personalMonthCents] = await Promise.all([
+        getSpaceSummaries(userId, month),
+        isGuest ? Promise.resolve(0) : getPersonalMonthTotal(userId, month),
     ]);
-    const sharedCatMap = categoryMetaMap(sharedCatList);
-    const personalCatMap = categoryMetaMap(personalCatList);
-    const sharedMetaFor = (key: string) => sharedCatMap[key] ?? sharedCatMap.other ?? NEUTRAL_CATEGORY_META;
-    const personalMetaFor = (key: string) => personalCatMap[key] ?? personalCatMap.other ?? NEUTRAL_CATEGORY_META;
+    const active = personalActive ? null : summaries.find((s) => s.id === activeGroupId) ?? null;
+    const activeKey = active ? active.id : PERSONAL_KEY;
 
-    // Unified feed, filtered by scope. Shared expenses respect the settlement
-    // "clean slate"; personal ones are just the user's recent private movements.
-    const sharedFeed = allExpenses
-        .map(e => ({
-            id: e.id,
-            type: "EXPENSE" as const,
-            description: e.description,
-            amount: toEuros(e.amount), // cents -> euros
-            date: e.date.toISOString(),
-            category: categoryKeyOf(e), // Category table is the read key (enum fallback)
-            categoryMeta: sharedMetaFor(categoryKeyOf(e)),
-            paidBy: e.paidById,
-            receiptUrl: e.receiptUrl,
-            splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
-            isPersonal: false,
-        }))
-        .filter(i => new Date(i.date) > lastSettlementDate);
+    // --- Active context data (month split + recent movements).
+    const categoryList = await getEffectiveCategories(active ? { groupId: active.id } : { ownerId: userId });
+    const catMap = categoryMetaMap(categoryList);
+    const metaFor = (key: string) => catMap[key] ?? catMap.other ?? NEUTRAL_CATEGORY_META;
 
-    const settlementFeed = settlements
-        .map((s) => ({
+    const expenseWhere = active
+        ? { coupleId: active.id, visibility: "SHARED" as const }
+        : { ownerId: userId, visibility: "PERSONAL" as const };
+
+    const [monthExpenses, recentExpenses, recentSettlements, pendingToMe, pendingFromMe, members, anyPersonalExpense] = await Promise.all([
+        prisma.expense.findMany({
+            where: { ...expenseWhere, date: { gte: month.start, lt: month.end } },
+            select: { amount: true, ...CATEGORY_REF_SELECT },
+        }),
+        prisma.expense.findMany({
+            where: expenseWhere,
+            orderBy: [{ date: "desc" }, { id: "desc" }],
+            take: 4,
+            include: { splits: { select: { userId: true, amount: true } }, ...CATEGORY_REF_SELECT },
+        }),
+        active
+            ? prisma.settlement.findMany({
+                where: { coupleId: active.id, status: { in: ["PENDING", "CONFIRMED"] } },
+                orderBy: [{ date: "desc" }, { id: "desc" }],
+                take: 4,
+            })
+            : Promise.resolve([]),
+        active
+            ? prisma.settlement.findMany({
+                where: { coupleId: active.id, toUserId: userId, status: "PENDING" },
+                orderBy: { date: "desc" },
+            })
+            : Promise.resolve([]),
+        active
+            ? prisma.settlement.findMany({
+                where: { coupleId: active.id, fromUserId: userId, status: "PENDING" },
+                select: { amount: true, toUserId: true },
+            })
+            : Promise.resolve([]),
+        active ? getGroupMembers(active.id) : Promise.resolve([]),
+        // Only needed to decide whether a brand-new user should see the welcome.
+        !isGuest && summaries.length === 0
+            ? prisma.expense.findFirst({ where: { ownerId: userId, visibility: "PERSONAL" }, select: { id: true } })
+            : Promise.resolve(null),
+    ]);
+
+    const names: Record<string, string> = Object.fromEntries(members.map((m) => [m.id, m.name]));
+    names[userId] = user.name;
+    const avatars: Record<string, string | null> = Object.fromEntries(members.map((m) => [m.id, m.avatar ?? null]));
+
+    // --- Carousel cards: live spaces (+ the active one even if archived) + Personal.
+    const pendingOutCents = pendingFromMe.reduce((a, s) => a + s.amount, 0);
+    const cards: SpaceCardData[] = summaries
+        .filter((s) => s.status !== SpaceStatus.ARCHIVED || s.id === active?.id)
+        .map((s) => {
+            const solo = s.others.length === 0;
+            const isActive = s.id === active?.id;
+            const canSettle = isActive && !solo && hasOpenBalance(s.balanceCents) && s.status !== SpaceStatus.ARCHIVED;
+            return {
+                key: s.id,
+                emoji: spaceTypeMeta(s.type).emoji,
+                name: spaceName(s),
+                sub: cardSub(s.others),
+                label: solo ? "Este mes" : balanceWords(s.balanceCents, s.others),
+                amount: absEuros(solo ? s.monthTotalCents : s.balanceCents),
+                tone: solo ? "neutral" : balanceTone(s.balanceCents),
+                signed: solo ? null : signedEuros(s.balanceCents),
+                settleHref: canSettle ? "/settle" : null,
+                // Debtor side of a two-step payment: say it is on its way (IE-27).
+                pendingNote:
+                    isActive && pendingOutCents > 0 && s.status !== SpaceStatus.ARCHIVED
+                        ? `Pago de ${formatCurrency(pendingOutCents)} pendiente de confirmar`
+                        : null,
+            };
+        });
+    if (!isGuest) {
+        cards.push({
+            key: PERSONAL_KEY,
+            emoji: "👤",
+            name: "Personal",
+            sub: "Solo tú",
+            label: "Personal este mes",
+            amount: formatCurrency(personalMonthCents),
+            tone: "neutral",
+            signed: null,
+            settleHref: null,
+        });
+    }
+
+    const totals: Record<string, number> = {};
+    for (const e of monthExpenses) {
+        const k = categoryKeyOf(e);
+        totals[k] = (totals[k] ?? 0) + e.amount;
+    }
+    const slices = categorySlices(totals, metaFor);
+    const monthTotal = monthExpenses.reduce((a, e) => a + e.amount, 0);
+    const contextName = active ? spaceName(active) : "Personal";
+
+    type Row = { id: string; date: Date; node: React.ReactNode };
+    const rows: Row[] = [
+        ...recentExpenses.map((e) => {
+            const meta = metaFor(categoryKeyOf(e));
+            const Icon = getIconComponent(meta.iconName);
+            const how = active
+                ? expenseSub({ payerId: e.paidById, meId: userId, splits: e.splits, names, memberCount: active.memberCount })
+                : meta.label;
+            return {
+                id: e.id,
+                date: e.date,
+                node: (
+                    <EqRow
+                        key={e.id}
+                        href={`/expense/${e.id}`}
+                        icon={<Icon className="h-[18px] w-[18px]" style={{ color: meta.hex }} aria-hidden="true" />}
+                        title={e.description}
+                        sub={`${how} · ${dayLabel(e.date, now)}`}
+                        amount={formatCurrency(e.amount)}
+                    />
+                ),
+            };
+        }),
+        ...recentSettlements.map((s) => ({
             id: s.id,
-            type: "SETTLEMENT" as const,
-            description: `Liquidación`,
-            amount: toEuros(s.amount), // cents -> euros
-            date: s.date.toISOString(),
-            category: "settlement",
-            paidBy: s.fromUserId,
-            toUserId: s.toUserId,
-            method: s.method,
-            status: s.status,
-        }))
-        .filter(i => i.status === "PENDING");
+            date: s.date,
+            node: (
+                <EqRow
+                    key={s.id}
+                    href={`/settle/${s.id}`}
+                    iconTint
+                    icon={<Check className="h-[18px] w-[18px]" aria-hidden="true" />}
+                    title="Liquidación"
+                    sub={`${names[s.fromUserId] ?? "Alguien"} → ${names[s.toUserId] ?? "Alguien"} · ${getSettlementStatusLabel(s.status)} · ${dayLabel(s.date, now)}`}
+                    amount={formatCurrency(s.amount)}
+                    amountClassName="text-[color:var(--positive)]"
+                />
+            ),
+        })),
+    ]
+        .sort((a, b) => b.date.getTime() - a.date.getTime() || b.id.localeCompare(a.id))
+        .slice(0, 4);
 
-    const personalFeed = personalExpenses.map(e => ({
-        id: e.id,
-        type: "EXPENSE" as const,
-        description: e.description,
-        amount: toEuros(e.amount),
-        date: e.date.toISOString(),
-        category: categoryKeyOf(e), // Category table is the read key (enum fallback)
-        categoryMeta: personalMetaFor(categoryKeyOf(e)),
-        paidBy: e.paidById,
-        receiptUrl: e.receiptUrl,
-        splits: e.splits.map(s => ({ userId: s.userId, amount: toEuros(s.amount) })),
-        isPersonal: true,
+    const pending = pendingToMe.map((s) => ({
+        id: s.id,
+        amount: s.amount,
+        fromUser: { name: names[s.fromUserId] ?? "Alguien", avatar: avatars[s.fromUserId] ?? null },
+        date: s.date.toISOString(),
+        method: s.method,
     }));
 
-    const feedForScope =
-        scope === "personal" ? personalFeed
-        : scope === "comun" ? [...sharedFeed, ...settlementFeed]
-        : [...sharedFeed, ...settlementFeed, ...personalFeed];
-
-    const combinedRecent = feedForScope
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .slice(0, 10);
+    const invite = active && active.others.length === 0 ? inviteConfigFor(active, ephemeralSpacesEnabled()) : null;
+    const canManage = active?.role === "OWNER" || active?.role === "ADMIN";
+    // GROUP/EPHEMERAL: one relationship can't summarise the space → per-member balances.
+    const showGroupBalances =
+        !!active && (active.type === SpaceType.GROUP || active.type === SpaceType.EPHEMERAL) && active.members.length > 1;
+    // Brand-new account (no space, no personal expense yet) → point to the welcome chooser.
+    const showWelcome = !isGuest && summaries.length === 0 && !anyPersonalExpense;
+    // `avatar` holds either an uploaded image URL or an emoji; else the initial.
+    const avatarRaw: string = user.avatar ?? "";
+    const avatarText = avatarRaw.trim() || user.name.charAt(0).toUpperCase();
 
     return (
-        <div className="flex flex-col h-full min-h-screen p-4 pb-24 space-y-6 relative">
-            <header className="flex justify-between items-center pt-2">
-                <SpaceSwitcher spaces={spaces} activeSpaceKey={activeSpaceKey} locked={isGuest} />
-                {/* Profile avatar → account settings. Navigation (Analíticas/Ajustes) lives in the bottom nav. */}
-                <Link href="/settings" className="h-[38px] w-[38px] rounded-full bg-secondary border border-[color:var(--line)] flex items-center justify-center font-bold text-sm text-primary overflow-hidden shrink-0">
+        <div className="min-h-screen pb-28 eq-in">
+            <header className="flex items-center justify-between px-5 pt-4 pb-3">
+                <h1 className="text-[22px] font-bold tracking-[-0.02em] truncate">Hola, {firstName(user.name)}</h1>
+                <Link
+                    href={isGuest ? "/guest/upgrade" : "/settings"}
+                    aria-label={isGuest ? "Crear cuenta" : "Ajustes de tu cuenta"}
+                    className="h-11 w-11 flex-none rounded-full bg-[var(--surface-raised-hex)] flex items-center justify-center text-sm font-bold overflow-hidden"
+                >
                     {isAvatarUrl(user.avatar) ? (
                         // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
-                        <img src={user.avatar!} alt={user.name} className="h-full w-full object-cover" />
+                        <img src={user.avatar} alt="" className="h-full w-full object-cover" />
                     ) : (
-                        user.name.charAt(0).toUpperCase()
+                        avatarText
                     )}
                 </Link>
             </header>
 
-            {/* Guest session notice + upgrade CTA (temporary shadow-user session). */}
-            <GuestBanner show={isGuest} />
-
-            {/* Lifecycle banner (SETTLING / ARCHIVED / ephemeral countdown). */}
-            {couple && scope !== "personal" && (
-                <SpaceStatusBanner
-                    spaceId={couple.id}
-                    type={couple.type}
-                    status={couple.status}
-                    expiresAt={couple.expiresAt}
-                    canManage={canManageSpace}
-                />
+            {isGuest && (
+                <div className="px-5 pb-3">
+                    <GuestBanner show />
+                </div>
             )}
 
-            {/* Personal spend this month — a neutral total, not a signed balance. */}
-            {scope !== "comun" && (
-                <div className="rounded-[16px] bg-card border border-[color:var(--line)] px-5 py-4 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                        <span className="text-[11px] uppercase font-semibold tracking-[0.14em] text-muted-foreground flex items-center gap-1.5">
-                            <Lock className="h-3 w-3" /> Personal este mes
+            <SpaceCarousel
+                cards={cards}
+                activeKey={activeKey}
+                spacesHref={isGuest ? null : personalActive ? "/spaces?active=personal" : "/spaces"}
+                locked={isGuest}
+            />
+
+            <div className="flex flex-col gap-5 px-5 pt-[18px]">
+                {showWelcome && (
+                    <Link
+                        href="/welcome"
+                        data-testid="welcome-card"
+                        className="eq-in rounded-[18px] bg-[var(--accent-tint)] border border-[color:var(--accent-border)] px-4 py-3.5 flex items-center gap-3"
+                    >
+                        <span className="text-2xl" aria-hidden="true">👋</span>
+                        <span className="flex-1 min-w-0">
+                            <span className="block text-[15px] font-semibold">¿Con quién compartes gastos?</span>
+                            <span className="block text-[12.5px] text-muted-foreground">Elige pareja, piso, viaje o solo tú. Tardas un momento.</span>
                         </span>
-                        <p className="text-[22px] leading-none font-mono font-bold text-foreground mt-1.5">{formatEuros(personalThisMonth)}</p>
-                    </div>
-                    {scope === "personal" && (
-                        <span className="text-[11px] text-muted-foreground text-right shrink-0">Privado —<br />solo tú lo ves</span>
-                    )}
-                </div>
-            )}
-
-            {/* Couple surfaces — hidden when viewing the Personal lens. */}
-            {scope !== "personal" && (
-            <>
-            <section className="grid grid-cols-1 gap-4">
-                <GlassCard className="p-0 flex flex-col items-center justify-center text-center overflow-hidden rounded-[20px] bg-card border border-[color:var(--line)]">
-                    {coupleWaiting ? (
-                        <div className="p-6">
-                            <span className="text-[11px] uppercase font-semibold tracking-[0.18em] text-muted-foreground mb-1 block">Tu balance</span>
-                            <h2 className="text-3xl font-bold text-foreground">Esperando...</h2>
-                            <p className="text-sm text-muted-foreground mt-2">
-                                Invita a la otra persona para empezar a repartir gastos
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="w-full">
-                            <div className="pt-6 px-6">
-                                <span className="text-[11px] uppercase font-semibold tracking-[0.18em] text-muted-foreground">Tu balance</span>
-                                <h2
-                                    data-testid="balance-amount"
-                                    className={cn(
-                                        "text-[40px] leading-none font-mono font-bold tracking-[-0.02em] mt-2",
-                                        myBalanceCents > 0 ? "text-[color:var(--positive)]" : myBalanceCents < 0 ? "text-destructive" : "text-foreground"
-                                    )}
-                                >
-                                    {myBalanceCents > 0 ? "+" : ""}{formatEuros(myBalance)}
-                                </h2>
-                            </div>
-
-                            {!isCoupleType || !partner ? (
-                                // The two-pan seesaw only maps to a COUPLE; GROUP/EPHEMERAL
-                                // (and any non-couple shape) get a per-member net-balance list.
-                                <MemberBalanceList
-                                    members={members}
-                                    balances={balances}
-                                    currentUserId={userId}
-                                    className="mt-3"
-                                />
-                            ) : (
-                                <>
-                                    <VisualBalanceLazy
-                                        balance={myBalance}
-                                        user1={{ name: user.name, avatar: user.avatar }}
-                                        user2={{ name: partner.name, avatar: partner.avatar }}
-                                        className="mt-1.5 mb-1"
-                                    />
-
-                                    <div className="pb-[22px] px-6">
-                                        <span className="text-xs font-semibold tracking-[0.04em] text-muted-foreground">
-                                            {myBalanceCents > 0 ? `Te deben ${formatEuros(myBalance)}` :
-                                                myBalanceCents < 0 ? `Debes ${formatEuros(Math.abs(myBalance))}` : "En equilibrio"}
-                                        </span>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    )}
-                </GlassCard>
-            </section>
-
-            {myPendingSettlements.length > 0 && (
-                <PendingSettlements settlements={myPendingSettlements} />
-            )}
-
-            {/* Dashboard Actions */}
-            <Link href="/settle" className="block">
-                <div className="w-full h-[50px] rounded-[13px] bg-card border border-[color:var(--line)] text-foreground font-semibold text-[15px] flex items-center justify-center cursor-pointer transition-all duration-150 hover:border-[color:var(--accent-border)] active:scale-[0.98]">
-                    Liquidar deuda
-                </div>
-            </Link>
-
-            <section className="space-y-4">
-                <h2 className="text-[13px] font-semibold tracking-[0.04em] uppercase text-muted-foreground">Resumen del mes</h2>
-                {(() => {
-                    const now = new Date();
-                    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
-
-                    const thisMonthExpenses = allExpenses.filter(e => new Date(e.date) >= startOfMonth);
-                    const lastMonthExpenses = allExpenses.filter(e => {
-                        const d = new Date(e.date);
-                        return d >= startOfLastMonth && d <= endOfLastMonth;
-                    });
-
-                    const totalThisMonth = toEuros(thisMonthExpenses.reduce((sum, e) => sum + e.amount, 0));
-                    const totalLastMonth = toEuros(lastMonthExpenses.reduce((sum, e) => sum + e.amount, 0));
-
-                    // Phase 4 read-switch: group by the relational Category key
-                    // (categoryRef.key, enum fallback) — behavior-identical while
-                    // system rows mirror the enum.
-                    const categoryTotals = thisMonthExpenses.reduce<Record<string, number>>((acc, e) => {
-                        const key = categoryKeyOf(e);
-                        acc[key] = (acc[key] || 0) + toEuros(e.amount);
-                        return acc;
-                    }, {});
-                    const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];
-
-                    const percentChange = totalLastMonth > 0
-                        ? ((totalThisMonth - totalLastMonth) / totalLastMonth * 100).toFixed(0)
-                        : null;
-
-                    const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
-
-                    return (
-                        <div className="space-y-2.5">
-                            <div className="grid grid-cols-3 gap-px bg-[color:var(--line)] border border-[color:var(--line)] rounded-[14px] overflow-hidden">
-                                <div className="bg-card py-4 px-2 text-center">
-                                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">Este mes</p>
-                                    <p className="text-[15px] font-bold font-mono mt-1.5 text-foreground">{formatEuros(totalThisMonth)}</p>
-                                </div>
-                                <div className="bg-card py-4 px-2 text-center">
-                                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">Top</p>
-                                    <p className="text-[15px] font-bold mt-1.5 text-foreground">{topCategory ? sharedMetaFor(topCategory[0]).label : "—"}</p>
-                                </div>
-                                <div className="bg-card py-4 px-2 text-center">
-                                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.05em]">vs Anterior</p>
-                                    <p className={cn(
-                                        "text-[15px] font-bold font-mono mt-1.5",
-                                        percentChange && Number(percentChange) > 0 ? "text-destructive" : "text-[color:var(--positive)]"
-                                    )}>
-                                        {percentChange ? `${Number(percentChange) > 0 ? "+" : ""}${percentChange}%` : "—"}
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Spending Breakdown Bar */}
-                            {totalThisMonth > 0 && (
-                                <GlassCard className="p-4 rounded-[14px] space-y-3.5 bg-card border border-[color:var(--line)]">
-                                    <div className="flex h-2 w-full rounded-md overflow-hidden bg-secondary gap-0.5">
-                                        {sortedCategories.map(([cat, amount]) => {
-                                            const percentage = (amount / totalThisMonth) * 100;
-                                            const meta = sharedMetaFor(cat);
-                                            return (
-                                                <div
-                                                    key={cat}
-                                                    className="h-full opacity-[0.85]"
-                                                    style={{ width: `${percentage}%`, backgroundColor: meta.hex }}
-                                                    title={`${meta.label}: ${formatEuros(amount)}`}
-                                                />
-                                            );
-                                        })}
-                                    </div>
-                                    <div className="flex flex-wrap gap-x-4 gap-y-2">
-                                        {sortedCategories.slice(0, 4).map(([cat, amount]) => {
-                                            const meta = sharedMetaFor(cat);
-                                            return (
-                                            <div key={cat} className="flex items-center gap-1.5">
-                                                <div className="h-[7px] w-[7px] rounded-sm" style={{ backgroundColor: meta.hex }} />
-                                                <span className="text-[11px] font-medium text-muted-foreground">
-                                                    {meta.label} · {((amount / totalThisMonth) * 100).toFixed(0)}%
-                                                </span>
-                                            </div>
-                                            );
-                                        })}
-                                    </div>
-                                </GlassCard>
-                            )}
-                        </div>
-                    );
-                })()}
-            </section>
-
-            {couple && coupleWaiting && <InviteCard spaceId={couple.id} />}
-            </>
-            )}
-
-            {!isGuest && (
-            <section className="space-y-3">
-                <h2 className="text-[13px] font-semibold tracking-[0.04em] uppercase text-muted-foreground">Accesos rápidos</h2>
-                <Link
-                    href="/lists"
-                    className="flex items-center gap-3 w-full h-14 px-4 bg-card border border-[color:var(--line)] rounded-xl hover:bg-secondary transition-colors"
-                >
-                    <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary shrink-0">
-                        <ShoppingCart className="h-5 w-5 text-primary" />
-                    </span>
-                    <span className="flex flex-col min-w-0">
-                        <span className="text-[15px] font-medium leading-tight">Listas de la compra</span>
-                        <span className="text-[13px] text-muted-foreground leading-tight">Planifica tu compra</span>
-                    </span>
-                    <ChevronRight className="ml-auto h-5 w-5 text-muted-foreground shrink-0" />
-                </Link>
-            </section>
-            )}
-
-            <section className="space-y-3">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-[13px] font-semibold tracking-[0.04em] uppercase text-muted-foreground">
-                        {scope === "personal" ? "Movimientos personales" : "Recientes"}
-                    </h2>
-                    {scope === "personal" ? (
-                        <Link href="/expenses/import" className="text-[13px] text-primary hover:underline">
-                            Importar CSV →
-                        </Link>
-                    ) : (allExpenses.length > 0 || settlements.length > 0) && (
-                        <Link href="/expenses/list" className="text-[13px] text-primary hover:underline">
-                            Ver todos →
-                        </Link>
-                    )}
-                </div>
-
-                <div className="space-y-2">
-                    {combinedRecent.length === 0 ? (
-                        scope === "personal" ? (
-                            <div className="text-center py-12 px-5 rounded-2xl border border-dashed border-[color:var(--line-strong)]">
-                                <p className="font-semibold text-[15px] text-foreground">Sin gastos personales</p>
-                                <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
-                                    Pulsa <span className="text-primary font-semibold">+</span> para registrar un gasto privado.
-                                </p>
-                            </div>
-                        ) : (allExpenses.length > 0 || settlements.length > 0) ? (
-                            <div className="text-center py-10 px-5 rounded-2xl border border-dashed border-[color:var(--line-strong)]">
-                                <p className="font-semibold text-[15px] text-foreground">Todo al día</p>
-                                <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
-                                    No tenéis pagos pendientes.<br />
-                                    Pulsa <span className="text-primary font-semibold">+</span> para añadir un gasto.
-                                </p>
-                                <Link href="/expenses/list">
-                                    <Button variant="ghost" size="sm" className="mt-3 text-xs h-auto p-0 text-primary hover:bg-transparent hover:underline">
-                                        Ver historial completo
-                                    </Button>
-                                </Link>
-                            </div>
-                        ) : (
-                            <div className="text-center py-12 px-5 rounded-2xl border border-dashed border-[color:var(--line-strong)]">
-                                <p className="font-semibold text-[15px] text-foreground">{spaceOperative ? "Sin movimientos aún" : "Casi listos"}</p>
-                                <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">
-                                    {spaceOperative
-                                        ? <>Pulsa <span className="text-primary font-semibold">+</span> para añadir el primer gasto.</>
-                                        : "Comparte el código de arriba para que se unan."
-                                    }
-                                </p>
-                            </div>
-                        )
-                    ) : (
-                        combinedRecent.map((item) => {
-                            if (item.type === "EXPENSE") {
-                                return (
-                                    <ExpenseCard
-                                        key={item.id}
-                                        expense={item as Expense}
-                                        paidByUser={usersMap[item.paidBy]}
-                                        allUsers={usersMap}
-                                        isPersonal={item.isPersonal}
-                                        categoryMeta={item.categoryMeta}
-                                    />
-                                );
-                            } else {
-                                const fromUser = usersMap[item.paidBy];
-                                const toUser = item.toUserId ? usersMap[item.toUserId] : null;
-
-                                return (
-                                    <Link href={`/settle/${item.id}`} key={item.id}>
-                                        <div className="flex items-center gap-[13px] p-[13px] rounded-2xl bg-card border border-[color:var(--line-2)] cursor-pointer transition-all duration-150 hover:border-[color:var(--accent-border)] active:scale-[0.99]">
-                                            <div className="w-[42px] h-[42px] rounded-[11px] flex items-center justify-center shrink-0 bg-secondary border border-[color:var(--line)] text-muted-foreground">
-                                                <ArrowLeftRight className="h-[18px] w-[18px]" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className="font-semibold text-[15px] text-foreground">Liquidación</h3>
-                                                <div className="flex items-center gap-[7px] mt-[3px]">
-                                                    <span className="text-[11px] text-muted-foreground truncate">{fromUser?.name} → {toUser?.name}</span>
-                                                    <span className="h-[2px] w-[2px] rounded-full bg-[color:var(--ink-3)] shrink-0" />
-                                                    <span className="text-[11px] text-muted-foreground shrink-0">{getSettlementMethodLabel(item.method)}</span>
-                                                </div>
-                                            </div>
-                                            <div className="text-right shrink-0">
-                                                <p className="text-[15px] font-mono font-semibold text-foreground">
-                                                    {formatEuros(item.amount)}
-                                                </p>
-                                                <span className="text-[10px] uppercase font-medium tracking-wider text-muted-foreground">
-                                                    {getSettlementStatusLabel(item.status)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </Link>
-                                );
-                            }
-                        })
-                    )}
-                </div>
-            </section>
-
-            {/* Optional, non-blocking group CTA for a solo user — replaces the old
-                onboarding wall. Shared expenses are opt-in, not required. */}
-            {!groupId && (
-                <GlassCard className="p-5 space-y-4 mt-2 bg-card border border-[color:var(--line)]">
-                    <div className="flex items-center gap-3">
-                        <Heart className="h-5 w-5 text-primary shrink-0" />
-                        <div className="min-w-0">
-                            <h3 className="font-semibold text-[15px] text-foreground">¿Gastos compartidos?</h3>
-                            <p className="text-[13px] text-muted-foreground">Crea un grupo o únete a uno para repartir gastos.</p>
-                        </div>
-                    </div>
-                    <form action={async () => {
-                        'use server';
-                        const code = randomBytes(3).toString('hex').toUpperCase();
-                        await prisma.$transaction(async (tx) => {
-                            const created = await tx.couple.create({ data: { name: "Mi grupo", code } });
-                            await tx.membership.create({ data: { groupId: created.id, userId, role: 'OWNER', status: 'ACTIVE' } });
-                        });
-                        redirect("/dashboard");
-                    }}>
-                        <Button type="submit" size="sm" className="w-full">Crear un grupo</Button>
-                    </form>
-                    <JoinGroupCard />
-                </GlassCard>
-            )}
-
-            {spaceOperative || scope === "personal" ? (
-                <div className="fixed bottom-[92px] right-6 z-50">
-                    <Link href={scope === "personal" ? "/expenses/new?type=personal" : "/expenses/new"}>
-                        <Button size="icon" className="h-14 w-14 rounded-full shadow-[0_12px_28px_-8px_rgba(189,93,58,0.6)] bg-primary hover:bg-primary/90 active:scale-90 transition-transform">
-                            <Plus className="h-6 w-6" />
-                        </Button>
+                        <ChevronRight className="h-5 w-5 flex-none text-primary" aria-hidden="true" />
                     </Link>
-                </div>
-            ) : (
-                <div className="fixed bottom-[30px] right-6 z-50">
-                    <Button size="icon" className="h-14 w-14 rounded-full bg-secondary cursor-not-allowed opacity-50" disabled>
-                        <Plus className="h-6 w-6" />
-                    </Button>
-                </div>
-            )}
+                )}
+
+                {active && (
+                    <SpaceStatusBanner
+                        spaceId={active.id}
+                        type={active.type}
+                        status={active.status}
+                        expiresAt={active.expiresAt}
+                        canManage={canManage}
+                        settleHref={settleUrlFor(active.id)}
+                    />
+                )}
+
+                {pending.length > 0 && active?.status !== "ARCHIVED" && <PendingSettlements settlements={pending} />}
+
+                {active && invite && (
+                    <SpaceInviteCard spaceId={active.id} spaceName={spaceName(active)} kind={invite.kind} maxUses={invite.maxUses} />
+                )}
+
+                {showGroupBalances && active && (
+                    <MemberBalanceList members={active.members} currentUserId={userId} />
+                )}
+
+                <MonthSummary title={`${madridMonthName(now)} en ${contextName}`} total={formatCurrency(monthTotal)} slices={slices} />
+
+                <section aria-labelledby="recent-title" className="flex flex-col">
+                    <div className="flex items-center justify-between">
+                        <EqLabel id="recent-title">Recientes</EqLabel>
+                        <div className="flex text-xs font-semibold text-primary">
+                            {personalActive && (
+                                <Link href="/expenses/import" className="min-h-11 px-2 flex items-center">Importar CSV</Link>
+                            )}
+                            <Link
+                                href={personalActive ? "/expenses/list?scope=personal" : "/expenses/list"}
+                                className="min-h-11 -mr-2 px-2 flex items-center"
+                            >
+                                Ver todo
+                            </Link>
+                        </div>
+                    </div>
+                    {rows.length === 0 ? (
+                        <p className="py-6 text-center text-sm text-muted-foreground">
+                            {active ? "Aún no hay gastos en este espacio." : "Aún no hay gastos personales."}
+                        </p>
+                    ) : (
+                        <div className="flex flex-col">{rows.map((r) => r.node)}</div>
+                    )}
+                </section>
+
+                {/* A user with no shared space: optional, non-blocking way in. */}
+                {!isGuest && summaries.length === 0 && (
+                    <section aria-labelledby="share-title" className="flex flex-col gap-2.5">
+                        <EqLabel id="share-title">¿Gastos compartidos?</EqLabel>
+                        <SpaceActionTiles />
+                    </section>
+                )}
+            </div>
+
+            {/* `?saved=<cents>` from /expenses/new → one-shot confirmation toast. */}
+            <Suspense fallback={null}>
+                <SavedToast />
+            </Suspense>
         </div>
     );
 }

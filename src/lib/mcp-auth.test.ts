@@ -2,9 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { validateBearerToken } from "@/lib/mcp-auth";
 
 const mockVerifyToken = vi.fn();
+const mockFindUser = vi.fn();
 
-vi.mock("@/lib/jwt", () => ({
+vi.mock("@/lib/jwt", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/jwt")>()),
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
+}));
+vi.mock("@/lib/db", () => ({
+  prisma: { user: { findUnique: (...args: unknown[]) => mockFindUser(...args) } },
 }));
 
 function makeRequest(headers: Record<string, string> = {}): Request {
@@ -14,6 +19,8 @@ function makeRequest(headers: Record<string, string> = {}): Request {
 describe("validateBearerToken", () => {
   beforeEach(() => {
     mockVerifyToken.mockReset();
+    mockFindUser.mockReset();
+    mockFindUser.mockResolvedValue({ tokenVersion: 0 });
   });
 
   it("returns null when no Authorization header is present", async () => {
@@ -103,5 +110,43 @@ describe("validateBearerToken", () => {
       makeRequest({ authorization: "Bearer minimal.jwt.token" }),
     );
     expect(result).toBeNull();
+  });
+
+  describe("token revocation (tokenVersion)", () => {
+    const mcp = (extra: Record<string, unknown> = {}) => ({ userId: "u1", kind: "mcp", ...extra });
+    const call = () => validateBearerToken(makeRequest({ authorization: "Bearer mcp.jwt.token" }));
+
+    it("accepts a token whose tv matches the DB", async () => {
+      mockVerifyToken.mockResolvedValue(mcp({ tv: 3 }));
+      mockFindUser.mockResolvedValue({ tokenVersion: 3 });
+      expect(await call()).toEqual({ userId: "u1", email: undefined, isAdmin: false });
+      expect(mockFindUser).toHaveBeenCalledWith({ where: { id: "u1" }, select: { tokenVersion: true } });
+    });
+
+    it("rejects a token whose tv is stale (revoked)", async () => {
+      mockVerifyToken.mockResolvedValue(mcp({ tv: 0 }));
+      mockFindUser.mockResolvedValue({ tokenVersion: 1 });
+      expect(await call()).toBeNull();
+    });
+
+    it("accepts a legacy token without tv while the user is still at version 0", async () => {
+      mockVerifyToken.mockResolvedValue(mcp());
+      mockFindUser.mockResolvedValue({ tokenVersion: 0 });
+      expect(await call()).not.toBeNull();
+    });
+
+    it("rejects a legacy token without tv once the user revoked their tokens", async () => {
+      mockVerifyToken.mockResolvedValue(mcp());
+      mockFindUser.mockResolvedValue({ tokenVersion: 1 });
+      expect(await call()).toBeNull();
+    });
+
+    it("rejects a malformed tv claim and a deleted user", async () => {
+      mockVerifyToken.mockResolvedValue(mcp({ tv: "0" }));
+      expect(await call()).toBeNull();
+      mockVerifyToken.mockResolvedValue(mcp({ tv: 0 }));
+      mockFindUser.mockResolvedValue(null);
+      expect(await call()).toBeNull();
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { signMcpToken } from "@/lib/jwt";
+import { forbidden, route, unauthorized } from "@/lib/http";
 
 /**
  * Issue a long-lived Bearer JWT for MCP clients (e.g. Hermes Agent).
@@ -8,7 +9,8 @@ import { signMcpToken } from "@/lib/jwt";
  * The caller must be authenticated via the normal browser session cookie.
  * The returned token carries `kind: 'mcp'` and a 90-day expiry (configurable
  * via MCP_TOKEN_TTL_DAYS). It is used as `Authorization: Bearer <token>` when
- * connecting to POST /api/mcp.
+ * connecting to POST /api/mcp. It embeds the user's current tokenVersion, so
+ * POST /api/me/sessions/revoke invalidates it together with every session.
  */
 
 const DEFAULT_TTL_DAYS = 90;
@@ -21,23 +23,31 @@ function getMcpTokenTtlDays(value: string | undefined): number {
   return ttlDays > 0 && ttlDays <= MAX_TTL_DAYS ? ttlDays : DEFAULT_TTL_DAYS;
 }
 
-export async function POST() {
-  const session = await getSession();
-  if (!session?.userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (session.kind !== undefined) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+// 'user-or-guest' + the explicit kind check: guests AND MCP tokens get the same
+// historical 403 message (route 'user' would let an MCP token through).
+export const POST = route(
+  { auth: "user-or-guest", errorMessage: "No se pudo generar el token", logLabel: "Error al generar el token MCP:" },
+  async ({ ctx }) => {
+    // Only a regular browser session may mint MCP tokens (not a guest, and not an
+    // MCP token forwarded as cookie — a token must not be able to extend itself).
+    if (ctx.kind !== undefined) throw forbidden("Acción no permitida con este tipo de sesión");
 
-  const ttlDays = getMcpTokenTtlDays(process.env.MCP_TOKEN_TTL_DAYS);
+    const ttlDays = getMcpTokenTtlDays(process.env.MCP_TOKEN_TTL_DAYS);
 
-  try {
+    // Fresh identity + tokenVersion from the DB (getSessionCtx already proved the
+    // session's tv is current; reading it here keeps the claims authoritative).
+    const user = await prisma.user.findUnique({
+      where: { id: ctx.userId },
+      select: { email: true, isAdmin: true, tokenVersion: true },
+    });
+    if (!user) throw unauthorized();
+
     const token = await signMcpToken(
       {
-        userId: session.userId,
-        email: session.email,
-        isAdmin: session.isAdmin,
+        userId: ctx.userId,
+        email: user.email,
+        isAdmin: user.isAdmin,
+        tv: user.tokenVersion,
       },
       ttlDays,
     );
@@ -53,7 +63,5 @@ export async function POST() {
         headers: { "Cache-Control": "private, no-store" },
       },
     );
-  } catch {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+);

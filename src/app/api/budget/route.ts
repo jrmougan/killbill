@@ -1,35 +1,58 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
 import { getActiveGroup } from '@/lib/membership';
-import { toCents } from '@/lib/currency';
 import { resolveCategoryId } from '@/lib/category-db';
 import { categoryKeyOf, CATEGORY_REF_SELECT } from '@/lib/category-read';
+import { requireSpaceAccess, type SessionCtx } from '@/lib/authz';
+import { allowsBudgetsAndRecurring } from '@/lib/space-policy';
+import type { SpaceType } from '@/generated/prisma/enums';
+import { badRequest, HttpError, notFound, requireSpace, route } from '@/lib/http';
+import { BUDGET_BODY_OPTIONS, BudgetDeleteQuery, BudgetListQuery, UpsertBudgetBody } from '@/lib/budget-schemas';
 
-export async function GET(request: Request) {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const userId = session.userId as string;
+/*
+ * Budgets are a member/personal surface: a GUEST session (caged to an ephemeral
+ * trip, where budgets are vetoed anyway) never reads or writes them — route
+ * auth 'user' (403 "Acción no permitida para invitados"). The proxy already
+ * blocks /api/budget for guests; this is the defense in depth.
+ */
 
-    const { searchParams } = new URL(request.url);
-    const scope = searchParams.get('scope') === 'personal' ? 'personal' : 'shared';
+/**
+ * Resolve + authorize the shared space a budget call targets. An explicit
+ * `groupId` (query/body) wins over the `active_group` UI cookie; either way the
+ * caller is authorized against THAT group with `requireSpaceAccess` (DB
+ * membership, guests denied). Writes (`write: true`) also require the space to
+ * be ACTIVE (SETTLING/ARCHIVED → 409 SPACE_NOT_WRITABLE) and a type that allows
+ * budgets (EPHEMERAL vetoes them).
+ */
+async function sharedSpace(ctx: SessionCtx, explicitGroupId: string | null | undefined, write: boolean): Promise<string> {
+    const groupId = explicitGroupId || (await getActiveGroup(ctx.userId));
+    if (!groupId) throw badRequest('No perteneces a ningún espacio compartido', 'NO_SPACE');
+    const auth = await requireSpace(ctx, groupId, { allowArchived: !write });
+    if (write && !allowsBudgetsAndRecurring(auth.space.type as SpaceType)) {
+        throw badRequest('Este tipo de espacio no admite presupuestos', 'BUDGETS_NOT_ALLOWED');
+    }
+    return groupId;
+}
 
-    // Shared budgets need a couple; personal budgets work for any user.
-    // Phase 4 selector switch: the caller's group comes from the Membership layer.
-    const groupId = scope === 'shared' ? await getActiveGroup(userId) : null;
-    if (scope === 'shared' && !groupId) return NextResponse.json({ budgets: [] });
+export const GET = route({ auth: 'user', query: BudgetListQuery }, async ({ ctx, query }) => {
+    const userId = ctx.userId;
+    const { scope } = query;
+
+    // Shared budgets need a space; personal budgets work for any user. The space
+    // is authorized against its DB membership (read: SETTLING/ARCHIVED allowed).
+    let groupId: string | null = null;
+    if (scope === 'shared') {
+        const explicit = query.groupId;
+        if (!explicit && !(await getActiveGroup(userId))) return NextResponse.json({ budgets: [] });
+        groupId = await sharedSpace(ctx, explicit, false);
+    }
 
     // Current-month view window [monthStart, monthEnd). Budgets are selected by
-    // half-open period-range overlap (Phase 2e/4 read-switch); spend is still
-    // measured over this same month window below.
+    // half-open period-range overlap; spend is measured over the same window.
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-    // Phase 4 read-switch: select by [periodStart, periodEnd) range overlap with the
-    // current-month window instead of legacy `month` equality. For all-MONTH budgets
-    // (periodStart == month, periodEnd == next-month-start) this yields identical rows,
-    // and it also surfaces WEEK/YEAR/CUSTOM budgets overlapping the current month.
     const periodOverlap = { periodStart: { lt: monthEnd }, periodEnd: { gt: monthStart } };
     const budgets = await prisma.budget.findMany({
         where: scope === 'personal'
@@ -39,9 +62,9 @@ export async function GET(request: Request) {
         include: CATEGORY_REF_SELECT,
     });
 
-    // Get actual spending per category for the current month.
-    // Personal budgets are measured against the caller's personal expenses;
-    // shared budgets against the couple's shared expenses only.
+    // Actual spending per category for the current month. Personal budgets are
+    // measured against the caller's personal expenses; shared budgets against
+    // the space's shared expenses only.
     const expenses = await prisma.expense.findMany({
         where: scope === 'personal'
             ? { ownerId: userId, visibility: 'PERSONAL', date: { gte: monthStart, lt: monthEnd } }
@@ -49,8 +72,6 @@ export async function GET(request: Request) {
         select: { amount: true, ...CATEGORY_REF_SELECT },
     });
 
-    // Phase 4 read-switch: spend-by-category keys on the relational Category
-    // (categoryRef.key, enum fallback) on BOTH sides of the budget↔expense match.
     const spentByCategory: Record<string, number> = {};
     for (const e of expenses) {
         const key = categoryKeyOf(e);
@@ -66,62 +87,45 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({ budgets: result });
-}
+});
 
-export async function POST(request: Request) {
-    try {
-        const session = await getSession();
-        if (!session?.userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        const userId = session.userId as string;
+/**
+ * POST /api/budget {category, amount (euros), month?: 'YYYY-MM', scope?, groupId?}
+ * Upsert one monthly budget. `groupId` (optional) targets a specific shared
+ * space; without it the active space is used. Either way the caller must be an
+ * ACTIVE non-guest member of a writable space that allows budgets.
+ */
+export const POST = route(
+    {
+        auth: 'user',
+        body: UpsertBudgetBody,
+        // The amount 400 keeps `code: INVALID_AMOUNT` and an unparseable body its historical message.
+        bodyOptions: BUDGET_BODY_OPTIONS,
+        errorMessage: 'No se pudo guardar el presupuesto',
+        logLabel: 'Error al guardar el presupuesto:',
+    },
+    async ({ ctx, body }) => {
+        const userId = ctx.userId;
+        const { category, amount: amountCents, month, scope, groupId: bodyGroupId } = body;
 
-        const body = await request.json();
-        const { category, amount, month, scope: scopeInput } = body;
-        const scope = scopeInput === 'personal' ? 'personal' : 'shared';
+        // The given month (YYYY-MM) or the current one.
+        const now = new Date();
+        const monthDate = month
+            ? new Date(month.year, month.month - 1, 1)
+            : new Date(now.getFullYear(), now.getMonth(), 1);
 
-        // Shared budgets require a couple; personal budgets do not.
-        // Phase 4 selector switch: the caller's group comes from the Membership layer.
-        const groupId = scope === 'shared' ? await getActiveGroup(userId) : null;
-        if (scope === 'shared' && !groupId) return NextResponse.json({ error: 'No Couple' }, { status: 400 });
+        // Shared budgets: authorize against the target space (writable, member,
+        // no guests). Personal budgets are scoped by ownerId only.
+        let groupId: string | null = null;
+        if (scope === 'shared') groupId = await sharedSpace(ctx, bodyGroupId, true);
 
-        if (!category || amount === undefined) {
-            return NextResponse.json({ error: 'category and amount are required' }, { status: 400 });
-        }
-
-        // Fase 3: no hardcoded whitelist. The category is validated against the
-        // EFFECTIVE set of the scope by resolveCategoryId below (null → 400), so a
-        // custom category is accepted and an unknown key is rejected.
-
-        // Parse month (YYYY-MM) or default to current month
-        let monthDate: Date;
-        if (month) {
-            const [year, mon] = month.split('-').map(Number);
-            monthDate = new Date(year, mon - 1, 1);
-        } else {
-            const now = new Date();
-            monthDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        }
-
-        const amountNum = Number(amount);
-        if (!Number.isFinite(amountNum)) {
-            return NextResponse.json({ error: 'amount must be a valid number' }, { status: 400 });
-        }
-
-        const amountCents = toCents(amountNum);
-        if (!Number.isFinite(amountCents) || amountCents <= 0) {
-            return NextResponse.json({ error: 'amount must be greater than 0' }, { status: 400 });
-        }
-
-        // Dual-write the relational Category (Phase 2b). Personal budgets have no
-        // group, so they resolve to the system category.
+        // No hardcoded whitelist: the category is validated against the EFFECTIVE
+        // set of the scope (null → 400), so a custom category is accepted and an
+        // unknown key is rejected.
         const categoryId = await resolveCategoryId(category, scope === 'personal' ? { ownerId: userId } : { groupId });
-        // Phase 5 (stop-dual-write): categoryId is now the NOT NULL unique key. An
-        // unresolvable (e.g. unseeded) category must fail cleanly, not throw a
-        // Prisma NOT-NULL error at upsert time.
-        if (!categoryId) return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
+        if (!categoryId) throw badRequest('La categoría no existe', 'INVALID_CATEGORY');
 
-        // Phase 2e dual-write: derive the half-open [periodStart, periodEnd) range
-        // from the same monthDate that seeds the legacy `month` column (local-midnight
-        // convention, matching how monthDate is built above).
+        // Half-open [periodStart, periodEnd) range (local-midnight convention).
         const periodStart = monthDate;
         const periodEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1);
 
@@ -170,8 +174,54 @@ export async function POST(request: Request) {
             });
 
         return NextResponse.json({ budget }, { status: 201 });
-    } catch (error) {
-        console.error('Error al guardar el presupuesto:', error);
-        return NextResponse.json({ error: 'Error al guardar el presupuesto' }, { status: 500 });
-    }
-}
+    },
+);
+
+/**
+ * DELETE /api/budget?id=<budgetId>[&scope=shared|personal] — remove one budget
+ * (EQUIL "Mes" sheet → "Eliminar"). Authorized against the BUDGET's own scope,
+ * never the active-group cookie: a personal budget must belong to the caller
+ * (`ownerId`); a shared one requires ACTIVE non-guest membership in ITS space,
+ * which must be writable (SETTLING/ARCHIVED → 409 SPACE_NOT_WRITABLE). A
+ * foreign/unknown id is a 404 (no existence leak), and the delete itself stays
+ * conditional on the scope (`deleteMany` by id + owner/space).
+ */
+export const DELETE = route(
+    {
+        auth: 'user',
+        query: BudgetDeleteQuery,
+        errorMessage: 'No se pudo eliminar el presupuesto',
+        logLabel: 'Error al eliminar el presupuesto:',
+    },
+    async ({ ctx, query: { id, scope: scopeParam } }) => {
+        const userId = ctx.userId;
+        const missing = () => notFound('Presupuesto no encontrado');
+
+        const budget = await prisma.budget.findUnique({
+            where: { id },
+            select: { id: true, ownerId: true, coupleId: true },
+        });
+        if (!budget) throw missing();
+
+        let where: { id: string; ownerId: string } | { id: string; coupleId: string };
+        if (budget.ownerId) {
+            if (budget.ownerId !== userId || scopeParam === 'shared') throw missing();
+            where = { id, ownerId: userId };
+        } else if (budget.coupleId) {
+            if (scopeParam === 'personal') throw missing();
+            const auth = await requireSpaceAccess(ctx, budget.coupleId);
+            if (!auth.ok) {
+                // Not a member of that space → indistinguishable from "no such budget".
+                if (auth.status === 403 || auth.status === 404) throw missing();
+                throw new HttpError(auth.status, auth.error, auth.code);
+            }
+            where = { id, coupleId: budget.coupleId };
+        } else {
+            throw missing();
+        }
+
+        const { count } = await prisma.budget.deleteMany({ where });
+        if (count === 0) throw missing();
+        return NextResponse.json({ ok: true });
+    },
+);

@@ -40,7 +40,7 @@ test.describe('API CRUD Suite (Categories, Budget, Tags, Import & Export)', () =
     });
     expect(badExpenseRes.status(), 'POST /api/expenses con categoría inexistente debe ser 400').toBe(400);
     const badExpenseErr = await badExpenseRes.json();
-    expect(badExpenseErr.error).toBe('Invalid category');
+    expect(badExpenseErr.error).toBe('Categoría no válida');
 
     // B) Hex fuera de paleta cerrada (isValidCategoryHex) -> 400
     const badHexRes = await apiA.post(`/api/spaces/${coupleId}/categories`, {
@@ -217,7 +217,8 @@ test.describe('API CRUD Suite (Categories, Budget, Tags, Import & Export)', () =
     });
     expect(badCatRes.status(), 'POST /api/budget con categoría desconocida debe ser 400').toBe(400);
     const badCatErr = await badCatRes.json();
-    expect(badCatErr.error).toBe('Invalid category');
+    expect(badCatErr.code).toBe('INVALID_CATEGORY');
+    expect(badCatErr.error).toBe('La categoría no existe');
 
     // B) POST con importe inválido (0 o negativo) -> 400
     const zeroAmountRes = await api.post('/api/budget', {
