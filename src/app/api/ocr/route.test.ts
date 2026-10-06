@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getSessionCtx } from '@/lib/authz';
 import { rateLimit } from '@/lib/rate-limit';
-import { analyzeReceiptImage } from '@/lib/receipt-ocr-ai';
+import { analyzeReceiptImage, ReceiptAIError } from '@/lib/receipt-ocr-ai';
 import { POST } from './route';
 
 vi.mock('@/lib/authz', () => ({ getSessionCtx: vi.fn() }));
@@ -45,6 +45,44 @@ describe('/api/ocr session handling', () => {
         vi.mocked(getSessionCtx).mockResolvedValue({ userId: 'g1', isAdmin: false, kind: 'guest', groupId: 'sp1' });
         expect((await ocr()).status).toBe(200);
         expect(vi.mocked(rateLimit).mock.calls.map(c => c[0])).toEqual(['ocr:user:g1', 'ocr:space:sp1']);
+    });
+
+    it('429 with Retry-After: per-user limit, then the guest per-space daily cap with its own message', async () => {
+        vi.mocked(getSessionCtx).mockResolvedValue({ userId: 'u1', isAdmin: false, kind: undefined });
+        vi.mocked(rateLimit).mockReturnValueOnce({ allowed: false, retryAfterSeconds: 30 });
+        const user = await ocr();
+        expect(user.status).toBe(429);
+        expect(user.headers.get('Retry-After')).toBe('30');
+        expect(await user.json()).toEqual({ error: 'Demasiadas solicitudes. Inténtalo de nuevo más tarde.' });
+
+        vi.stubEnv('EPHEMERAL_SPACES_ENABLED', 'true');
+        vi.mocked(getSessionCtx).mockResolvedValue({ userId: 'g1', isAdmin: false, kind: 'guest', groupId: 'sp1' });
+        vi.mocked(rateLimit)
+            .mockReturnValueOnce({ allowed: true, retryAfterSeconds: 0 })
+            .mockReturnValueOnce({ allowed: false, retryAfterSeconds: 999 });
+        const guest = await ocr();
+        expect(guest.status).toBe(429);
+        expect(guest.headers.get('Retry-After')).toBe('999');
+        expect(await guest.json()).toEqual({ error: 'Se alcanzó el límite diario de escaneos de este espacio.' });
+        expect(analyzeReceiptImage).not.toHaveBeenCalled();
+    });
+
+    it('maps a provider failure (ReceiptAIError) to 502 with its message', async () => {
+        vi.mocked(getSessionCtx).mockResolvedValue({ userId: 'u1', isAdmin: false, kind: undefined });
+        vi.mocked(analyzeReceiptImage).mockRejectedValue(new ReceiptAIError('Proveedores caídos'));
+        const res = await ocr();
+        expect(res.status).toBe(502);
+        expect(await res.json()).toEqual({ error: 'Proveedores caídos' });
+    });
+
+    it('400 for a non-multipart body (it used to be a 500)', async () => {
+        vi.mocked(getSessionCtx).mockResolvedValue({ userId: 'u1', isAdmin: false, kind: undefined });
+        const res = await POST(new Request('http://localhost/api/ocr', {
+            method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' },
+        }));
+        expect(res.status).toBe(400);
+        expect(await res.json()).toEqual({ error: 'Petición no válida' });
+        expect(analyzeReceiptImage).not.toHaveBeenCalled();
     });
 
     it('rejects guests while ephemeral spaces are disabled', async () => {
