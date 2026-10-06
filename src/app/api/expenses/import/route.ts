@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { getSessionCtx } from '@/lib/authz';
 import { resolveCategoryId, getEffectiveCategories } from '@/lib/category-db';
 import type { Prisma } from '@/generated/prisma/client';
 import { checkExpenseDay } from '@/lib/expense-input';
@@ -30,10 +30,10 @@ function fingerprint(userId: string, r: ImportRow): string {
  * whose fingerprint already exists (or repeat within the batch) are skipped.
  */
 export async function POST(request: Request) {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    if (session.kind === 'guest') return NextResponse.json({ error: 'Los invitados no pueden importar movimientos' }, { status: 403 });
-    const userId = session.userId as string;
+    const ctx = await getSessionCtx();
+    if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    if (ctx.kind === 'guest') return NextResponse.json({ error: 'Los invitados no pueden importar movimientos' }, { status: 403 });
+    const userId = ctx.userId;
 
     let body: { rows?: ImportRow[]; defaultCategory?: string };
     try {

@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { getSessionCtx } from '@/lib/authz';
 import { getActiveGroup, getMembership } from '@/lib/membership';
 
 export async function POST(request: Request) {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    if (session.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
-    const userId = session.userId as string;
+    const ctx = await getSessionCtx();
+    if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    if (ctx.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
+    const userId = ctx.userId;
 
     try {
         // F4 (multi-group): accept an optional { groupId } and leave THAT group.

@@ -104,6 +104,8 @@ describe("POST /api/invites/claim", () => {
 
     it("403 for a GUEST session on a MEMBER invite (a shadow user never joins a COUPLE/GROUP)", async () => {
         mockGetSession.mockResolvedValue({ userId: "guest1", kind: "guest", groupId: "e1" });
+        // getSessionCtx revalidates the guest membership live.
+        mockMembershipFindUnique.mockResolvedValueOnce({ role: "GUEST", status: "ACTIVE", group: { status: "ACTIVE" } });
         mockGroupInviteFindUnique.mockResolvedValue(memberInvite());
         const res = await POST(req({ token: TOKEN }));
         expect(res.status).toBe(403);
@@ -379,6 +381,8 @@ describe("POST /api/invites/claim — GUEST", () => {
 
     it("a guest already in that trip does not mint a second shadow user", async () => {
         mockGetSession.mockResolvedValue({ userId: "guest1", kind: "guest", groupId: "e1" });
+        // getSessionCtx revalidates the guest membership live.
+        mockMembershipFindUnique.mockResolvedValueOnce({ role: "GUEST", status: "ACTIVE", group: { status: "ACTIVE" } });
         mockGroupInviteFindUnique.mockResolvedValue(guestInvite());
         const res = await POST(req({ token: TOKEN, name: "Ana" }));
         expect(res.status).toBe(200);
