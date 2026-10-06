@@ -1,22 +1,34 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { getSessionCtx } from '@/lib/authz';
 import { getActiveGroup, getGroupMembers, ACTIVE_GROUP_COOKIE } from '@/lib/membership';
 import { randomBytes } from 'crypto';
 
+const PUBLIC_SPACE_SELECT = {
+    id: true,
+    name: true,
+    type: true,
+    status: true,
+    createdAt: true,
+    archivedAt: true,
+    expiresAt: true,
+} as const;
+
 export async function GET(_request: Request) {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    if (session.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
-    const userId = session.userId as string;
+    const ctx = await getSessionCtx();
+    if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    if (ctx.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
+    const userId = ctx.userId;
 
     // Resolve the caller's ACTIVE group + members via the Membership layer (F4).
     const groupId = await getActiveGroup(userId);
     if (!groupId) return NextResponse.json({ couple: null, userId });
 
+    // Explicit projection: never the legacy `Couple.code` (not an invitation any
+    // more) and members only as the public shape (no password/pin/email).
     const [couple, members] = await Promise.all([
-        prisma.couple.findUnique({ where: { id: groupId } }),
+        prisma.couple.findUnique({ where: { id: groupId }, select: PUBLIC_SPACE_SELECT }),
         getGroupMembers(groupId),
     ]);
     if (!couple) return NextResponse.json({ couple: null, userId });
@@ -30,10 +42,10 @@ export async function GET(_request: Request) {
  * clients keep working.
  */
 export async function POST(request: Request) {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    if (session.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
-    const userId = session.userId as string;
+    const ctx = await getSessionCtx();
+    if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    if (ctx.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
+    const userId = ctx.userId;
 
     // F4 (multi-group): no blanket "already in a group" block — a user may own or
     // belong to several groups.
@@ -48,6 +60,7 @@ export async function POST(request: Request) {
     // longer connects User.coupleId.
     const couple = await prisma.$transaction(async (tx) => {
         const created = await tx.couple.create({
+            select: PUBLIC_SPACE_SELECT,
             data: {
                 name: name || "Mi grupo",
                 code: code,
