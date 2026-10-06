@@ -53,6 +53,17 @@ describe('PATCH /api/settle/[id]/status', () => {
         expect(mockResolve).not.toHaveBeenCalled();
     });
 
+    it('400 bodies keep { error, code: INVALID_INPUT } and add issues', async () => {
+        const res = await PATCH(req({ status: 'CONFIRMED', expectedAmountCents: '50' }), { params });
+        expect(await res.json()).toMatchObject({
+            error: 'expectedAmountCents no válido', code: 'INVALID_INPUT', issues: [{ path: 'expectedAmountCents' }],
+        });
+        // An unparseable body behaves like an empty one: "Estado no válido".
+        const badJson = new Request('http://localhost/api/settle/s1/status', { method: 'PATCH', body: '{' });
+        expect(await (await PATCH(badJson, { params })).json()).toMatchObject({ error: 'Estado no válido', code: 'INVALID_INPUT' });
+        expect(mockSettlementFindUnique).not.toHaveBeenCalled();
+    });
+
     it('404 when the settlement does not exist', async () => {
         mockSettlementFindUnique.mockResolvedValue(null);
         expect((await PATCH(req({ status: 'CONFIRMED' }), { params })).status).toBe(404);

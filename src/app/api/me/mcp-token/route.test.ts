@@ -30,7 +30,7 @@ describe("POST /api/me/mcp-token", () => {
   it("returns 401 without a session", async () => {
     mockGetSessionCtx.mockResolvedValue(null);
 
-    const response = await POST();
+    const response = await POST(new Request("http://localhost/api/me/mcp-token", { method: "POST" }));
 
     expect(response.status).toBe(401);
     expect(mockSignMcpToken).not.toHaveBeenCalled();
@@ -39,7 +39,7 @@ describe("POST /api/me/mcp-token", () => {
   it("returns 403 for a guest session", async () => {
     mockGetSessionCtx.mockResolvedValue({ userId: "guest-1", kind: "guest" });
 
-    const response = await POST();
+    const response = await POST(new Request("http://localhost/api/me/mcp-token", { method: "POST" }));
 
     expect(response.status).toBe(403);
     expect(mockSignMcpToken).not.toHaveBeenCalled();
@@ -48,14 +48,14 @@ describe("POST /api/me/mcp-token", () => {
   it("returns 403 when the caller is itself an MCP token", async () => {
     mockGetSessionCtx.mockResolvedValue({ userId: "user-1", kind: "mcp" });
 
-    const response = await POST();
+    const response = await POST(new Request("http://localhost/api/me/mcp-token", { method: "POST" }));
 
     expect(response.status).toBe(403);
     expect(mockSignMcpToken).not.toHaveBeenCalled();
   });
 
   it("issues a no-store MCP token for a normal browser session", async () => {
-    const response = await POST();
+    const response = await POST(new Request("http://localhost/api/me/mcp-token", { method: "POST" }));
     const body = await response.json();
 
     expect(response.status).toBe(201);
@@ -72,7 +72,7 @@ describe("POST /api/me/mcp-token", () => {
     ("uses the default TTL for invalid value %s", async (ttl) => {
       process.env.MCP_TOKEN_TTL_DAYS = ttl;
 
-      const response = await POST();
+      const response = await POST(new Request("http://localhost/api/me/mcp-token", { method: "POST" }));
       const body = await response.json();
 
       expect(body.expiresInDays).toBe(90);
@@ -82,7 +82,7 @@ describe("POST /api/me/mcp-token", () => {
   it("returns a generic 500 response when signing fails", async () => {
     mockSignMcpToken.mockRejectedValue(new Error("signing secret unavailable"));
 
-    const response = await POST();
+    const response = await POST(new Request("http://localhost/api/me/mcp-token", { method: "POST" }));
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: "No se pudo generar el token" });

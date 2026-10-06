@@ -1,41 +1,27 @@
 import { NextResponse } from "next/server";
-import { getSessionCtx } from "@/lib/authz";
-import { updateItemForScope, setItemChecked, deleteItemForScope, type ListWriteScope } from "@/lib/list-crud";
-import { listErrorResponse } from "@/lib/list-http";
+import { updateItemForScope, setItemChecked, deleteItemForScope } from "@/lib/list-crud";
+import { route } from "@/lib/http";
+import { ItemBody, itemParams, PERSONAL_LIST_ROUTE } from "../../../schemas";
 
-/** A single item of a personal list. PATCH toggles `checked` or edits fields. */
+/** A single item of a personal list. PATCH toggles `checked` or edits fields. Guests → 403. */
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ listId: string; itemId: string }> }) {
-    const { listId, itemId } = await params;
-    const ctx = await getSessionCtx();
-    if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    // Guests (shadow users caged to one ephemeral space) have no personal lists.
-    if (ctx.kind === "guest") return NextResponse.json({ error: "Acción no permitida para invitados" }, { status: 403 });
-    const scope: ListWriteScope = { kind: "owner", ownerId: ctx.userId };
-    try {
-        const body = await request.json();
-        if (typeof body?.checked === "boolean") {
+export const PATCH = route(
+    { ...PERSONAL_LIST_ROUTE, params: itemParams, body: ItemBody },
+    async ({ ctx, params: { listId, itemId }, body }) => {
+        const scope = { kind: "owner", ownerId: ctx.userId } as const;
+        if (typeof body.checked === "boolean") {
             const result = await setItemChecked(scope, listId, itemId, body.checked, ctx.userId);
             return NextResponse.json(result);
         }
         const item = await updateItemForScope(scope, listId, itemId, body);
         return NextResponse.json({ item });
-    } catch (e) {
-        return listErrorResponse(e);
-    }
-}
+    },
+);
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ listId: string; itemId: string }> }) {
-    const { listId, itemId } = await params;
-    const ctx = await getSessionCtx();
-    if (!ctx?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    // Guests (shadow users caged to one ephemeral space) have no personal lists.
-    if (ctx.kind === "guest") return NextResponse.json({ error: "Acción no permitida para invitados" }, { status: 403 });
-    const scope: ListWriteScope = { kind: "owner", ownerId: ctx.userId };
-    try {
-        const result = await deleteItemForScope(scope, listId, itemId);
+export const DELETE = route(
+    { ...PERSONAL_LIST_ROUTE, params: itemParams },
+    async ({ ctx, params: { listId, itemId } }) => {
+        const result = await deleteItemForScope({ kind: "owner", ownerId: ctx.userId }, listId, itemId);
         return NextResponse.json(result);
-    } catch (e) {
-        return listErrorResponse(e);
-    }
-}
+    },
+);

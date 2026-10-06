@@ -38,6 +38,19 @@ describe("PATCH /api/user/profile", () => {
         expect((await patch({ name: "Ana", avatar: "x".repeat(300) })).status).toBe(400);
     });
 
+    it("400 shapes: historical messages + issues, nothing written", async () => {
+        const badJson = await PATCH(new Request("http://localhost/api/user/profile", { method: "PATCH", body: "{" }));
+        expect(await badJson.json()).toEqual({ error: "Cuerpo de la petición no válido" });
+        expect(await (await patch({ name: 7 })).json()).toMatchObject({ error: "El nombre es obligatorio", issues: [{ path: "name" }] });
+        expect(await (await patch({ name: "Ana", avatar: 5 })).json()).toMatchObject({ error: "El avatar no es válido", issues: [{ path: "avatar" }] });
+        expect(mockUserUpdate).not.toHaveBeenCalled();
+    });
+
+    it("an empty avatar keeps the current one", async () => {
+        await patch({ name: "Ana", avatar: "" });
+        expect(mockUserUpdate.mock.calls[0][0].data).toEqual({ name: "Ana", avatar: undefined });
+    });
+
     it("updates the trimmed name", async () => {
         const res = await patch({ name: "  Ana  ", avatar: "🐱" });
         expect(res.status).toBe(200);

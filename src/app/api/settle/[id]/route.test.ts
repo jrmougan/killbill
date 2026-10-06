@@ -57,6 +57,16 @@ describe('PATCH /api/settle/[id] (edit a PENDING settlement)', () => {
         expect((await PATCH(req({ method: 'PAYPAL' }), { params })).status).toBe(400);
     });
 
+    it('400 INVALID_INPUT on a null method, a non-object or unparseable body (nothing written)', async () => {
+        const nullMethod = await PATCH(req({ method: null }), { params });
+        expect(await nullMethod.json()).toMatchObject({ error: 'Método de pago no válido', code: 'INVALID_INPUT', issues: [{ path: 'method' }] });
+        expect(await (await PATCH(req([1]), { params })).json()).toMatchObject({ error: 'Petición no válida', code: 'INVALID_INPUT' });
+        const badJson = new Request('http://localhost/api/settle/s1', { method: 'PATCH', body: '{' });
+        expect(await (await PATCH(badJson, { params })).json()).toMatchObject({ error: 'Petición no válida', code: 'INVALID_INPUT' });
+        expect(mockSettlementFindUnique).not.toHaveBeenCalled();
+        expect(mockEdit).not.toHaveBeenCalled();
+    });
+
     it('404 / 403 for unknown settlements or foreign spaces', async () => {
         mockSettlementFindUnique.mockResolvedValueOnce(null);
         expect((await PATCH(req({ amount: 1 }), { params })).status).toBe(404);
