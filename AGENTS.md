@@ -48,6 +48,10 @@ Kill Bill is a couples/group expense-splitting app. Full-stack Next.js with App 
 - `prisma/` — Schema, migrations, seed script, and fix scripts
 - `src/generated/prisma/` — Generated Prisma client (do not edit manually)
 
+### API route handlers
+
+New/changed routes under `src/app/api/` use the `src/lib/http` toolkit (convention and migration rules in `docs/route-handlers.md`): `export const POST = route({ auth, params, query, body, bodyOptions, errorMessage }, handler)` does session auth → Zod parsing → handler → error mapping; handlers **throw** `HttpError` (`badRequest`/`notFound`/`conflict`…) or domain errors instead of returning error responses, and keep space authorization explicit with `requireSpace`. Zod primitives live in `src/lib/http/schemas.ts`; per-domain body schemas and shared parse options in `src/lib/<domain>-schemas.ts`. Error shapes, statuses and Spanish messages are a contract — never change them in a refactor. Only `mcp`, `health`, `cron/*`, `test/*`, `auth/logout`, `invites/[token]/preview`, `setup` and the `/uploads` file server are hand-rolled (still using `toErrorResponse`/`enforceRateLimit` where they apply).
+
 ### Data model
 
 All monetary amounts are stored in **cents** (integers). Convert to euros only for display using `src/lib/currency.ts`.
