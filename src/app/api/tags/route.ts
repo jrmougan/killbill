@@ -1,14 +1,38 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { getActiveGroup } from '@/lib/membership';
-import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
+import { badRequest, conflict, readJson, requireSpace, route, validate } from '@/lib/http';
+import { jsonObject } from '@/lib/http/schemas';
 
 /** Longest tag name accepted (keeps chips readable and well under the column limit). */
 const MAX_TAG_NAME_LEN = 40;
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const DEFAULT_COLOR = '#8b5cf6';
 
-const json = (body: unknown, status: number) => NextResponse.json(body, { status });
+const BODY_INVALID = 'Cuerpo de la petición no válido';
+const NAME_REQUIRED = 'El nombre de la etiqueta es obligatorio';
+const COLOR_INVALID = 'El color no es válido';
+
+const CreateTagBody = jsonObject(
+    {
+        name: z
+            .string({ error: NAME_REQUIRED })
+            .trim()
+            .min(1, NAME_REQUIRED)
+            .max(MAX_TAG_NAME_LEN, `El nombre de la etiqueta no puede superar los ${MAX_TAG_NAME_LEN} caracteres`),
+        /** null / "" / absent → the default colour. */
+        color: z
+            .union([z.string().regex(HEX_COLOR, COLOR_INVALID), z.literal(''), z.null()], { error: COLOR_INVALID })
+            .optional()
+            .transform((v) => v || DEFAULT_COLOR),
+        /** Only `true` makes it personal (lenient, as always). */
+        personal: z.unknown().optional().transform((v) => v === true),
+        /** A non-empty string targets that space; anything else → the active space. */
+        groupId: z.unknown().optional().transform((v) => (typeof v === 'string' && v ? v : null)),
+    },
+    BODY_INVALID,
+);
 
 function isUniqueViolation(e: unknown): boolean {
     return typeof e === 'object' && e !== null && (e as { code?: string }).code === 'P2002';
@@ -19,10 +43,7 @@ function isUniqueViolation(e: unknown): boolean {
  * A GUEST session only ever sees the tags of the space it is caged to (no
  * personal surface).
  */
-export async function GET() {
-    const ctx = await getSessionCtx();
-    if (!ctx) return json({ error: 'No autorizado' }, 401);
-
+export const GET = route({ auth: 'user-or-guest' }, async ({ ctx }) => {
     if (ctx.kind === 'guest') {
         const tags = ctx.groupId
             ? await prisma.tag.findMany({ where: { coupleId: ctx.groupId }, orderBy: { name: 'asc' } })
@@ -40,7 +61,7 @@ export async function GET() {
     });
 
     return NextResponse.json({ tags });
-}
+});
 
 /**
  * POST /api/tags {name, color?, personal?, groupId?}
@@ -49,62 +70,39 @@ export async function GET() {
  * non-guest membership in that writable space. Guests never create tags.
  * Errors: 400 invalid input, 403 guest/non-member, 409 duplicate name.
  */
-export async function POST(request: Request) {
-    const ctx = await getSessionCtx();
-    if (!ctx) return json({ error: 'No autorizado' }, 401);
-    if (ctx.kind === 'guest') return json({ error: 'Acción no permitida para invitados' }, 403);
-    const userId = ctx.userId;
+export const POST = route(
+    { auth: 'user', errorMessage: 'No se pudo crear la etiqueta', logLabel: 'Error al crear la etiqueta:' },
+    async ({ req, ctx }) => {
+        const userId = ctx.userId;
+        // Unparseable JSON keeps its historical message (so not options.body).
+        const raw = await readJson(req).catch(() => {
+            throw badRequest(BODY_INVALID);
+        });
+        const { name, color, personal, groupId: bodyGroupId } = validate(CreateTagBody, raw);
 
-    let body: Record<string, unknown>;
-    try {
-        body = await request.json();
-    } catch {
-        return json({ error: 'Cuerpo de la petición no válido' }, 400);
-    }
-    if (!body || typeof body !== 'object') return json({ error: 'Cuerpo de la petición no válido' }, 400);
+        const duplicate = () => conflict(`Ya existe una etiqueta llamada «${name}»`, 'TAG_EXISTS');
 
-    const name = typeof body.name === 'string' ? body.name.trim() : '';
-    if (!name) return json({ error: 'El nombre de la etiqueta es obligatorio' }, 400);
-    if (name.length > MAX_TAG_NAME_LEN) {
-        return json({ error: `El nombre de la etiqueta no puede superar los ${MAX_TAG_NAME_LEN} caracteres` }, 400);
-    }
-    let color = DEFAULT_COLOR;
-    if (body.color !== undefined && body.color !== null && body.color !== '') {
-        if (typeof body.color !== 'string' || !HEX_COLOR.test(body.color)) {
-            return json({ error: 'El color no es válido' }, 400);
+        try {
+            if (personal) {
+                // Personal tags have no DB unique (coupleId is NULL), so check explicitly.
+                const existing = await prisma.tag.findFirst({ where: { ownerId: userId, name }, select: { id: true } });
+                if (existing) throw duplicate();
+                const tag = await prisma.tag.create({ data: { name, color, ownerId: userId } });
+                return NextResponse.json({ tag }, { status: 201 });
+            }
+
+            const groupId = bodyGroupId || (await getActiveGroup(userId));
+            if (!groupId) throw badRequest('No perteneces a ningún espacio compartido', 'NO_SPACE');
+            await requireSpace(ctx, groupId);
+
+            const existing = await prisma.tag.findFirst({ where: { coupleId: groupId, name }, select: { id: true } });
+            if (existing) throw duplicate();
+            const tag = await prisma.tag.create({ data: { name, color, coupleId: groupId } });
+            return NextResponse.json({ tag }, { status: 201 });
+        } catch (error) {
+            // Concurrent create of the same name loses the @@unique([name, coupleId]) race.
+            if (isUniqueViolation(error)) throw duplicate();
+            throw error;
         }
-        color = body.color;
-    }
-
-    const duplicate = () =>
-        json({ error: `Ya existe una etiqueta llamada «${name}»`, code: 'TAG_EXISTS' }, 409);
-
-    try {
-        if (body.personal === true) {
-            // Personal tags have no DB unique (coupleId is NULL), so check explicitly.
-            const existing = await prisma.tag.findFirst({ where: { ownerId: userId, name }, select: { id: true } });
-            if (existing) return duplicate();
-            const tag = await prisma.tag.create({ data: { name, color, ownerId: userId } });
-            return json({ tag }, 201);
-        }
-
-        const groupId = typeof body.groupId === 'string' && body.groupId
-            ? body.groupId
-            : await getActiveGroup(userId);
-        if (!groupId) {
-            return json({ error: 'No perteneces a ningún espacio compartido', code: 'NO_SPACE' }, 400);
-        }
-        const auth = await requireSpaceAccess(ctx, groupId);
-        if (!auth.ok) return json({ error: auth.error, code: auth.code }, auth.status);
-
-        const existing = await prisma.tag.findFirst({ where: { coupleId: groupId, name }, select: { id: true } });
-        if (existing) return duplicate();
-        const tag = await prisma.tag.create({ data: { name, color, coupleId: groupId } });
-        return json({ tag }, 201);
-    } catch (error) {
-        // Concurrent create of the same name loses the @@unique([name, coupleId]) race.
-        if (isUniqueViolation(error)) return duplicate();
-        console.error('Error al crear la etiqueta:', error);
-        return json({ error: 'No se pudo crear la etiqueta' }, 500);
-    }
-}
+    },
+);

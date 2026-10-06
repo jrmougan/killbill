@@ -62,6 +62,21 @@ describe("POST /api/tags", () => {
         expect((await post({ name: "ok", color: "red" })).status).toBe(400);
     });
 
+    it("400 shapes: historical messages, issues per field, nothing written", async () => {
+        const badJson = await POST(new Request("http://localhost/api/tags", { method: "POST", body: "{" }));
+        expect(await badJson.json()).toEqual({ error: "Cuerpo de la petición no válido" });
+        expect(await (await post({ name: 42 })).json())
+            .toMatchObject({ error: "El nombre de la etiqueta es obligatorio", issues: [{ path: "name" }] });
+        expect(await (await post({ name: "ok", color: 7 })).json())
+            .toMatchObject({ error: "El color no es válido", issues: [{ path: "color" }] });
+        expect(mockTagCreate).not.toHaveBeenCalled();
+    });
+
+    it("trims the name and defaults an empty colour", async () => {
+        await post({ name: "  Casa  ", color: "", personal: true });
+        expect(mockTagCreate.mock.calls[0][0].data).toEqual({ name: "Casa", color: "#8b5cf6", ownerId: "u1" });
+    });
+
     it("authorizes a space tag against the target space (writable)", async () => {
         mockRequireSpaceAccess.mockResolvedValue({ ok: false, status: 409, error: "archivado", code: "SPACE_NOT_WRITABLE" });
         const res = await post({ name: "Casa", groupId: "c9" });
@@ -82,7 +97,7 @@ describe("GET /api/tags", () => {
     it("a guest only sees the tags of its own space", async () => {
         mockGetSessionCtx.mockResolvedValue({ userId: "g1", kind: "guest", groupId: "trip" });
         mockTagFindMany.mockResolvedValue([]);
-        expect((await GET()).status).toBe(200);
+        expect((await GET(new Request("http://localhost/api/tags"))).status).toBe(200);
         expect(mockTagFindMany.mock.calls[0][0].where).toEqual({ coupleId: "trip" });
     });
 });
