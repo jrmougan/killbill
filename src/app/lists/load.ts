@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getActiveGroup } from "@/lib/membership";
-import { getListsForScope, getListWithItems, type ListSummary } from "@/lib/list-read";
+import { getListsForScope, getListWithItems, listVersionOf, type ListSummary } from "@/lib/list-read";
 import { MembershipStatus } from "@/generated/prisma/enums";
 import type { ListWriteScope } from "@/lib/list-crud";
 import type { ShoppingItem } from "@/components/shopping/shopping-item-row";
@@ -18,6 +18,8 @@ export interface HubSelected {
     name: string;
     groupId: string | null;
     items: ShoppingItem[];
+    /** Change stamp (see listVersionStamp): the poll refreshes only when it moves. */
+    version: string;
 }
 
 export interface ListsHubData {
@@ -102,6 +104,7 @@ export async function loadListsHub(userId: string, listId?: string): Promise<Lis
             id: list.id,
             name: list.name,
             groupId: list.groupId,
+            version: listVersionOf(list),
             items: list.items.map((i) => ({
                 id: i.id,
                 name: i.name,

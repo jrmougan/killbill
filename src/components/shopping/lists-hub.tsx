@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, MoreHorizontal, Pencil, Receipt, Trash2, ListX, X } from "lucide-react";
 import { EqChip, EqCta, EqHeader, EqLabel, useEqToast } from "@/components/ui/eq";
@@ -25,7 +25,11 @@ interface ListsHubProps {
     selected: HubSelected | null;
 }
 
-/** Near-live poll of the selected list (no realtime infra). Refreshes only when visible. */
+/**
+ * Near-live poll of the selected list (no realtime infra). Each tick asks the
+ * cheap `…/version` endpoint and only re-renders the screen (router.refresh)
+ * when the stamp moved. Only while visible.
+ */
 const POLL_MS = 6000;
 
 const AISLE_ORDER = new Map(AISLES.map((a) => [a.key, a.sortOrder]));
@@ -85,9 +89,38 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
         setItems(selected?.items ?? []);
     }, [selected]);
 
+    const apiBase = selected
+        ? selected.groupId
+            ? `/api/spaces/${selected.groupId}/lists/${selected.id}`
+            : `/api/me/lists/${selected.id}`
+        : null;
+
+    // The list on screen and its stamp (from the last server render), read by
+    // the poll without re-subscribing the listeners on every render.
+    const shown = useRef({ apiBase, version: selected?.version ?? null });
     useEffect(() => {
+        shown.current = { apiBase, version: selected?.version ?? null };
+    }, [apiBase, selected]);
+
+    useEffect(() => {
+        const visible = () => document.visibilityState === "visible";
         const refresh = () => {
-            if (document.visibilityState === "visible") router.refresh();
+            if (visible()) router.refresh();
+        };
+        const poll = async () => {
+            if (!visible()) return;
+            // No list on screen: nothing cheap to compare, re-read the hub.
+            const { apiBase: base, version: current } = shown.current;
+            if (!base) return router.refresh();
+            try {
+                const res = await fetch(`${base}/version`, { cache: "no-store" });
+                // Gone / no longer accessible / server error: let the page decide (redirects).
+                if (!res.ok) return router.refresh();
+                const { version } = await res.json();
+                if (version !== current) router.refresh();
+            } catch {
+                /* offline: retry on the next tick */
+            }
         };
         // Browser back restores the list from the router cache / bfcache: re-read
         // it right away instead of showing already-cleared items until the poll.
@@ -95,7 +128,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
         window.addEventListener("focus", refresh);
         window.addEventListener("pageshow", refresh);
         document.addEventListener("visibilitychange", refresh);
-        const timer = setInterval(refresh, POLL_MS);
+        const timer = setInterval(() => void poll(), POLL_MS);
         return () => {
             window.removeEventListener("focus", refresh);
             window.removeEventListener("pageshow", refresh);
@@ -103,12 +136,6 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
             clearInterval(timer);
         };
     }, [router]);
-
-    const apiBase = selected
-        ? selected.groupId
-            ? `/api/spaces/${selected.groupId}/lists/${selected.id}`
-            : `/api/me/lists/${selected.id}`
-        : null;
 
     const pending = useMemo(() => items.filter((i) => !i.checked), [items]);
     const done = useMemo(() => items.filter((i) => i.checked), [items]);
