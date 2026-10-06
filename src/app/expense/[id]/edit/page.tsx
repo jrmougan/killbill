@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { getSessionCtx } from "@/lib/authz";
 import { getActiveGroup, getGroupMembers } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
@@ -24,7 +24,8 @@ function dayInAppTz(d: Date): string {
  */
 export default async function EditExpensePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
-    const session = await getSession();
+    // getSessionCtx: a guest is revalidated against its Membership (expelled/archived → login).
+    const session = await getSessionCtx();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Check, ChevronRight } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { getSessionCtx } from "@/lib/authz";
 import { getActiveGroup, getGroupMembers } from "@/lib/membership";
 import { materializeDueRecurringExpenses, materializeDueRecurringExpensesForOwner } from "@/lib/recurring";
 import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
@@ -62,7 +62,8 @@ function spaceName(s: Pick<SpaceSummary, "name" | "type">): string {
  * in a future month never counts as "este mes".
  */
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
-    const session = await getSession();
+    // getSessionCtx: a guest is revalidated against its Membership (expelled/archived → login).
+    const session = await getSessionCtx();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
     // A GUEST session is caged to its EPHEMERAL space with no personal economy.

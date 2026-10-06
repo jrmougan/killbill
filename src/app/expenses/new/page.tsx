@@ -20,7 +20,7 @@
  * Example: `/expenses/new?title=Mercadona&category=shopping&space=personal&returnTo=/lists/abc&scan=1`
  */
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth";
+import { getSessionCtx } from "@/lib/authz";
 import { prisma } from "@/lib/db";
 import { getActiveGroup, getGroupMembers, getUserGroups } from "@/lib/membership";
 import { safeReturnTo } from "@/lib/safe-return";
@@ -34,7 +34,8 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export default async function NewExpensePage({ searchParams }: { searchParams: SearchParams }) {
-    const session = await getSession();
+    // getSessionCtx: a guest is revalidated against its Membership (expelled/archived → login).
+    const session = await getSessionCtx();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
     const isGuest = session.kind === "guest";

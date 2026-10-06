@@ -3,7 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { DeleteExpenseButton } from "@/components/expense/delete-button";
-import { getSession } from "@/lib/auth";
+import { getSessionCtx } from "@/lib/authz";
 import { formatCurrency, formatEuros } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
@@ -16,7 +16,8 @@ import { EqCard, EqHeader, EqLabel } from "@/components/ui/eq";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
-    const session = await getSession();
+    // getSessionCtx: a guest is revalidated against its Membership (expelled/archived → login).
+    const session = await getSessionCtx();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 

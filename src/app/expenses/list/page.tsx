@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { ExpensesListClient, type ListItem } from "./client";
-import { getSession } from "@/lib/auth";
+import { getSessionCtx } from "@/lib/authz";
 import { getGroupMembers, getActiveGroup } from "@/lib/membership";
 import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { getEffectiveCategories } from "@/lib/category-db";
@@ -16,7 +16,8 @@ export const dynamic = "force-dynamic";
  * shows the private personal ledger instead. Amounts travel in cents.
  */
 export default async function ExpensesListPage({ searchParams }: { searchParams: Promise<{ scope?: string }> }) {
-    const session = await getSession();
+    // getSessionCtx: a guest is revalidated against its Membership (expelled/archived → login).
+    const session = await getSessionCtx();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
     const isGuest = session.kind === "guest";
