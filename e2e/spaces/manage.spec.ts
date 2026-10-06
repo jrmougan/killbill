@@ -158,7 +158,17 @@ test.describe('Spaces - Management', () => {
     await page.getByTestId('space-invite-card').getByRole('button', { name: 'Enviar' }).click();
     expect(posts).toBe(1);
 
+    // "Generar nuevo" revokes the old invite (awaited DELETE) and then mints a new
+    // one; the link is briefly cleared in between, so wait for the mint itself
+    // instead of the first DOM change before counting/listing.
+    const revoked = page.waitForResponse((r) =>
+      r.request().method() === 'DELETE' && new URL(r.url()).pathname === `/api/spaces/${spaceId}/invites`);
+    const minted = page.waitForResponse((r) =>
+      r.request().method() === 'POST' && new URL(r.url()).pathname === `/api/spaces/${spaceId}/invites`);
     await page.getByRole('button', { name: 'Generar nuevo' }).click();
+    expect((await revoked).ok()).toBeTruthy();
+    expect((await minted).ok()).toBeTruthy();
+    await expect(page.getByTestId('invite-link')).toContainText('/i/');
     await expect(page.getByTestId('invite-link')).not.toHaveText(firstLink!);
     expect(posts).toBe(2);
     const list = await (await page.request.get(`/api/spaces/${spaceId}/invites`)).json();
