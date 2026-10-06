@@ -293,6 +293,7 @@ export function formReducer(state: FormState, action: FormAction): FormState {
         case "scanCancelled":
             return withoutReceipt({ ...state, mode: "form" });
         case "formError":
+            if (action.error === state.formError && !action.openMore) return state;
             return { ...state, formError: action.error, ...(action.openMore ? { moreOpen: true } : {}) };
         case "saveStarted":
             return { ...state, saving: true };
