@@ -156,3 +156,46 @@ describe("PATCH /api/spaces/[id]", () => {
         });
     });
 });
+
+describe("PATCH /api/spaces/[id] — body validation (route() kit)", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockGetSession.mockResolvedValue({ userId: "a" });
+        mockMembershipFindUnique.mockResolvedValue({ groupId: "g1", userId: "a", role: "OWNER", status: "ACTIVE" });
+        mockLockedStatus.mockReturnValue(null);
+        space("ACTIVE");
+    });
+
+    it("400 'Cuerpo inválido' for unparseable JSON", async () => {
+        const res = await PATCH(new Request("http://localhost/api/spaces/g1", { method: "PATCH", body: "{" }), { params });
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toBe("Cuerpo inválido");
+        expect(mockCoupleUpdate).not.toHaveBeenCalled();
+    });
+
+    it.each([["toString"], ["CLOSED"], [null]])("400 'Estado no válido' for status %j", async (status) => {
+        const res = await patch({ status });
+        expect(res.status).toBe(400);
+        const json = await res.json();
+        expect(json.error).toBe("Estado no válido");
+        expect(json.issues[0].path).toBe("status");
+        expect(mockCoupleUpdate).not.toHaveBeenCalled();
+    });
+
+    it("400 'Tipo no válido' for an unknown type", async () => {
+        const res = await patch({ type: "TRIBE" });
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toBe("Tipo no válido");
+    });
+
+    it("400 'Nada que actualizar' for an empty object", async () => {
+        const res = await patch({});
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toBe("Nada que actualizar");
+    });
+
+    it("a MEMBER gets 403 before any body validation", async () => {
+        mockMembershipFindUnique.mockResolvedValue({ groupId: "g1", userId: "a", role: "MEMBER", status: "ACTIVE" });
+        expect((await patch({ status: "BOGUS" })).status).toBe(403);
+    });
+});

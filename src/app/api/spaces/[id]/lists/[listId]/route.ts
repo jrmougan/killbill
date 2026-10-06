@@ -1,38 +1,32 @@
 import { NextResponse } from "next/server";
 import { updateListForScope, deleteListForScope, type ListWriteScope } from "@/lib/list-crud";
-import { listErrorResponse, requireListWriteAccess } from "@/lib/list-http";
+import { LIST_ERROR_LOG_LABEL, LIST_ERROR_MESSAGE, requireListWrite } from "@/lib/list-http";
+import { ListBody, spaceListParams } from "@/lib/list-schemas";
+import { parseJson, route } from "@/lib/http";
 
 /**
  * A single space list. `id` = groupId, `listId` = the list. Any ACTIVE member may
  * rename/edit/delete (no role gate); writes are blocked only when ARCHIVED (lists stay editable while SETTLING).
  * The lib re-checks the list belongs to this group (defense in depth vs IDOR).
  */
+const options = {
+    auth: "user",
+    params: spaceListParams,
+    unauthorizedMessage: "Unauthorized",
+    errorMessage: LIST_ERROR_MESSAGE,
+    logLabel: LIST_ERROR_LOG_LABEL,
+} as const;
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string; listId: string }> }) {
-    const { id, listId } = await params;
-    const gate = await requireListWriteAccess(id);
-    if (!gate.ok) return gate.response;
-
+export const PATCH = route(options, async ({ req, ctx, params: { id, listId } }) => {
+    await requireListWrite(ctx, id);
+    const body = await parseJson(req, ListBody);
     const scope: ListWriteScope = { kind: "group", groupId: id };
-    try {
-        const body = await request.json();
-        const list = await updateListForScope(scope, listId, body);
-        return NextResponse.json({ list });
-    } catch (e) {
-        return listErrorResponse(e);
-    }
-}
+    const list = await updateListForScope(scope, listId, body);
+    return NextResponse.json({ list });
+});
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string; listId: string }> }) {
-    const { id, listId } = await params;
-    const gate = await requireListWriteAccess(id);
-    if (!gate.ok) return gate.response;
-
+export const DELETE = route(options, async ({ ctx, params: { id, listId } }) => {
+    await requireListWrite(ctx, id);
     const scope: ListWriteScope = { kind: "group", groupId: id };
-    try {
-        const result = await deleteListForScope(scope, listId);
-        return NextResponse.json(result);
-    } catch (e) {
-        return listErrorResponse(e);
-    }
-}
+    return NextResponse.json(await deleteListForScope(scope, listId));
+});

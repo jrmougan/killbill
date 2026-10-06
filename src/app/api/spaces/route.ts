@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
-import { getSessionCtx } from "@/lib/authz";
 import { ACTIVE_GROUP_COOKIE } from "@/lib/membership";
-import { normalizeSpaceName, parseTripEndDate, SpacePolicyError } from "@/lib/space-policy";
+import { normalizeSpaceName, parseTripEndDate } from "@/lib/space-policy";
 import { SpaceType } from "@/generated/prisma/enums";
+import { route } from "@/lib/http";
+import { CreateSpaceBody, parseSpaceBody } from "@/lib/space-schemas";
 
 /**
  * Typed space creation + listing (Fase 1). Replaces the untyped POST /api/couple
@@ -13,13 +14,8 @@ import { SpaceType } from "@/generated/prisma/enums";
  * never inferred from member count.
  */
 
-// Types a user may create directly. INDIVIDUAL is a virtual mode (no rows) and
-// is never materialized here.
-const CREATABLE_TYPES: SpaceType[] = [SpaceType.COUPLE, SpaceType.GROUP, SpaceType.EPHEMERAL];
-
-export async function GET() {
-    const ctx = await getSessionCtx();
-    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+// A guest session may list its (single) space.
+export const GET = route({ auth: "user-or-guest", unauthorizedMessage: "Unauthorized" }, async ({ ctx }) => {
     const userId = ctx.userId;
 
     // All spaces where the caller is an ACTIVE member, in a stable order, with
@@ -58,54 +54,27 @@ export async function GET() {
     }));
 
     return NextResponse.json({ spaces, userId });
-}
+});
 
-export async function POST(request: Request) {
-    const ctx = await getSessionCtx();
-    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    // A guest session is caged to its EPHEMERAL space: it can never own a space.
-    if (ctx.kind === "guest") {
-        return NextResponse.json({ error: "Acción no permitida para invitados" }, { status: 403 });
-    }
+// A guest session is caged to its EPHEMERAL space: it can never own a space (403).
+// Only a type (COUPLE/GROUP/EPHEMERAL) is required; INDIVIDUAL is virtual and
+// never materialized here.
+export const POST = route({ auth: "user", unauthorizedMessage: "Unauthorized" }, async ({ req, ctx }) => {
     const userId = ctx.userId;
+    const body = await parseSpaceBody(req, CreateSpaceBody);
+    const spaceType = body.type;
 
-    let body: { name?: unknown; type?: unknown; expiresAt?: unknown };
-    try {
-        body = await request.json();
-    } catch {
-        return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
-    }
-    if (!body || typeof body !== "object") {
-        return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 });
-    }
-
-    const type = body.type;
-    if (typeof type !== "string" || !CREATABLE_TYPES.includes(type as SpaceType)) {
-        return NextResponse.json(
-            { error: "type es obligatorio y debe ser COUPLE, GROUP o EPHEMERAL" },
-            { status: 400 },
-        );
-    }
-    const spaceType = type as SpaceType;
-
-    let expiresAt: Date | null = null;
-    let name: string;
-    try {
-        // expiresAt only makes sense for EPHEMERAL. A calendar date is stored as
-        // the END of that day in Europe/Madrid; past dates are rejected. It caps
-        // guest sessions (see jwt.ts) but never closes the space by itself.
-        if (spaceType === SpaceType.EPHEMERAL && body.expiresAt != null && body.expiresAt !== "") {
-            expiresAt = parseTripEndDate(body.expiresAt);
-        }
-        name = body.name == null || (typeof body.name === "string" && body.name.trim() === "")
-            ? defaultName(spaceType)
-            : normalizeSpaceName(body.name);
-    } catch (e) {
-        if (e instanceof SpacePolicyError) {
-            return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
-        }
-        throw e;
-    }
+    // expiresAt only makes sense for EPHEMERAL. A calendar date is stored as
+    // the END of that day in Europe/Madrid; past dates are rejected. It caps
+    // guest sessions (see jwt.ts) but never closes the space by itself.
+    // SpacePolicyError (INVALID_END_DATE / INVALID_NAME) maps to its 400 + code.
+    const expiresAt: Date | null =
+        spaceType === SpaceType.EPHEMERAL && body.expiresAt != null && body.expiresAt !== ""
+            ? parseTripEndDate(body.expiresAt)
+            : null;
+    const name = body.name == null || (typeof body.name === "string" && body.name.trim() === "")
+        ? defaultName(spaceType)
+        : normalizeSpaceName(body.name);
 
     // `Couple.code` is a legacy UNIQUE column. No short codes any more: fill it
     // with an unguessable 128-bit value that is never shown nor accepted as an
@@ -138,7 +107,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ success: true, space });
-}
+});
 
 function defaultName(type: SpaceType): string {
     switch (type) {

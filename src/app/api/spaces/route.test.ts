@@ -76,3 +76,37 @@ describe("POST /api/spaces", () => {
         expect((await post({ type: "GROUP", name: "x".repeat(61) })).status).toBe(400);
     });
 });
+
+describe("POST /api/spaces — body validation (route() kit)", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockGetSession.mockResolvedValue({ userId: "u1" });
+    });
+
+    function raw(body: string) {
+        return POST(new Request("http://localhost/api/spaces", { method: "POST", body }));
+    }
+
+    it.each([["{oops"], [""], ["null"], ["[]"]])("400 'Cuerpo inválido' for the body %j", async (body) => {
+        const res = await raw(body);
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toBe("Cuerpo inválido");
+        expect(mockCoupleCreate).not.toHaveBeenCalled();
+    });
+
+    it.each([[{}], [{ type: "INDIVIDUAL" }], [{ type: 3 }]])("400 with the historical message for %j", async (body) => {
+        const res = await post(body);
+        expect(res.status).toBe(400);
+        const json = await res.json();
+        expect(json.error).toBe("type es obligatorio y debe ser COUPLE, GROUP o EPHEMERAL");
+        expect(json.issues[0].path).toBe("type");
+        expect(mockCoupleCreate).not.toHaveBeenCalled();
+    });
+
+    it("401 'Unauthorized' without a session", async () => {
+        mockGetSession.mockResolvedValue(null);
+        const res = await post({ type: "GROUP" });
+        expect(res.status).toBe(401);
+        expect((await res.json()).error).toBe("Unauthorized");
+    });
+});

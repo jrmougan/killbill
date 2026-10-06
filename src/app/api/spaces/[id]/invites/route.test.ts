@@ -94,6 +94,47 @@ describe("/api/spaces/[id]/invites (kind MEMBER)", () => {
         expect(data.invite.tokenHash).toBeUndefined();
     });
 
+    it("400 'Cuerpo inválido' for unparseable JSON", async () => {
+        const res = await POST(new Request("http://localhost/api/spaces/g1/invites", { method: "POST", body: "{" }), { params });
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toBe("Cuerpo inválido");
+        expect(mockGroupInviteCreate).not.toHaveBeenCalled();
+    });
+
+    it("400 'Tipo de invitación no válido' for an unknown kind", async () => {
+        const res = await POST(post({ kind: "ADMIN", expiresAt: future }), { params });
+        expect(res.status).toBe(400);
+        const json = await res.json();
+        expect(json.error).toBe("Tipo de invitación no válido");
+        expect(json.issues[0].path).toBe("kind");
+        expect(mockGroupInviteCreate).not.toHaveBeenCalled();
+    });
+
+    it("a MEMBER gets 403 before any body validation", async () => {
+        mockMembershipFindUnique.mockResolvedValue({ groupId: "g1", userId: "u2", role: "MEMBER", status: "ACTIVE" });
+        expect((await POST(post({ kind: "ADMIN" }), { params })).status).toBe(403);
+    });
+
+    it("400 for an out-of-range maxUses", async () => {
+        const res = await POST(post({ expiresAt: future, maxUses: 51 }), { params });
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toBe("maxUses debe ser un entero entre 1 y 50");
+    });
+
+    it("DELETE takes the invite id from the body and 400s without one", async () => {
+        mockGroupInviteUpdateMany.mockResolvedValue({ count: 1 });
+        const ok = await DELETE(
+            new Request("http://localhost/api/spaces/g1/invites", { method: "DELETE", body: JSON.stringify({ inviteId: "inv9" }) }),
+            { params },
+        );
+        expect(ok.status).toBe(200);
+        expect(mockGroupInviteUpdateMany.mock.calls[0][0].where).toMatchObject({ id: "inv9", groupId: "g1" });
+
+        const missing = await DELETE(new Request("http://localhost/api/spaces/g1/invites", { method: "DELETE", body: "{" }), { params });
+        expect(missing.status).toBe(400);
+        expect((await missing.json()).error).toBe("Falta inviteId");
+    });
+
     it("defaults maxUses to 1 when omitted", async () => {
         await POST(post({ expiresAt: future }), { params });
         expect(mockGroupInviteCreate.mock.calls[0][0].data.maxUses).toBe(1);

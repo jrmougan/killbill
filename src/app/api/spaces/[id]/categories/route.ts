@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
-import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
+import { z } from "zod";
 import { getEffectiveCategories } from "@/lib/category-db";
 import {
     createCategoryForScope,
     updateCategoryForScope,
     deleteCategoryForScope,
     reorderCategoriesForScope,
-    CategoryError,
     type CategoryWriteScope,
 } from "@/lib/category-crud";
+import { badRequest, parseJson, requireSpace, route } from "@/lib/http";
+import { idParams, jsonObject } from "@/lib/http/schemas";
 
 /**
  * Space-scoped category CRUD (Fase 3). `id` in the path IS the `groupId`.
@@ -20,83 +21,66 @@ import {
  * - POST/PATCH/DELETE: OWNER/ADMIN only (requireSpaceAccess roles gate). The
  *   default (allowArchived:false) also blocks writes in SETTLING/ARCHIVED via
  *   assertSpaceWritable. PATCH doubles as reorder when the body carries `order`.
+ *
+ * Bodies are parsed after the role gate and only checked for shape (a JSON
+ * object): the field rules live in category-crud, which throws CategoryError
+ * with its machine code (INVALID_LABEL, INVALID_COLOR, RESERVED_KEY…).
  */
 
-function errorResponse(e: unknown) {
-    if (e instanceof CategoryError) {
-        return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
-    }
-    console.error("Category CRUD error:", e);
-    return NextResponse.json({ error: "Error en categorías" }, { status: 500 });
-}
+const MISSING_ID = "Falta el id de la categoría";
+const field = z.unknown().optional();
+const CategoryFields = { key: field, label: field, labelEn: field, emoji: field, iconName: field, hex: field };
+const CreateCategoryBody = jsonObject(CategoryFields);
+/** `{ order: string[] }` (reorder) or `{ id, ...fields }` (single update). */
+const PatchCategoryBody = jsonObject({ ...CategoryFields, id: field, order: field });
+const DeleteCategoryQuery = z.object({ id: z.string().optional(), reassignTo: z.string().optional() });
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
-    const ctx = await getSessionCtx();
-    const auth = await requireSpaceAccess(ctx, id, { allowArchived: true, allowGuest: true });
-    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
+const writeOptions = {
+    auth: "user",
+    params: idParams,
+    unauthorizedMessage: "Unauthorized",
+    errorMessage: "Error en categorías",
+    logLabel: "Category CRUD error:",
+} as const;
 
-    const merged = await getEffectiveCategories({ groupId: id });
-    const categories = merged.map((c) => ({ ...c, editable: !c.isSystem }));
-    return NextResponse.json({ categories });
-}
+export const GET = route(
+    { ...writeOptions, auth: "user-or-guest" },
+    async ({ ctx, params: { id } }) => {
+        await requireSpace(ctx, id, { allowArchived: true, allowGuest: true });
+        const merged = await getEffectiveCategories({ groupId: id });
+        const categories = merged.map((c) => ({ ...c, editable: !c.isSystem }));
+        return NextResponse.json({ categories });
+    },
+);
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
-    const ctx = await getSessionCtx();
-    const auth = await requireSpaceAccess(ctx, id, { roles: ["OWNER", "ADMIN"] });
-    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
-
+export const POST = route(writeOptions, async ({ req, ctx, params: { id } }) => {
+    await requireSpace(ctx, id, { roles: ["OWNER", "ADMIN"] });
+    const body = await parseJson(req, CreateCategoryBody);
     const scope: CategoryWriteScope = { kind: "group", groupId: id };
-    try {
-        const body = await request.json();
-        const category = await createCategoryForScope(scope, body);
-        return NextResponse.json({ category }, { status: 201 });
-    } catch (e) {
-        return errorResponse(e);
-    }
-}
+    const category = await createCategoryForScope(scope, body);
+    return NextResponse.json({ category }, { status: 201 });
+});
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
-    const ctx = await getSessionCtx();
-    const auth = await requireSpaceAccess(ctx, id, { roles: ["OWNER", "ADMIN"] });
-    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
-
+export const PATCH = route(writeOptions, async ({ req, ctx, params: { id } }) => {
+    await requireSpace(ctx, id, { roles: ["OWNER", "ADMIN"] });
+    const body = await parseJson(req, PatchCategoryBody);
     const scope: CategoryWriteScope = { kind: "group", groupId: id };
-    try {
-        const body = await request.json();
-        // Reorder mode: { order: string[] }.
-        if (Array.isArray(body?.order)) {
-            const result = await reorderCategoriesForScope(scope, body.order);
-            return NextResponse.json(result);
-        }
-        // Single-update mode: { id, ...fields }.
-        if (typeof body?.id !== "string") {
-            return NextResponse.json({ error: "Falta el id de la categoría" }, { status: 400 });
-        }
-        const category = await updateCategoryForScope(scope, body.id, body);
-        return NextResponse.json({ category });
-    } catch (e) {
-        return errorResponse(e);
+    // Reorder mode: { order: string[] }.
+    if (Array.isArray(body.order)) {
+        return NextResponse.json(await reorderCategoriesForScope(scope, body.order));
     }
-}
+    // Single-update mode: { id, ...fields }.
+    if (typeof body.id !== "string") throw badRequest(MISSING_ID);
+    const category = await updateCategoryForScope(scope, body.id, body);
+    return NextResponse.json({ category });
+});
 
-export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-    const { id } = await params;
-    const ctx = await getSessionCtx();
-    const auth = await requireSpaceAccess(ctx, id, { roles: ["OWNER", "ADMIN"] });
-    if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
-
-    const scope: CategoryWriteScope = { kind: "group", groupId: id };
-    const { searchParams } = new URL(request.url);
-    const catId = searchParams.get("id");
-    const reassignTo = searchParams.get("reassignTo");
-    if (!catId) return NextResponse.json({ error: "Falta el id de la categoría" }, { status: 400 });
-    try {
-        const result = await deleteCategoryForScope(scope, catId, reassignTo);
-        return NextResponse.json(result);
-    } catch (e) {
-        return errorResponse(e);
-    }
-}
+export const DELETE = route(
+    { ...writeOptions, query: DeleteCategoryQuery },
+    async ({ ctx, params: { id }, query }) => {
+        await requireSpace(ctx, id, { roles: ["OWNER", "ADMIN"] });
+        const scope: CategoryWriteScope = { kind: "group", groupId: id };
+        if (!query.id) throw badRequest(MISSING_ID);
+        return NextResponse.json(await deleteCategoryForScope(scope, query.id, query.reassignTo ?? null));
+    },
+);
