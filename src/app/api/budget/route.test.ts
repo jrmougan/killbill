@@ -221,6 +221,30 @@ describe('budget API — amount validation (400, never a 500 overflow)', () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
         const res = await POST(new Request('http://localhost/api/budget', { method: 'POST', body: '{' }));
         expect(res.status).toBe(400);
+        expect(await res.json()).toEqual({ error: 'Cuerpo de la petición no válido' });
+    });
+
+    it('400 shapes: INVALID_AMOUNT only for a bad amount, issues on every field error', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        expect(await (await post({ scope: 'personal', category: 'food', amount: 'abc' })).json())
+            .toMatchObject({ error: 'El importe no es válido', code: 'INVALID_AMOUNT', issues: [{ path: 'amount' }] });
+        const missing = await (await post({ scope: 'personal', amount: 5 })).json();
+        expect(missing).toMatchObject({ error: 'La categoría y el importe son obligatorios', issues: [{ path: 'category' }] });
+        expect(missing.code).toBeUndefined();
+        expect((await (await post({ scope: 'personal', category: 'food' })).json()).code).toBeUndefined();
+        expect(await (await post({ scope: 'personal', category: 'food', amount: 5, month: 202601 })).json())
+            .toMatchObject({ error: 'El mes no es válido (formato AAAA-MM)', issues: [{ path: 'month' }] });
+        expect(mockBudgetUpsert).not.toHaveBeenCalled();
+    });
+
+    it('stores an explicit month as its first local day', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        mockCategoryFindFirst.mockResolvedValue({ id: 'cat' });
+        mockBudgetUpsert.mockResolvedValue({ id: 'b1' });
+        expect((await post({ scope: 'personal', category: 'food', amount: 5, month: '2026-02' })).status).toBe(201);
+        const { periodStart, periodEnd } = mockBudgetUpsert.mock.calls[0][0].create;
+        expect(periodStart).toEqual(new Date(2026, 1, 1));
+        expect(periodEnd).toEqual(new Date(2026, 2, 1));
     });
 });
 

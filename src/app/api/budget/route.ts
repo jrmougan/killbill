@@ -1,32 +1,20 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { getActiveGroup } from '@/lib/membership';
-import { toCents, parseEuroInput } from '@/lib/currency';
 import { resolveCategoryId } from '@/lib/category-db';
 import { categoryKeyOf, CATEGORY_REF_SELECT } from '@/lib/category-read';
-import { getSessionCtx, requireSpaceAccess, type SessionCtx } from '@/lib/authz';
+import { requireSpaceAccess, type SessionCtx } from '@/lib/authz';
 import { allowsBudgetsAndRecurring } from '@/lib/space-policy';
 import type { SpaceType } from '@/generated/prisma/enums';
+import { badRequest, HttpError, notFound, requireSpace, route } from '@/lib/http';
+import { BudgetDeleteQuery, BudgetListQuery, parseBudgetBody } from '@/lib/budget-schemas';
 
-/** Upper bound for a single budget: 1.000.000 € (fits the INT `amount` column). */
-const MAX_BUDGET_CENTS = 100_000_000;
-
-type Scope = 'personal' | 'shared';
-type Fail = { ok: false; res: NextResponse };
-
-const json = (body: unknown, status: number) => NextResponse.json(body, { status });
-
-/**
+/*
  * Budgets are a member/personal surface: a GUEST session (caged to an ephemeral
- * trip, where budgets are vetoed anyway) never reads or writes them. The proxy
- * already blocks /api/budget for guests; this is the defense in depth.
+ * trip, where budgets are vetoed anyway) never reads or writes them — route
+ * auth 'user' (403 "Acción no permitida para invitados"). The proxy already
+ * blocks /api/budget for guests; this is the defense in depth.
  */
-async function caller(): Promise<{ ok: true; ctx: SessionCtx } | Fail> {
-    const ctx = await getSessionCtx();
-    if (!ctx) return { ok: false, res: json({ error: 'No autorizado' }, 401) };
-    if (ctx.kind === 'guest') return { ok: false, res: json({ error: 'Acción no permitida para invitados' }, 403) };
-    return { ok: true, ctx };
-}
 
 /**
  * Resolve + authorize the shared space a budget call targets. An explicit
@@ -36,62 +24,27 @@ async function caller(): Promise<{ ok: true; ctx: SessionCtx } | Fail> {
  * be ACTIVE (SETTLING/ARCHIVED → 409 SPACE_NOT_WRITABLE) and a type that allows
  * budgets (EPHEMERAL vetoes them).
  */
-async function sharedSpace(
-    ctx: SessionCtx,
-    explicitGroupId: unknown,
-    write: boolean,
-): Promise<{ ok: true; groupId: string } | Fail> {
-    const groupId = typeof explicitGroupId === 'string' && explicitGroupId
-        ? explicitGroupId
-        : await getActiveGroup(ctx.userId);
-    if (!groupId) {
-        return { ok: false, res: json({ error: 'No perteneces a ningún espacio compartido', code: 'NO_SPACE' }, 400) };
-    }
-    const auth = await requireSpaceAccess(ctx, groupId, { allowArchived: !write });
-    if (!auth.ok) return { ok: false, res: json({ error: auth.error, code: auth.code }, auth.status) };
+async function sharedSpace(ctx: SessionCtx, explicitGroupId: string | null | undefined, write: boolean): Promise<string> {
+    const groupId = explicitGroupId || (await getActiveGroup(ctx.userId));
+    if (!groupId) throw badRequest('No perteneces a ningún espacio compartido', 'NO_SPACE');
+    const auth = await requireSpace(ctx, groupId, { allowArchived: !write });
     if (write && !allowsBudgetsAndRecurring(auth.space.type as SpaceType)) {
-        return {
-            ok: false,
-            res: json({ error: 'Este tipo de espacio no admite presupuestos', code: 'BUDGETS_NOT_ALLOWED' }, 400),
-        };
+        throw badRequest('Este tipo de espacio no admite presupuestos', 'BUDGETS_NOT_ALLOWED');
     }
-    return { ok: true, groupId };
+    return groupId;
 }
 
-/**
- * Parse a budget amount in EUROS (number, or an es-ES string like "1.234,56")
- * into integer cents, enforcing (0, MAX_BUDGET_CENTS]. Returns an error message
- * instead of throwing so an absurd value is a 400, never a DB overflow 500.
- */
-function parseBudgetAmount(amount: unknown): { ok: true; cents: number } | { ok: false; error: string } {
-    let cents: number | null = null;
-    if (typeof amount === 'number' && Number.isFinite(amount)) cents = toCents(amount);
-    else if (typeof amount === 'string') cents = parseEuroInput(amount);
-    if (cents === null || !Number.isSafeInteger(cents)) {
-        return { ok: false, error: 'El importe no es válido' };
-    }
-    if (cents <= 0) return { ok: false, error: 'El importe debe ser de al menos 0,01 €' };
-    if (cents > MAX_BUDGET_CENTS) return { ok: false, error: 'El importe máximo de un presupuesto es 1.000.000 €' };
-    return { ok: true, cents };
-}
-
-export async function GET(request: Request) {
-    const who = await caller();
-    if (!who.ok) return who.res;
-    const userId = who.ctx.userId;
-
-    const { searchParams } = new URL(request.url);
-    const scope: Scope = searchParams.get('scope') === 'personal' ? 'personal' : 'shared';
+export const GET = route({ auth: 'user', query: BudgetListQuery }, async ({ ctx, query }) => {
+    const userId = ctx.userId;
+    const { scope } = query;
 
     // Shared budgets need a space; personal budgets work for any user. The space
     // is authorized against its DB membership (read: SETTLING/ARCHIVED allowed).
     let groupId: string | null = null;
     if (scope === 'shared') {
-        const explicit = searchParams.get('groupId');
+        const explicit = query.groupId;
         if (!explicit && !(await getActiveGroup(userId))) return NextResponse.json({ budgets: [] });
-        const space = await sharedSpace(who.ctx, explicit, false);
-        if (!space.ok) return space.res;
-        groupId = space.groupId;
+        groupId = await sharedSpace(ctx, explicit, false);
     }
 
     // Current-month view window [monthStart, monthEnd). Budgets are selected by
@@ -134,7 +87,7 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({ budgets: result });
-}
+});
 
 /**
  * POST /api/budget {category, amount (euros), month?: 'YYYY-MM', scope?, groupId?}
@@ -142,59 +95,30 @@ export async function GET(request: Request) {
  * space; without it the active space is used. Either way the caller must be an
  * ACTIVE non-guest member of a writable space that allows budgets.
  */
-export async function POST(request: Request) {
-    try {
-        const who = await caller();
-        if (!who.ok) return who.res;
-        const userId = who.ctx.userId;
+export const POST = route(
+    { auth: 'user', errorMessage: 'No se pudo guardar el presupuesto', logLabel: 'Error al guardar el presupuesto:' },
+    async ({ req, ctx }) => {
+        const userId = ctx.userId;
+        // Parsed in the handler: the amount 400 keeps `code: INVALID_AMOUNT` and an
+        // unparseable body its historical message.
+        const { category, amount: amountCents, month, scope, groupId: bodyGroupId } = await parseBudgetBody(req);
 
-        let body: Record<string, unknown>;
-        try {
-            body = await request.json();
-        } catch {
-            return json({ error: 'Cuerpo de la petición no válido' }, 400);
-        }
-        if (!body || typeof body !== 'object') return json({ error: 'Cuerpo de la petición no válido' }, 400);
-        const { category, amount, month, groupId: bodyGroupId } = body;
-        const scope: Scope = body.scope === 'personal' ? 'personal' : 'shared';
-
-        if (typeof category !== 'string' || !category || amount === undefined || amount === null) {
-            return json({ error: 'La categoría y el importe son obligatorios' }, 400);
-        }
-
-        const parsed = parseBudgetAmount(amount);
-        if (!parsed.ok) return json({ error: parsed.error, code: 'INVALID_AMOUNT' }, 400);
-        const amountCents = parsed.cents;
-
-        // Parse month (YYYY-MM) or default to the current month.
-        let monthDate: Date;
-        if (month !== undefined && month !== null && month !== '') {
-            const m = typeof month === 'string' ? /^(\d{4})-(\d{2})$/.exec(month) : null;
-            const year = m ? Number(m[1]) : NaN;
-            const mon = m ? Number(m[2]) : NaN;
-            if (!m || mon < 1 || mon > 12 || year < 2000 || year > 2100) {
-                return json({ error: 'El mes no es válido (formato AAAA-MM)' }, 400);
-            }
-            monthDate = new Date(year, mon - 1, 1);
-        } else {
-            const now = new Date();
-            monthDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        }
+        // The given month (YYYY-MM) or the current one.
+        const now = new Date();
+        const monthDate = month
+            ? new Date(month.year, month.month - 1, 1)
+            : new Date(now.getFullYear(), now.getMonth(), 1);
 
         // Shared budgets: authorize against the target space (writable, member,
         // no guests). Personal budgets are scoped by ownerId only.
         let groupId: string | null = null;
-        if (scope === 'shared') {
-            const space = await sharedSpace(who.ctx, bodyGroupId, true);
-            if (!space.ok) return space.res;
-            groupId = space.groupId;
-        }
+        if (scope === 'shared') groupId = await sharedSpace(ctx, bodyGroupId, true);
 
         // No hardcoded whitelist: the category is validated against the EFFECTIVE
         // set of the scope (null → 400), so a custom category is accepted and an
         // unknown key is rejected.
         const categoryId = await resolveCategoryId(category, scope === 'personal' ? { ownerId: userId } : { groupId });
-        if (!categoryId) return json({ error: 'La categoría no existe', code: 'INVALID_CATEGORY' }, 400);
+        if (!categoryId) throw badRequest('La categoría no existe', 'INVALID_CATEGORY');
 
         // Half-open [periodStart, periodEnd) range (local-midnight convention).
         const periodStart = monthDate;
@@ -245,11 +169,8 @@ export async function POST(request: Request) {
             });
 
         return NextResponse.json({ budget }, { status: 201 });
-    } catch (error) {
-        console.error('Error al guardar el presupuesto:', error);
-        return json({ error: 'No se pudo guardar el presupuesto' }, 500);
-    }
-}
+    },
+);
 
 /**
  * DELETE /api/budget?id=<budgetId>[&scope=shared|personal] — remove one budget
@@ -260,46 +181,42 @@ export async function POST(request: Request) {
  * foreign/unknown id is a 404 (no existence leak), and the delete itself stays
  * conditional on the scope (`deleteMany` by id + owner/space).
  */
-export async function DELETE(request: Request) {
-    try {
-        const who = await caller();
-        if (!who.ok) return who.res;
-        const userId = who.ctx.userId;
+export const DELETE = route(
+    {
+        auth: 'user',
+        query: BudgetDeleteQuery,
+        errorMessage: 'No se pudo eliminar el presupuesto',
+        logLabel: 'Error al eliminar el presupuesto:',
+    },
+    async ({ ctx, query: { id, scope: scopeParam } }) => {
+        const userId = ctx.userId;
+        const missing = () => notFound('Presupuesto no encontrado');
 
-        const { searchParams } = new URL(request.url);
-        const id = searchParams.get('id');
-        if (!id) return json({ error: 'Falta el identificador del presupuesto' }, 400);
-        const scopeParam = searchParams.get('scope');
-
-        const notFound = () => json({ error: 'Presupuesto no encontrado' }, 404);
         const budget = await prisma.budget.findUnique({
             where: { id },
             select: { id: true, ownerId: true, coupleId: true },
         });
-        if (!budget) return notFound();
+        if (!budget) throw missing();
 
         let where: { id: string; ownerId: string } | { id: string; coupleId: string };
         if (budget.ownerId) {
-            if (budget.ownerId !== userId || scopeParam === 'shared') return notFound();
+            if (budget.ownerId !== userId || scopeParam === 'shared') throw missing();
             where = { id, ownerId: userId };
         } else if (budget.coupleId) {
-            if (scopeParam === 'personal') return notFound();
-            const auth = await requireSpaceAccess(who.ctx, budget.coupleId);
+            if (scopeParam === 'personal') throw missing();
+            const auth = await requireSpaceAccess(ctx, budget.coupleId);
             if (!auth.ok) {
                 // Not a member of that space → indistinguishable from "no such budget".
-                if (auth.status === 403 || auth.status === 404) return notFound();
-                return json({ error: auth.error, code: auth.code }, auth.status);
+                if (auth.status === 403 || auth.status === 404) throw missing();
+                throw new HttpError(auth.status, auth.error, auth.code);
             }
             where = { id, coupleId: budget.coupleId };
         } else {
-            return notFound();
+            throw missing();
         }
 
         const { count } = await prisma.budget.deleteMany({ where });
-        if (count === 0) return notFound();
+        if (count === 0) throw missing();
         return NextResponse.json({ ok: true });
-    } catch (error) {
-        console.error('Error al eliminar el presupuesto:', error);
-        return json({ error: 'No se pudo eliminar el presupuesto' }, 500);
-    }
-}
+    },
+);
