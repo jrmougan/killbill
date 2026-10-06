@@ -51,7 +51,7 @@ describe('dynamic uploaded receipt reader', () => {
             expect(response.headers.get('Content-Type')).toBe(contentType);
             expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
             expect(response.headers.get('Cache-Control')).toBe('no-store');
-            expect(readFile).toHaveBeenCalledWith(join(process.cwd(), 'public', 'uploads', `${id}.${extension}`));
+            expect(readFile).toHaveBeenCalledWith(join(process.cwd(), 'uploads', `${id}.${extension}`));
         });
 
     it.each(['../secret.png', `%2e%2e%2f${id}.png`, `${id}.png/..`, `${id}.svg`, `${id}.gif`, 'receipt.png', `../${id}.png`, `${id}.png\0`, `${id}.png?token=x`])
@@ -59,6 +59,21 @@ describe('dynamic uploaded receipt reader', () => {
             expect((await get(filename)).status).toBe(404);
             expect(readFile).not.toHaveBeenCalled();
         });
+
+    it('reads UPLOAD_DIR first and falls back to the legacy public/uploads', async () => {
+        vi.stubEnv('UPLOAD_DIR', '/data/uploads');
+        const bytes = Buffer.from([7]);
+        vi.mocked(readFile)
+            .mockRejectedValueOnce(Object.assign(new Error('Not found'), { code: 'ENOENT' }))
+            .mockResolvedValueOnce(bytes);
+        const response = await get(`${id}.png`);
+        expect(response.status).toBe(200);
+        expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes);
+        expect(vi.mocked(readFile).mock.calls.map(c => c[0])).toEqual([
+            join('/data/uploads', `${id}.png`),
+            join(process.cwd(), 'public', 'uploads', `${id}.png`),
+        ]);
+    });
 
     it('returns 404 for a nonexistent receipt', async () => {
         vi.mocked(readFile).mockRejectedValue(Object.assign(new Error('Not found'), { code: 'ENOENT' }));

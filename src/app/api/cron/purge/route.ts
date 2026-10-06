@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { unlink } from "fs/promises";
-import { join, basename } from "path";
 import { prisma } from "@/lib/db";
 import { SpaceStatus } from "@/generated/prisma/enums";
 import { cronGuard } from "../cron-auth";
+import { uploadNameFromUrl, uploadPathCandidates } from "@/lib/uploads";
 
 /**
  * Fase 5 — Purga de espacios efímeros archivados (OPCIONAL).
@@ -33,7 +33,8 @@ import { cronGuard } from "../cron-auth";
  *   3. Borrar los User sombra que hayan quedado TOTALMENTE desligados (sin
  *      memberships ni ninguna referencia de dinero). El filtro defensivo evita
  *      que un Restrict aborte el borrado.
- *   4. Limpiar los ficheros de `public/uploads` asociados a esos recibos.
+ *   4. Limpiar los ficheros subidos (UPLOAD_DIR y el legado public/uploads)
+ *      asociados a esos recibos.
  *
  * Uso:
  *   curl -X POST https://finanzas.mougan.es/api/cron/purge \
@@ -59,19 +60,6 @@ function archivedAfterDays(): number {
     const n = Number.parseInt(raw, 10);
     if (!Number.isFinite(n) || n < 0) return DEFAULT_ARCHIVED_AFTER_DAYS;
     return n;
-}
-
-/**
- * Convierte una `receiptUrl` en la ruta absoluta del fichero en disco, o null si
- * no es un recibo local subido por la app. `basename` neutraliza cualquier
- * intento de path traversal: solo se puede borrar dentro de public/uploads.
- */
-function localUploadPath(receiptUrl: string | null): string | null {
-    if (!receiptUrl) return null;
-    if (!receiptUrl.startsWith("/uploads/")) return null; // URLs externas: fuera.
-    const name = basename(receiptUrl);
-    if (!name || name === "." || name === "..") return null;
-    return join(process.cwd(), "public", "uploads", name);
 }
 
 export async function POST(request: Request) {
@@ -118,9 +106,11 @@ export async function POST(request: Request) {
                 }),
             ]);
 
-            const uploadPaths = expensesWithReceipt
-                .map((e) => localUploadPath(e.receiptUrl))
-                .filter((p): p is string => p !== null);
+            // Solo recibos locales (`/uploads/<nombre>`); basename neutraliza
+            // cualquier path traversal (solo se borra dentro de los dirs de uploads).
+            const uploadNames = expensesWithReceipt
+                .map((e) => uploadNameFromUrl(e.receiptUrl))
+                .filter((n): n is string => n !== null);
             const shadowUserIds = shadowMemberships.map((m) => m.userId);
 
             if (dryRun) {
@@ -130,10 +120,10 @@ export async function POST(request: Request) {
                     name: space.name,
                     archivedAt: space.archivedAt,
                     deletedShadowUsers: shadowUserIds.length,
-                    deletedFiles: uploadPaths.length,
+                    deletedFiles: uploadNames.length,
                 });
                 totalShadowUsers += shadowUserIds.length;
-                totalFiles += uploadPaths.length;
+                totalFiles += uploadNames.length;
                 continue;
             }
 
@@ -168,16 +158,21 @@ export async function POST(request: Request) {
             // 4. Limpiar los ficheros de recibos. No es transaccional; un fichero
             //    ya inexistente (ENOENT) no es un error.
             let deletedFiles = 0;
-            for (const p of uploadPaths) {
-                try {
-                    await unlink(p);
-                    deletedFiles += 1;
-                } catch (err) {
-                    const code = (err as NodeJS.ErrnoException).code;
-                    if (code !== "ENOENT") {
-                        console.error(`[cron/purge] no se pudo borrar ${p}:`, err);
+            for (const name of uploadNames) {
+                let deleted = false;
+                // Dir actual y legado (public/uploads) mientras no se migren.
+                for (const p of uploadPathCandidates(name)) {
+                    try {
+                        await unlink(p);
+                        deleted = true;
+                    } catch (err) {
+                        const code = (err as NodeJS.ErrnoException).code;
+                        if (code !== "ENOENT") {
+                            console.error(`[cron/purge] no se pudo borrar ${p}:`, err);
+                        }
                     }
                 }
+                if (deleted) deletedFiles += 1;
             }
 
             totalShadowUsers += deletedShadowUsers;

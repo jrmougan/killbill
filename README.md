@@ -129,3 +129,21 @@ Coolify un paso previo al despliegue (o un job one-shot con la misma imagen) que
 ejecute `cd /prisma-tools && ./node_modules/.bin/prisma migrate deploy`, y apunta
 el healthcheck de Coolify a `/api/health`. Mientras no exista ese paso, el `CMD`
 de la imagen sigue migrando al arrancar.
+
+### Subidas (tickets y avatares)
+
+Los ficheros subidos se guardan en `UPLOAD_DIR` (por defecto `<cwd>/uploads`;
+`/app/uploads` en la imagen Docker), **fuera de `public/`**: Next sirve `public/`
+como estático antes de cualquier ruta, así que un fichero allí se descargaría sin
+sesión tras el siguiente reinicio. Solo se sirven por `/uploads/<uuid>.<ext>`
+(`src/app/uploads/[filename]/route.ts`), que exige sesión. Mientras queden
+ficheros en la ubicación antigua (`public/uploads`), la app los sigue leyendo
+(y la purga los borra) desde ahí, así que nada se rompe antes de migrarlos.
+
+**Migración única en el servidor (Coolify):** cambia el *mount path* del
+almacenamiento persistente de la app de `/app/public/uploads` a `/app/uploads`
+(mismo volumen → los ficheros aparecen en la ruta nueva sin copiarlos) y
+redespliega. Si los ficheros estaban en otro sitio, cópialos a `/app/uploads`
+del volumen (`chown 1001:1001`). Comprueba después que
+`curl -I https://finanzas.mougan.es/uploads/<fichero>` sin cookie devuelve 401.
+En local, mueve los ficheros con `mkdir -p uploads && mv public/uploads/* uploads/`.

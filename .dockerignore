@@ -36,6 +36,6 @@ next-env.d.ts
 # Prisma (regenerated in the builder stage)
 src/generated/
 
-# Runtime uploads (persistent volume in production)
-public/uploads/*
-!public/uploads/.gitkeep
+# Runtime uploads (persistent volume in production) — current and legacy dirs
+uploads
+public/uploads

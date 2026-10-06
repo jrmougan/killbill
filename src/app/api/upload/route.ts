@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { mkdir, writeFile } from 'fs/promises';
-import { join } from 'path';
+import { uploadDir, uploadFilePath } from '@/lib/uploads';
 import { randomUUID } from 'crypto';
 import { getSessionCtx } from '@/lib/authz';
 import { ephemeralSpacesEnabled } from '@/lib/flags';
@@ -66,9 +66,10 @@ export async function POST(request: Request) {
         // Unpredictable filename with a whitelisted extension. It does NOT embed
         // the user id, so the URL leaks no information about the uploader.
         const filename = `${randomUUID()}.${ext}`;
-        const directory = join(process.cwd(), 'public', 'uploads');
+        // Outside public/ (served only through the authenticated /uploads route).
+        const directory = uploadDir();
         await mkdir(directory, { recursive: true });
-        await writeFile(join(directory, filename), buffer);
+        await writeFile(uploadFilePath(filename), buffer);
 
         return NextResponse.json({
             success: true,

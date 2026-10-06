@@ -46,9 +46,10 @@ next-env.d.ts
 /playwright-report/
 /test-results/
 
-# Uploaded receipts (runtime, served from a persistent volume in prod)
-/public/uploads/*
-!/public/uploads/.gitkeep
+# Uploaded receipts (runtime; UPLOAD_DIR, a persistent volume in prod).
+# public/uploads is the legacy location (still read until migrated).
+/uploads/
+/public/uploads/
 
 # stray build/typecheck output
 *.log

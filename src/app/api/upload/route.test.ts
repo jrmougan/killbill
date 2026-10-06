@@ -39,7 +39,8 @@ describe('receipt upload storage', () => {
         const log = vi.spyOn(console, 'log');
         const response = await upload(PNG);
         expect(response.status).toBe(200);
-        const directory = join(process.cwd(), 'public', 'uploads');
+        // Never under public/ (Next would serve it statically, skipping auth).
+        const directory = join(process.cwd(), 'uploads');
         expect(mkdir).toHaveBeenCalledWith(directory, { recursive: true });
         expect(writeFile).toHaveBeenCalledWith(join(directory, '550e8400-e29b-41d4-a716-446655440000.png'), PNG);
         expect(vi.mocked(mkdir).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(writeFile).mock.invocationCallOrder[0]);
