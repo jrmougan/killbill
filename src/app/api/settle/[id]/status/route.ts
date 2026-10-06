@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
-import { SettlementError } from '@/lib/settlement-rules';
+import { notFound, requireSpace, route } from '@/lib/http';
+import { idParams } from '@/lib/http/schemas';
+import { parseSettlementInput, ResolveSettlementBody } from '@/lib/settlement-schemas';
 import { resolveSettlement } from '@/lib/settlement-service';
 
 /**
@@ -18,44 +19,31 @@ import { resolveSettlement } from '@/lib/settlement-service';
  * The transition is a conditional update under the space lock and the ledger is
  * posted only by the request that wins it.
  */
-export async function PATCH(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    const { id } = await params;
-
-    try {
-        const ctx = await getSessionCtx();
-        if (!ctx) return NextResponse.json({ error: 'No has iniciado sesión' }, { status: 401 });
-
-        const body = await request.json().catch(() => null);
-        const { status, expectedAmountCents } = (body ?? {}) as Record<string, unknown>;
-
-        if (status !== 'CONFIRMED' && status !== 'REJECTED') {
-            return NextResponse.json({ error: 'Estado no válido', code: 'INVALID_INPUT' }, { status: 400 });
-        }
-        if (expectedAmountCents !== undefined && !Number.isSafeInteger(expectedAmountCents)) {
-            return NextResponse.json({ error: 'expectedAmountCents no válido', code: 'INVALID_INPUT' }, { status: 400 });
-        }
+export const PATCH = route(
+    {
+        auth: 'user-or-guest',
+        params: idParams,
+        unauthorizedMessage: 'No has iniciado sesión',
+        errorMessage: 'No se pudo actualizar el pago',
+        logLabel: 'Error al actualizar el pago:',
+    },
+    async ({ req, ctx, params: { id } }) => {
+        // Parsed in the handler (not options.body) so every 400 keeps its `code`.
+        const { status, expectedAmountCents } = await parseSettlementInput(req, ResolveSettlementBody);
 
         const settlement = await prisma.settlement.findUnique({ where: { id }, select: { coupleId: true } });
-        if (!settlement) return NextResponse.json({ error: 'Pago no encontrado' }, { status: 404 });
+        if (!settlement) throw notFound('Pago no encontrado');
 
         // Authorize against the settlement's OWN group (not the active-group cookie).
-        const auth = await requireSpaceAccess(ctx, settlement.coupleId, { allowArchived: true, allowGuest: true });
-        if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
+        await requireSpace(ctx, settlement.coupleId, { allowArchived: true, allowGuest: true });
 
         const updated = await resolveSettlement({
             settlementId: id,
             groupId: settlement.coupleId,
             callerId: ctx.userId,
             status,
-            expectedAmountCents: expectedAmountCents as number | undefined,
+            expectedAmountCents,
         });
         return NextResponse.json({ success: true, settlement: updated });
-    } catch (e) {
-        if (e instanceof SettlementError) return NextResponse.json(e.toJSON(), { status: e.status });
-        console.error('Error al actualizar el pago:', e);
-        return NextResponse.json({ error: 'No se pudo actualizar el pago' }, { status: 500 });
-    }
-}
+    },
+);

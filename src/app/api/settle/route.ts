@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
 import { getActiveGroup, getGroupMembers } from '@/lib/membership';
-import { isSettlementMethod, parseSettlementAmount, SettlementError } from '@/lib/settlement-rules';
+import { badRequest, forbidden, requireSpace, route } from '@/lib/http';
+import { CreateSettlementBody, parseSettlementInput } from '@/lib/settlement-schemas';
 import { createSettlement } from '@/lib/settlement-service';
 
-const bad = (error: string, code = 'INVALID_INPUT') => NextResponse.json({ error, code }, { status: 400 });
+const bad = (error: string, code = 'INVALID_INPUT') => badRequest(error, code);
 
 /**
  * Record a settlement in a space.
@@ -32,48 +32,39 @@ const bad = (error: string, code = 'INVALID_INPUT') => NextResponse.json({ error
  * Guests may use both directions: "received" can only ever reduce what is owed
  * to the guest, and it is capped to the current debt.
  */
-export async function POST(request: Request) {
-    try {
-        const ctx = await getSessionCtx();
-        if (!ctx) return NextResponse.json({ error: 'No has iniciado sesión' }, { status: 401 });
+export const POST = route(
+    {
+        auth: 'user-or-guest',
+        unauthorizedMessage: 'No has iniciado sesión',
+        errorMessage: 'Error al registrar el pago',
+        logLabel: 'Error al registrar el pago:',
+    },
+    async ({ req, ctx }) => {
         const userId = ctx.userId;
+        // Parsed in the handler (not options.body) so every 400 keeps its `code`.
+        const { amount: cents, toUserId, fromUserId, method, groupId } = await parseSettlementInput(req, CreateSettlementBody);
 
-        const body = await request.json().catch(() => null);
-        if (!body || typeof body !== 'object' || Array.isArray(body)) return bad('Petición no válida');
-        const { amount, toUserId, fromUserId, method, groupId } = body as Record<string, unknown>;
-
-        const received = fromUserId !== undefined && fromUserId !== null;
+        const received = fromUserId != null;
         if (received) {
-            if (typeof fromUserId !== 'string' || !fromUserId) return bad('fromUserId no válido');
             if (toUserId !== undefined && toUserId !== null && toUserId !== userId) {
-                return bad('Un pago recibido debe ir dirigido a ti');
+                throw bad('Un pago recibido debe ir dirigido a ti');
             }
-            if (fromUserId === userId) return bad('No puedes saldar contigo mismo');
-        } else {
-            if (typeof toUserId !== 'string' || !toUserId) return bad('Falta toUserId');
-            if (toUserId === userId) return bad('No puedes saldar contigo mismo');
+            if (fromUserId === userId) throw bad('No puedes saldar contigo mismo');
+        } else if (toUserId === userId) {
+            throw bad('No puedes saldar contigo mismo');
         }
         const counterpartyId = (received ? fromUserId : toUserId) as string;
 
-        const parsed = parseSettlementAmount(amount);
-        if (!parsed.ok) return bad(parsed.error, 'INVALID_AMOUNT');
-
-        if (method !== undefined && method !== null && !isSettlementMethod(method)) return bad('Método de pago no válido');
-
-        if (groupId !== undefined && groupId !== null && (typeof groupId !== 'string' || !groupId)) {
-            return bad('groupId no válido');
-        }
-        const coupleId = (groupId as string | null | undefined) || (await getActiveGroup(userId));
-        if (!coupleId) return bad('No tienes ningún espacio compartido activo', 'NO_SPACE');
+        const coupleId = groupId || (await getActiveGroup(userId));
+        if (!coupleId) throw bad('No tienes ningún espacio compartido activo', 'NO_SPACE');
 
         // Authorize against the space itself (DB membership, not the JWT claim).
         // The ARCHIVED check happens under the space lock in the service.
-        const auth = await requireSpaceAccess(ctx, coupleId, { allowArchived: true, allowGuest: true });
-        if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
+        await requireSpace(ctx, coupleId, { allowArchived: true, allowGuest: true });
 
         const members = await getGroupMembers(coupleId);
         if (!members.some((m) => m.id === counterpartyId)) {
-            return NextResponse.json({ error: 'La otra persona no es miembro de este espacio' }, { status: 403 });
+            throw forbidden('La otra persona no es miembro de este espacio');
         }
 
         const result = await createSettlement({
@@ -81,8 +72,8 @@ export async function POST(request: Request) {
             callerId: userId,
             counterpartyId,
             direction: received ? 'received' : 'paid',
-            cents: parsed.cents,
-            method: isSettlementMethod(method) ? method : 'CASH',
+            cents,
+            method: method ?? 'CASH',
         });
 
         return NextResponse.json({
@@ -90,9 +81,5 @@ export async function POST(request: Request) {
             settlement: { id: result.id, status: result.status, amount: result.amount },
             merged: result.merged,
         });
-    } catch (error) {
-        if (error instanceof SettlementError) return NextResponse.json(error.toJSON(), { status: error.status });
-        console.error('Error al registrar el pago:', error);
-        return NextResponse.json({ error: 'Error al registrar el pago' }, { status: 500 });
-    }
-}
+    },
+);

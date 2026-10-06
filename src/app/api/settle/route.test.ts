@@ -107,6 +107,18 @@ describe('POST /api/settle', () => {
         expect(mockCreateSettlement).not.toHaveBeenCalled();
     });
 
+    it('400s keep their code: INVALID_INPUT for bad JSON / fields (with issues), INVALID_AMOUNT for the amount', async () => {
+        expect(await (await POST(req('{not json'))).json()).toMatchObject({ error: 'Petición no válida', code: 'INVALID_INPUT' });
+        const missing = await (await POST(req({ amount: 1 }))).json();
+        expect(missing).toMatchObject({ error: 'Falta toUserId', code: 'INVALID_INPUT', issues: [{ path: 'toUserId' }] });
+        const bad = await (await POST(req({ toUserId: 'u2', amount: 1, method: 'PAYPAL' }))).json();
+        expect(bad).toMatchObject({ error: 'Método de pago no válido', code: 'INVALID_INPUT', issues: [{ path: 'method' }] });
+        const amount = await (await POST(req({ toUserId: 'u2', amount: '12' }))).json();
+        expect(amount).toMatchObject({ code: 'INVALID_AMOUNT', issues: [{ path: 'amount' }] });
+        expect((await (await POST(req({ fromUserId: '', amount: 1 }))).json()).error).toBe('fromUserId no válido');
+        expect(mockCreateSettlement).not.toHaveBeenCalled();
+    });
+
     it('rejects settling with yourself in either direction', async () => {
         expect((await POST(req({ toUserId: 'u1', amount: 1 }))).status).toBe(400);
         expect((await POST(req({ fromUserId: 'u1', amount: 1 }))).status).toBe(400);
