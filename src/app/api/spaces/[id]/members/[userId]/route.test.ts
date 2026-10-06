@@ -212,3 +212,47 @@ describe("PATCH /api/spaces/[id]/members/[userId] — role", () => {
         expect((await patch("g", { role: "MEMBER" })).status).toBe(403);
     });
 });
+
+describe("PATCH /api/spaces/[id]/members/[userId] — body validation (route() kit)", () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it("400 'Cuerpo inválido' for unparseable JSON, without touching the target", async () => {
+        setup("a", [{ userId: "a", role: "OWNER" }, { userId: "b", role: "MEMBER" }]);
+        const res = await PATCH(
+            new Request("http://localhost/api/spaces/g1/members/b", { method: "PATCH", body: "{" }),
+            { params: Promise.resolve({ id: "g1", userId: "b" }) },
+        );
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toBe("Cuerpo inválido");
+        expect(mockMembershipUpdate).not.toHaveBeenCalled();
+    });
+
+    it("400 'Rol no válido' with issues for a non-string role", async () => {
+        setup("a", [{ userId: "a", role: "OWNER" }, { userId: "b", role: "MEMBER" }]);
+        const res = await patch("b", { role: 1 });
+        expect(res.status).toBe(400);
+        const json = await res.json();
+        expect(json.error).toBe("Rol no válido");
+        expect(json.issues[0].path).toBe("role");
+        expect(mockMembershipUpdate).not.toHaveBeenCalled();
+    });
+
+    it("a non-OWNER gets 403 before any body validation", async () => {
+        setup("a", [{ userId: "a", role: "ADMIN" }, { userId: "b", role: "MEMBER" }]);
+        expect((await patch("b", { role: 1 })).status).toBe(403);
+    });
+
+    it("HAS_BALANCE keeps the blocker body (status, balanceCents, settleUrl)", async () => {
+        setup("a", [{ userId: "a", role: "OWNER" }, { userId: "b", role: "MEMBER" }], { b: -5000 });
+        const res = await del("b");
+        expect(res.status).toBe(409);
+        expect(await res.json()).toEqual({
+            error: expect.any(String),
+            code: "HAS_BALANCE",
+            status: 409,
+            balanceCents: -5000,
+            settleUrl: "/settle?space=g1",
+        });
+        expect(mockMembershipUpdate).not.toHaveBeenCalled();
+    });
+});
