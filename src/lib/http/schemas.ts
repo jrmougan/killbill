@@ -36,20 +36,16 @@ export function cents(opts: { message?: string; min?: number; max?: number; maxM
     return s;
 }
 
-/**
- * An amount in EUROS (JSON number, or numeric string from old clients/forms —
- * `Number()` semantics, as the routes always did) converted to integer cents,
- * strictly positive and ≤ `max` cents.
- * `empty: 'null'` maps null / "" to null (PATCH "keep the old amount");
- * by default they are rejected.
- */
-export function eurosToCents(opts: { message?: string; max?: number; maxMessage?: string; empty?: "reject" | "null" } = {}) {
+type EurosOptions = { message?: string; max?: number; maxMessage?: string };
+
+function eurosSchema<E extends "reject" | "null">(opts: EurosOptions, empty: E) {
     const message = opts.message ?? "Importe no válido";
     return z
         .union([z.number(), z.string(), z.null()], { error: message })
-        .transform((v, ctx): number | null => {
+        .transform((v, ctx): E extends "null" ? number | null : number => {
+            type R = E extends "null" ? number | null : number;
             if (v === null || (typeof v === "string" && v.trim() === "")) {
-                if (opts.empty === "null") return null;
+                if (empty === "null") return null as R;
                 ctx.addIssue({ code: "custom", message });
                 return z.NEVER;
             }
@@ -62,8 +58,22 @@ export function eurosToCents(opts: { message?: string; max?: number; maxMessage?
                 ctx.addIssue({ code: "custom", message: opts.maxMessage ?? message });
                 return z.NEVER;
             }
-            return value;
+            return value as R;
         });
+}
+
+/**
+ * An amount in EUROS (JSON number, or numeric string from old clients/forms —
+ * `Number()` semantics, as the routes always did) converted to integer cents,
+ * strictly positive and ≤ `max` cents. null / "" are rejected.
+ */
+export function eurosToCents(opts: EurosOptions = {}) {
+    return eurosSchema(opts, "reject");
+}
+
+/** Like eurosToCents, but null / "" map to null (PATCH: "keep the old amount"). */
+export function eurosToCentsOrNull(opts: EurosOptions = {}) {
+    return eurosSchema(opts, "null");
 }
 
 /** Strict "YYYY-MM-DD" naming a real calendar day (no range check). */

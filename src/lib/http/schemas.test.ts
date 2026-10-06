@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
 import {
-    jsonObject, id, idParams, cents, eurosToCents, isoDay, expenseDate, recurringInterval,
+    jsonObject, id, idParams, cents, eurosToCents, eurosToCentsOrNull, isoDay, expenseDate, recurringInterval,
     categoryKey, categoryHex, listQuantity, intParam, paginationQuery,
 } from "./schemas";
 import { CATEGORY_PALETTE } from "@/lib/category-colors";
@@ -45,8 +45,8 @@ describe("schemas", () => {
         expect(msg(s, 1_000_000)).toBe("El importe máximo es 999.999,99 €");
     });
 
-    it("eurosToCents empty:'null' keeps null / '' as null (PATCH)", () => {
-        const s = eurosToCents({ empty: "null" });
+    it("eurosToCentsOrNull keeps null / '' as null (PATCH)", () => {
+        const s = eurosToCentsOrNull();
         expect(s.parse(null)).toBeNull();
         expect(s.parse("")).toBeNull();
         expect(msg(s, 0)).toBe("Importe no válido");
