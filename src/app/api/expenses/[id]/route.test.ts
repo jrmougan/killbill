@@ -397,6 +397,36 @@ describe('PATCH /api/expenses/[id] — date, read-only spaces and explicit split
         expect(mockExpenseUpdate.mock.calls[0][0].data.splitStrategy).toBe('ITEMIZED');
     });
 
+    it('400 for a malformed body (invalid JSON, wrong types) before anything is written', async () => {
+        const raw = await PATCH(new Request('http://localhost/api/expenses/e1', { method: 'PATCH', body: '{nope' }), { params });
+        expect(raw.status).toBe(400);
+        expect(await raw.json()).toEqual({ error: 'Petición no válida' });
+        for (const [body, message] of [
+            [{ paidById: null }, 'Quien pagó no es miembro del espacio'],
+            [{ description: '  ' }, 'El concepto es obligatorio'],
+            [{ recurringInterval: 'daily' }, 'Periodicidad no válida'],
+            [{ amount: 1_000_000 }, 'El importe máximo es 999.999,99 €'],
+            [{ customSplits: [{ userId: 'u1', amount: 10.5 }] }, 'Los importes del reparto no son válidos'],
+        ] as const) {
+            const res = await PATCH(patchReq(body), { params });
+            expect(res.status).toBe(400);
+            expect((await res.json()).error).toBe(message);
+        }
+        const typed = await PATCH(patchReq({ notes: 42 }), { params });
+        expect(typed.status).toBe(400);
+        expect((await typed.json()).issues[0].path).toBe('notes');
+        expect(mockExpenseUpdate).not.toHaveBeenCalled();
+    });
+
+    it('amount null / "" keeps the persisted amount', async () => {
+        for (const amount of [null, '']) {
+            mockExpenseUpdate.mockClear();
+            const res = await PATCH(patchReq({ amount }), { params });
+            expect(res.status).toBe(200);
+            expect(mockExpenseUpdate.mock.calls[0][0].data.amount).toBe(2000);
+        }
+    });
+
     it('error messages are in Spanish', async () => {
         const res = await PATCH(patchReq({ amount: -1 }), { params });
         expect(res.status).toBe(400);

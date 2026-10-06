@@ -1,30 +1,38 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { toCents } from '@/lib/currency';
 import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from '@/lib/splits';
 import { getGroupMembers, getActiveGroup } from '@/lib/membership';
 import { resolveCategoryId } from '@/lib/category-db';
 import { buildReceiptLineItems } from '@/lib/receipt';
 import { postExpenseLedger } from '@/lib/ledger';
-import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
 import { assertRosterUnchanged, assertWritableUnderLock, runLedgerTransaction, withSpaceLock } from '@/lib/expense-tx';
-import { SettlementError } from '@/lib/settlement-rules';
-import { isRecurringInterval, nextRecurringRun, parseExpenseDate } from '@/lib/expense-input';
+import { nextRecurringRun } from '@/lib/expense-input';
+import { badRequest, forbidden, requireSpace, route, unauthorized } from '@/lib/http';
+import { intParam } from '@/lib/http/schemas';
+import { BENEFICIARY_NOT_MEMBER, CreateExpenseBody, PAYER_NOT_MEMBER, SPLIT_NOT_MEMBER } from '@/lib/expense-schemas';
 import type { Prisma } from '@/generated/prisma/client';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
-export async function GET(request: Request) {
-    try {
-        // getSessionCtx (not the raw JWT): a guest session is revalidated against
-        // the DB on every request, so an expelled guest is cut off at once (H3).
-        const ctx = await getSessionCtx();
-        if (!ctx?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-        const userId = ctx.userId;
+const ListQuery = z.object({
+    // Anything but 'personal' is the shared scope (historical behavior).
+    scope: z.string().optional().transform((v) => (v === 'personal' ? 'personal' as const : 'shared' as const)),
+    limit: intParam({ default: DEFAULT_LIMIT, min: 1, max: MAX_LIMIT }),
+    // Optional cursor (expense id) for keyset pagination, or numeric skip offset.
+    cursor: z.string().optional(),
+    skip: intParam({ default: 0 }),
+});
 
-        const { searchParams } = new URL(request.url);
-        const scope = searchParams.get('scope') === 'personal' ? 'personal' : 'shared';
+// getSessionCtx (not the raw JWT): a guest session is revalidated against the
+// DB on every request, so an expelled guest is cut off at once (H3).
+export const GET = route(
+    { auth: 'user-or-guest', query: ListQuery, errorMessage: 'Error al obtener los gastos', logLabel: 'Error fetching expenses:' },
+    async ({ ctx, query }) => {
+        const userId = ctx.userId;
+        const { scope, limit, cursor } = query;
+        const skip = query.skip > 0 ? query.skip : undefined;
         // A guest has no personal surface.
         if (scope === 'personal' && ctx.kind === 'guest') {
             return NextResponse.json({ expenses: [], nextCursor: null });
@@ -44,17 +52,6 @@ export async function GET(request: Request) {
         const where = scope === 'personal'
             ? { ownerId: userId, visibility: 'PERSONAL' as const }
             : { coupleId: groupId!, visibility: 'SHARED' as const };
-
-        // Parse limit with sane default and bounds
-        const parsedLimit = parseInt(searchParams.get('limit') ?? '', 10);
-        const limit = Number.isFinite(parsedLimit)
-            ? Math.min(Math.max(parsedLimit, 1), MAX_LIMIT)
-            : DEFAULT_LIMIT;
-
-        // Optional cursor (expense id) for keyset pagination, or numeric skip offset
-        const cursor = searchParams.get('cursor');
-        const parsedSkip = parseInt(searchParams.get('skip') ?? '', 10);
-        const skip = Number.isFinite(parsedSkip) && parsedSkip > 0 ? parsedSkip : undefined;
 
         const expenses = await prisma.expense.findMany({
             where,
@@ -85,19 +82,8 @@ export async function GET(request: Request) {
         }));
 
         return NextResponse.json({ expenses: mappedExpenses, nextCursor });
-    } catch (error) {
-        console.error("Error fetching expenses:", error);
-        return NextResponse.json({ error: "Error al obtener los gastos" }, { status: 500 });
-    }
-}
-
-/** Upper bound for one expense (999.999,99 €, the numpad ceiling; Int column safe). */
-const MAX_AMOUNT_CENTS = 99_999_999;
-
-type SplitInput = { userId: string; amount: number };
-
-const bad = (error: string, status = 400, code?: string) =>
-    NextResponse.json(code ? { error, code } : { error }, { status });
+    },
+);
 
 /**
  * Create an expense.
@@ -110,63 +96,36 @@ const bad = (error: string, status = 400, code?: string) =>
  * `visibility: 'PERSONAL'`) creates a private expense instead.
  *
  * `date` (optional, "YYYY-MM-DD") must be a real calendar day in
- * [2000-01-01, today + 1 year] (G-06/T-03).
+ * [2000-01-01, today + 1 year] (G-06/T-03). The body SHAPE is validated by
+ * CreateExpenseBody; membership-dependent rules are checked below.
  */
-export async function POST(request: Request) {
-    try {
-        const ctx = await getSessionCtx();
-        if (!ctx?.userId) return bad('No autorizado', 401);
+export const POST = route(
+    { auth: 'user-or-guest', body: CreateExpenseBody, errorMessage: 'Error al crear el gasto', logLabel: 'Error creating expense:' },
+    async ({ ctx, body }) => {
         const userId = ctx.userId;
-
-        let body: Record<string, unknown>;
-        try {
-            body = await request.json();
-        } catch {
-            return bad('Petición no válida');
-        }
-        if (!body || typeof body !== 'object') return bad('Petición no válida');
         const {
-            description, amount, category, beneficiaryId, customSplits, receiptUrl, receiptData, notes,
+            description, amount: amountCents, category, beneficiaryId, customSplits, receiptUrl, receiptData, notes,
             isRecurring, recurringInterval, paidById: paidByIdInput, visibility: visibilityInput, isPersonal,
-            date: dateInput, groupId: groupIdInput,
-        } = body as Record<string, unknown> & { customSplits?: unknown };
+            date: expenseDate, groupId: groupIdInput,
+        } = body;
 
         // Personal expenses are a private ledger and never touch a space.
         const isPersonalExpense = isPersonal === true || visibilityInput === 'PERSONAL';
         if (isPersonalExpense && ctx.kind === 'guest') {
-            return bad('Los invitados no pueden crear gastos personales', 403);
+            throw forbidden('Los invitados no pueden crear gastos personales');
         }
 
         let groupId: string | null = null;
         if (!isPersonalExpense) {
-            if (groupIdInput !== undefined && groupIdInput !== null && (typeof groupIdInput !== 'string' || groupIdInput === '')) {
-                return bad('Espacio no válido');
-            }
-            groupId = typeof groupIdInput === 'string' ? groupIdInput : await getActiveGroup(userId);
-            if (!groupId) return bad('No perteneces a ningún espacio');
+            groupId = groupIdInput ?? await getActiveGroup(userId);
+            if (!groupId) throw badRequest('No perteneces a ningún espacio');
             // Membership (DB row), guest cage and writability (SETTLING/ARCHIVED
             // reject new expenses) of the RESOURCE's space.
-            const access = await requireSpaceAccess(ctx, groupId, { allowGuest: true });
-            if (!access.ok) return bad(access.error, access.status, access.code);
+            await requireSpace(ctx, groupId, { allowGuest: true });
         } else {
             const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
-            if (!user) return bad('No autorizado', 401);
+            if (!user) throw unauthorized();
         }
-
-        if (typeof description !== 'string' || description.trim().length === 0) {
-            return bad('El concepto es obligatorio');
-        }
-
-        const parsedDate = parseExpenseDate(dateInput);
-        if (!parsedDate.ok) return bad(parsedDate.error);
-        const expenseDate = parsedDate.date;
-
-        // Euros (number, or numeric string from old clients) → cents.
-        const amountCents = toCents(Number(amount));
-        if (amount === null || amount === '' || !Number.isFinite(amountCents) || amountCents <= 0) {
-            return bad('Importe no válido');
-        }
-        if (amountCents > MAX_AMOUNT_CENTS) return bad('El importe máximo es 999.999,99 €');
 
         // Members of the destination space (ACTIVE, ordered — split order matters
         // for the remainder cent). Personal expenses have none.
@@ -176,18 +135,13 @@ export async function POST(request: Request) {
         // The payer defaults to the creator; the client may attribute it to another
         // member ("¿Quién pagó?"). Personal expenses are always paid by the owner.
         let paidById = userId;
-        if (!isPersonalExpense && paidByIdInput !== undefined && paidByIdInput !== null) {
-            if (typeof paidByIdInput !== 'string' || !memberIds.has(paidByIdInput)) {
-                return bad('Quien pagó no es miembro del espacio');
-            }
+        if (!isPersonalExpense && paidByIdInput != null) {
+            if (!memberIds.has(paidByIdInput)) throw badRequest(PAYER_NOT_MEMBER);
             paidById = paidByIdInput;
         }
 
-        const wantsRecurring = isRecurring === true;
-        if (wantsRecurring && !isRecurringInterval(recurringInterval)) {
-            return bad('Periodicidad no válida');
-        }
-        const normalizedInterval = wantsRecurring && isRecurringInterval(recurringInterval) ? recurringInterval : null;
+        // CreateExpenseBody already requires an interval when isRecurring is true.
+        const normalizedInterval = isRecurring === true ? recurringInterval ?? null : null;
         // G-12: the series is anchored on the expense date, not on "now".
         const nextRecurringDate = normalizedInterval
             ? nextRecurringRun(expenseDate ?? new Date(), normalizedInterval)
@@ -195,14 +149,11 @@ export async function POST(request: Request) {
 
         // Category validated against the EFFECTIVE set of the context (system ∪
         // context-custom) — an unknown key is a 400, never silently 'other'.
-        if (typeof category !== 'string' || category.trim().length === 0) {
-            return bad('Categoría no válida');
-        }
         const categoryId = await resolveCategoryId(
             category,
             isPersonalExpense ? { ownerId: userId } : { groupId },
         );
-        if (!categoryId) return bad('Categoría no válida');
+        if (!categoryId) throw badRequest('Categoría no válida');
 
         const expenseData: Prisma.ExpenseUncheckedCreateInput = {
             description: description.trim(),
@@ -214,35 +165,26 @@ export async function POST(request: Request) {
             createdById: userId,
             visibility: isPersonalExpense ? 'PERSONAL' : 'SHARED',
             coupleId: isPersonalExpense ? null : groupId,
-            receiptUrl: typeof receiptUrl === 'string' && receiptUrl ? receiptUrl : null,
-            notes: typeof notes === 'string' && notes.trim() ? notes : null,
+            receiptUrl: receiptUrl || null,
+            notes: notes?.trim() ? notes : null,
             ...(expenseDate ? { date: expenseDate } : {}),
         };
 
-        const receiptItems = Array.isArray(receiptData) ? (receiptData as ReceiptItemForSplit[]) : null;
+        const receiptItems = receiptData ? (receiptData as ReceiptItemForSplit[]) : null;
 
         if (isPersonalExpense) {
             // Personal expenses are never split nor settled (splitStrategy null).
-        } else if (Array.isArray(customSplits) && customSplits.length > 0) {
-            const splits = customSplits as SplitInput[];
-            if (splits.some((s) => !Number.isInteger(s?.amount))) {
-                return bad('Los importes del reparto no son válidos');
-            }
-            if (splits.some((s) => s.amount < 0)) {
-                return bad('Los importes del reparto no pueden ser negativos');
-            }
-            if (splits.some((s) => !memberIds.has(s?.userId))) {
-                return bad('El reparto incluye a alguien que no es miembro del espacio');
-            }
+        } else if (customSplits && customSplits.length > 0) {
+            // Line shape (integer, non-negative cents) is checked by the schema.
+            const splits = customSplits;
+            if (splits.some((s) => !memberIds.has(s.userId))) throw badRequest(SPLIT_NOT_MEMBER);
             if (splits.reduce((sum, s) => sum + s.amount, 0) !== amountCents) {
-                return bad('El reparto no suma el importe total');
+                throw badRequest('El reparto no suma el importe total');
             }
             expenseData.splitStrategy = 'CUSTOM';
             expenseData.splits = { create: splits.map((s) => ({ userId: s.userId, amount: s.amount })) };
         } else if (beneficiaryId) {
-            if (typeof beneficiaryId !== 'string' || !memberIds.has(beneficiaryId)) {
-                return bad('La persona elegida no es miembro del espacio');
-            }
+            if (!memberIds.has(beneficiaryId)) throw badRequest(BENEFICIARY_NOT_MEMBER);
             expenseData.splitStrategy = 'EXCLUSIVE';
             expenseData.splits = { create: [{ userId: beneficiaryId, amount: amountCents }] };
         } else if (coupleMembers.length > 0) {
@@ -317,9 +259,5 @@ export async function POST(request: Request) {
             : await runLedgerTransaction(createInTx);
 
         return NextResponse.json({ success: true, expenseId: expense.id, groupId: expense.coupleId });
-    } catch (error) {
-        if (error instanceof SettlementError) return NextResponse.json(error.toJSON(), { status: error.status });
-        console.error("Error creating expense:", error);
-        return NextResponse.json({ error: "Error al crear el gasto" }, { status: 500 });
-    }
-}
+    },
+);

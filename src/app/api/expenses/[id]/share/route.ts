@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
-import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
+import { z } from "zod";
 import { calculateSplitAmountsFromLines, hasExclusiveReceiptLines } from "@/lib/splits";
 import { RECEIPT_LINES_SELECT, linesForSplit } from "@/lib/receipt-read";
 import { addInterval } from "@/lib/recurring";
@@ -8,6 +8,13 @@ import { getGroupMembers, getActiveGroup } from "@/lib/membership";
 import { postExpenseLedger } from "@/lib/ledger";
 import { assertRosterUnchanged, assertWritableUnderLock, withSpaceLock } from "@/lib/expense-tx";
 import { SettlementError } from "@/lib/settlement-rules";
+import { badRequest, conflict, forbidden, notFound, requireSpace, route } from "@/lib/http";
+import { idParams, jsonObject } from "@/lib/http/schemas";
+
+/** Optional body: `{ targetGroupId }`; an empty body shares into the active space. */
+const ShareBody = jsonObject({
+    targetGroupId: z.string({ error: "Espacio no válido" }).nullish(),
+}).nullish();
 
 /**
  * Promote a personal expense to a shared (couple) expense.
@@ -15,47 +22,29 @@ import { SettlementError } from "@/lib/settlement-rules";
  * Only the owner can share, and only if they belong to a couple. The expense
  * gains a coupleId, flips visibility to SHARED, and receives the split records
  * (equal / receipt-aware) so it starts counting towards the couple's balances.
+ * Guests can't share (no personal expenses): 403 from route({ auth: 'user' }).
  */
-export async function POST(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    try {
-        const { id } = await params;
-        const ctx = await getSessionCtx();
-        if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+export const POST = route(
+    { auth: "user", params: idParams, body: ShareBody, errorMessage: "Error al compartir el gasto", logLabel: "Error sharing expense:" },
+    async ({ ctx, params: { id }, body }) => {
         const userId = ctx.userId;
 
         // Fase 1: the target space may be given explicitly (targetGroupId) so a
         // personal expense can be shared into a chosen group, not just the active
-        // one. Default to the active group. Parse defensively (empty body must not 500).
-        let targetGroupId: string | null = null;
-        try {
-            const b = await request.json();
-            if (b && typeof b.targetGroupId === 'string') targetGroupId = b.targetGroupId;
-        } catch { /* no body — fall back to the active group */ }
-        const groupId = targetGroupId ?? await getActiveGroup(userId);
-        if (!groupId) {
-            return NextResponse.json({ error: 'Necesitas un grupo para compartir un gasto' }, { status: 400 });
-        }
+        // one. Default to the active group (an empty body is fine).
+        const groupId = body?.targetGroupId ?? await getActiveGroup(userId);
+        if (!groupId) throw badRequest('Necesitas un grupo para compartir un gasto');
 
         // Authorize against the TARGET group (of the resource we write into): ACTIVE
         // membership + writable status (no sharing into a SETTLING/ARCHIVED space).
-        const auth = await requireSpaceAccess(ctx, groupId);
-        if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
+        await requireSpace(ctx, groupId);
 
         const expense = await prisma.expense.findUnique({ where: { id }, include: { ...RECEIPT_LINES_SELECT, series: true } });
-        if (!expense) {
-            return NextResponse.json({ error: 'Gasto no encontrado' }, { status: 404 });
-        }
+        if (!expense) throw notFound('Gasto no encontrado');
 
         // Only the owner of a personal expense can share it.
-        if (expense.ownerId !== userId) {
-            return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
-        }
-        if (expense.visibility === 'SHARED') {
-            return NextResponse.json({ error: 'El gasto ya es compartido' }, { status: 409 });
-        }
+        if (expense.ownerId !== userId) throw forbidden('No autorizado');
+        if (expense.visibility === 'SHARED') throw conflict('El gasto ya es compartido');
 
         const coupleMembers = (await getGroupMembers(groupId)).map((m) => ({ id: m.id }));
 
@@ -131,9 +120,5 @@ export async function POST(
         });
 
         return NextResponse.json({ success: true });
-    } catch (error) {
-        if (error instanceof SettlementError) return NextResponse.json(error.toJSON(), { status: error.status });
-        console.error("Error sharing expense:", error);
-        return NextResponse.json({ error: "Error al compartir el gasto" }, { status: 500 });
-    }
-}
+    },
+);

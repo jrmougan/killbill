@@ -98,6 +98,30 @@ describe('POST /api/expenses/[id]/share', () => {
         expect((await POST(req(), { params })).status).toBe(400);
     });
 
+    it('shares into an explicit targetGroupId; 400 for a malformed body', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        mockExpenseFindUnique.mockResolvedValue(personal({ lineItems: [], series: null }));
+        const body = (b: string) => new Request('http://localhost/api/expenses/e1/share', { method: 'POST', body: b });
+
+        expect((await POST(body(JSON.stringify({ targetGroupId: 'g2' })), { params })).status).toBe(200);
+        expect(mockWithSpaceLock).toHaveBeenCalledWith('g2');
+        expect(mockGetPrimaryGroup).not.toHaveBeenCalled();
+
+        const wrongType = await POST(body(JSON.stringify({ targetGroupId: 7 })), { params });
+        expect(wrongType.status).toBe(400);
+        expect((await wrongType.json()).error).toBe('Espacio no válido');
+        const invalid = await POST(body('{nope'), { params });
+        expect(await invalid.json()).toEqual({ error: 'Petición no válida' });
+    });
+
+    it('403 for a guest session (guests have no personal expenses to share)', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'g1', kind: 'guest', groupId: 'trip' });
+        mockMembershipFindUnique.mockResolvedValue({ role: 'GUEST', status: 'ACTIVE', group: { status: 'ACTIVE' } });
+        const res = await POST(req(), { params });
+        expect(res.status).toBe(403);
+        expect(await res.json()).toEqual({ error: 'Acción no permitida para invitados' });
+    });
+
     it('404 when the expense does not exist', async () => {
         mockGetSession.mockResolvedValue({ userId: 'u1' });
         mockGetPrimaryGroup.mockResolvedValue('c1');

@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
+import { forbidden, notFound, requireSpace, route } from "@/lib/http";
+import { idParams } from "@/lib/http/schemas";
 
-export async function GET(
-    _request: Request,
-    { params }: { params: Promise<{ id: string }> },
-) {
-    const { id } = await params;
-    const ctx = await getSessionCtx();
-    if (!ctx) {
-        return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
-
-    try {
+export const GET = route(
+    {
+        auth: "user-or-guest",
+        params: idParams,
+        errorMessage: "Error al obtener el desglose del recibo",
+        logLabel: "Error fetching receipt lines:",
+    },
+    async ({ ctx, params: { id } }) => {
         const expense = await prisma.expense.findUnique({
             where: { id },
             select: {
@@ -24,25 +22,15 @@ export async function GET(
             },
         });
 
-        if (!expense) {
-            return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
-        }
+        if (!expense) throw notFound("Gasto no encontrado");
 
         if (expense.visibility === "PERSONAL") {
-            if (expense.ownerId !== ctx.userId) {
-                return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-            }
+            if (expense.ownerId !== ctx.userId) throw forbidden("No autorizado");
         } else {
-            const auth = await requireSpaceAccess(ctx, expense.coupleId!, {
+            await requireSpace(ctx, expense.coupleId!, {
                 allowGuest: true,
                 allowArchived: true,
             });
-            if (!auth.ok) {
-                return NextResponse.json(
-                    { error: auth.error, code: auth.code },
-                    { status: auth.status },
-                );
-            }
         }
 
         return NextResponse.json({
@@ -56,11 +44,5 @@ export async function GET(
                 assignedToId: l.assignedToId,
             })),
         });
-    } catch (error) {
-        console.error("Error fetching receipt lines:", error);
-        return NextResponse.json(
-            { error: "Error al obtener el desglose del recibo" },
-            { status: 500 },
-        );
-    }
-}
+    },
+);

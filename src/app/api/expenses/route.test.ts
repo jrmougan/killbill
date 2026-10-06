@@ -189,6 +189,62 @@ describe('POST /api/expenses', () => {
         });
     });
 
+    describe('body shape validation (CreateExpenseBody)', () => {
+        it('400 "Petición no válida" for invalid JSON or a non-object body', async () => {
+            const raw = await POST(new Request('http://localhost/api/expenses', { method: 'POST', body: '{nope' }));
+            expect(raw.status).toBe(400);
+            expect(await raw.json()).toEqual({ error: 'Petición no válida' });
+            for (const body of [null, [base], 'x']) {
+                const res = await post(body);
+                expect(res.status).toBe(400);
+                expect((await res.json()).error).toBe('Petición no válida');
+            }
+            expect(mockExpenseCreate).not.toHaveBeenCalled();
+        });
+
+        it('accepts the amount as a numeric string (old clients / e2e)', async () => {
+            const res = await post({ ...base, amount: '15.50' });
+            expect(res.status).toBe(200);
+            expect(mockExpenseCreate.mock.calls[0][0].data.amount).toBe(1550);
+        });
+
+        it.each([
+            [{ ...base, amount: true }, 'Importe no válido'],
+            [{ ...base, amount: '15,50' }, 'Importe no válido'],
+            [{ ...base, description: 42 }, 'El concepto es obligatorio'],
+            [{ ...base, category: 7 }, 'Categoría no válida'],
+            [{ ...base, isRecurring: true }, 'Periodicidad no válida'],
+            [{ ...base, customSplits: [{ userId: 'u1', amount: 6.25 }, { userId: 'u2', amount: 6.25 }] }, 'Los importes del reparto no son válidos'],
+            [{ ...base, customSplits: [{ userId: 'u1', amount: 1350 }, { userId: 'u2', amount: -100 }] }, 'Los importes del reparto no pueden ser negativos'],
+            [{ ...base, customSplits: [{ userId: 3, amount: 1250 }] }, 'El reparto incluye a alguien que no es miembro del espacio'],
+            [{ ...base, paidById: 5 }, 'Quien pagó no es miembro del espacio'],
+        ] as const)('400 %# with its Spanish message and `issues`', async (body, message) => {
+            const res = await post(body);
+            expect(res.status).toBe(400);
+            const json = await res.json();
+            expect(json.error).toBe(message);
+            expect(json.issues[0]).toMatchObject({ message });
+            expect(mockExpenseCreate).not.toHaveBeenCalled();
+        });
+
+        it.each([
+            [{ ...base, notes: 3 }, 'notes'],
+            [{ ...base, receiptUrl: { url: 'x' } }, 'receiptUrl'],
+            [{ ...base, isPersonal: 'yes' }, 'isPersonal'],
+            [{ ...base, receiptData: 'lines' }, 'receiptData'],
+        ] as const)('400 for a wrongly typed optional field (%#: %s)', async (body, path) => {
+            const res = await post(body);
+            expect(res.status).toBe(400);
+            expect((await res.json()).issues[0].path).toBe(path);
+        });
+
+        it('a valid body is still authorized against the space before anything is written', async () => {
+            mockRequireSpaceAccess.mockResolvedValue({ ok: false, status: 403, error: 'No perteneces a este espacio' });
+            const res = await post({ ...base, groupId: 'foreign' });
+            expect(await res.json()).toEqual({ error: 'No perteneces a este espacio' });
+        });
+    });
+
     it('itemized receipt lines produce an ITEMIZED split (not CUSTOM) that sums to the amount (G-03/G-16)', async () => {
         const receiptData = [
             { description: 'Pan', quantity: 1, price: 3.39, total: 3.39, assignedTo: 'u1' },

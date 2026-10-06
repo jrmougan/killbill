@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
-import { getSessionCtx, type SessionCtx } from "@/lib/authz";
-import { toCents } from "@/lib/currency";
+import type { SessionCtx } from "@/lib/authz";
 import { calculateSplitAmounts, calculateSplitAmountsFromLines, hasExclusiveReceiptItems, rescaleSplits, type ReceiptItemForSplit } from "@/lib/splits";
 import type { SplitStrategy, SpaceStatus } from "@/generated/prisma/enums";
 import { RECEIPT_LINES_SELECT, linesForSplit } from "@/lib/receipt-read";
@@ -10,32 +9,23 @@ import { buildReceiptLineItems } from "@/lib/receipt";
 import { getGroupMembers } from "@/lib/membership";
 import { postExpenseLedger } from "@/lib/ledger";
 import { assertRosterUnchanged, assertWritableUnderLock, runLedgerTransaction, withSpaceLock } from "@/lib/expense-tx";
-import { SettlementError } from "@/lib/settlement-rules";
-import { isRecurringInterval, nextRecurringRun, parseExpenseDate } from "@/lib/expense-input";
-import { assertSpaceWritable, SpacePolicyError } from "@/lib/space-policy";
+import { isRecurringInterval, nextRecurringRun } from "@/lib/expense-input";
+import { assertSpaceWritable } from "@/lib/space-policy";
+import { badRequest, forbidden, notFound, route } from "@/lib/http";
+import { idParams } from "@/lib/http/schemas";
+import { BENEFICIARY_NOT_MEMBER, PatchExpenseBody, PAYER_NOT_MEMBER, SPLIT_NOT_MEMBER } from "@/lib/expense-schemas";
 import type { Prisma } from "@/generated/prisma/client";
-
-/** Upper bound for one expense (999.999,99 €; Int column safe). */
-const MAX_AMOUNT_CENTS = 99_999_999;
-
-const bad = (error: string, status = 400, code?: string) =>
-    NextResponse.json(code ? { error, code } : { error }, { status });
 
 /**
  * A SETTLING/ARCHIVED space is read-only for expenses: the UI hides edit/delete
- * there, and the API must refuse them too. Returns a response to send, or null.
+ * there, and the API must refuse them too (throws the SpacePolicyError → 409
+ * SPACE_NOT_WRITABLE, mapped by route()).
  */
-async function spaceNotWritable(coupleId: string | null): Promise<NextResponse | null> {
-    if (!coupleId) return null;
+async function assertExpenseSpaceWritable(coupleId: string | null): Promise<void> {
+    if (!coupleId) return;
     const space = await prisma.couple.findUnique({ where: { id: coupleId }, select: { status: true } });
-    if (!space) return null;
-    try {
-        assertSpaceWritable(space.status as SpaceStatus);
-        return null;
-    } catch (e) {
-        if (e instanceof SpacePolicyError) return bad(e.message, e.status, e.code);
-        throw e;
-    }
+    if (!space) return;
+    assertSpaceWritable(space.status as SpaceStatus);
 }
 
 /**
@@ -66,15 +56,10 @@ function writeExpense<T>(
     });
 }
 
-export async function DELETE(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    try {
-        const { id } = await params;
-        // getSessionCtx revalidates a guest session against the DB (H3).
-        const ctx = await getSessionCtx();
-        if (!ctx?.userId) return bad('No autorizado', 401);
+// getSessionCtx (in route()) revalidates a guest session against the DB (H3).
+export const DELETE = route(
+    { auth: "user-or-guest", params: idParams, errorMessage: "Error al eliminar", logLabel: "Error deleting expense:" },
+    async ({ ctx, params: { id } }) => {
         const userId = ctx.userId;
 
         // Get expense and verify ownership
@@ -83,9 +68,7 @@ export async function DELETE(
             include: { series: true }
         });
 
-        if (!expense) {
-            return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
-        }
+        if (!expense) throw notFound("Gasto no encontrado");
 
         // Personal expenses are authorized by ownership; shared ones strictly by
         // current couple membership via the Membership layer (Phase 5 WS1) — an
@@ -94,11 +77,8 @@ export async function DELETE(
         const delMembers = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
         const isMember = delMembers.some(m => m.id === userId);
         const authorized = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
-        if (!authorized || guestOutOfCage(ctx, expense)) {
-            return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-        }
-        const readOnly = await spaceNotWritable(expense.coupleId);
-        if (readOnly) return readOnly;
+        if (!authorized || guestOutOfCage(ctx, expense)) throw forbidden("No autorizado");
+        await assertExpenseSpaceWritable(expense.coupleId);
 
         // Delete expense (splits cascade; the ledger Transaction cascades via FK).
         // Phase 4 (recurring-sync): deleting a recurring TEMPLATE must stop its
@@ -119,12 +99,8 @@ export async function DELETE(
         });
 
         return NextResponse.json({ success: true });
-    } catch (error) {
-        if (error instanceof SettlementError) return NextResponse.json(error.toJSON(), { status: error.status });
-        console.error("Error deleting expense:", error);
-        return NextResponse.json({ error: "Error al eliminar" }, { status: 500 });
-    }
-}
+    },
+);
 
 /**
  * Edit an expense. Every field is optional; omitted fields keep their value.
@@ -136,28 +112,17 @@ export async function DELETE(
  *   - `receiptItems` with assigned lines → ITEMIZED (lines rescaled to the amount)
  *   - none of the above → recomputed from the PERSISTED strategy
  * `date` ("YYYY-MM-DD") must be a real day in [2000-01-01, today + 1 year].
+ * The body SHAPE is validated by PatchExpenseBody; membership-dependent rules
+ * are checked below, after authorization.
  */
-export async function PATCH(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    try {
-        const { id } = await params;
-        // getSessionCtx revalidates a guest session against the DB (H3).
-        const ctx = await getSessionCtx();
-        if (!ctx?.userId) return bad('No autorizado', 401);
+export const PATCH = route(
+    { auth: "user-or-guest", params: idParams, body: PatchExpenseBody, errorMessage: "Error al actualizar el gasto", logLabel: "Error updating expense:" },
+    async ({ ctx, params: { id }, body }) => {
         const userId = ctx.userId;
-
-        let body: Record<string, unknown>;
-        try {
-            body = await request.json();
-        } catch {
-            return bad('Petición no válida');
-        }
         const {
             description, amount, category, splitWithPartner, receiptItems, notes, isRecurring, recurringInterval,
-            customSplits, paidById: paidByIdInput, receiptUrl, date: dateInput, beneficiaryId, splitEqual,
-        } = (body ?? {}) as Record<string, unknown>;
+            customSplits, paidById: paidByIdInput, receiptUrl, date: newDate, beneficiaryId, splitEqual,
+        } = body;
 
         // Get expense and verify ownership
         const expense = await prisma.expense.findUnique({
@@ -165,9 +130,7 @@ export async function PATCH(
             include: { series: true, ...RECEIPT_LINES_SELECT }
         });
 
-        if (!expense) {
-            return NextResponse.json({ error: "Gasto no encontrado" }, { status: 404 });
-        }
+        if (!expense) throw notFound("Gasto no encontrado");
 
         // Members via the Membership layer (ACTIVE, ordered) — backs BOTH the authz
         // check and split remainder-cent allocation / ledger re-post, so everything
@@ -180,60 +143,29 @@ export async function PATCH(
         // current couple membership.
         const isMember = members.some(m => m.id === userId);
         const authorized = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
-        if (!authorized || guestOutOfCage(ctx, expense)) {
-            return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-        }
-        const readOnly = await spaceNotWritable(expense.coupleId);
-        if (readOnly) return readOnly;
+        if (!authorized || guestOutOfCage(ctx, expense)) throw forbidden("No autorizado");
+        await assertExpenseSpaceWritable(expense.coupleId);
 
         const memberIds = new Set(members.map(m => m.id));
 
         // Payer change (N-way): accept a new payer when it's a current member.
-        if (paidByIdInput !== undefined && (typeof paidByIdInput !== 'string' || !memberIds.has(paidByIdInput))) {
-            return bad('Quien pagó no es miembro del espacio');
-        }
-        const effectivePaidById = typeof paidByIdInput === 'string' ? paidByIdInput : expense.paidById;
+        if (paidByIdInput !== undefined && !memberIds.has(paidByIdInput)) throw badRequest(PAYER_NOT_MEMBER);
+        const effectivePaidById = paidByIdInput ?? expense.paidById;
 
-        if (description !== undefined && (typeof description !== 'string' || description.trim().length === 0)) {
-            return bad('El concepto es obligatorio');
-        }
+        // Description, interval, date and amount shape/bounds: PatchExpenseBody.
+        // null / "" amount keeps the persisted one.
+        const amountCents = typeof amount === 'number' ? amount : expense.amount;
 
-        if (recurringInterval !== undefined && recurringInterval !== null && !isRecurringInterval(recurringInterval)) {
-            return bad('Periodicidad no válida');
-        }
-
-        const parsedDate = parseExpenseDate(dateInput);
-        if (!parsedDate.ok) return bad(parsedDate.error);
-        const newDate = parsedDate.date;
-
-        const amountCents = amount !== undefined && amount !== null && amount !== ''
-            ? toCents(Number(amount))
-            : expense.amount;
-        if (!Number.isFinite(amountCents) || amountCents <= 0) {
-            return bad('Importe no válido');
-        }
-        if (amountCents > MAX_AMOUNT_CENTS) return bad('El importe máximo es 999.999,99 €');
-
-        // Validate that client-supplied splits sum exactly to the expense amount.
-        const hasCustomSplits = Array.isArray(customSplits) && customSplits.length > 0;
+        // Validate that client-supplied splits sum exactly to the expense amount
+        // (line shape — integer, non-negative cents — is checked by the schema).
+        const hasCustomSplits = !!customSplits && customSplits.length > 0;
         if (hasCustomSplits) {
-            const splits = customSplits as { userId: string; amount: number }[];
-            if (splits.some((s) => !Number.isInteger(s?.amount))) {
-                return bad('Los importes del reparto no son válidos');
-            }
-            if (splits.some((s) => s.amount < 0)) {
-                return bad('Los importes del reparto no pueden ser negativos');
-            }
-            if (splits.some((s) => !memberIds.has(s?.userId))) {
-                return bad('El reparto incluye a alguien que no es miembro del espacio');
-            }
-            if (splits.reduce((sum, s) => sum + s.amount, 0) !== amountCents) {
-                return bad('El reparto no suma el importe total');
+            if (customSplits.some((s) => !memberIds.has(s.userId))) throw badRequest(SPLIT_NOT_MEMBER);
+            if (customSplits.reduce((sum, s) => sum + s.amount, 0) !== amountCents) {
+                throw badRequest('El reparto no suma el importe total');
             }
         }
-        if (beneficiaryId !== undefined && beneficiaryId !== null && (typeof beneficiaryId !== 'string' || !memberIds.has(beneficiaryId))) {
-            return bad('La persona elegida no es miembro del espacio');
-        }
+        if (beneficiaryId != null && !memberIds.has(beneficiaryId)) throw badRequest(BENEFICIARY_NOT_MEMBER);
 
         // Recurrence: pre-state comes from the linked series (this expense is the
         // TEMPLATE iff series.templateId === its id).
@@ -257,24 +189,21 @@ export async function PATCH(
             amount: amountCents,
         };
         if (newDate) updateData.date = newDate;
-        if (notes !== undefined) updateData.notes = typeof notes === 'string' && notes.trim() ? notes : null;
+        if (notes !== undefined) updateData.notes = notes?.trim() ? notes : null;
         // Receipt image: a string sets/replaces it, null removes it. undefined leaves it.
-        if (receiptUrl !== undefined) updateData.receiptUrl = typeof receiptUrl === 'string' && receiptUrl ? receiptUrl : null;
+        if (receiptUrl !== undefined) updateData.receiptUrl = receiptUrl || null;
         if (paidByIdInput !== undefined) updateData.paidById = effectivePaidById;
         // Category validated against the EFFECTIVE set of the expense's context.
-        if (category !== undefined && category !== null) {
-            if (typeof category !== 'string' || category.trim().length === 0) {
-                return bad('Categoría no válida');
-            }
+        if (category != null) {
             const resolvedCategoryId = await resolveCategoryId(
                 category,
                 expense.coupleId ? { groupId: expense.coupleId } : { ownerId: expense.ownerId },
             );
-            if (!resolvedCategoryId) return bad('Categoría no válida');
+            if (!resolvedCategoryId) throw badRequest('Categoría no válida');
             updateData.categoryId = resolvedCategoryId;
         }
 
-        const receiptList = Array.isArray(receiptItems) ? (receiptItems as ReceiptItemForSplit[]) : undefined;
+        const receiptList = receiptItems ? (receiptItems as ReceiptItemForSplit[]) : undefined;
 
         // Recalculate splits when a split-affecting field changes. `splitWithPartner`
         // is a retired binary toggle (kept only so old clients don't 400).
@@ -298,8 +227,7 @@ export async function PATCH(
 
             if (hasCustomSplits) {
                 newStrategy = 'CUSTOM';
-                newSplits = (customSplits as { userId: string; amount: number }[])
-                    .map(s => ({ userId: s.userId, amount: s.amount }));
+                newSplits = customSplits!.map(s => ({ userId: s.userId, amount: s.amount }));
             } else if (typeof beneficiaryId === 'string') {
                 newStrategy = 'EXCLUSIVE';
                 newSplits = [{ userId: beneficiaryId, amount: amountCents }];
@@ -448,9 +376,5 @@ export async function PATCH(
         });
 
         return NextResponse.json({ success: true, expense: updatedExpense });
-    } catch (error) {
-        if (error instanceof SettlementError) return NextResponse.json(error.toJSON(), { status: error.status });
-        console.error("Error updating expense:", error);
-        return NextResponse.json({ error: "Error al actualizar el gasto" }, { status: 500 });
-    }
-}
+    },
+);
