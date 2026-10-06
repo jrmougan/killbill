@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getSessionCtx } from "@/lib/authz";
 import { bumpTokenVersion } from "@/lib/token-version";
+import { forbidden, route } from "@/lib/http";
 
 /**
  * POST /api/me/sessions/revoke — "Cerrar sesión en todos los dispositivos".
@@ -12,22 +12,22 @@ import { bumpTokenVersion } from "@/lib/token-version";
  * Browser sessions only: guests have their own revocation (membership) and an
  * MCP token must not be able to act on the account's sessions.
  */
-export async function POST() {
-    const ctx = await getSessionCtx();
-    if (!ctx) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    if (ctx.kind !== undefined) {
-        return NextResponse.json({ error: "Acción no permitida con este tipo de sesión" }, { status: 403 });
-    }
+export const POST = route(
+    {
+        auth: "user-or-guest",
+        errorMessage: "No se pudieron cerrar las sesiones. Inténtalo de nuevo.",
+        logLabel: "Error al revocar sesiones:",
+    },
+    async ({ ctx }) => {
+        // Guests AND MCP tokens: same historical 403 (route 'user' would let MCP through).
+        if (ctx.kind !== undefined) throw forbidden("Acción no permitida con este tipo de sesión");
 
-    try {
+        // A failure here is a 500 and the current cookie is kept.
         await bumpTokenVersion(ctx.userId);
-    } catch (error) {
-        console.error("Error al revocar sesiones:", error);
-        return NextResponse.json({ error: "No se pudieron cerrar las sesiones. Inténtalo de nuevo." }, { status: 500 });
-    }
 
-    const cookieStore = await cookies();
-    cookieStore.delete("session_token");
-    cookieStore.delete("user_id");
-    return NextResponse.json({ success: true });
-}
+        const cookieStore = await cookies();
+        cookieStore.delete("session_token");
+        cookieStore.delete("user_id");
+        return NextResponse.json({ success: true });
+    },
+);

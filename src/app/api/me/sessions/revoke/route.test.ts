@@ -21,18 +21,18 @@ describe("POST /api/me/sessions/revoke", () => {
 
     it("401 without a session", async () => {
         mockGetSessionCtx.mockResolvedValue(null);
-        expect((await POST()).status).toBe(401);
+        expect((await POST(new Request("http://localhost/api/me/sessions/revoke", { method: "POST" }))).status).toBe(401);
         expect(mockBump).not.toHaveBeenCalled();
     });
 
     it.each(["guest", "mcp"])("403 for a %s session", async (kind) => {
         mockGetSessionCtx.mockResolvedValue({ userId: "u1", kind });
-        expect((await POST()).status).toBe(403);
+        expect((await POST(new Request("http://localhost/api/me/sessions/revoke", { method: "POST" }))).status).toBe(403);
         expect(mockBump).not.toHaveBeenCalled();
     });
 
     it("bumps the token version and clears the current cookie", async () => {
-        const res = await POST();
+        const res = await POST(new Request("http://localhost/api/me/sessions/revoke", { method: "POST" }));
         expect(res.status).toBe(200);
         expect(mockBump).toHaveBeenCalledWith("u1");
         expect(mockDeleteCookie).toHaveBeenCalledWith("session_token");
@@ -41,7 +41,7 @@ describe("POST /api/me/sessions/revoke", () => {
     it("500 (cookie kept) when the bump fails", async () => {
         mockBump.mockRejectedValue(new Error("db down"));
         vi.spyOn(console, "error").mockImplementation(() => {});
-        expect((await POST()).status).toBe(500);
+        expect((await POST(new Request("http://localhost/api/me/sessions/revoke", { method: "POST" }))).status).toBe(500);
         expect(mockDeleteCookie).not.toHaveBeenCalled();
     });
 });
