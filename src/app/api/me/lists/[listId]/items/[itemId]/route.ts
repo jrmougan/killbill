@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { updateItemForScope, setItemChecked, deleteItemForScope } from "@/lib/list-crud";
 import { route } from "@/lib/http";
-import { ItemBody, itemParams, PERSONAL_LIST_ROUTE } from "../../../schemas";
+import { ItemPatchBody, personalItemParams, PERSONAL_LIST_ROUTE } from "@/lib/list-schemas";
 
 /** A single item of a personal list. PATCH toggles `checked` or edits fields. Guests → 403. */
 
 export const PATCH = route(
-    { ...PERSONAL_LIST_ROUTE, params: itemParams, body: ItemBody },
+    { ...PERSONAL_LIST_ROUTE, params: personalItemParams, body: ItemPatchBody },
     async ({ ctx, params: { listId, itemId }, body }) => {
         const scope = { kind: "owner", ownerId: ctx.userId } as const;
         if (typeof body.checked === "boolean") {
@@ -19,7 +19,7 @@ export const PATCH = route(
 );
 
 export const DELETE = route(
-    { ...PERSONAL_LIST_ROUTE, params: itemParams },
+    { ...PERSONAL_LIST_ROUTE, params: personalItemParams },
     async ({ ctx, params: { listId, itemId } }) => {
         const result = await deleteItemForScope({ kind: "owner", ownerId: ctx.userId }, listId, itemId);
         return NextResponse.json(result);

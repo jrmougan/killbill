@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createListForScope, reorderListsForScope, type ListWriteScope } from "@/lib/list-crud";
 import { getListsForScope } from "@/lib/list-read";
 import { route } from "@/lib/http";
-import { ListBody, OrderBody, PERSONAL_LIST_ROUTE } from "./schemas";
+import { ListBody, OrderBody, PERSONAL_LIST_ROUTE } from "@/lib/list-schemas";
 
 /**
  * Personal shopping lists (scope `ownerId`). Authorized solely by the session

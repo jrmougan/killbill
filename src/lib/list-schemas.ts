@@ -36,3 +36,19 @@ export type OrderBody = z.output<typeof OrderBody>;
 /** Dynamic segments of the space list routes. */
 export const spaceListParams = z.object({ id: id(), listId: id() });
 export const spaceItemParams = spaceListParams.extend({ itemId: id() });
+
+/** Dynamic segments of the personal list routes (/api/me/lists/**). */
+export const personalListParams = z.object({ listId: id() });
+export const personalItemParams = personalListParams.extend({ itemId: id() });
+
+/**
+ * Historical contract of the personal list routes: 401 "Unauthorized", guests
+ * 403 "Acción no permitida para invitados" (they have no personal lists), and
+ * an unexpected error is a 500 "Error en las listas".
+ */
+export const PERSONAL_LIST_ROUTE = {
+    auth: "user",
+    unauthorizedMessage: "Unauthorized",
+    errorMessage: "Error en las listas",
+    logLabel: "Shopping list error:",
+} as const;
