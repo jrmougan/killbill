@@ -63,6 +63,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
             userId: user.id,
             email: user.email,
             isAdmin: user.isAdmin,
+            tv: user.tokenVersion,
         });
 
         const cookieStore = await cookies();

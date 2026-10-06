@@ -13,6 +13,7 @@ import {
     LayoutGrid,
     Layers,
     LogIn,
+    MonitorSmartphone,
     PieChart,
     Plus,
     ShieldAlert,
@@ -130,13 +131,14 @@ function LinkRow({
 export function SettingsClient({ user, groups, personalParam = false }: SettingsClientProps) {
     const router = useRouter();
     const [toast, showToast] = useEqToast(2600);
-    const [sheet, setSheet] = useState<"profile" | "join" | "mcp-confirm" | "mcp" | null>(null);
+    const [sheet, setSheet] = useState<"profile" | "join" | "mcp-confirm" | "mcp" | "revoke" | null>(null);
     const [leaving, setLeaving] = useState<GroupData | null>(null);
     // Personal mode: without a space everything is personal anyway.
     const personal = usePersonalMode(personalParam) || groups.length === 0;
 
-    // MCP token (shown once). Generating again just issues another 90-day token:
-    // tokens cannot be revoked yet, so there is no "Desconectar".
+    // MCP token (shown once). Generating again just issues another 90-day token;
+    // all of them (and every session) are revoked with "Cerrar sesión en todos los
+    // dispositivos" (POST /api/me/sessions/revoke).
     const [mcpToken, setMcpToken] = useState<McpToken | null>(null);
     const [mcpBusy, setMcpBusy] = useState(false);
     const [mcpError, setMcpError] = useState<string | null>(null);
@@ -319,6 +321,11 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
 
                 <Section label="Cuenta">
                     {user.isAdmin && <LinkRow href="/admin" icon={ShieldCheck} label="Administración" />}
+                    <button type="button" onClick={() => setSheet("revoke")} className={rowCls}>
+                        <MonitorSmartphone className="h-[19px] w-[19px] flex-none text-muted-foreground" />
+                        <span className="flex-1 text-[15px]">Cerrar sesión en todos los dispositivos</span>
+                        <ChevronRight className="h-[17px] w-[17px] flex-none text-[color:var(--ink-4)]" />
+                    </button>
                     <LogoutButton className={cn(rowCls, "text-destructive")} />
                 </Section>
 
@@ -339,6 +346,8 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
 
             {sheet === "join" && <JoinSheet onClose={() => setSheet(null)} />}
 
+            {sheet === "revoke" && <RevokeSessionsSheet onClose={() => setSheet(null)} />}
+
             {sheet === "mcp-confirm" && (
                 <Sheet title={mcpIssued ? "¿Generar otro token?" : "Conectar Hermes Agent"} onClose={() => setSheet(null)}>
                     <div className="flex flex-col gap-3">
@@ -349,9 +358,9 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
                         <div className="flex items-start gap-2 rounded-[14px] bg-[var(--negative-tint)] px-3 py-2.5 text-xs">
                             <ShieldAlert className="h-4 w-4 flex-none text-destructive mt-px" />
                             <span>
-                                Todavía no se puede revocar: cerrar la ventana no lo invalida
-                                {mcpIssued ? " y el token anterior seguirá funcionando hasta que caduque" : ""}. Genéralo solo
-                                si vas a configurarlo ahora.
+                                Cerrar la ventana no lo invalida
+                                {mcpIssued ? " y el token anterior seguirá funcionando" : ""}: para revocarlo usa «Cerrar sesión
+                                en todos los dispositivos». Genéralo solo si vas a configurarlo ahora.
                             </span>
                         </div>
                         <div className="flex gap-2.5 pt-1">
@@ -655,6 +664,57 @@ function JoinSheet({ onClose }: { onClose: () => void }) {
                 <EqCta onClick={go} disabled={!value.trim()}>
                     Continuar
                 </EqCta>
+            </div>
+        </Sheet>
+    );
+}
+
+/**
+ * Confirm + POST /api/me/sessions/revoke: invalidates every session cookie and
+ * MCP token of the account (this device included), then hard-navigates to /login.
+ */
+function RevokeSessionsSheet({ onClose }: { onClose: () => void }) {
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const revoke = async () => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch("/api/me/sessions/revoke", { method: "POST" });
+            if (!res.ok) {
+                const data = await res.json().catch(() => null);
+                setError(data?.error || "No se pudieron cerrar las sesiones. Inténtalo de nuevo.");
+                setBusy(false);
+                return;
+            }
+            window.location.assign("/login");
+        } catch {
+            setError("Error de conexión. Inténtalo de nuevo.");
+            setBusy(false);
+        }
+    };
+
+    return (
+        <Sheet title="¿Cerrar sesión en todos los dispositivos?" onClose={onClose} dismissible={!busy}>
+            <div className="flex flex-col gap-3">
+                <p className="text-sm text-muted-foreground">
+                    Se cerrará la sesión en todos tus dispositivos, también en este, y dejarán de funcionar los tokens de
+                    Hermes Agent que hayas generado. Tendrás que volver a iniciar sesión.
+                </p>
+                {error && (
+                    <p role="alert" className="text-sm text-destructive">
+                        {error}
+                    </p>
+                )}
+                <div className="flex gap-2.5 pt-1">
+                    <EqCta variant="outline" className="flex-1 h-12 rounded-2xl text-[15px]" onClick={onClose} disabled={busy}>
+                        Cancelar
+                    </EqCta>
+                    <EqCta className="flex-1 h-12 rounded-2xl text-[15px]" onClick={revoke} disabled={busy}>
+                        {busy ? "Cerrando…" : "Cerrar sesiones"}
+                    </EqCta>
+                </div>
             </div>
         </Sheet>
     );

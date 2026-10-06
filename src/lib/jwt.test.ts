@@ -3,7 +3,15 @@
 // instanceof checks fail under jsdom due to cross-realm typed arrays, so
 // pin this file to the node environment.
 import { describe, it, expect, beforeAll } from 'vitest';
-import { signToken, verifyToken, signGuestToken, refreshGuestToken, GUEST_SESSION_SECONDS } from './jwt';
+import {
+    signToken,
+    verifyToken,
+    signGuestToken,
+    refreshGuestToken,
+    signMcpToken,
+    tokenVersionOf,
+    GUEST_SESSION_SECONDS,
+} from './jwt';
 
 describe('jwt utilities', () => {
     beforeAll(() => {
@@ -12,7 +20,7 @@ describe('jwt utilities', () => {
     });
 
     it('should round-trip a payload through sign and verify', async () => {
-        const token = await signToken({ userId: 'user1' });
+        const token = await signToken({ userId: 'user1', tv: 0 });
         expect(typeof token).toBe('string');
 
         const payload = await verifyToken(token);
@@ -21,7 +29,7 @@ describe('jwt utilities', () => {
     });
 
     it('should set standard JWT claims (iat, exp)', async () => {
-        const token = await signToken({ userId: 'user2' });
+        const token = await signToken({ userId: 'user2', tv: 0 });
         const payload = await verifyToken(token);
         expect(payload?.iat).toBeTypeOf('number');
         expect(payload?.exp).toBeTypeOf('number');
@@ -30,7 +38,7 @@ describe('jwt utilities', () => {
     });
 
     it('should return null for a tampered token', async () => {
-        const token = await signToken({ userId: 'user1' });
+        const token = await signToken({ userId: 'user1', tv: 0 });
         // Flip the FIRST character of the signature segment. Flipping the last
         // base64url char can be a no-op (its trailing bits are unused, so a→b
         // may decode to identical bytes and still verify — a flaky test); the
@@ -51,7 +59,7 @@ describe('jwt utilities', () => {
     it('should return null for a token signed with a different secret', async () => {
         const original = process.env.JWT_SECRET;
         process.env.JWT_SECRET = 'some-other-secret';
-        const foreignToken = await signToken({ userId: 'user1' });
+        const foreignToken = await signToken({ userId: 'user1', tv: 0 });
         process.env.JWT_SECRET = original;
 
         const payload = await verifyToken(foreignToken);
@@ -105,7 +113,7 @@ describe('guest session tokens', () => {
     });
 
     it('refreshGuestToken returns null for a non-guest payload', async () => {
-        const token = await signToken({ userId: 'u1', email: 'a@b.c', isAdmin: false });
+        const token = await signToken({ userId: 'u1', email: 'a@b.c', isAdmin: false, tv: 0 });
         const payload = await verifyToken(token);
         expect(await refreshGuestToken(payload!)).toBeNull();
     });
@@ -120,5 +128,32 @@ describe('guest session tokens', () => {
             hardCap: Math.floor((Date.now() - 1000) / 1000),
         };
         expect(await refreshGuestToken(payload)).toBeNull();
+    });
+});
+
+describe('token version (revocation) claims', () => {
+    beforeAll(() => {
+        process.env.JWT_SECRET = 'test-secret-for-vitest';
+    });
+
+    it('session tokens carry tv', async () => {
+        const payload = await verifyToken(await signToken({ userId: 'u1', tv: 4 }));
+        expect(payload?.tv).toBe(4);
+        expect(tokenVersionOf(payload!)).toBe(4);
+    });
+
+    it('MCP tokens carry kind, tv and a unique jti', async () => {
+        const a = await verifyToken(await signMcpToken({ userId: 'u1', tv: 1 }, 30));
+        const b = await verifyToken(await signMcpToken({ userId: 'u1', tv: 1 }, 30));
+        expect(a?.kind).toBe('mcp');
+        expect(a?.tv).toBe(1);
+        expect(typeof a?.jti).toBe('string');
+        expect(a?.jti).not.toBe(b?.jti);
+    });
+
+    it('a legacy payload without tv counts as version 0; a malformed one never matches', () => {
+        expect(tokenVersionOf({ userId: 'u1' })).toBe(0);
+        expect(tokenVersionOf({ userId: 'u1', tv: '0' })).toBeNaN();
+        expect(tokenVersionOf({ userId: 'u1', tv: 1.5 })).toBeNaN();
     });
 });
