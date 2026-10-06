@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { getSessionCtx } from '@/lib/authz';
 import { getActiveGroup, getGroupMembers, ACTIVE_GROUP_COOKIE } from '@/lib/membership';
 import { randomBytes } from 'crypto';
+import { route } from '@/lib/http';
+import { jsonObject } from '@/lib/http/schemas';
 
 const PUBLIC_SPACE_SELECT = {
     id: true,
@@ -15,10 +17,10 @@ const PUBLIC_SPACE_SELECT = {
     expiresAt: true,
 } as const;
 
-export async function GET(_request: Request) {
-    const ctx = await getSessionCtx();
-    if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    if (ctx.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
+/** Legacy create body: an optional name ("" / null / absent → "Mi grupo"). */
+const CreateCoupleBody = jsonObject({ name: z.string({ error: 'Nombre no válido' }).nullish() });
+
+export const GET = route({ auth: 'user' }, async ({ ctx }) => {
     const userId = ctx.userId;
 
     // Resolve the caller's ACTIVE group + members via the Membership layer (F4).
@@ -34,22 +36,18 @@ export async function GET(_request: Request) {
     if (!couple) return NextResponse.json({ couple: null, userId });
 
     return NextResponse.json({ couple: { ...couple, members }, userId });
-}
+});
 
 /**
  * @deprecated Fase 1: use POST /api/spaces with an explicit `type` instead. This
  * endpoint is kept as an alias that always creates a COUPLE-typed space so old
  * clients keep working.
  */
-export async function POST(request: Request) {
-    const ctx = await getSessionCtx();
-    if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    if (ctx.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
+export const POST = route({ auth: 'user', body: CreateCoupleBody }, async ({ ctx, body }) => {
     const userId = ctx.userId;
 
     // F4 (multi-group): no blanket "already in a group" block — a user may own or
     // belong to several groups.
-    const body = await request.json();
     const { name } = body;
 
     // Generate cryptographically random code for invite
@@ -81,4 +79,4 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ success: true, couple });
-}
+});

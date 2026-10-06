@@ -16,7 +16,19 @@ vi.mock("@/lib/db", () => ({
     },
 }));
 
-import { GET } from "./route";
+import { GET, POST } from "./route";
+
+describe("POST /api/couple (deprecated alias)", () => {
+    it("400 instead of a 500 on an unparseable body or a non-string name", async () => {
+        mockGetSessionCtx.mockReset().mockResolvedValue({ userId: "u1" });
+        const badJson = await POST(new Request("http://x", { method: "POST", body: "{" }));
+        expect(badJson.status).toBe(400);
+        expect(await badJson.json()).toEqual({ error: "Petición no válida" });
+        const res = await POST(new Request("http://x", { method: "POST", body: JSON.stringify({ name: 5 }) }));
+        expect(res.status).toBe(400);
+        expect((await res.json()).issues[0].path).toBe("name");
+    });
+});
 
 describe("GET /api/couple", () => {
     beforeEach(() => {

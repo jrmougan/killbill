@@ -1,22 +1,29 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { getSessionCtx } from '@/lib/authz';
 import { getActiveGroup, getMembership } from '@/lib/membership';
+import { badRequest, forbidden, readJson, route, validate } from '@/lib/http';
 
-export async function POST(request: Request) {
-    const ctx = await getSessionCtx();
-    if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    if (ctx.kind === 'guest') return NextResponse.json({ error: 'Acción no permitida para invitados' }, { status: 403 });
-    const userId = ctx.userId;
+/**
+ * Optional `{ groupId }` — parsed defensively, as always: an empty, unparseable
+ * or non-object body, or a non-string groupId, just falls back to the active group.
+ */
+const UnlinkBody = z
+    .object({ groupId: z.string().optional().catch(undefined) })
+    .nullish()
+    .catch(undefined);
 
-    try {
+export const POST = route(
+    {
+        auth: 'user',
+        errorMessage: 'No se pudo salir del espacio. Inténtalo de nuevo.',
+        logLabel: 'Error unlinking couple:',
+    },
+    async ({ req, ctx }) => {
+        const userId = ctx.userId;
         // F4 (multi-group): accept an optional { groupId } and leave THAT group.
-        // Parse defensively — an empty body must not 500.
-        let bodyGroupId: string | null = null;
-        try {
-            const b = await request.json();
-            if (b && typeof b.groupId === 'string') bodyGroupId = b.groupId;
-        } catch { /* no body — fall back to the active group below */ }
+        const raw = await readJson(req).catch(() => undefined);
+        const bodyGroupId = validate(UnlinkBody, raw)?.groupId || null;
 
         // Resolve the target group. Explicit path: validate the caller has an
         // ACTIVE membership in it. Fallback path (no groupId): the active group,
@@ -26,7 +33,7 @@ export async function POST(request: Request) {
         if (bodyGroupId) {
             const m = await getMembership(bodyGroupId, userId);
             if (!m || m.status !== 'ACTIVE') {
-                return NextResponse.json({ error: 'No perteneces a este grupo' }, { status: 403 });
+                throw forbidden('No perteneces a este grupo');
             }
             coupleId = bodyGroupId;
         } else {
@@ -35,7 +42,7 @@ export async function POST(request: Request) {
         }
 
         if (!coupleId) {
-            return NextResponse.json({ error: 'No estás en ningún grupo' }, { status: 400 });
+            throw badRequest('No estás en ningún grupo');
         }
 
         await prisma.$transaction(async (tx) => {
@@ -81,8 +88,5 @@ export async function POST(request: Request) {
         });
 
         return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error('Error unlinking couple:', error);
-        return NextResponse.json({ error: 'No se pudo salir del espacio. Inténtalo de nuevo.' }, { status: 500 });
-    }
-}
+    },
+);
