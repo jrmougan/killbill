@@ -75,6 +75,30 @@ describe('receipt upload storage', () => {
         expect(writeFile).not.toHaveBeenCalled();
     });
 
+    it('400 for a non-multipart body or a missing file (a non-multipart body used to be a 500)', async () => {
+        vi.mocked(getSessionCtx).mockResolvedValue(user);
+        const json = await POST(new Request('http://localhost/api/upload', {
+            method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' },
+        }));
+        expect(json.status).toBe(400);
+        expect(await json.json()).toEqual({ error: 'Petición no válida' });
+
+        const form = new FormData();
+        form.append('file', 'not a file');
+        const text = await POST(new Request('http://localhost/api/upload', { method: 'POST', body: form }));
+        expect(text.status).toBe(400);
+        expect(await text.json()).toEqual({ error: 'No se ha subido ningún archivo' });
+        expect(writeFile).not.toHaveBeenCalled();
+    });
+
+    it('413 above the size cap', async () => {
+        vi.mocked(getSessionCtx).mockResolvedValue(user);
+        const big = Buffer.concat([PNG, Buffer.alloc(8 * 1024 * 1024)]);
+        const res = await upload(big);
+        expect(res.status).toBe(413);
+        expect(writeFile).not.toHaveBeenCalled();
+    });
+
     it('rejects guest sessions while ephemeral spaces are disabled', async () => {
         vi.mocked(getSessionCtx).mockResolvedValue({ userId: 'guest-1', isAdmin: false, kind: 'guest', groupId: 'g1' });
         vi.stubEnv('EPHEMERAL_SPACES_ENABLED', 'false');

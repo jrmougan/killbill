@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { signGuestToken } from "@/lib/auth";
-import { getSessionCtx } from "@/lib/authz";
 import { ACTIVE_GROUP_COOKIE } from "@/lib/membership";
 import { SPACE_CAPS, allowsGuests, SpacePolicyError } from "@/lib/space-policy";
 import { evaluateInvite, generateInviteToken, hashInviteToken, inviteInvalidMessage } from "@/lib/invite-token";
@@ -14,7 +14,9 @@ import {
     type SessionKind,
 } from "@/lib/invite-policy";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
-import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/rate-limit";
+import { HttpError, badRequest, conflict, enforceRateLimit, forbidden, notFound, readJson, route, validate } from "@/lib/http";
+import { jsonObject } from "@/lib/http/schemas";
 import { InviteKind, MembershipRole, MembershipStatus, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 
 /**
@@ -50,79 +52,95 @@ const ACTIVE_GROUP_COOKIE_OPTS = {
     httpOnly: true as const, sameSite: "lax" as const, path: "/", maxAge: 60 * 60 * 24 * 365,
 };
 const MAX_GUEST_NAME_LEN = 40;
+const INVALID_BODY = "Cuerpo inválido";
+
+/**
+ * Lenient on purpose (historical contract): only a non-blank `token` is required;
+ * `asMember` / `replaceSession` count only when literally `true`, and `name` is
+ * checked later — only the guest-entry path needs it.
+ */
+const ClaimBody = jsonObject(
+    {
+        token: z
+            .unknown()
+            .optional()
+            .transform((v) => (typeof v === "string" ? v.trim() : ""))
+            .refine((t) => t.length > 0, "Falta el token de invitación"),
+        name: z.unknown().optional(),
+        asMember: z.unknown().optional().transform((v) => v === true),
+        replaceSession: z.unknown().optional().transform((v) => v === true),
+    },
+    INVALID_BODY,
+);
 
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status });
 
 function sessionExists() {
-    return json({ error: SESSION_EXISTS_MESSAGE, code: "SESSION_EXISTS" }, 409);
+    return conflict(SESSION_EXISTS_MESSAGE, "SESSION_EXISTS");
 }
 
-export async function POST(request: Request) {
-    let body: { token?: unknown; name?: unknown; asMember?: unknown; replaceSession?: unknown };
-    try {
-        body = await request.json();
-    } catch {
-        return json({ error: "Cuerpo inválido" }, 400);
-    }
-    if (!body || typeof body !== "object") return json({ error: "Cuerpo inválido" }, 400);
-    const token = typeof body.token === "string" ? body.token.trim() : "";
-    if (!token) {
-        return json({ error: "Falta el token de invitación" }, 400);
-    }
-    const tokenHash = hashInviteToken(token);
-    const asMember = body.asMember === true;
-    const replaceSession = body.replaceSession === true;
+function featureDisabled() {
+    return forbidden("Los espacios efímeros no están habilitados", "FEATURE_DISABLED");
+}
 
-    // getSessionCtx (not the raw JWT): an expelled guest / archived trip / revoked
-    // registered token reads as "no session" here.
-    const session = await getSessionCtx();
-    const current = sessionKindOf(session);
-    const sessionUserId = current === "none" ? null : session!.userId;
-
-    // Resolve a GroupInvite first (MEMBER or GUEST).
-    const invite = await prisma.groupInvite.findUnique({
-        where: { tokenHash },
-        include: { group: { select: { id: true, type: true, status: true, expiresAt: true } } },
-    });
-
-    // ── Path 1: GUEST invite ──────────────────────────────────────────────────
-    if (invite && invite.kind === InviteKind.GUEST) {
-        if (!ephemeralSpacesEnabled()) {
-            return json({ error: "Los espacios efímeros no están habilitados", code: "FEATURE_DISABLED" }, 403);
+// auth 'public': every session kind matters here (none / registered / guest) and
+// getSessionCtx (not the raw JWT) makes an expelled guest / archived trip /
+// revoked registered token read as "no session".
+export const POST = route(
+    { auth: "public", errorMessage: "Error al unirse al espacio", logLabel: "Error al canjear invitación:" },
+    async ({ req, ctx: session }) => {
+        let raw: unknown;
+        try {
+            raw = await readJson(req);
+        } catch {
+            throw new HttpError(400, INVALID_BODY);
         }
-        if (asMember) {
-            if (current !== "registered") {
-                return json({ error: "Inicia sesión para unirte con tu cuenta", code: "LOGIN_REQUIRED" }, 401);
+        const { token, name, asMember, replaceSession } = validate(ClaimBody, raw);
+        const tokenHash = hashInviteToken(token);
+
+        const current = sessionKindOf(session);
+        const sessionUserId = current === "none" ? null : session!.userId;
+
+        // Resolve a GroupInvite first (MEMBER or GUEST).
+        const invite = await prisma.groupInvite.findUnique({
+            where: { tokenHash },
+            include: { group: { select: { id: true, type: true, status: true, expiresAt: true } } },
+        });
+
+        // ── Path 1: GUEST invite ──────────────────────────────────────────────────
+        if (invite && invite.kind === InviteKind.GUEST) {
+            if (!ephemeralSpacesEnabled()) throw featureDisabled();
+            if (asMember) {
+                if (current !== "registered") {
+                    throw new HttpError(401, "Inicia sesión para unirte con tu cuenta", "LOGIN_REQUIRED");
+                }
+                return joinAsMember(invite, sessionUserId!);
             }
-            return joinAsMember(invite, sessionUserId!);
+            if (current === "guest" && session?.groupId === invite.group.id) {
+                // Already inside this trip as a guest: never mint a second shadow user.
+                return json({ success: true, guest: true, alreadyMember: true, groupId: invite.group.id });
+            }
+            if (!mayOpenGuestSession(current, replaceSession)) throw sessionExists();
+            return claimAsGuest(invite, name, req);
         }
-        if (current === "guest" && session?.groupId === invite.group.id) {
-            // Already inside this trip as a guest: never mint a second shadow user.
-            return json({ success: true, guest: true, alreadyMember: true, groupId: invite.group.id });
+
+        // ── Path 2: guest recovery token (re-open session on a new device) ────────
+        if (!invite) {
+            const recovery = await resolveGuestRecovery(tokenHash, current, replaceSession);
+            if (recovery) return recovery;
+            throw notFound("Enlace de invitación no encontrado", "NOT_FOUND");
         }
-        if (!mayOpenGuestSession(current, replaceSession)) return sessionExists();
-        return claimAsGuest(invite, body.name, request);
-    }
 
-    // ── Path 2: guest recovery token (re-open session on a new device) ────────
-    if (!invite) {
-        const recovery = await resolveGuestRecovery(tokenHash, current, replaceSession);
-        if (recovery) return recovery;
-        return json({ error: "Enlace de invitación no encontrado", code: "NOT_FOUND" }, 404);
-    }
-
-    // ── Path 3: MEMBER invite (requires a registered session) ─────────────────
-    if (current === "none") {
-        return json({ error: "Inicia sesión para unirte", code: "LOGIN_REQUIRED" }, 401);
-    }
-    if (current === "guest") {
-        return json(
-            { error: "Estás como invitado: crea tu cuenta para unirte a otro espacio", code: "GUEST_NOT_ALLOWED" },
-            403,
-        );
-    }
-    return joinAsMember(invite, sessionUserId!);
-}
+        // ── Path 3: MEMBER invite (requires a registered session) ─────────────────
+        if (current === "none") {
+            throw new HttpError(401, "Inicia sesión para unirte", "LOGIN_REQUIRED");
+        }
+        if (current === "guest") {
+            throw forbidden("Estás como invitado: crea tu cuenta para unirte a otro espacio", "GUEST_NOT_ALLOWED");
+        }
+        return joinAsMember(invite, sessionUserId!);
+    },
+);
 
 /** Invite row shape needed for a claim (from the include above). */
 type ClaimInvite = {
@@ -135,6 +153,12 @@ type ClaimInvite = {
     group: { id: string; type: SpaceType; status: SpaceStatus; expiresAt: Date | null };
 };
 
+/** 400 unless the invite is still redeemable (not revoked / expired / exhausted). */
+function assertInviteValid(invite: ClaimInvite) {
+    const validity = evaluateInvite(invite);
+    if (!validity.ok) throw badRequest(inviteInvalidMessage(validity.reason), validity.reason);
+}
+
 /**
  * Join the invite's space with a REGISTERED account (role MEMBER). Used for
  * MEMBER links (COUPLE/GROUP) and for a GUEST link opened by someone who already
@@ -142,20 +166,18 @@ type ClaimInvite = {
  * and consumes one invite use with a conditional `updateMany`.
  */
 async function joinAsMember(invite: ClaimInvite, userId: string) {
-    const validity = evaluateInvite(invite);
-    if (!validity.ok) {
-        return json({ error: inviteInvalidMessage(validity.reason), code: validity.reason }, 400);
-    }
+    assertInviteValid(invite);
     const groupId = invite.group.id;
     const type = invite.group.type as SpaceType;
     const status = invite.group.status as SpaceStatus;
 
     if (!accountJoinAllowed(invite.kind, type, status)) {
-        return json({ error: "Este espacio no admite unirse mediante este enlace", code: "JOIN_NOT_ALLOWED" }, 400);
+        throw badRequest("Este espacio no admite unirse mediante este enlace", "JOIN_NOT_ALLOWED");
     }
 
+    let result: { alreadyMember: boolean };
     try {
-        const result = await prisma.$transaction(async (tx) => {
+        result = await prisma.$transaction(async (tx) => {
             // Different invites share the same capacity. Lock the space BEFORE
             // reading memberships so MySQL's snapshot sees the previous claim.
             await tx.$queryRaw`SELECT id FROM Couple WHERE id = ${groupId} FOR UPDATE`;
@@ -189,22 +211,26 @@ async function joinAsMember(invite: ClaimInvite, userId: string) {
 
             return { alreadyMember: false };
         });
-
-        (await cookies()).set(ACTIVE_GROUP_COOKIE, groupId, ACTIVE_GROUP_COOKIE_OPTS);
-
-        return json({ success: true, groupId, alreadyMember: result.alreadyMember });
     } catch (e) {
-        if (e instanceof SpacePolicyError) return policyErrorResponse(e);
-        console.error("Error al canjear invitación:", e);
-        return json({ error: "Error al unirse al espacio" }, 500);
+        throw policyError(e); // anything else → 500 "Error al unirse al espacio" (route())
     }
+
+    (await cookies()).set(ACTIVE_GROUP_COOKIE, groupId, ACTIVE_GROUP_COOKIE_OPTS);
+
+    return json({ success: true, groupId, alreadyMember: result.alreadyMember });
 }
 
-function policyErrorResponse(e: SpacePolicyError) {
+/**
+ * The internal SpacePolicyError("SPACE_FULL", "full" | "exhausted") thrown inside
+ * the claim transactions is reworded here (the generic mapping would leak the
+ * internal message). Any other error is returned unchanged.
+ */
+function policyError(e: unknown): unknown {
+    if (!(e instanceof SpacePolicyError)) return e;
     if (e.message === "exhausted") {
-        return json({ error: "Este enlace de invitación ya no admite más usos", code: "EXHAUSTED" }, 400);
+        return badRequest("Este enlace de invitación ya no admite más usos", "EXHAUSTED");
     }
-    return json({ error: "Este espacio ya está completo", code: "SPACE_FULL" }, 400);
+    return badRequest("Este espacio ya está completo", "SPACE_FULL");
 }
 
 /**
@@ -213,31 +239,21 @@ function policyErrorResponse(e: SpacePolicyError) {
  * `updateMany` so concurrent claims can't over-consume it.
  */
 async function claimAsGuest(invite: ClaimInvite, rawName: unknown, request: Request) {
-    if (!ephemeralSpacesEnabled()) {
-        return json({ error: "Los espacios efímeros no están habilitados", code: "FEATURE_DISABLED" }, 403);
-    }
+    if (!ephemeralSpacesEnabled()) throw featureDisabled();
 
     const group = invite.group;
     if (!allowsGuests(group.type) || group.status !== SpaceStatus.ACTIVE) {
-        return json({ error: "Este espacio no admite invitados", code: "GUESTS_NOT_ALLOWED" }, 400);
+        throw badRequest("Este espacio no admite invitados", "GUESTS_NOT_ALLOWED");
     }
 
-    const validity = evaluateInvite(invite);
-    if (!validity.ok) {
-        return json({ error: inviteInvalidMessage(validity.reason), code: validity.reason }, 400);
-    }
+    assertInviteValid(invite);
 
     const name = typeof rawName === "string" ? rawName.trim().slice(0, MAX_GUEST_NAME_LEN) : "";
-    if (!name) {
-        return json({ error: "Escribe tu nombre para entrar" }, 400);
-    }
+    if (!name) throw badRequest("Escribe tu nombre para entrar");
 
     // Rate-limit guest creation per IP so a leaked link can't spawn shadow users
     // en masse (each is a real DB row): 10 new guests / 10 min per IP.
-    const ip = getClientIp(request.headers);
-    if (!rateLimit(`guest-claim:${ip}`, 10, 10 * 60 * 1000).allowed) {
-        return json({ error: "Demasiadas solicitudes. Inténtalo de nuevo más tarde." }, 429);
-    }
+    enforceRateLimit(`guest-claim:${getClientIp(request.headers)}`, 10, 10 * 60 * 1000);
 
     // Personal recovery link (multi-device): shown once, only its hash persisted.
     const recoveryToken = generateInviteToken();
@@ -280,9 +296,11 @@ async function claimAsGuest(invite: ClaimInvite, rawName: unknown, request: Requ
             return user.id;
         });
     } catch (e) {
-        if (e instanceof SpacePolicyError) return policyErrorResponse(e);
+        const mapped = policyError(e);
+        if (mapped instanceof HttpError) throw mapped;
+        // This path keeps its own 500 wording.
         console.error("Error al entrar como invitado:", e);
-        return json({ error: "No se pudo entrar como invitado" }, 500);
+        throw new HttpError(500, "No se pudo entrar como invitado");
     }
 
     // Open the guest session (72h, hard-capped at the space's expiresAt).
@@ -324,9 +342,9 @@ async function resolveGuestRecovery(tokenHash: string, current: SessionKind, rep
         membership.status !== MembershipStatus.ACTIVE ||
         membership.group.status === SpaceStatus.ARCHIVED
     ) {
-        return json({ error: "Este enlace de invitado ya no es válido", code: "GUEST_REVOKED" }, 403);
+        throw forbidden("Este enlace de invitado ya no es válido", "GUEST_REVOKED");
     }
-    if (!mayOpenGuestSession(current, replaceSession)) return sessionExists();
+    if (!mayOpenGuestSession(current, replaceSession)) throw sessionExists();
 
     const sessionToken = await signGuestToken(
         { userId: membership.userId, groupId: membership.group.id, role: MembershipRole.GUEST },

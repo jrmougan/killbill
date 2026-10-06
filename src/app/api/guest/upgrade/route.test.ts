@@ -97,4 +97,44 @@ describe("POST /api/guest/upgrade", () => {
         const res = await POST(req({ email: "a@b.c", password: "password1" }));
         expect(res.status).toBe(409);
     });
+
+    it("keeps the historical 400 messages (invalid / non-object body, missing fields first)", async () => {
+        const raw = (body: string) =>
+            POST(new Request("http://localhost/api/guest/upgrade", { method: "POST", body }));
+        expect(await (await raw("{nope")).json()).toEqual({ error: "Cuerpo inválido" });
+        const nullBody = await raw("null"); // used to be a 500 (TypeError)
+        expect(nullBody.status).toBe(400);
+        expect((await nullBody.json()).error).toBe("Cuerpo inválido");
+
+        // Missing password wins over a malformed email, as before.
+        const missing = await POST(req({ email: "nope" }));
+        expect(missing.status).toBe(400);
+        expect((await missing.json()).error).toBe("Email y contraseña obligatorios");
+
+        const badEmail = await POST(req({ email: "nope", password: "password1" }));
+        const data = await badEmail.json();
+        expect(data.error).toBe("Email inválido");
+        expect(data.issues[0].path).toBe("email");
+
+        const shortPw = await POST(req({ email: "a@b.c", password: 12345678 }));
+        expect((await shortPw.json()).error).toBe("Email y contraseña obligatorios");
+        expect(mockUserUpdate).not.toHaveBeenCalled();
+    });
+
+    it("normalizes the email (trim + lowercase) before saving", async () => {
+        await POST(req({ email: "  Ana@Example.COM ", password: "password1" }));
+        expect(mockUserUpdate.mock.calls[0][0].data.email).toBe("ana@example.com");
+    });
+
+    it("403 (not 401) without any session, and an unexpected failure is a 500", async () => {
+        mockGetSessionCtx.mockResolvedValue(null);
+        expect((await POST(req({ email: "a@b.c", password: "password1" }))).status).toBe(403);
+
+        mockGetSessionCtx.mockResolvedValue({ userId: "guest1", kind: "guest", groupId: "e1" });
+        mockUserUpdate.mockRejectedValue(new Error("db down"));
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        const res = await POST(req({ email: "a@b.c", password: "password1" }));
+        expect(res.status).toBe(500);
+        expect(await res.json()).toEqual({ error: "No se pudo crear la cuenta" });
+    });
 });

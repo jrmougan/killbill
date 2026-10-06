@@ -1,44 +1,52 @@
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
+import { HttpError, readJson, toErrorResponse, validate } from "@/lib/http";
+import { jsonObject } from "@/lib/http/schemas";
 
 const SETUP_DONE = "Ya existen usuarios. El setup ya fue completado.";
+const INVALID_BODY = "Cuerpo de la petición no válido";
 
 class SetupAlreadyDone extends Error {}
+
+const trimmedOrEmpty = z.unknown().optional().transform((v) => (typeof v === "string" ? v.trim() : ""));
+
+/**
+ * {name, email, password}. Same checks and order as always: any field missing
+ * (a non-string name/email counts as missing) → then the password must be a
+ * string of ≥ 8 characters.
+ */
+const SetupBody = jsonObject({ name: trimmedOrEmpty, email: trimmedOrEmpty, password: z.unknown().optional() }, INVALID_BODY)
+    .superRefine(({ name, email, password }, ctx) => {
+        if (!name || !email || !password) {
+            ctx.addIssue({ code: "custom", message: "Se requiere nombre, email y contraseña" });
+        } else if (typeof password !== "string" || password.length < 8) {
+            ctx.addIssue({ code: "custom", path: ["password"], message: "La contraseña debe tener al menos 8 caracteres" });
+        }
+    })
+    .transform(({ name, email, password }) => ({ name, email, password: password as string }));
+
+const setupDone = () => new HttpError(403, SETUP_DONE);
+
+// Public bootstrap routes: no session involved, so they don't go through route()
+// (which would resolve one); errors still map through toErrorResponse.
 
 // POST: Setup first admin user (only works if no users exist)
 export async function POST(request: Request) {
     try {
         // Cheap early exit (no hashing work) once the instance is set up. The
         // authoritative check is repeated inside the transaction below.
-        if ((await prisma.user.count()) > 0) {
-            return NextResponse.json({ error: SETUP_DONE }, { status: 403 });
-        }
+        if ((await prisma.user.count()) > 0) throw setupDone();
 
-        let body: { name?: unknown; email?: unknown; password?: unknown };
+        let raw: unknown;
         try {
-            body = await request.json();
+            raw = await readJson(request);
         } catch {
-            return NextResponse.json({ error: "Cuerpo de la petición no válido" }, { status: 400 });
+            throw new HttpError(400, INVALID_BODY);
         }
-        const name = typeof body?.name === "string" ? body.name.trim() : "";
-        const email = typeof body?.email === "string" ? body.email.trim() : "";
-        const password = body?.password;
-
-        if (!name || !email || !password) {
-            return NextResponse.json(
-                { error: "Se requiere nombre, email y contraseña" },
-                { status: 400 }
-            );
-        }
-
-        if (typeof password !== "string" || password.length < 8) {
-            return NextResponse.json(
-                { error: "La contraseña debe tener al menos 8 caracteres" },
-                { status: 400 }
-            );
-        }
+        const { name, email, password } = validate(SetupBody, raw);
 
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -66,13 +74,9 @@ export async function POST(request: Request) {
                 { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
             );
         } catch (error) {
-            if (error instanceof SetupAlreadyDone) {
-                return NextResponse.json({ error: SETUP_DONE }, { status: 403 });
-            }
+            if (error instanceof SetupAlreadyDone) throw setupDone();
             // Lost a race against a concurrent bootstrap: the winner's row exists.
-            if ((await prisma.user.count()) > 0) {
-                return NextResponse.json({ error: SETUP_DONE }, { status: 403 });
-            }
+            if ((await prisma.user.count()) > 0) throw setupDone();
             throw error;
         }
 
@@ -81,10 +85,8 @@ export async function POST(request: Request) {
             message: "Usuario administrador creado. Ahora puedes iniciar sesión.",
             user: admin,
         });
-
     } catch (error) {
-        console.error("Setup Error:", error);
-        return NextResponse.json({ error: "Error interno" }, { status: 500 });
+        return toErrorResponse(error, { fallbackMessage: "Error interno", logLabel: "Setup Error:" });
     }
 }
 
@@ -95,7 +97,6 @@ export async function GET() {
 
         return NextResponse.json({ setupRequired: userCount === 0 });
     } catch (error) {
-        console.error("Setup check error:", error);
-        return NextResponse.json({ error: "Error interno" }, { status: 500 });
+        return toErrorResponse(error, { fallbackMessage: "Error interno", logLabel: "Setup check error:" });
     }
 }
