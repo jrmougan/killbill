@@ -18,7 +18,7 @@ import { parseSettlementAmount, SETTLEMENT_METHODS } from "@/lib/settlement-rule
 const METHOD_INVALID = "Método de pago no válido";
 
 /** An amount in euros (JSON number only) → integer cents in [1, MAX_SETTLEMENT_CENTS]. */
-const settlementAmount = z.unknown().transform((v, ctx): number => {
+const settlementAmount = z.unknown().optional().transform((v, ctx): number => {
     const parsed = parseSettlementAmount(v);
     if (!parsed.ok) {
         ctx.addIssue({ code: "custom", message: parsed.error });
