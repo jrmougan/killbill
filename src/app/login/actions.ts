@@ -32,6 +32,12 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
         return { error: 'Email y contraseña obligatorios' };
     }
 
+    // Per-account limit as well (10 attempts / 15 minutes per email): a password
+    // guess spread across many IPs still hits the same bucket.
+    if (!rateLimit(`login-account:${email.toLowerCase()}`, 10, 15 * 60 * 1000).allowed) {
+        return { error: 'Demasiados intentos. Inténtalo de nuevo más tarde.' };
+    }
+
     let firstRun = false;
     try {
         const user = await prisma.user.findUnique({ where: { email } });

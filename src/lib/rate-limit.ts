@@ -12,6 +12,32 @@ type WindowEntry = {
 
 const store = new Map<string, WindowEntry>();
 
+/**
+ * Bound on live buckets. Keys are attacker-influenced (IPs, typed emails), so
+ * without a cap a flood of distinct keys would grow the Map forever. Above the
+ * cap expired buckets are swept first; if that is not enough, the oldest
+ * buckets (Map insertion order) are evicted.
+ */
+export const MAX_BUCKETS = 10_000;
+/** Expired buckets are also swept at most this often, on access. */
+const SWEEP_INTERVAL_MS = 60_000;
+let lastSweep = 0;
+
+function sweep(now: number) {
+    lastSweep = now;
+    for (const [key, entry] of store) {
+        if (now >= entry.resetAt) store.delete(key);
+    }
+    if (store.size >= MAX_BUCKETS) {
+        // Still full of live buckets: drop the oldest to make room.
+        let excess = store.size - MAX_BUCKETS + 1;
+        for (const key of store.keys()) {
+            if (excess-- <= 0) break;
+            store.delete(key);
+        }
+    }
+}
+
 export type RateLimitResult = {
     allowed: boolean;
     retryAfterSeconds: number;
@@ -34,6 +60,10 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
     }
 
     const now = Date.now();
+    if (now - lastSweep >= SWEEP_INTERVAL_MS || store.size >= MAX_BUCKETS) {
+        sweep(now);
+    }
+
     const entry = store.get(key);
 
     if (!entry || now >= entry.resetAt) {
@@ -52,23 +82,46 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
     return { allowed: true, retryAfterSeconds: 0 };
 }
 
+/** Test hook: number of live buckets. */
+export function _rateLimitBucketCount(): number {
+    return store.size;
+}
+
+/** Test hook: forget every bucket. */
+export function _resetRateLimitStore(): void {
+    store.clear();
+    lastSweep = 0;
+}
+
 /**
- * Derives a best-effort client identifier from proxy headers, falling back to
- * a constant when none are present (e.g. local dev without a proxy).
+ * Derives the client IP from headers set by the TRUSTED reverse proxy, falling
+ * back to a constant when none are present (e.g. local dev without a proxy).
+ *
+ * Deployment assumption (Coolify + Traefik): Traefik is the ONLY ingress — the
+ * app container's port is not published to the internet — and its entrypoints
+ * do not trust forwarded headers from arbitrary clients (no
+ * `forwardedHeaders.insecure`). Under that setup Traefik:
+ *  - overwrites `X-Real-Ip` with the address of the peer it accepted the TCP
+ *    connection from, and
+ *  - APPENDS that same address to whatever `X-Forwarded-For` the client sent.
+ *
+ * So `X-Real-Ip` is authoritative, and the LAST `X-Forwarded-For` entry is the
+ * one our proxy wrote. The FIRST entry is client-controlled and must never be
+ * used as a rate-limit key: rotating it would give every request a fresh bucket.
  *
  * Accepts any Headers-like object (`Request.headers` in route handlers, or the
  * result of `await headers()` in Server Actions/Components).
  */
 export function getClientIp(headers: { get(name: string): string | null }): string {
-    const forwarded = headers.get('x-forwarded-for');
-    if (forwarded) {
-        // x-forwarded-for may be a comma-separated list; the first is the client.
-        return forwarded.split(',')[0].trim();
+    const realIp = headers.get('x-real-ip')?.trim();
+    if (realIp) {
+        return realIp;
     }
 
-    const realIp = headers.get('x-real-ip');
-    if (realIp) {
-        return realIp.trim();
+    const forwarded = headers.get('x-forwarded-for');
+    if (forwarded) {
+        const hops = forwarded.split(',').map((h) => h.trim()).filter(Boolean);
+        if (hops.length > 0) return hops[hops.length - 1];
     }
 
     return 'unknown';
