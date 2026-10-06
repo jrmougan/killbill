@@ -6,6 +6,8 @@ import { RECEIPT_LINES_SELECT, linesForSplit } from "@/lib/receipt-read";
 import { addInterval } from "@/lib/recurring";
 import { getGroupMembers, getActiveGroup } from "@/lib/membership";
 import { postExpenseLedger } from "@/lib/ledger";
+import { assertRosterUnchanged, assertWritableUnderLock, withSpaceLock } from "@/lib/expense-tx";
+import { SettlementError } from "@/lib/settlement-rules";
 
 /**
  * Promote a personal expense to a shared (couple) expense.
@@ -74,8 +76,16 @@ export async function POST(
             nextRunReset = addInterval(new Date(), expense.series.interval);
         }
 
-        // Flip to shared, attach to the couple, and create the splits atomically.
-        await prisma.$transaction(async (tx) => {
+        // Flip to shared, attach to the couple, and create the splits atomically —
+        // under the target space's row lock (lock order G-04), re-checking there the
+        // space status, the roster the splits were computed on, and that no
+        // concurrent share already promoted this expense (it would post twice).
+        await withSpaceLock(groupId, async (tx, status) => {
+            assertWritableUnderLock(status);
+            await assertRosterUnchanged(tx, groupId, coupleMembers.map((m) => m.id));
+            const current = await tx.expense.findUnique({ where: { id }, select: { visibility: true } });
+            if (!current) throw new SettlementError(404, 'NOT_FOUND', 'Gasto no encontrado');
+            if (current.visibility === 'SHARED') throw new SettlementError(409, 'ALREADY_SHARED', 'El gasto ya es compartido');
             await tx.split.deleteMany({ where: { expenseId: id } });
             const updated = await tx.expense.update({
                 where: { id },
@@ -122,6 +132,7 @@ export async function POST(
 
         return NextResponse.json({ success: true });
     } catch (error) {
+        if (error instanceof SettlementError) return NextResponse.json(error.toJSON(), { status: error.status });
         console.error("Error sharing expense:", error);
         return NextResponse.json({ error: "Error al compartir el gasto" }, { status: 500 });
     }

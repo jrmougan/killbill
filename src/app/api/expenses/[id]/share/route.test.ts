@@ -11,6 +11,10 @@ const mockTxExpenseUpdate = vi.fn();
 const mockTxSplitDeleteMany = vi.fn();
 const mockTxSeriesUpdate = vi.fn();
 const mockTransaction = vi.fn();
+const mockTxExpenseFindUnique = vi.fn();
+const mockLockedStatus = vi.fn();
+const mockLockedRoster = vi.fn();
+const mockWithSpaceLock = vi.fn();
 
 vi.mock('@/lib/auth', () => ({ getSession: () => mockGetSession() }));
 // Members come from the Membership layer; ledger posting is covered by
@@ -23,6 +27,18 @@ vi.mock('@/lib/membership', () => ({
     MAX_GROUP_MEMBERS: 20,
 }));
 vi.mock('@/lib/ledger', () => ({ postExpenseLedger: vi.fn() }));
+// Emulates the space row lock: the callback gets the tx double and the status
+// read under the lock (assertWritableUnderLock / assertRosterUnchanged are real).
+vi.mock('@/lib/expense-tx', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@/lib/expense-tx')>();
+    return {
+        ...actual,
+        withSpaceLock: (groupId: string, fn: (t: unknown, status: string) => unknown) => {
+            mockWithSpaceLock(groupId);
+            return mockTransaction((tx: unknown) => fn(tx, mockLockedStatus()));
+        },
+    };
+});
 vi.mock('@/lib/db', () => ({
     prisma: {
         user: {
@@ -33,7 +49,6 @@ vi.mock('@/lib/db', () => ({
         // requireSpaceAccess (real authz module) authorizes against the target group.
         couple: { findUnique: (...a: unknown[]) => mockCoupleFindUnique(...a) },
         membership: { findUnique: (...a: unknown[]) => mockMembershipFindUnique(...a) },
-        $transaction: (cb: (tx: unknown) => unknown) => mockTransaction(cb),
     },
 }));
 
@@ -49,7 +64,10 @@ function personal(overrides = {}) {
 
 describe('POST /api/expenses/[id]/share', () => {
     beforeEach(() => {
-        [mockGetSession, mockGetPrimaryGroup, mockUserFindUnique, mockUserFindMany, mockExpenseFindUnique, mockCoupleFindUnique, mockMembershipFindUnique, mockTxExpenseUpdate, mockTxSplitDeleteMany, mockTxSeriesUpdate, mockTransaction].forEach((m) => m.mockReset());
+        [mockGetSession, mockGetPrimaryGroup, mockUserFindUnique, mockUserFindMany, mockExpenseFindUnique, mockCoupleFindUnique, mockMembershipFindUnique, mockTxExpenseUpdate, mockTxSplitDeleteMany, mockTxSeriesUpdate, mockTransaction, mockTxExpenseFindUnique, mockLockedStatus, mockLockedRoster, mockWithSpaceLock].forEach((m) => m.mockReset());
+        mockLockedStatus.mockReturnValue('ACTIVE');
+        mockLockedRoster.mockReturnValue(['u1', 'u2']);
+        mockTxExpenseFindUnique.mockResolvedValue({ visibility: 'PERSONAL' });
         // requireSpaceAccess: every space is ACTIVE and the caller is an ACTIVE member.
         mockCoupleFindUnique.mockImplementation(async ({ where: { id } }: { where: { id: string } }) => ({ id, status: 'ACTIVE' }));
         mockMembershipFindUnique.mockImplementation(async ({ where: { groupId_userId } }: { where: { groupId_userId: { groupId: string; userId: string } } }) => ({ groupId: groupId_userId.groupId, userId: groupId_userId.userId, role: 'MEMBER', status: 'ACTIVE' }));
@@ -57,7 +75,11 @@ describe('POST /api/expenses/[id]/share', () => {
         // exercised when the shared source is the recurring TEMPLATE (Phase 5).
         mockTransaction.mockImplementation(async (cb) => cb({
             split: { deleteMany: (...a: unknown[]) => mockTxSplitDeleteMany(...a) },
-            expense: { update: (...a: unknown[]) => mockTxExpenseUpdate(...a) },
+            expense: {
+                update: (...a: unknown[]) => mockTxExpenseUpdate(...a),
+                findUnique: (...a: unknown[]) => mockTxExpenseFindUnique(...a),
+            },
+            membership: { findMany: async () => (mockLockedRoster() as string[]).map((userId) => ({ userId })) },
             recurringSeries: { update: (...a: unknown[]) => mockTxSeriesUpdate(...a) },
         }));
         mockTxExpenseUpdate.mockResolvedValue({});
@@ -154,5 +176,43 @@ describe('POST /api/expenses/[id]/share', () => {
 
         expect((await POST(req(), { params })).status).toBe(200);
         expect(mockTxSeriesUpdate).not.toHaveBeenCalled();
+    });
+
+    describe('under the target space lock', () => {
+        beforeEach(() => {
+            mockGetSession.mockResolvedValue({ userId: 'u1' });
+            mockGetPrimaryGroup.mockResolvedValue('c1');
+            mockExpenseFindUnique.mockResolvedValue(personal());
+        });
+
+        it('takes the lock of the TARGET space', async () => {
+            expect((await POST(req(), { params })).status).toBe(200);
+            expect(mockWithSpaceLock).toHaveBeenCalledWith('c1');
+        });
+
+        it('409 SPACE_NOT_WRITABLE when the space went SETTLING before the lock', async () => {
+            mockLockedStatus.mockReturnValue('SETTLING');
+            const res = await POST(req(), { params });
+            expect(res.status).toBe(409);
+            expect((await res.json()).code).toBe('SPACE_NOT_WRITABLE');
+            expect(mockTxExpenseUpdate).not.toHaveBeenCalled();
+        });
+
+        it('409 MEMBERS_CHANGED when the roster changed after the splits were computed', async () => {
+            mockLockedRoster.mockReturnValue(['u1', 'u2', 'u3']);
+            const res = await POST(req(), { params });
+            expect(res.status).toBe(409);
+            expect((await res.json()).code).toBe('MEMBERS_CHANGED');
+            expect(mockTxExpenseUpdate).not.toHaveBeenCalled();
+        });
+
+        it('409 ALREADY_SHARED when a concurrent share won the lock (no double ledger post)', async () => {
+            mockTxExpenseFindUnique.mockResolvedValue({ visibility: 'SHARED' });
+            const res = await POST(req(), { params });
+            expect(res.status).toBe(409);
+            expect((await res.json()).code).toBe('ALREADY_SHARED');
+            expect(mockTxSplitDeleteMany).not.toHaveBeenCalled();
+            expect(mockTxExpenseUpdate).not.toHaveBeenCalled();
+        });
     });
 });
