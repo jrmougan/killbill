@@ -71,12 +71,17 @@ WORKDIR /prisma-tools
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
-# Instalamos dependencias de Prisma (CLI y configuración) en las versiones exactas
-# del package-lock.json: sin fijarlas, un rebuild instalaba Prisma 8 (sin `migrate`)
-# y el contenedor no arrancaba.
+# Instalamos SOLO el CLI de Prisma en la versión exacta del package-lock.json: sin
+# fijarla, un rebuild instalaba Prisma 8 (sin `migrate`) y el contenedor no
+# arrancaba. `prisma` ya trae su driver (mysql2) y el cargador de prisma.config.ts
+# (c12/jiti); el .env lo lee process.loadEnvFile() (Node 24), así que no hacen
+# falta mysql2, dotenv, tsx ni @prisma/client aquí.
 COPY --from=builder /app/package-lock.json /tmp/package-lock.json
-RUN npm init -y && npm install --save-exact $(node -p "const l = require('/tmp/package-lock.json').packages; ['prisma', 'tsx', '@prisma/client', 'mysql2'].map((n) => n + '@' + l['node_modules/' + n].version).join(' ')") \
-    && rm /tmp/package-lock.json
+RUN npm init -y >/dev/null \
+    && npm install --save-exact --no-audit --no-fund \
+       "prisma@$(node -p "require('/tmp/package-lock.json').packages['node_modules/prisma'].version")" \
+    && rm /tmp/package-lock.json \
+    && npm cache clean --force
 
 # Volvemos al directorio de la app
 WORKDIR /app
@@ -90,9 +95,16 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# Healthcheck sin curl (no viene en alpine): fetch nativo de Node contra
+# /api/health, que hace SELECT 1. El start-period cubre `migrate deploy`.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+
 # Arranque: aplicar migraciones pendientes (desde /prisma-tools, que trae el CLI
 # de Prisma + las migraciones) y SOLO si tienen éxito, ejecutar el servidor. Si
 # `migrate deploy` falla, el proceso muere y el contenedor no arranca — Coolify
 # mantiene el contenedor anterior vivo (sin caída) hasta que se corrija. Un no-op
-# rápido cuando no hay migraciones pendientes.
-CMD ["sh", "-c", "cd /prisma-tools && ./node_modules/.bin/prisma migrate deploy && cd /app && exec node server.js"]
+# rápido cuando no hay migraciones pendientes. `set -e` garantiza que
+# un fallo de migración termina el contenedor con código != 0 (fail fast).
+# Recomendado: mover las migraciones a un paso previo de Coolify (ver README).
+CMD ["sh", "-c", "set -e; cd /prisma-tools; ./node_modules/.bin/prisma migrate deploy; cd /app; exec node server.js"]
