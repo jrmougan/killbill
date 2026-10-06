@@ -63,7 +63,7 @@ export async function POST(request: Request) {
 
     const hashed = await bcrypt.hash(password, 10);
 
-    let updated: { id: string; email: string | null; isAdmin: boolean };
+    let updated: { id: string; email: string | null; isAdmin: boolean; tokenVersion: number };
     try {
         updated = await prisma.$transaction(async (tx) => {
             // Guard against a double-upgrade / non-guest row (idempotency + safety).
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
             const u = await tx.user.update({
                 where: { id: ctx.userId },
                 data: { email, password: hashed, isGuest: false, upgradedAt: new Date() },
-                select: { id: true, email: true, isAdmin: true },
+                select: { id: true, email: true, isAdmin: true, tokenVersion: true },
             });
 
             // Promote the GUEST membership to a full MEMBER in its space.
@@ -105,7 +105,12 @@ export async function POST(request: Request) {
     }
 
     // Swap the 72h guest session for a normal 7d one.
-    const token = await signToken({ userId: updated.id, email: updated.email, isAdmin: updated.isAdmin });
+    const token = await signToken({
+        userId: updated.id,
+        email: updated.email,
+        isAdmin: updated.isAdmin,
+        tv: updated.tokenVersion,
+    });
     const cookieStore = await cookies();
     cookieStore.set("session_token", token, SESSION_COOKIE);
     cookieStore.delete("user_id");

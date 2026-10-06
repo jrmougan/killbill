@@ -1,24 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockGetSession = vi.fn();
+const mockGetSessionCtx = vi.fn();
 const mockSignMcpToken = vi.fn();
+const mockFindUser = vi.fn();
 const originalTtl = process.env.MCP_TOKEN_TTL_DAYS;
 
-vi.mock("@/lib/auth", () => ({ getSession: () => mockGetSession() }));
+vi.mock("@/lib/authz", () => ({ getSessionCtx: () => mockGetSessionCtx() }));
+vi.mock("@/lib/db", () => ({ prisma: { user: { findUnique: (...a: unknown[]) => mockFindUser(...a) } } }));
 vi.mock("@/lib/jwt", () => ({ signMcpToken: (...args: unknown[]) => mockSignMcpToken(...args) }));
 
 import { POST } from "./route";
 
 describe("POST /api/me/mcp-token", () => {
   beforeEach(() => {
-    mockGetSession.mockReset();
+    mockGetSessionCtx.mockReset();
     mockSignMcpToken.mockReset();
+    mockFindUser.mockReset();
     delete process.env.MCP_TOKEN_TTL_DAYS;
-    mockGetSession.mockResolvedValue({
-      userId: "user-1",
-      email: "user@example.com",
-      isAdmin: false,
-    });
+    mockGetSessionCtx.mockResolvedValue({ userId: "user-1", isAdmin: false, tokenVersion: 2 });
+    mockFindUser.mockResolvedValue({ email: "user@example.com", isAdmin: false, tokenVersion: 2 });
     mockSignMcpToken.mockResolvedValue("mcp.jwt.token");
   });
 
@@ -28,7 +28,7 @@ describe("POST /api/me/mcp-token", () => {
   });
 
   it("returns 401 without a session", async () => {
-    mockGetSession.mockResolvedValue(null);
+    mockGetSessionCtx.mockResolvedValue(null);
 
     const response = await POST();
 
@@ -37,7 +37,16 @@ describe("POST /api/me/mcp-token", () => {
   });
 
   it("returns 403 for a guest session", async () => {
-    mockGetSession.mockResolvedValue({ userId: "guest-1", kind: "guest" });
+    mockGetSessionCtx.mockResolvedValue({ userId: "guest-1", kind: "guest" });
+
+    const response = await POST();
+
+    expect(response.status).toBe(403);
+    expect(mockSignMcpToken).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when the caller is itself an MCP token", async () => {
+    mockGetSessionCtx.mockResolvedValue({ userId: "user-1", kind: "mcp" });
 
     const response = await POST();
 
@@ -54,7 +63,7 @@ describe("POST /api/me/mcp-token", () => {
     expect(body.token).toBe("mcp.jwt.token");
     expect(body.expiresInDays).toBe(90);
     expect(mockSignMcpToken).toHaveBeenCalledWith(
-      { userId: "user-1", email: "user@example.com", isAdmin: false },
+      { userId: "user-1", email: "user@example.com", isAdmin: false, tv: 2 },
       90,
     );
   });

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
+import { getSessionCtx } from '@/lib/authz';
 import { getGroupMembers } from '@/lib/membership';
 
 async function getExpenseAndVerifyMembership(expenseId: string, userId: string) {
@@ -19,9 +19,11 @@ export async function POST(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id: expenseId } = await params;
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    const userId = session.userId as string;
+    // getSessionCtx revalidates guest sessions (expelled guest / archived trip)
+    // and the tokenVersion of registered ones.
+    const ctx = await getSessionCtx();
+    if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    const userId = ctx.userId;
 
     const { expense, authorized } = await getExpenseAndVerifyMembership(expenseId, userId);
     if (!expense) return NextResponse.json({ error: 'Gasto no encontrado' }, { status: 404 });
@@ -57,9 +59,11 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id: expenseId } = await params;
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    const userId = session.userId as string;
+    // getSessionCtx revalidates guest sessions (expelled guest / archived trip)
+    // and the tokenVersion of registered ones.
+    const ctx = await getSessionCtx();
+    if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    const userId = ctx.userId;
 
     const { expense, authorized } = await getExpenseAndVerifyMembership(expenseId, userId);
     if (!expense) return NextResponse.json({ error: 'Gasto no encontrado' }, { status: 404 });

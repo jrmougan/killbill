@@ -10,7 +10,11 @@ vi.mock("next/headers", () => ({ cookies: async () => ({ set: mockCookieSet, get
 vi.mock("@/lib/db", () => {
     const tx = {
         couple: { create: (...a: unknown[]) => mockCoupleCreate(...a) },
-        membership: { create: (...a: unknown[]) => mockMembershipCreate(...a) },
+        membership: {
+            create: (...a: unknown[]) => mockMembershipCreate(...a),
+            // getSessionCtx revalidates guest sessions live.
+            findUnique: async () => ({ role: "GUEST", status: "ACTIVE", group: { status: "ACTIVE" } }),
+        },
     };
     return { prisma: { ...tx, $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) } };
 });

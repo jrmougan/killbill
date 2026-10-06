@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { getSessionCtx } from "@/lib/authz";
 import { ACTIVE_GROUP_COOKIE } from "@/lib/membership";
 import { normalizeSpaceName, parseTripEndDate, SpacePolicyError } from "@/lib/space-policy";
 import { SpaceType } from "@/generated/prisma/enums";
@@ -18,9 +18,9 @@ import { SpaceType } from "@/generated/prisma/enums";
 const CREATABLE_TYPES: SpaceType[] = [SpaceType.COUPLE, SpaceType.GROUP, SpaceType.EPHEMERAL];
 
 export async function GET() {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const userId = session.userId as string;
+    const ctx = await getSessionCtx();
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const userId = ctx.userId;
 
     // All spaces where the caller is an ACTIVE member, in a stable order, with
     // type/status so the UI can section them (active vs Archived). ACTIVE-only
@@ -61,13 +61,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-    const session = await getSession();
-    if (!session?.userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const ctx = await getSessionCtx();
+    if (!ctx) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     // A guest session is caged to its EPHEMERAL space: it can never own a space.
-    if (session.kind === "guest") {
+    if (ctx.kind === "guest") {
         return NextResponse.json({ error: "Acción no permitida para invitados" }, { status: 403 });
     }
-    const userId = session.userId as string;
+    const userId = ctx.userId;
 
     let body: { name?: unknown; type?: unknown; expiresAt?: unknown };
     try {

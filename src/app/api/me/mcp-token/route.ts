@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSessionCtx } from "@/lib/authz";
+import { prisma } from "@/lib/db";
 import { signMcpToken } from "@/lib/jwt";
 
 /**
@@ -8,7 +9,8 @@ import { signMcpToken } from "@/lib/jwt";
  * The caller must be authenticated via the normal browser session cookie.
  * The returned token carries `kind: 'mcp'` and a 90-day expiry (configurable
  * via MCP_TOKEN_TTL_DAYS). It is used as `Authorization: Bearer <token>` when
- * connecting to POST /api/mcp.
+ * connecting to POST /api/mcp. It embeds the user's current tokenVersion, so
+ * POST /api/me/sessions/revoke invalidates it together with every session.
  */
 
 const DEFAULT_TTL_DAYS = 90;
@@ -22,22 +24,35 @@ function getMcpTokenTtlDays(value: string | undefined): number {
 }
 
 export async function POST() {
-  const session = await getSession();
-  if (!session?.userId) {
+  const ctx = await getSessionCtx();
+  if (!ctx) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
-  if (session.kind !== undefined) {
+  // Only a regular browser session may mint MCP tokens (not a guest, and not an
+  // MCP token forwarded as cookie — a token must not be able to extend itself).
+  if (ctx.kind !== undefined) {
     return NextResponse.json({ error: "Acción no permitida con este tipo de sesión" }, { status: 403 });
   }
 
   const ttlDays = getMcpTokenTtlDays(process.env.MCP_TOKEN_TTL_DAYS);
 
   try {
+    // Fresh identity + tokenVersion from the DB (getSessionCtx already proved the
+    // session's tv is current; reading it here keeps the claims authoritative).
+    const user = await prisma.user.findUnique({
+      where: { id: ctx.userId },
+      select: { email: true, isAdmin: true, tokenVersion: true },
+    });
+    if (!user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
     const token = await signMcpToken(
       {
-        userId: session.userId,
-        email: session.email,
-        isAdmin: session.isAdmin,
+        userId: ctx.userId,
+        email: user.email,
+        isAdmin: user.isAdmin,
+        tv: user.tokenVersion,
       },
       ttlDays,
     );

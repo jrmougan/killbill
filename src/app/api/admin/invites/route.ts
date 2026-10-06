@@ -1,25 +1,20 @@
 import { prisma } from "@/lib/db";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { verifyToken } from "@/lib/auth";
+import { getSessionCtx } from "@/lib/authz";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 async function checkAdmin() {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("session_token")?.value;
+    // getSessionCtx verifies the JWT AND its tokenVersion (revoked tokens fail).
+    // Only a regular browser session administers: not a guest, not an MCP token.
+    const ctx = await getSessionCtx();
+    if (!ctx || ctx.kind !== undefined) return null;
 
-    if (!token) return null;
-
-    const payload = await verifyToken(token);
-    if (!payload || !payload.userId) return null;
-
-    // Optional: Verify against DB if we want strictly 100% fresh state
-    // For admin, it's safer to check DB field.
+    // isAdmin is read from the DB, never trusted from the JWT claim.
     const user = await prisma.user.findUnique({
-        where: { id: payload.userId as string },
+        where: { id: ctx.userId },
         select: { id: true, email: true, isAdmin: true }
     });
 

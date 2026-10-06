@@ -157,6 +157,10 @@ model User {
   isAdmin   Boolean  @default(false)
   createdAt DateTime @default(now())
 
+  // Revocación de tokens: el claim `tv` de cada JWT de sesión/MCP debe coincidir;
+  // incrementarlo invalida todos los tokens emitidos antes (sin `tv` ⇒ 0).
+  tokenVersion Int @default(0)
+
   // Fase 0: identidad de invitado sombra (EPHEMERAL). isGuest=true → email/
   // password NULL; el upgrade a cuenta real es un UPDATE de la misma fila.
   isGuest    Boolean   @default(false)

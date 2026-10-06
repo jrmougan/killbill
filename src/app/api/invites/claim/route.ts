@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { getSession, signGuestToken } from "@/lib/auth";
+import { signGuestToken } from "@/lib/auth";
+import { getSessionCtx } from "@/lib/authz";
 import { ACTIVE_GROUP_COOKIE } from "@/lib/membership";
 import { SPACE_CAPS, allowsGuests, SpacePolicyError } from "@/lib/space-policy";
 import { evaluateInvite, generateInviteToken, hashInviteToken, inviteInvalidMessage } from "@/lib/invite-token";
@@ -72,9 +73,11 @@ export async function POST(request: Request) {
     const asMember = body.asMember === true;
     const replaceSession = body.replaceSession === true;
 
-    const session = await getSession();
+    // getSessionCtx (not the raw JWT): an expelled guest / archived trip / revoked
+    // registered token reads as "no session" here.
+    const session = await getSessionCtx();
     const current = sessionKindOf(session);
-    const sessionUserId = current === "none" ? null : (session!.userId as string);
+    const sessionUserId = current === "none" ? null : session!.userId;
 
     // Resolve a GroupInvite first (MEMBER or GUEST).
     const invite = await prisma.groupInvite.findUnique({

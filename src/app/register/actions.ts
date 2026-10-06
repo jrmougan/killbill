@@ -179,6 +179,7 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
             userId: user.id,
             email: user.email,
             isAdmin: user.isAdmin,
+            tv: user.tokenVersion,
         });
 
         const cookieStore = await cookies();
