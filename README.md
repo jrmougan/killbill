@@ -47,7 +47,8 @@ de `.env.example` que necesites; `setup` nunca lo sobrescribe. Mantén
 | --- | --- |
 | `mise run setup` | Preparar entorno, dependencias y cliente Prisma |
 | `mise run dev` | Arrancar Next.js en el puerto de `.env` |
-| `mise run check` | Prisma generate, oxlint y tests unitarios sin watch |
+| `mise run check` | Prisma generate, oxlint, typecheck y tests unitarios sin watch |
+| `mise run typecheck` | `next typegen` + `tsc` de la app y de `e2e/` |
 | `mise run test` | Tests unitarios sin watch |
 | `mise run lint` | Lint con oxlint |
 | `mise run build` | Generar Prisma y compilar producción |
@@ -62,7 +63,8 @@ Antes del primer e2e: `mise exec -- npx playwright install chromium --with-deps`
 Los fixtures e2e **borran los datos de la base configurada**: ejecútalos en un
 checkout de pruebas con su propia `.env` y base local. Detén su servidor dev;
 Playwright arranca uno con las rutas de prueba habilitadas y usa el mismo `PORT`.
-CI mantiene su base MariaDB 10.11 efímera y usa los comandos mise del repositorio.
+CI levanta una MySQL 8.0 efímera con el mismo `compose.dev.yaml` (igual que
+producción) y usa los comandos mise del repositorio.
 Las variables que CI exporta tienen prioridad sobre las del archivo `.env`.
 
 Playwright separa los contratos API (`api`, una ejecución) de los flujos de interfaz
@@ -108,8 +110,22 @@ sin depender de la activación de Node en un shell interactivo.
 `docker-compose.yml` describe el despliegue con una imagen publicada y redes
 externas de MySQL/Traefik; **no crea una base de datos**.
 
-GitHub Actions ejecuta unit tests/lint y e2e antes de publicar la imagen en GHCR
-y solicitar el despliegue a Coolify. El Dockerfile usa la misma versión de Node
+GitHub Actions ejecuta unit tests, lint, typecheck, `npm audit` (bloquea con
+avisos críticos en dependencias de runtime) y e2e antes de publicar la imagen en
+GHCR (`latest` + SHA del commit) y solicitar el despliegue a Coolify. El Dockerfile usa la misma versión de Node
 que `mise.toml`; al actualizarla, cambia ambos y ejecuta las comprobaciones.
-El contenedor aplica `prisma migrate deploy` antes de arrancar el servidor.
-Los secretos y la conexión de producción se configuran en Coolify.
+El contenedor aplica `prisma migrate deploy` antes de arrancar el servidor; si
+la migración falla, el contenedor termina con error y no llega a servir.
+Los secretos y la conexión de producción se configuran en Coolify. La base de
+producción es MySQL 8.0 (el driver se llama `@prisma/adapter-mariadb`, pero el
+servidor es MySQL).
+
+`GET /api/health` es público y sin caché: responde 200 `{"status":"ok"}` tras un
+`SELECT 1` y 503 si la base no responde. La imagen trae un `HEALTHCHECK` que lo
+usa; también sirve como healthcheck de Coolify/Traefik.
+
+**Recomendado (operaciones):** separar las migraciones del arranque. Configura en
+Coolify un paso previo al despliegue (o un job one-shot con la misma imagen) que
+ejecute `cd /prisma-tools && ./node_modules/.bin/prisma migrate deploy`, y apunta
+el healthcheck de Coolify a `/api/health`. Mientras no exista ese paso, el `CMD`
+de la imagen sigue migrando al arrancar.
