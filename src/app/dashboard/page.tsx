@@ -80,13 +80,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const personalActive = !isGuest && (!activeGroupId || scope === "personal");
 
     // Lazily materialize due recurring expenses so balances/totals include them.
-    // A failure here must never block the render.
-    try {
-        if (activeGroupId) await materializeDueRecurringExpenses(activeGroupId);
-        if (!isGuest) await materializeDueRecurringExpensesForOwner(userId);
-    } catch (err) {
-        console.error("Failed to materialize recurring expenses", err);
-    }
+    // A failure here must never block the render. Idempotent and race-safe (each
+    // occurrence is claimed under the space lock), so it coexists with the
+    // scheduled POST /api/cron/recurring; each scope fails independently.
+    const materialize = async (run: () => Promise<number>) => {
+        try {
+            await run();
+        } catch (err) {
+            console.error("Failed to materialize recurring expenses", err);
+        }
+    };
+    if (activeGroupId) await materialize(() => materializeDueRecurringExpenses(activeGroupId));
+    if (!isGuest) await materialize(() => materializeDueRecurringExpensesForOwner(userId));
 
     const [summaries, personalMonthCents] = await Promise.all([
         getSpaceSummaries(userId, month),
