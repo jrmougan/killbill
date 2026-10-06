@@ -31,6 +31,8 @@ interface ListsHubProps {
  * when the stamp moved. Only while visible.
  */
 const POLL_MS = 6000;
+/** How long an unconfirmed optimistic toggle survives stale server renders. */
+const PENDING_TOGGLE_MS = 10_000;
 
 const AISLE_ORDER = new Map(AISLES.map((a) => [a.key, a.sortOrder]));
 
@@ -83,10 +85,26 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
     const archived = !!selected?.groupId && groupStatus === "ARCHIVED";
     const settling = !!selected?.groupId && groupStatus === "SETTLING";
 
+    // Optimistic toggles not yet reflected by a server render. A refresh started
+    // BEFORE the PATCH (mount / focus / poll) can land after the tap with the old
+    // `checked`; without this it would silently undo the tick on screen.
+    const pendingToggles = useRef(new Map<string, { checked: boolean; at: number }>());
+
     // Server re-renders (poll / focus / navigation to another list) are the
-    // source of truth: resync the local optimistic copy.
+    // source of truth: resync the local optimistic copy, keeping in-flight
+    // toggles until a render confirms them (or they go stale).
     useEffect(() => {
-        setItems(selected?.items ?? []);
+        const pending = pendingToggles.current;
+        const now = Date.now();
+        setItems((selected?.items ?? []).map((i) => {
+            const p = pending.get(i.id);
+            if (!p) return i;
+            if (p.checked === i.checked || now - p.at > PENDING_TOGGLE_MS) {
+                pending.delete(i.id);
+                return i;
+            }
+            return { ...i, checked: p.checked };
+        }));
     }, [selected]);
 
     const apiBase = selected
@@ -207,6 +225,11 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
             const checked = !item.checked;
             const set = (value: boolean) =>
                 setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, checked: value } : i)));
+            const revert = () => {
+                pendingToggles.current.delete(item.id);
+                set(!checked);
+            };
+            pendingToggles.current.set(item.id, { checked, at: Date.now() });
             set(checked);
             try {
                 const res = await fetch(`${apiBase}/items/${item.id}`, {
@@ -215,13 +238,13 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                     body: JSON.stringify({ checked }),
                 });
                 if (!res.ok) {
-                    set(!checked);
+                    revert();
                     showToast(await errorOf(res, "No se pudo actualizar el producto"));
                 } else {
                     router.refresh();
                 }
             } catch {
-                set(!checked);
+                revert();
                 showToast("No se pudo actualizar el producto");
             }
         },
