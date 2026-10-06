@@ -403,4 +403,64 @@ describe("POST /api/invites/claim — GUEST", () => {
         expect(mockCookieSet).not.toHaveBeenCalled();
         expect((await POST(req({ token: "recovery-token", replaceSession: true }))).status).toBe(200);
     });
+
+    it("429 with Retry-After when the per-IP guest-creation budget is spent", async () => {
+        mockGetSession.mockResolvedValue(null);
+        mockGroupInviteFindUnique.mockResolvedValue(guestInvite());
+        mockRateLimit.mockReturnValue({ allowed: false, retryAfterSeconds: 120 });
+        const res = await POST(req({ token: TOKEN, name: "Ana" }));
+        expect(res.status).toBe(429);
+        expect(res.headers.get("Retry-After")).toBe("120");
+        expect(await res.json()).toEqual({ error: "Demasiadas solicitudes. Inténtalo de nuevo más tarde." });
+        expect(mockRateLimit).toHaveBeenCalledWith("guest-claim:1.2.3.4", 10, 10 * 60 * 1000);
+        expect(mockUserCreate).not.toHaveBeenCalled();
+    });
+
+    it("SPACE_FULL keeps its local wording, an unexpected failure its own 500", async () => {
+        mockGetSession.mockResolvedValue(null);
+        mockGroupInviteFindUnique.mockResolvedValue(guestInvite());
+        mockMembershipCount.mockResolvedValue(20);
+        const full = await POST(req({ token: TOKEN, name: "Ana" }));
+        expect(full.status).toBe(400);
+        expect(await full.json()).toEqual({ error: "Este espacio ya está completo", code: "SPACE_FULL" });
+
+        mockMembershipCount.mockResolvedValue(1);
+        mockUserCreate.mockRejectedValue(new Error("db down"));
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        const boom = await POST(req({ token: TOKEN, name: "Ana" }));
+        expect(boom.status).toBe(500);
+        expect(await boom.json()).toEqual({ error: "No se pudo entrar como invitado" });
+    });
+});
+
+describe("POST /api/invites/claim — body validation", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockGetSession.mockResolvedValue({ userId: "u1" });
+    });
+
+    const raw = (body: string) => POST(new Request("http://localhost/api/invites/claim", { method: "POST", body }));
+
+    it.each(["{nope", "", "null", "[]", '"token"'])("400 'Cuerpo inválido' for body %j", async (body) => {
+        const res = await raw(body);
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toBe("Cuerpo inválido");
+        expect(mockGroupInviteFindUnique).not.toHaveBeenCalled();
+    });
+
+    it.each([{}, { token: "   " }, { token: 42 }])("400 'Falta el token de invitación' for %j", async (body) => {
+        const res = await POST(req(body));
+        expect(res.status).toBe(400);
+        const data = await res.json();
+        expect(data.error).toBe("Falta el token de invitación");
+        expect(data.issues[0].path).toBe("token");
+        expect(mockGroupInviteFindUnique).not.toHaveBeenCalled();
+    });
+
+    it("trims the token before hashing it", async () => {
+        mockGroupInviteFindUnique.mockResolvedValue(null);
+        mockMembershipFindUnique.mockResolvedValue(null);
+        await POST(req({ token: `  ${TOKEN}  ` }));
+        expect(mockGroupInviteFindUnique.mock.calls[0][0].where).toEqual({ tokenHash: hashInviteToken(TOKEN) });
+    });
 });
