@@ -16,7 +16,7 @@ export const registerResourcesPrompts: ToolRegistrar = (server, api) => {
       const result = await api.get("/api/spaces");
       const text = result.ok
         ? JSON.stringify(result.data, null, 2)
-        : JSON.stringify({ error: result.error });
+        : JSON.stringify({ error: result.error, status: result.status, ...(result.code ? { code: result.code } : {}) });
       return {
         contents: [{ uri: uri.href, mimeType: JSON_MIME, text }],
       };
@@ -35,7 +35,7 @@ export const registerResourcesPrompts: ToolRegistrar = (server, api) => {
       const result = await api.get("/api/budget", { scope: "shared" });
       const text = result.ok
         ? JSON.stringify(result.data, null, 2)
-        : JSON.stringify({ error: result.error });
+        : JSON.stringify({ error: result.error, status: result.status, ...(result.code ? { code: result.code } : {}) });
       return {
         contents: [{ uri: uri.href, mimeType: JSON_MIME, text }],
       };

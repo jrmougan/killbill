@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSessionCtx } from '@/lib/authz';
+import { ephemeralSpacesEnabled } from '@/lib/flags';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { isAllowedImage, ALLOWED_IMAGE_TYPES as ALLOWED_TYPES, MAX_IMAGE_BYTES as MAX_SIZE_BYTES } from '@/lib/receipt-image';
 import { analyzeReceiptImage, ReceiptAIError } from '@/lib/receipt-ocr-ai';
@@ -13,9 +14,15 @@ interface ReceiptItem {
 }
 
 export async function POST(request: Request) {
-    const session = await getSession();
-    if (!session?.userId) {
+    // getSessionCtx revalidates guest sessions against the DB on every call
+    // (revoked membership / archived space → null), unlike the raw JWT claim.
+    const session = await getSessionCtx();
+    if (!session) {
         return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+    // The whole guest surface is gated by EPHEMERAL_SPACES_ENABLED.
+    if (session.kind === 'guest' && !ephemeralSpacesEnabled()) {
+        return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
     }
 
     // Rate limit the paid AI OCR call: 10 requests / 5 minutes, keyed per
@@ -30,8 +37,12 @@ export async function POST(request: Request) {
     }
 
     // Guests (product #5): OCR is allowed but capped PER SPACE PER DAY so a leaked
-    // guest link can't run up the provider bill. The guest JWT carries its groupId.
-    if (session.kind === 'guest' && typeof session.groupId === 'string') {
+    // guest link can't run up the provider bill. The guest JWT carries its groupId
+    // (already revalidated by getSessionCtx).
+    // NOTE: like every rateLimit bucket this counter lives in process memory, so
+    // it assumes a single replica (and resets on restart); scaling out needs a
+    // shared store.
+    if (session.kind === 'guest' && session.groupId) {
         const dayLimit = rateLimit(`ocr:space:${session.groupId}`, 50, 24 * 60 * 60 * 1000);
         if (!dayLimit.allowed) {
             return NextResponse.json(

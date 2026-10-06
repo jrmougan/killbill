@@ -1,20 +1,44 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { readFile } from 'node:fs/promises';
+import { getSessionCtx } from '@/lib/authz';
 import { GET } from './route';
 
 vi.mock('node:fs/promises', async importOriginal => ({
     ...await importOriginal<typeof import('node:fs/promises')>(),
     readFile: vi.fn(),
 }));
+vi.mock('@/lib/authz', () => ({ getSessionCtx: vi.fn() }));
 const id = '550e8400-e29b-41d4-a716-446655440000';
 
 function get(filename: string) {
     return GET(new Request('http://localhost/uploads/receipt'), { params: Promise.resolve({ filename }) });
 }
 
-afterEach(() => { vi.resetAllMocks(); });
+beforeEach(() => {
+    vi.mocked(getSessionCtx).mockResolvedValue({ userId: 'user-a', isAdmin: false, kind: undefined });
+});
+
+afterEach(() => { vi.resetAllMocks(); vi.unstubAllEnvs(); });
+
+describe('uploaded file access control', () => {
+    it('returns 401 without a live session and never reads disk', async () => {
+        vi.mocked(getSessionCtx).mockResolvedValue(null);
+        const response = await get(`${id}.png`);
+        expect(response.status).toBe(401);
+        expect(readFile).not.toHaveBeenCalled();
+    });
+
+    it('rejects guest sessions while ephemeral spaces are disabled', async () => {
+        vi.mocked(getSessionCtx).mockResolvedValue({ userId: 'g', isAdmin: false, kind: 'guest', groupId: 'sp' });
+        vi.stubEnv('EPHEMERAL_SPACES_ENABLED', 'false');
+        expect((await get(`${id}.png`)).status).toBe(401);
+        vi.stubEnv('EPHEMERAL_SPACES_ENABLED', 'true');
+        vi.mocked(readFile).mockResolvedValue(Buffer.from([1]));
+        expect((await get(`${id}.png`)).status).toBe(200);
+    });
+});
 
 describe('dynamic uploaded receipt reader', () => {
     it.each([['png', 'image/png'], ['jpg', 'image/jpeg'], ['webp', 'image/webp']])
