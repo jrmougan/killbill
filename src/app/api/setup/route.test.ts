@@ -72,6 +72,30 @@ describe("POST /api/setup", () => {
         expect((await POST(req({ ...valid, password: "short" }))).status).toBe(400);
         expect((await POST(req({ ...valid, name: { x: 1 } }))).status).toBe(400);
     });
+
+    it("keeps the historical 400 wording, and never creates on bad input", async () => {
+        const raw = (body: string) => POST(new Request("http://localhost/api/setup", { method: "POST", body }));
+        expect(await (await raw("{nope")).json()).toEqual({ error: "Cuerpo de la petición no válido" });
+        expect((await (await raw("[]")).json()).error).toBe("Cuerpo de la petición no válido");
+        expect((await (await POST(req({ name: "A" }))).json()).error).toBe("Se requiere nombre, email y contraseña");
+        const shortPw = await (await POST(req({ ...valid, password: 12345678 }))).json();
+        expect(shortPw.error).toBe("La contraseña debe tener al menos 8 caracteres");
+        expect(shortPw.issues[0].path).toBe("password");
+        expect(mockTransaction).not.toHaveBeenCalled();
+    });
+
+    it("trims name and email before creating the admin", async () => {
+        await POST(req({ ...valid, name: "  Admin ", email: " admin@example.com " }));
+        expect(mockCreate.mock.calls[0][0].data).toMatchObject({ name: "Admin", email: "admin@example.com" });
+    });
+
+    it("an unexpected failure is a 500 'Error interno'", async () => {
+        mockTransaction.mockRejectedValue(new Error("db down"));
+        mockCount.mockResolvedValue(0);
+        const res = await POST(req(valid));
+        expect(res.status).toBe(500);
+        expect(await res.json()).toEqual({ error: "Error interno" });
+    });
 });
 
 describe("GET /api/setup", () => {
