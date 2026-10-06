@@ -59,7 +59,7 @@ export async function signGuestToken(
     const payload: GuestClaims = { ...claims, kind: 'guest', ...(hardCap != null ? { hardCap } : {}) };
     return await new SignJWT(payload)
         .setProtectedHeader({ alg: 'HS256' })
-        .setIssuedAt()
+        .setIssuedAt(now)
         .setExpirationTime(guestExp(now, hardCap))
         .sign(getKey());
 }
