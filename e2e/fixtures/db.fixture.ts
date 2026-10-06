@@ -7,12 +7,18 @@ export interface SeedUser {
   name?: string;
 }
 
+/** A registered user as returned by /api/test/seed (always id + shared password). */
+export interface SeededUser extends SeedUser {
+  id: string;
+  password: string;
+}
+
 export interface SeedResult {
   inviteCode?: string;
   admin?: SeedUser;
-  user?: SeedUser;
-  userA?: SeedUser;
-  userB?: SeedUser;
+  user?: SeededUser;
+  userA?: SeededUser;
+  userB?: SeededUser;
   [key: string]: unknown;
 }
 

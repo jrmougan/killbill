@@ -27,7 +27,7 @@ test.describe('Auth - Register', () => {
       baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
     });
     const data = await seedScenario(apiContext, 'admin-with-invite');
-    inviteCode = data.inviteCode;
+    inviteCode = data.inviteCode!;
   });
 
   test.afterAll(async () => {

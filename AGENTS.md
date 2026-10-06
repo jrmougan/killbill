@@ -11,7 +11,8 @@ mise run services:up    # Local MySQL via Docker/Podman; wait for readiness
 mise run db:migrate     # Apply committed migrations explicitly
 mise run db:seed        # Seed system categories and admin explicitly
 mise run dev            # Next.js on the PORT generated in .env
-mise run check          # Prisma generate + oxlint + unit tests (one pass)
+mise run check          # Prisma generate + oxlint + typecheck (app + e2e) + unit tests
+mise run typecheck      # next typegen + tsc (app) + tsc -p tsconfig.e2e.json
 mise run build          # Prisma generate + production build
 mise run e2e            # Playwright: uses/reset the configured DB; stop dev first
 mise run services:down  # Keep the DB volume
@@ -33,7 +34,7 @@ The existing npm scripts remain available through `mise exec -- npm …`.
 
 ## Architecture
 
-Kill Bill is a couples/group expense-splitting app. Full-stack Next.js with App Router, Prisma + MariaDB, and JWT auth.
+Kill Bill is a couples/group expense-splitting app. Full-stack Next.js with App Router, Prisma + MySQL 8.0 (via the `@prisma/adapter-mariadb` driver), and JWT auth.
 
 ### Key directories
 
@@ -116,11 +117,11 @@ mcp_servers:
 
 ### Deployment
 
-GitHub Actions (`.github/workflows/deploy.yml`) on push to `main`: runs the e2e + unit/lint gates, builds a Docker image, pushes it to GHCR (`ghcr.io/jrmougan/killbill`), then triggers a **Coolify** webhook that pulls the new image and redeploys. Migrations run from the **container's start command** (`Dockerfile` `CMD`): `prisma migrate deploy` from the bundled `/prisma-tools` (Prisma CLI + `prisma/migrations`) executes before `node server.js`, so pending migrations auto-apply on every deploy and the server only starts if they succeed (a failed migration leaves the previous container serving). Coolify itself has no pre/post-deploy command. The container runs behind **Traefik** (host `finanzas.mougan.es`) and connects to a dedicated **MySQL 8.0** database (`killbill-mysql-8`, user in `mysql_native_password` — the `@prisma/adapter-mariadb` driver needs it) over the `coolify` Docker network. The production environment must set `JWT_SECRET` and at least one OCR provider key (`GEMINI_API_KEY` and/or `OPENROUTER_API_KEY`); configure both to enable failover (auth fails loudly without `JWT_SECRET`).
+GitHub Actions (`.github/workflows/deploy.yml`, `concurrency: deploy-main`, never cancelled) on push to `main`: runs the e2e + unit/lint/typecheck/audit gates, builds a Docker image (Buildx, GHA cache), pushes it to GHCR (`ghcr.io/jrmougan/killbill`, tags `latest` + commit SHA), then triggers a **Coolify** webhook that pulls the new image and redeploys. Migrations run from the **container's start command** (`Dockerfile` `CMD`): `prisma migrate deploy` from the bundled `/prisma-tools` (Prisma CLI + `prisma/migrations`) executes before `node server.js` (`set -e`), so pending migrations auto-apply on every deploy and the server only starts if they succeed (a failed migration exits the container non-zero and leaves the previous container serving). `/prisma-tools` installs only the `prisma` CLI pinned from the lockfile. Coolify itself has no pre/post-deploy command yet (recommended: move migrations to a Coolify pre-deploy step, see README). The image has a `HEALTHCHECK` on **`GET /api/health`** (public, uncached: `SELECT 1` → 200 `{status:'ok'}`, 503 on DB failure). The container runs behind **Traefik** (host `finanzas.mougan.es`) and connects to a dedicated **MySQL 8.0** database (`killbill-mysql-8`, user in `mysql_native_password` — the `@prisma/adapter-mariadb` driver needs it) over the `coolify` Docker network. The production environment must set `JWT_SECRET` and at least one OCR provider key (`GEMINI_API_KEY` and/or `OPENROUTER_API_KEY`); configure both to enable failover (auth fails loudly without `JWT_SECRET`).
 
 ## Testing
 
-Unit tests live alongside the code in `src/lib/` (`.test.ts` files), using Vitest with jsdom. The `finance.ts` and `splits.ts` files are the most critical to keep tested — they contain the core financial math. End-to-end tests live in `e2e/` (Playwright) and run in CI against a MariaDB service; both unit tests and lint are blocking gates for the deploy. Test-only API routes (`/api/test/*`) and the login rate limiter are gated on `TEST_ROUTES_ENABLED=true`.
+Unit tests live alongside the code (`.test.ts`/`.test.tsx`), using Vitest with two projects: server code (`src/lib`, API routes, proxy, MCP) runs under `node`, components and `.tsx` tests under `jsdom`. The `finance.ts` and `splits.ts` files are the most critical to keep tested — they contain the core financial math. End-to-end tests live in `e2e/` (Playwright, typechecked via `tsconfig.e2e.json`) and run in CI against MySQL 8.0 started from `compose.dev.yaml` (same flags as local/prod); unit tests, lint, typecheck and `npm audit --omit=dev --audit-level=critical` are blocking gates for the deploy. Test-only API routes (`/api/test/*`) and the login rate limiter are gated on `TEST_ROUTES_ENABLED=true`.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

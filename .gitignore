@@ -49,3 +49,7 @@ next-env.d.ts
 # Uploaded receipts (runtime, served from a persistent volume in prod)
 /public/uploads/*
 !/public/uploads/.gitkeep
+
+# stray build/typecheck output
+*.log
+tsc_output*

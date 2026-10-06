@@ -1,7 +1,13 @@
-import 'dotenv/config';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../src/generated/prisma/client';
 import bcrypt from 'bcryptjs';
+
+// Carga .env si existe (Node 24); en CI/contenedor las variables ya vienen del entorno.
+try {
+    process.loadEnvFile();
+} catch {
+    // Sin .env: usar el entorno tal cual.
+}
 
 // Parse DATABASE_URL to get connection details
 function parseDbUrl(url: string) {

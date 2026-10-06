@@ -12,7 +12,7 @@ test.describe('Expenses - Create', () => {
       baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
     });
     const data = await seedScenario(apiContext, 'couple-no-expenses');
-    userA = data.userA;
+    userA = data.userA!;
   });
 
   test.afterAll(async () => {
