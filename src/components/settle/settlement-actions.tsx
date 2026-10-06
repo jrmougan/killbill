@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { EqCta } from "@/components/ui/eq";
+import { useApiMutation } from "@/hooks/use-api-mutation";
 
 /**
  * Confirm / reject a PENDING settlement as its receiver (the creditor). The
@@ -12,32 +13,22 @@ import { EqCta } from "@/components/ui/eq";
  */
 export function SettlementActions({ id, fromName, amountCents }: { id: string; fromName: string; amountCents: number }) {
     const router = useRouter();
+    const { mutate, error } = useApiMutation();
     const [busy, setBusy] = useState<"CONFIRMED" | "REJECTED" | null>(null);
-    const [error, setError] = useState<string | null>(null);
 
     async function act(status: "CONFIRMED" | "REJECTED") {
         if (status === "REJECTED" && !window.confirm(`¿Rechazar el pago de ${fromName}? No contará en el saldo.`)) return;
         setBusy(status);
-        setError(null);
-        try {
-            const res = await fetch(`/api/settle/${id}/status`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status, expectedAmountCents: amountCents }),
-            });
-            if (!res.ok) {
-                const json = await res.json().catch(() => ({}));
-                // The settlement changed under us (edited/resolved): show the error
-                // and refresh so the detail reflects the current state.
-                if (res.status === 409) router.refresh();
-                throw new Error(json.error || "No se pudo actualizar el pago");
-            }
-            router.refresh();
-        } catch (e) {
-            setError(e instanceof Error ? e.message : "Error de conexión");
-        } finally {
-            setBusy(null);
-        }
+        const res = await mutate(`/api/settle/${id}/status`, {
+            method: "PATCH",
+            body: { status, expectedAmountCents: amountCents },
+            errorMessage: "No se pudo actualizar el pago",
+            networkErrorMessage: "Error de conexión",
+        });
+        // The settlement changed under us (edited/resolved): show the error
+        // and refresh so the detail reflects the current state.
+        if (!res.ok && res.status === 409) router.refresh();
+        setBusy(null);
     }
 
     return (

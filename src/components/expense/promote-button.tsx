@@ -1,9 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Users } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useState } from "react";
+import { useApiMutation } from "@/hooks/use-api-mutation";
 
 /**
  * Promote a PERSONAL expense to a SHARED (group) one. Wires the existing
@@ -11,29 +11,15 @@ import { useState, useTransition } from "react";
  * a personal expense whose owner belongs to a group.
  */
 export function PromoteButton({ expenseId }: { expenseId: string }) {
-    const router = useRouter();
-    const [refreshing, startTransition] = useTransition();
+    const { mutate, pending: loading, refreshing, error } = useApiMutation();
     const [showConfirm, setShowConfirm] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     const handlePromote = async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await fetch(`/api/expenses/${expenseId}/share`, { method: "POST" });
-            if (res.ok) {
-                setShowConfirm(false);
-                startTransition(() => router.refresh());
-            } else {
-                const body = await res.json().catch(() => ({}));
-                setError(body.error ?? "No se pudo compartir el gasto");
-            }
-        } catch {
-            setError("Error de conexión");
-        } finally {
-            setLoading(false);
-        }
+        const res = await mutate(`/api/expenses/${expenseId}/share`, {
+            errorMessage: "No se pudo compartir el gasto",
+            networkErrorMessage: "Error de conexión",
+        });
+        if (res.ok) setShowConfirm(false);
     };
 
     if (showConfirm) {
