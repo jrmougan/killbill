@@ -57,7 +57,7 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
                     <div className="h-20 w-20 rounded-full bg-[var(--surface-raised-hex)] flex items-center justify-center overflow-hidden relative">
                             {isInternalImage ? (
                                 // oxlint-disable-next-line nextjs/no-img-element
-                                <img src={currentAvatar} alt="Avatar" className="h-full w-full object-cover" />
+                                <img src={currentAvatar} alt="Avatar" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                             ) : (
                                 <span className="text-4xl select-none">{currentAvatar}</span>
                             )}

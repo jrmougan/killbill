@@ -1,11 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
 import { Check, X } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 import { getSettlementMethodLabel } from "@/lib/settlement-labels";
+import { useApiMutation } from "@/hooks/use-api-mutation";
 
 interface PendingSettlement {
     id: string;
@@ -25,34 +24,15 @@ interface PendingSettlementsProps {
  * to "User B te …"); the actions sit on their own row with 44px targets.
  */
 export function PendingSettlements({ settlements }: PendingSettlementsProps) {
-    const router = useRouter();
-    const [refreshing, startTransition] = useTransition();
-    const [loadingIds, setLoadingIds] = useState<string[]>([]);
-    const [error, setError] = useState<string | null>(null);
+    const { mutate, busy, error } = useApiMutation();
 
-    const handleStatusUpdate = async (id: string, newStatus: "CONFIRMED" | "REJECTED", expectedAmountCents: number) => {
-        setLoadingIds((prev) => [...prev, id]);
-        setError(null);
-        try {
-            const res = await fetch(`/api/settle/${id}/status`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                // expectedAmountCents: confirm exactly the amount on screen (409 if the payer edited it meanwhile).
-                body: JSON.stringify({ status: newStatus, expectedAmountCents }),
-            });
-
-            if (res.ok) {
-                startTransition(() => router.refresh());
-            } else {
-                const data = await res.json().catch(() => null);
-                setError(data?.error || (newStatus === "CONFIRMED" ? "No se pudo confirmar el pago" : "No se pudo rechazar el pago"));
-            }
-        } catch {
-            setError("Sin conexión. Inténtalo de nuevo.");
-        } finally {
-            setLoadingIds((prev) => prev.filter((x) => x !== id));
-        }
-    };
+    const handleStatusUpdate = (id: string, newStatus: "CONFIRMED" | "REJECTED", expectedAmountCents: number) =>
+        mutate(`/api/settle/${id}/status`, {
+            method: "PATCH",
+            // expectedAmountCents: confirm exactly the amount on screen (409 if the payer edited it meanwhile).
+            body: { status: newStatus, expectedAmountCents },
+            errorMessage: newStatus === "CONFIRMED" ? "No se pudo confirmar el pago" : "No se pudo rechazar el pago",
+        });
 
     if (settlements.length === 0) return null;
 
@@ -69,14 +49,13 @@ export function PendingSettlements({ settlements }: PendingSettlementsProps) {
 
             <ul className="flex flex-col gap-4">
                 {settlements.map((s) => {
-                    const busy = loadingIds.length > 0 || refreshing;
                     return (
                         <li key={s.id} className="flex flex-col gap-2.5" data-testid="pending-settlement">
                             <div className="flex items-start gap-3">
                                 <span className="h-10 w-10 flex-none rounded-full bg-card flex items-center justify-center text-lg overflow-hidden text-primary font-bold" aria-hidden="true">
                                     {isAvatarUrl(s.fromUser.avatar) ? (
                                         // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
-                                        <img src={s.fromUser.avatar!} alt="" className="h-full w-full object-cover" />
+                                        <img src={s.fromUser.avatar!} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
                                     ) : (
                                         s.fromUser.avatar || s.fromUser.name.charAt(0).toUpperCase()
                                     )}

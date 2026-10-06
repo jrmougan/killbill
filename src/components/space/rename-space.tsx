@@ -1,20 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Pencil } from "lucide-react";
 import { Sheet, SheetField } from "@/components/ui/sheet";
+import { useApiMutation } from "@/hooks/use-api-mutation";
 
 const MAX = 60;
 
 /** "Renombrar" (OWNER/ADMIN, not archived): PATCH /api/spaces/[id] { name }. */
 export function RenameSpace({ spaceId, name }: { spaceId: string; name: string }) {
-    const router = useRouter();
-    const [refreshing, startTransition] = useTransition();
+    const { mutate, busy, error, setError } = useApiMutation();
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState(name);
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
 
     const trimmed = value.replace(/\s+/g, " ").trim();
     const valid = trimmed.length > 0 && trimmed.length <= MAX;
@@ -25,26 +22,12 @@ export function RenameSpace({ spaceId, name }: { spaceId: string; name: string }
             setError(trimmed.length === 0 ? "Escribe un nombre" : `Máximo ${MAX} caracteres`);
             return;
         }
-        setBusy(true);
-        setError(null);
-        try {
-            const res = await fetch(`/api/spaces/${spaceId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: trimmed }),
-            });
-            const data = await res.json().catch(() => null);
-            if (!res.ok) {
-                setError(data?.error || "No se pudo cambiar el nombre");
-                return;
-            }
-            setOpen(false);
-            startTransition(() => router.refresh());
-        } catch {
-            setError("Sin conexión. Inténtalo de nuevo.");
-        } finally {
-            setBusy(false);
-        }
+        const res = await mutate(`/api/spaces/${spaceId}`, {
+            method: "PATCH",
+            body: { name: trimmed },
+            errorMessage: "No se pudo cambiar el nombre",
+        });
+        if (res.ok) setOpen(false);
     };
 
     return (
@@ -79,7 +62,7 @@ export function RenameSpace({ spaceId, name }: { spaceId: string; name: string }
                         {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
                         <button
                             type="submit"
-                            disabled={busy || refreshing || !valid}
+                            disabled={busy || !valid}
                             className="h-14 rounded-[18px] bg-primary text-primary-foreground text-base font-semibold disabled:opacity-40"
                         >
                             Guardar
