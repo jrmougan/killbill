@@ -167,7 +167,7 @@ test.describe('API Authorization Matrix (authz & space policy)', () => {
     expect(csvContent).toContain('Viaje (histórico)');
   });
 
-  test('4. Miembro expulsado: JWT sigue válido pero requireSpaceAccess deniega en DB (403)', async ({ page, newContext, context, request }) => {
+  test('4. Miembro expulsado (409 con saldo; tras liquidar): JWT sigue válido pero requireSpaceAccess deniega en DB (403)', async ({ page, newContext, context, request }) => {
     await resetDb(request);
 
     const seed = await seedScenario(request, 'group-of-3');
@@ -188,8 +188,23 @@ test.describe('API Authorization Matrix (authz & space policy)', () => {
     await loginAs(page, userA);
     const apiA = context.request;
 
+    // userB debe 33,33 € (cena a tres pagada por A): con saldo abierto no se le
+    // puede expulsar -> 409 HAS_BALANCE con enlace a liquidar.
+    const blockedRes = await apiA.delete(`/api/spaces/${spaceId}/members/${userB.id}`);
+    expect(blockedRes.status(), 'expulsar con saldo abierto -> 409').toBe(409);
+    const blocked = await blockedRes.json();
+    expect(blocked.code).toBe('HAS_BALANCE');
+    expect(blocked.balanceCents).not.toBe(0);
+
+    // El acreedor (A) registra "Ya me ha pagado" -> CONFIRMED y saldo de B a cero.
+    const settleRes = await apiA.post('/api/settle', {
+      data: { fromUserId: userB.id, amount: 33.33, method: 'CASH', groupId: spaceId },
+    });
+    expect(settleRes.status(), 'A registra el pago recibido de B').toBe(200);
+    expect((await settleRes.json()).settlement.status).toBe('CONFIRMED');
+
     const expelRes = await apiA.delete(`/api/spaces/${spaceId}/members/${userB.id}`);
-    expect(expelRes.status(), 'OWNER expulsa a userB').toBe(200);
+    expect(expelRes.status(), 'OWNER expulsa a userB ya sin deuda').toBe(200);
     const expelJson = await expelRes.json();
     expect(expelJson.status).toBe('REMOVED');
 
