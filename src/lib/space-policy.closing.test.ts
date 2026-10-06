@@ -3,6 +3,7 @@ import {
     assertCanArchive,
     assertNotArchived,
     hasOpenBalance,
+    kickBlocker,
     leaveBlocker,
     madridToday,
     normalizeSpaceName,
@@ -62,6 +63,19 @@ describe("space-policy — closing, leaving, naming, trip dates", () => {
         it("HAS_BALANCE carries the balance, force skips it", () => {
             expect(leaveBlocker({ ...base, balanceCents: -2500 })).toMatchObject({ code: "HAS_BALANCE", balanceCents: -2500 });
             expect(leaveBlocker({ ...base, balanceCents: -2500, force: true })).toBeNull();
+        });
+    });
+
+    describe("kickBlocker (A2)", () => {
+        it("allows expelling a settled member (±1 cent tolerated)", () => {
+            expect(kickBlocker(0)).toBeNull();
+            expect(kickBlocker(1)).toBeNull();
+            expect(kickBlocker(-1)).toBeNull();
+        });
+        it("409 HAS_BALANCE for a debtor or a creditor, with the balance", () => {
+            expect(kickBlocker(-2500)).toMatchObject({ code: "HAS_BALANCE", status: 409, balanceCents: -2500 });
+            expect(kickBlocker(2500)).toMatchObject({ code: "HAS_BALANCE", status: 409, balanceCents: 2500 });
+            expect(kickBlocker(2500)?.error).toMatch(/Quedad en paz/);
         });
     });
 

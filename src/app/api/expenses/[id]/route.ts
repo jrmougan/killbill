@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
+import { getSessionCtx, type SessionCtx } from "@/lib/authz";
 import { toCents } from "@/lib/currency";
 import { calculateSplitAmounts, calculateSplitAmountsFromLines, hasExclusiveReceiptItems, rescaleSplits, type ReceiptItemForSplit } from "@/lib/splits";
 import type { SplitStrategy, SpaceStatus } from "@/generated/prisma/enums";
@@ -9,7 +9,8 @@ import { resolveCategoryId } from "@/lib/category-db";
 import { buildReceiptLineItems } from "@/lib/receipt";
 import { getGroupMembers } from "@/lib/membership";
 import { postExpenseLedger } from "@/lib/ledger";
-import { runLedgerTransaction } from "@/lib/expense-tx";
+import { assertRosterUnchanged, assertWritableUnderLock, runLedgerTransaction, withSpaceLock } from "@/lib/expense-tx";
+import { SettlementError } from "@/lib/settlement-rules";
 import { isRecurringInterval, nextRecurringRun, parseExpenseDate } from "@/lib/expense-input";
 import { assertSpaceWritable, SpacePolicyError } from "@/lib/space-policy";
 import type { Prisma } from "@/generated/prisma/client";
@@ -37,15 +38,44 @@ async function spaceNotWritable(coupleId: string | null): Promise<NextResponse |
     }
 }
 
+/**
+ * A guest session is caged to the one space of its JWT (getSessionCtx already
+ * revalidated its membership against the DB): it may never touch a personal
+ * expense nor an expense of another space.
+ */
+function guestOutOfCage(ctx: SessionCtx, expense: { visibility: string; coupleId: string | null }): boolean {
+    return ctx.kind === "guest" && (expense.visibility !== "SHARED" || !ctx.groupId || expense.coupleId !== ctx.groupId);
+}
+
+/**
+ * Run a mutation of an existing expense. A SHARED expense is written under its
+ * space's row lock (A3): the status (SETTLING/ARCHIVED are read-only for
+ * expenses) and the roster the authz/split decisions were made on are re-read
+ * inside the same transaction as the write. PERSONAL expenses touch no space.
+ */
+function writeExpense<T>(
+    coupleId: string | null,
+    memberIds: readonly string[],
+    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+    if (!coupleId) return runLedgerTransaction(fn);
+    return withSpaceLock(coupleId, async (tx, status) => {
+        assertWritableUnderLock(status);
+        await assertRosterUnchanged(tx, coupleId, memberIds);
+        return fn(tx);
+    });
+}
+
 export async function DELETE(
     request: Request,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const { id } = await params;
-        const session = await getSession();
-        if (!session?.userId) return bad('No autorizado', 401);
-        const userId = session.userId as string;
+        // getSessionCtx revalidates a guest session against the DB (H3).
+        const ctx = await getSessionCtx();
+        if (!ctx?.userId) return bad('No autorizado', 401);
+        const userId = ctx.userId;
 
         // Get expense and verify ownership
         const expense = await prisma.expense.findUnique({
@@ -64,7 +94,7 @@ export async function DELETE(
         const delMembers = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
         const isMember = delMembers.some(m => m.id === userId);
         const authorized = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
-        if (!authorized) {
+        if (!authorized || guestOutOfCage(ctx, expense)) {
             return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
         const readOnly = await spaceNotWritable(expense.coupleId);
@@ -77,18 +107,20 @@ export async function DELETE(
         // seriesId lineage (series deletion would SetNull them). Phase 5: the
         // template is identified by series.templateId === this expense (not the
         // retired isRecurring column); instances never deactivate the series.
-        await prisma.$transaction(async (tx) => {
+        await writeExpense(expense.coupleId, delMembers.map((m) => m.id), async (tx) => {
             if (expense.seriesId && expense.series?.templateId === expense.id) {
                 await tx.recurringSeries.update({
                     where: { id: expense.seriesId },
                     data: { isActive: false },
                 });
             }
-            await tx.expense.delete({ where: { id } });
+            // deleteMany: a concurrent delete already removed it → still success.
+            await tx.expense.deleteMany({ where: { id } });
         });
 
         return NextResponse.json({ success: true });
     } catch (error) {
+        if (error instanceof SettlementError) return NextResponse.json(error.toJSON(), { status: error.status });
         console.error("Error deleting expense:", error);
         return NextResponse.json({ error: "Error al eliminar" }, { status: 500 });
     }
@@ -111,9 +143,10 @@ export async function PATCH(
 ) {
     try {
         const { id } = await params;
-        const session = await getSession();
-        if (!session?.userId) return bad('No autorizado', 401);
-        const userId = session.userId as string;
+        // getSessionCtx revalidates a guest session against the DB (H3).
+        const ctx = await getSessionCtx();
+        if (!ctx?.userId) return bad('No autorizado', 401);
+        const userId = ctx.userId;
 
         let body: Record<string, unknown>;
         try {
@@ -147,7 +180,7 @@ export async function PATCH(
         // current couple membership.
         const isMember = members.some(m => m.id === userId);
         const authorized = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
-        if (!authorized) {
+        if (!authorized || guestOutOfCage(ctx, expense)) {
             return NextResponse.json({ error: "No autorizado" }, { status: 403 });
         }
         const readOnly = await spaceNotWritable(expense.coupleId);
@@ -313,8 +346,9 @@ export async function PATCH(
         if (newStrategy !== undefined) updateData.splitStrategy = newStrategy;
 
         // Update the expense, its splits, receipt lines, ledger and series in one
-        // transaction (READ COMMITTED + retried on write conflicts — G-04).
-        const updatedExpense = await runLedgerTransaction(async (tx) => {
+        // transaction (READ COMMITTED + retried on write conflicts — G-04), under
+        // the space lock for a shared expense (A3).
+        const updatedExpense = await writeExpense(expense.coupleId, members.map((m) => m.id), async (tx) => {
             const updated = await tx.expense.update({
                 where: { id },
                 data: updateData,
@@ -415,6 +449,7 @@ export async function PATCH(
 
         return NextResponse.json({ success: true, expense: updatedExpense });
     } catch (error) {
+        if (error instanceof SettlementError) return NextResponse.json(error.toJSON(), { status: error.status });
         console.error("Error updating expense:", error);
         return NextResponse.json({ error: "Error al actualizar el gasto" }, { status: 500 });
     }

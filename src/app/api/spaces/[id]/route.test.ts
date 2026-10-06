@@ -6,19 +6,32 @@ const mockCoupleUpdate = vi.fn();
 const mockMembershipFindUnique = vi.fn();
 const mockSettlementCount = vi.fn();
 const mockGetGroupBalances = vi.fn();
+/** Status the space has once the row lock is taken (null = same as outside). */
+const mockLockedStatus = vi.fn((): string | null => null);
 
 vi.mock("@/lib/auth", () => ({ getSession: () => mockGetSession() }));
 vi.mock("@/lib/ledger-read", () => ({ getGroupBalances: (...a: unknown[]) => mockGetGroupBalances(...a) }));
-vi.mock("@/lib/db", () => ({
-    prisma: {
-        couple: {
-            findUnique: (...a: unknown[]) => mockCoupleFindUnique(...a),
-            update: (...a: unknown[]) => mockCoupleUpdate(...a),
+vi.mock("@/lib/db", () => {
+    const couple = {
+        findUnique: (...a: unknown[]) => mockCoupleFindUnique(...a),
+        findUniqueOrThrow: (...a: unknown[]) => mockCoupleFindUnique(...a),
+        update: (...a: unknown[]) => mockCoupleUpdate(...a),
+    };
+    const settlement = { count: (...a: unknown[]) => mockSettlementCount(...a) };
+    // withSpaceLock: `SELECT status … FOR UPDATE` returns the status UNDER the lock.
+    const $queryRaw = async () => {
+        const row = (await mockCoupleFindUnique()) as { status: string } | null;
+        return row ? [{ status: mockLockedStatus() ?? row.status }] : [];
+    };
+    return {
+        prisma: {
+            couple,
+            membership: { findUnique: (...a: unknown[]) => mockMembershipFindUnique(...a) },
+            settlement,
+            $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ couple, settlement, $queryRaw }),
         },
-        membership: { findUnique: (...a: unknown[]) => mockMembershipFindUnique(...a) },
-        settlement: { count: (...a: unknown[]) => mockSettlementCount(...a) },
-    },
-}));
+    };
+});
 
 import { PATCH } from "./route";
 
@@ -40,7 +53,33 @@ describe("PATCH /api/spaces/[id]", () => {
         mockCoupleUpdate.mockImplementation(async ({ data }: { data: object }) => ({ id: "g1", ...data }));
         mockGetGroupBalances.mockResolvedValue({ a: 0, b: 0 });
         mockSettlementCount.mockResolvedValue(0);
+        mockLockedStatus.mockReturnValue(null);
         space("ACTIVE");
+    });
+
+    describe("status re-checked under the space lock (A3)", () => {
+        it("a rename seen ACTIVE outside but ARCHIVED under the lock is refused", async () => {
+            mockLockedStatus.mockReturnValue("ARCHIVED");
+            const res = await patch({ name: "Nuevo" });
+            expect(res.status).toBe(409);
+            expect((await res.json()).code).toBe("SPACE_NOT_WRITABLE");
+            expect(mockCoupleUpdate).not.toHaveBeenCalled();
+        });
+
+        it("the transition is validated against the LOCKED status (two concurrent closes)", async () => {
+            // Request saw ACTIVE; another close already moved it to SETTLING.
+            mockLockedStatus.mockReturnValue("SETTLING");
+            const res = await patch({ status: "SETTLING" });
+            expect(res.status).toBe(400);
+            expect((await res.json()).code).toBe("INVALID_TRANSITION");
+            expect(mockCoupleUpdate).not.toHaveBeenCalled();
+        });
+
+        it("the archive guard reads balances and pending payments through the locked transaction", async () => {
+            const res = await patch({ status: "ARCHIVED" });
+            expect(res.status).toBe(200);
+            expect(mockGetGroupBalances).toHaveBeenCalledWith("g1", expect.objectContaining({ $queryRaw: expect.any(Function) }));
+        });
     });
 
     describe("archive guard", () => {

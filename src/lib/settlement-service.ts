@@ -1,6 +1,6 @@
-import { prisma } from './db';
 import type { Prisma } from '@/generated/prisma/client';
 import { postSettlementLedger } from './ledger';
+import { withSpaceLock } from './expense-tx';
 import {
     SettlementError,
     assertWithinCap,
@@ -32,36 +32,9 @@ import {
 
 type Tx = Prisma.TransactionClient;
 
-const MAX_ATTEMPTS = 3;
-
-function isRetryable(e: unknown): boolean {
-    const code = (e as { code?: unknown } | null)?.code;
-    const msg = e instanceof Error ? e.message : String(e);
-    return code === 'P2034' || /deadlock|lock wait timeout|write conflict|\b1213\b|\b1205\b/i.test(msg);
-}
-
-/**
- * Run `fn` in a transaction holding the space's row lock. Retries a couple of
- * times on deadlock / lock-wait errors (never on a SettlementError).
- */
-export async function withSpaceLock<T>(groupId: string, fn: (tx: Tx, spaceStatus: string) => Promise<T>): Promise<T> {
-    for (let attempt = 1; ; attempt++) {
-        try {
-            return await prisma.$transaction(
-                async (tx) => {
-                    const rows = await tx.$queryRaw<{ status: string }[]>`SELECT status FROM Couple WHERE id = ${groupId} FOR UPDATE`;
-                    if (rows.length === 0) throw new SettlementError(404, 'SPACE_NOT_FOUND', 'Espacio no encontrado');
-                    return fn(tx, rows[0].status);
-                },
-                // READ COMMITTED: once we hold the lock, every read sees what the
-                // previous lock holder committed (no stale REPEATABLE READ snapshot).
-                { isolationLevel: 'ReadCommitted', maxWait: 10_000, timeout: 15_000 },
-            );
-        } catch (e) {
-            if (e instanceof SettlementError || attempt >= MAX_ATTEMPTS || !isRetryable(e)) throw e;
-        }
-    }
-}
+// The space lock lives in expense-tx.ts so every space-scoped write (expenses,
+// membership, lifecycle, recurring) shares ONE lock primitive and lock order.
+export { withSpaceLock };
 
 /** Ledger net balance (cents) of one member in one space. */
 async function accountBalance(tx: Tx, groupId: string, userId: string): Promise<number> {

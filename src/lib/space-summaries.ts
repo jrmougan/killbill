@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getUserGroups } from "@/lib/membership";
-import { getGroupBalances } from "@/lib/ledger-read";
+import { balancesForMembers, sumLedgerByGroup } from "@/lib/ledger-read";
 import { normalizeCents } from "@/lib/home-format";
 import type { MembershipRole, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 
@@ -50,7 +50,9 @@ export async function getSpaceSummaries(userId: string, month: MonthBounds): Pro
     if (groups.length === 0) return [];
     const ids = groups.map((g) => g.id);
 
-    const [roster, monthTotals, balances] = await Promise.all([
+    // Three queries for ALL spaces (roster, month totals, ledger sums) — the
+    // ledger is aggregated in SQL once for every space, not once per space (M2).
+    const [roster, monthTotals, nets] = await Promise.all([
         prisma.membership.findMany({
             where: { groupId: { in: ids }, status: "ACTIVE" },
             orderBy: [{ joinedAt: "asc" }, { userId: "asc" }],
@@ -61,11 +63,12 @@ export async function getSpaceSummaries(userId: string, month: MonthBounds): Pro
             where: { coupleId: { in: ids }, visibility: "SHARED", date: { gte: month.start, lt: month.end } },
             _sum: { amount: true },
         }),
-        Promise.all(ids.map((id) => getGroupBalances(id))),
+        sumLedgerByGroup(ids),
     ]);
 
-    return groups.map((g, i) => {
+    return groups.map((g) => {
         const inGroup = roster.filter((r) => r.groupId === g.id);
+        const balances = balancesForMembers(nets.get(g.id), inGroup.map((r) => r.userId));
         return {
             id: g.id,
             name: g.name,
@@ -80,9 +83,9 @@ export async function getSpaceSummaries(userId: string, month: MonthBounds): Pro
                 name: r.user.name,
                 avatar: r.user.avatar ?? null,
                 isGuest: r.user.isGuest,
-                balanceCents: normalizeCents(balances[i][r.userId] ?? 0),
+                balanceCents: normalizeCents(balances[r.userId] ?? 0),
             })),
-            balanceCents: normalizeCents(balances[i][userId] ?? 0),
+            balanceCents: normalizeCents(balances[userId] ?? 0),
             monthTotalCents: monthTotals.find((t) => t.coupleId === g.id)?._sum.amount ?? 0,
         };
     });

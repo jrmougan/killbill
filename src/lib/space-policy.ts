@@ -274,6 +274,25 @@ export function leaveBlocker(args: {
     return null;
 }
 
+/**
+ * Rule for an EXPULSION (OWNER/ADMIN removes another member, → REMOVED): the
+ * target's net balance must be closed (same ±1 cent tolerance as leaveBlocker).
+ * A REMOVED member drops out of every ACTIVE balance view, so expelling someone
+ * who still owes / is owed would make the visible balances stop summing to zero
+ * and lock that debt forever (A2). Unlike a self-leave there is NO `force`: the
+ * debt has to be settled first (the route adds the settle link).
+ * Returns null when the expulsion is allowed.
+ */
+export function kickBlocker(balanceCents: number): Extract<LeaveBlock, { code: "HAS_BALANCE" }> | null {
+    if (!hasOpenBalance(balanceCents)) return null;
+    return {
+        code: "HAS_BALANCE",
+        status: 409,
+        error: "Esta persona aún tiene saldo pendiente en el espacio. Quedad en paz antes de quitarla.",
+        balanceCents: Math.round(balanceCents),
+    };
+}
+
 // --- Space name ---------------------------------------------------------------
 
 export const SPACE_NAME_MAX = 60;

@@ -88,12 +88,19 @@ export function calculateSplitAmounts(
  * the first member), instead of collapsing the split or leaving a non-balanced
  * ledger. Degenerate cases (empty input, zero old total) fall back to an even
  * N-way division so the result still sums exactly.
+ *
+ * A negative input share (only reachable through a promotion line assigned to
+ * someone) is treated as 0, so for a non-negative total every output share is
+ * >= 0 — the DB enforces `Split.amount >= 0` (chk_split_amount_nonneg).
  */
 export function rescaleSplits(
-    existing: { userId: string; amount: number }[],
+    input: { userId: string; amount: number }[],
     newTotalCents: number,
 ): { userId: string; amount: number }[] {
-    if (existing.length === 0) return [];
+    if (input.length === 0) return [];
+    const existing = newTotalCents >= 0
+        ? input.map((s) => ({ userId: s.userId, amount: Math.max(0, s.amount) }))
+        : input;
     const oldTotal = existing.reduce((acc, s) => acc + s.amount, 0);
 
     if (oldTotal <= 0) {
@@ -186,8 +193,9 @@ export function calculateSplitAmountsFromLines(
  * total with an unlisted discount…), the difference is spread PROPORTIONALLY
  * over every member's share instead of being dumped on the first member —
  * which previously charged a whole price change to one person, or even made
- * their split negative. Degenerate inputs (a non-positive share, e.g. a
- * promotion line) keep the old "first member absorbs the diff" behaviour.
+ * their split negative. A NEGATIVE share (a promotion line assigned to someone
+ * that exceeds their part) is clamped to 0 and the rest rescaled, so no split
+ * is ever negative — the DB enforces `Split.amount >= 0`.
  */
 function reconcileItemizedSplits(
     splits: { userId: string; amount: number }[],
@@ -195,10 +203,11 @@ function reconcileItemizedSplits(
 ): { userId: string; amount: number }[] {
     const sum = splits.reduce((acc, s) => acc + s.amount, 0);
     const diff = amountCents - sum;
-    if (diff === 0) return splits;
-    if (sum > 0 && amountCents > 0 && splits.every((s) => s.amount >= 0)) {
-        return rescaleSplits(splits, amountCents);
-    }
+    const hasNegative = splits.some((s) => s.amount < 0);
+    if (diff === 0 && !hasNegative) return splits;
+    // rescaleSplits clamps negative shares to 0 (and splits evenly when nothing
+    // positive is left), so the result sums exactly and is never negative.
+    if (amountCents > 0) return rescaleSplits(splits, amountCents);
     splits[0].amount += diff;
     return splits;
 }

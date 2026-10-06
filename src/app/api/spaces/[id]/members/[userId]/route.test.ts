@@ -7,6 +7,8 @@ const mockMembershipFindMany = vi.fn();
 const mockMembershipCount = vi.fn();
 const mockMembershipUpdate = vi.fn();
 const mockGetGroupBalances = vi.fn();
+const mockLockQuery = vi.fn();
+const mockTransaction = vi.fn();
 
 vi.mock("@/lib/auth", () => ({ getSession: () => mockGetSession() }));
 vi.mock("@/lib/ledger-read", () => ({ getGroupBalances: (...a: unknown[]) => mockGetGroupBalances(...a) }));
@@ -23,7 +25,11 @@ vi.mock("@/lib/db", () => {
             couple: { findUnique: (...a: unknown[]) => mockCoupleFindUnique(...a) },
             membership,
             user,
-            $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ membership, user }),
+            // withSpaceLock: the tx double answers the `SELECT … FOR UPDATE`.
+            $transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+                mockTransaction();
+                return fn({ membership, user, $queryRaw: (...a: unknown[]) => mockLockQuery(...a) });
+            },
         },
     };
 });
@@ -45,6 +51,7 @@ function setup(me: string, roster: Row[], balances: Record<string, number> = {})
     mockMembershipFindMany.mockResolvedValue(roster.map((r) => ({ userId: r.userId, role: r.role })));
     mockMembershipCount.mockResolvedValue(roster.filter((r) => r.role === "OWNER").length);
     mockGetGroupBalances.mockResolvedValue(balances);
+    mockLockQuery.mockResolvedValue([{ status: "ACTIVE" }]);
 }
 
 function del(userId: string, query = "") {
@@ -112,11 +119,58 @@ describe("DELETE /api/spaces/[id]/members/[userId] — self-leave", () => {
         expect((await del("b")).status).toBe(200);
     });
 
-    it("expelling another member is unaffected by the balance guard (OWNER → REMOVED)", async () => {
-        setup("a", [{ userId: "a", role: "OWNER" }, { userId: "b", role: "MEMBER" }], { a: 5000, b: -5000 });
+    it("an OWNER expels a member whose balance is closed (→ REMOVED)", async () => {
+        setup("a", [{ userId: "a", role: "OWNER" }, { userId: "b", role: "MEMBER" }], { a: 1, b: -1 });
         const res = await del("b");
         expect(res.status).toBe(200);
         expect((await res.json()).status).toBe("REMOVED");
+    });
+
+    it("A2: 409 HAS_BALANCE when expelling a member with an open balance — even with ?force=1", async () => {
+        setup("a", [{ userId: "a", role: "OWNER" }, { userId: "b", role: "MEMBER" }], { a: 5000, b: -5000 });
+        for (const q of ["", "?force=1"]) {
+            const res = await del("b", q);
+            expect(res.status).toBe(409);
+            const body = await res.json();
+            expect(body).toMatchObject({ code: "HAS_BALANCE", balanceCents: -5000, settleUrl: "/settle?space=g1" });
+            expect(body.error).toMatch(/saldo pendiente/);
+        }
+        expect(mockMembershipUpdate).not.toHaveBeenCalled();
+    });
+
+    it("A2: a creditor (positive balance) cannot be expelled either", async () => {
+        setup("a", [{ userId: "a", role: "OWNER" }, { userId: "b", role: "MEMBER" }], { a: -2500, b: 2500 });
+        expect((await del("b")).status).toBe(409);
+    });
+
+    it("A3: the balance and the update run inside the space-locked transaction", async () => {
+        setup("a", [{ userId: "a", role: "OWNER" }, { userId: "b", role: "MEMBER" }], { a: 0, b: 0 });
+        await del("b");
+        expect(mockTransaction).toHaveBeenCalledOnce();
+        expect(mockLockQuery).toHaveBeenCalledOnce();
+        // Balances are read through the transaction client, not the global one.
+        expect(mockGetGroupBalances).toHaveBeenCalledWith("g1", expect.objectContaining({ $queryRaw: expect.any(Function) }));
+        expect(mockLockQuery.mock.invocationCallOrder[0]).toBeLessThan(mockGetGroupBalances.mock.invocationCallOrder[0]);
+        expect(mockGetGroupBalances.mock.invocationCallOrder[0]).toBeLessThan(mockMembershipUpdate.mock.invocationCallOrder[0]);
+    });
+
+    it("A3: a caller demoted concurrently (re-read under the lock) can no longer expel", async () => {
+        setup("a", [{ userId: "a", role: "OWNER" }, { userId: "b", role: "MEMBER" }], { a: 0, b: 0 });
+        // requireSpaceAccess (outside) saw OWNER; under the lock "a" is a MEMBER.
+        mockMembershipFindUnique
+            .mockResolvedValueOnce({ groupId: "g1", userId: "a", role: "OWNER", status: "ACTIVE" })
+            .mockResolvedValueOnce({ groupId: "g1", userId: "b", role: "MEMBER", status: "ACTIVE" })
+            .mockResolvedValueOnce({ groupId: "g1", userId: "a", role: "MEMBER", status: "ACTIVE" });
+        expect((await del("b")).status).toBe(403);
+        expect(mockMembershipUpdate).not.toHaveBeenCalled();
+    });
+
+    it("404 when the space disappeared before the lock", async () => {
+        setup("a", [{ userId: "a", role: "OWNER" }, { userId: "b", role: "MEMBER" }], { a: 0, b: 0 });
+        mockLockQuery.mockResolvedValue([]);
+        const res = await del("b");
+        expect(res.status).toBe(404);
+        expect((await res.json()).code).toBe("SPACE_NOT_FOUND");
     });
 
     it("a MEMBER cannot expel someone else", async () => {

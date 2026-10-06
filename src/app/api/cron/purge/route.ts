@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { unlink } from "fs/promises";
 import { join, basename } from "path";
-import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/db";
 import { SpaceStatus } from "@/generated/prisma/enums";
+import { cronGuard } from "../cron-auth";
 
 /**
  * Fase 5 — Purga de espacios efímeros archivados (OPCIONAL).
@@ -52,16 +52,6 @@ export const dynamic = "force-dynamic";
 const DEFAULT_ARCHIVED_AFTER_DAYS = 90;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Compara el secreto en tiempo constante (evita timing attacks). */
-function secretMatches(provided: string | null, expected: string): boolean {
-    if (!provided) return false;
-    const a = Buffer.from(provided);
-    const b = Buffer.from(expected);
-    // timingSafeEqual exige longitudes iguales; longitudes distintas => no coincide.
-    if (a.length !== b.length) return false;
-    return timingSafeEqual(a, b);
-}
-
 /** Umbral de retención en días (env, saneado). */
 function archivedAfterDays(): number {
     const raw = process.env.PURGE_ARCHIVED_AFTER_DAYS;
@@ -85,19 +75,9 @@ function localUploadPath(receiptUrl: string | null): string | null {
 }
 
 export async function POST(request: Request) {
-    const expected = process.env.CRON_SECRET;
-    if (!expected) {
-        // Sin secreto configurado el endpoint está deshabilitado por seguridad.
-        return NextResponse.json(
-            { error: "Purga deshabilitada: falta CRON_SECRET" },
-            { status: 503 },
-        );
-    }
-
-    const provided = request.headers.get("x-cron-secret");
-    if (!secretMatches(provided, expected)) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Sin secreto configurado el endpoint está deshabilitado por seguridad.
+    const denied = cronGuard(request, "Purga deshabilitada: falta CRON_SECRET");
+    if (denied) return denied;
 
     const dryRun = new URL(request.url).searchParams.has("dryRun");
     const days = archivedAfterDays();
@@ -157,28 +137,33 @@ export async function POST(request: Request) {
                 continue;
             }
 
-            // 2. Borrar el espacio (cascada de todo su historial).
-            await prisma.couple.delete({ where: { id: space.id } });
+            // 2 + 3 en UNA transacción: o se borran el espacio y sus User sombra
+            //    juntos, o nada (un fallo a mitad no deja invitados huérfanos con
+            //    el espacio ya borrado, ni al revés).
+            const deletedShadowUsers = await prisma.$transaction(async (tx) => {
+                // 2. Borrar el espacio (cascada de todo su historial).
+                await tx.couple.delete({ where: { id: space.id } });
 
-            // 3. Borrar los User sombra que quedaron completamente desligados. El
-            //    filtro defensivo evita que un FK Restrict (Fase 4) aborte: solo
-            //    se borra si ya no tiene NINGUNA referencia de dinero ni membership.
-            let deletedShadowUsers = 0;
-            if (shadowUserIds.length > 0) {
-                const del = await prisma.user.deleteMany({
+                // 3. Borrar los User sombra que quedaron completamente desligados.
+                //    El filtro defensivo evita que un FK Restrict (Fase 4, y
+                //    Split.userId) aborte: solo se borra si ya no tiene NINGUNA
+                //    referencia de dinero ni membership.
+                if (shadowUserIds.length === 0) return 0;
+                const del = await tx.user.deleteMany({
                     where: {
                         id: { in: shadowUserIds },
                         isGuest: true,
                         memberships: { none: {} },
                         expensesPaid: { none: {} },
                         expensesOwned: { none: {} },
+                        splits: { none: {} },
                         settlementsPaid: { none: {} },
                         settlementsReceived: { none: {} },
                         accounts: { none: {} },
                     },
                 });
-                deletedShadowUsers = del.count;
-            }
+                return del.count;
+            });
 
             // 4. Limpiar los ficheros de recibos. No es transaccional; un fichero
             //    ya inexistente (ENOENT) no es un error.

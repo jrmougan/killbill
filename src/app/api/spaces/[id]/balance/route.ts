@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
 import { getGroupMembers } from "@/lib/membership";
-import { getGroupBalances } from "@/lib/ledger-read";
+import { balancesForMembers, sumLedgerByGroup } from "@/lib/ledger-read";
 import { resolveMyDebts } from "@/lib/finance";
 
 /**
@@ -26,10 +26,9 @@ export async function GET(
         return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
     }
 
-    const [members, balances] = await Promise.all([
-        getGroupMembers(id),
-        getGroupBalances(id),
-    ]);
+    // Roster read once (not again inside getGroupBalances); ledger summed in SQL.
+    const [members, nets] = await Promise.all([getGroupMembers(id), sumLedgerByGroup([id])]);
+    const balances = balancesForMembers(nets.get(id), members.map((m) => m.id));
 
     // What the caller owes (positive = I owe them), greedy-matched. Empty if the
     // caller is a creditor / settled.

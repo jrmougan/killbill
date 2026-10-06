@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
 import { getGroupBalances } from "@/lib/ledger-read";
-import { leaveBlocker, settleUrlFor } from "@/lib/space-policy";
+import { kickBlocker, leaveBlocker, settleUrlFor } from "@/lib/space-policy";
+import { withSpaceLock } from "@/lib/expense-tx";
+import { SettlementError } from "@/lib/settlement-rules";
 import { MembershipRole, MembershipStatus } from "@/generated/prisma/enums";
+
+type Outcome = { status: number; body: Record<string, unknown> };
 
 /**
  * Remove a member from a space (Fase 1). NEVER a physical delete — a self-leave
@@ -16,7 +20,9 @@ import { MembershipRole, MembershipStatus } from "@/generated/prisma/enums";
  *     409 { code: "HAS_BALANCE", balanceCents, settleUrl } — the caller's net
  *         balance in this space is open (beyond ±1 cent); repeat with `?force=1`
  *         once the user explicitly confirmed leaving anyway.
- * - Expulsion: OWNER/ADMIN may remove another member (status -> REMOVED).
+ * - Expulsion: OWNER/ADMIN may remove another member (status -> REMOVED), only
+ *   once that member's balance is closed: 409 { code: "HAS_BALANCE",
+ *   balanceCents, settleUrl } otherwise (no `force` — the debt must be settled).
  * - An ADMIN cannot remove an OWNER (only an OWNER can).
  */
 export async function DELETE(
@@ -34,50 +40,7 @@ export async function DELETE(
 
     const isSelf = targetUserId === auth.userId;
     const searchParams = new URL(request.url).searchParams;
-
-    // Load the target's membership in THIS space.
-    const target = await prisma.membership.findUnique({
-        where: { groupId_userId: { groupId: id, userId: targetUserId } },
-    });
-    if (!target || target.status !== MembershipStatus.ACTIVE) {
-        return NextResponse.json({ error: "Ese miembro no está en el espacio" }, { status: 404 });
-    }
-
-    let newStatus: MembershipStatus;
-    if (isSelf) {
-        const force = searchParams.get("force") === "1" || searchParams.get("force") === "true";
-        const [roster, balances] = await Promise.all([
-            prisma.membership.findMany({
-                where: { groupId: id, status: MembershipStatus.ACTIVE },
-                select: { userId: true, role: true },
-            }),
-            getGroupBalances(id),
-        ]);
-        const block = leaveBlocker({
-            role: target.role,
-            ownerCount: roster.filter((m) => m.role === MembershipRole.OWNER).length,
-            activeCount: roster.length,
-            balanceCents: balances[targetUserId] ?? 0,
-            force,
-        });
-        if (block) {
-            return NextResponse.json(
-                block.code === "HAS_BALANCE" ? { ...block, settleUrl: settleUrlFor(id) } : block,
-                { status: block.status },
-            );
-        }
-        newStatus = MembershipStatus.LEFT;
-    } else {
-        // Expelling another member requires OWNER/ADMIN.
-        if (auth.role !== MembershipRole.OWNER && auth.role !== MembershipRole.ADMIN) {
-            return NextResponse.json({ error: "No tienes permisos para expulsar miembros" }, { status: 403 });
-        }
-        // Only an OWNER can remove another OWNER.
-        if (target.role === MembershipRole.OWNER && auth.role !== MembershipRole.OWNER) {
-            return NextResponse.json({ error: "Solo un propietario puede quitar a otro propietario" }, { status: 403 });
-        }
-        newStatus = MembershipStatus.REMOVED;
-    }
+    const force = searchParams.get("force") === "1" || searchParams.get("force") === "true";
 
     // RGPD suppression (Fase 3): an OWNER/ADMIN may anonymize a GUEST shadow user
     // on expulsion (`?anonymize=true`). We NEVER physically delete a user with
@@ -86,20 +49,81 @@ export async function DELETE(
     // stays intact. Only applies to shadow guests, never a real account.
     const anonymize = !isSelf && searchParams.get("anonymize") === "true";
 
-    await prisma.$transaction(async (tx) => {
-        await tx.membership.update({
-            where: { groupId_userId: { groupId: id, userId: targetUserId } },
-            data: { status: newStatus, leftAt: new Date() },
-        });
-        if (anonymize) {
-            await tx.user.updateMany({
-                where: { id: targetUserId, isGuest: true },
-                data: { name: "Invitado" },
-            });
-        }
-    });
+    // Every check that guards the status change (target/caller membership, the
+    // roster, the target's balance) is read UNDER the space row lock, in the same
+    // transaction as the write (A3): an expense, settlement or role change of
+    // this space can't slip in between the balance check and the REMOVED/LEFT.
+    let outcome: Outcome;
+    try {
+        outcome = await withSpaceLock(id, async (tx) => {
+            const [target, caller] = await Promise.all([
+                tx.membership.findUnique({ where: { groupId_userId: { groupId: id, userId: targetUserId } } }),
+                tx.membership.findUnique({ where: { groupId_userId: { groupId: id, userId: auth.userId } } }),
+            ]);
+            if (!target || target.status !== MembershipStatus.ACTIVE) {
+                return { status: 404, body: { error: "Ese miembro no está en el espacio" } };
+            }
+            if (!caller || caller.status !== MembershipStatus.ACTIVE) {
+                return { status: 403, body: { error: "No perteneces a este espacio" } };
+            }
 
-    return NextResponse.json({ success: true, status: newStatus, anonymized: anonymize });
+            let newStatus: MembershipStatus;
+            if (isSelf) {
+                const [roster, balances] = await Promise.all([
+                    tx.membership.findMany({
+                        where: { groupId: id, status: MembershipStatus.ACTIVE },
+                        select: { userId: true, role: true },
+                    }),
+                    getGroupBalances(id, tx),
+                ]);
+                const block = leaveBlocker({
+                    role: target.role,
+                    ownerCount: roster.filter((m) => m.role === MembershipRole.OWNER).length,
+                    activeCount: roster.length,
+                    balanceCents: balances[targetUserId] ?? 0,
+                    force,
+                });
+                if (block) {
+                    return {
+                        status: block.status,
+                        body: block.code === "HAS_BALANCE" ? { ...block, settleUrl: settleUrlFor(id) } : block,
+                    };
+                }
+                newStatus = MembershipStatus.LEFT;
+            } else {
+                // Expelling another member requires OWNER/ADMIN (role re-read under the lock).
+                if (caller.role !== MembershipRole.OWNER && caller.role !== MembershipRole.ADMIN) {
+                    return { status: 403, body: { error: "No tienes permisos para expulsar miembros" } };
+                }
+                // Only an OWNER can remove another OWNER.
+                if (target.role === MembershipRole.OWNER && caller.role !== MembershipRole.OWNER) {
+                    return { status: 403, body: { error: "Solo un propietario puede quitar a otro propietario" } };
+                }
+                // A2: never expel someone with an open balance (no force override).
+                const balances = await getGroupBalances(id, tx);
+                const block = kickBlocker(balances[targetUserId] ?? 0);
+                if (block) return { status: block.status, body: { ...block, settleUrl: settleUrlFor(id) } };
+                newStatus = MembershipStatus.REMOVED;
+            }
+
+            await tx.membership.update({
+                where: { groupId_userId: { groupId: id, userId: targetUserId } },
+                data: { status: newStatus, leftAt: new Date() },
+            });
+            if (anonymize) {
+                await tx.user.updateMany({
+                    where: { id: targetUserId, isGuest: true },
+                    data: { name: "Invitado" },
+                });
+            }
+            return { status: 200, body: { success: true, status: newStatus, anonymized: anonymize } };
+        });
+    } catch (e) {
+        if (e instanceof SettlementError) return NextResponse.json(e.toJSON(), { status: e.status });
+        throw e;
+    }
+
+    return NextResponse.json(outcome.body, { status: outcome.status });
 }
 
 const ASSIGNABLE_ROLES: MembershipRole[] = [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.MEMBER];

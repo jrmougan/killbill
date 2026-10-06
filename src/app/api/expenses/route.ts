@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSession } from '@/lib/auth';
 import { toCents } from '@/lib/currency';
 import { calculateSplitAmounts, hasExclusiveReceiptItems, type ReceiptItemForSplit } from '@/lib/splits';
 import { getGroupMembers, getActiveGroup } from '@/lib/membership';
@@ -8,7 +7,8 @@ import { resolveCategoryId } from '@/lib/category-db';
 import { buildReceiptLineItems } from '@/lib/receipt';
 import { postExpenseLedger } from '@/lib/ledger';
 import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
-import { runLedgerTransaction } from '@/lib/expense-tx';
+import { assertRosterUnchanged, assertWritableUnderLock, runLedgerTransaction, withSpaceLock } from '@/lib/expense-tx';
+import { SettlementError } from '@/lib/settlement-rules';
 import { isRecurringInterval, nextRecurringRun, parseExpenseDate } from '@/lib/expense-input';
 import type { Prisma } from '@/generated/prisma/client';
 
@@ -17,16 +17,25 @@ const MAX_LIMIT = 200;
 
 export async function GET(request: Request) {
     try {
-        const session = await getSession();
-        if (!session?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-        const userId = session.userId as string;
+        // getSessionCtx (not the raw JWT): a guest session is revalidated against
+        // the DB on every request, so an expelled guest is cut off at once (H3).
+        const ctx = await getSessionCtx();
+        if (!ctx?.userId) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+        const userId = ctx.userId;
 
         const { searchParams } = new URL(request.url);
         const scope = searchParams.get('scope') === 'personal' ? 'personal' : 'shared';
+        // A guest has no personal surface.
+        if (scope === 'personal' && ctx.kind === 'guest') {
+            return NextResponse.json({ expenses: [], nextCursor: null });
+        }
 
-        // Phase 4 selector switch: my group comes from the Membership layer.
-        // Shared scope needs a couple; personal scope works for any user.
-        const groupId = scope === 'shared' ? await getActiveGroup(userId) : null;
+        // Phase 4 selector switch: my group comes from the Membership layer (a
+        // guest is caged to the space of its session). Shared scope needs a
+        // couple; personal scope works for any user.
+        const groupId = scope === 'shared'
+            ? (ctx.kind === 'guest' ? ctx.groupId ?? null : await getActiveGroup(userId))
+            : null;
         if (scope === 'shared' && !groupId) {
             return NextResponse.json({ expenses: [], nextCursor: null });
         }
@@ -54,7 +63,9 @@ export async function GET(request: Request) {
                     select: { name: true }
                 }
             },
-            orderBy: { date: 'desc' },
+            // `id` breaks ties between equal dates so keyset pagination is stable
+            // (no row skipped/repeated across pages) — M3.
+            orderBy: [{ date: 'desc' }, { id: 'desc' }],
             // Fetch one extra row to determine if there are more pages
             take: limit + 1,
             ...(cursor
@@ -250,7 +261,7 @@ export async function POST(request: Request) {
 
         // Expense + optional RecurringSeries + ledger post in one transaction,
         // READ COMMITTED and retried on write conflicts (G-04).
-        const expense = await runLedgerTransaction(async (tx) => {
+        const createInTx = async (tx: Prisma.TransactionClient) => {
             let newSeriesId: string | null = null;
             if (normalizedInterval && nextRecurringDate) {
                 const series = await tx.recurringSeries.create({
@@ -290,10 +301,24 @@ export async function POST(request: Request) {
                 });
             }
             return created;
-        });
+        };
+
+        // A SHARED expense is written under the space row lock (A3): the status
+        // (SETTLING/ARCHIVED reject new expenses) and the roster the splits were
+        // computed on are re-checked inside the same transaction as the insert,
+        // so a concurrent close/kick/leave can't interleave. PERSONAL ones touch
+        // no space.
+        const expense = groupId
+            ? await withSpaceLock(groupId, async (tx, status) => {
+                assertWritableUnderLock(status);
+                await assertRosterUnchanged(tx, groupId, coupleMembers.map((m) => m.id));
+                return createInTx(tx);
+            })
+            : await runLedgerTransaction(createInTx);
 
         return NextResponse.json({ success: true, expenseId: expense.id, groupId: expense.coupleId });
     } catch (error) {
+        if (error instanceof SettlementError) return NextResponse.json(error.toJSON(), { status: error.status });
         console.error("Error creating expense:", error);
         return NextResponse.json({ error: "Error al crear el gasto" }, { status: 500 });
     }
