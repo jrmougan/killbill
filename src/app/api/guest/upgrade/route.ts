@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { signToken } from "@/lib/auth";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
 import { MembershipRole } from "@/generated/prisma/enums";
-import { HttpError, conflict, forbidden, readJson, route, validate } from "@/lib/http";
+import { conflict, forbidden, parseJson, route } from "@/lib/http";
 import { jsonObject } from "@/lib/http/schemas";
 
 /**
@@ -69,13 +69,7 @@ export const POST = route(
         }
         const { userId, groupId } = ctx;
 
-        let raw: unknown;
-        try {
-            raw = await readJson(req);
-        } catch {
-            throw new HttpError(400, INVALID_BODY);
-        }
-        const { email, password } = validate(UpgradeBody, raw);
+        const { email, password } = await parseJson(req, UpgradeBody, { invalidMessage: INVALID_BODY });
 
         const hashed = await bcrypt.hash(password, 10);
 

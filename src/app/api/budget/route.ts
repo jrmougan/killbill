@@ -7,7 +7,7 @@ import { requireSpaceAccess, type SessionCtx } from '@/lib/authz';
 import { allowsBudgetsAndRecurring } from '@/lib/space-policy';
 import type { SpaceType } from '@/generated/prisma/enums';
 import { badRequest, HttpError, notFound, requireSpace, route } from '@/lib/http';
-import { BudgetDeleteQuery, BudgetListQuery, parseBudgetBody } from '@/lib/budget-schemas';
+import { BUDGET_BODY_OPTIONS, BudgetDeleteQuery, BudgetListQuery, UpsertBudgetBody } from '@/lib/budget-schemas';
 
 /*
  * Budgets are a member/personal surface: a GUEST session (caged to an ephemeral
@@ -96,12 +96,17 @@ export const GET = route({ auth: 'user', query: BudgetListQuery }, async ({ ctx,
  * ACTIVE non-guest member of a writable space that allows budgets.
  */
 export const POST = route(
-    { auth: 'user', errorMessage: 'No se pudo guardar el presupuesto', logLabel: 'Error al guardar el presupuesto:' },
-    async ({ req, ctx }) => {
+    {
+        auth: 'user',
+        body: UpsertBudgetBody,
+        // The amount 400 keeps `code: INVALID_AMOUNT` and an unparseable body its historical message.
+        bodyOptions: BUDGET_BODY_OPTIONS,
+        errorMessage: 'No se pudo guardar el presupuesto',
+        logLabel: 'Error al guardar el presupuesto:',
+    },
+    async ({ ctx, body }) => {
         const userId = ctx.userId;
-        // Parsed in the handler: the amount 400 keeps `code: INVALID_AMOUNT` and an
-        // unparseable body its historical message.
-        const { category, amount: amountCents, month, scope, groupId: bodyGroupId } = await parseBudgetBody(req);
+        const { category, amount: amountCents, month, scope, groupId: bodyGroupId } = body;
 
         // The given month (YYYY-MM) or the current one.
         const now = new Date();

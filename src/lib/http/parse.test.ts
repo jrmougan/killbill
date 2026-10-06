@@ -50,6 +50,29 @@ describe("readJson / parseJson", () => {
     });
 });
 
+describe("parse options", () => {
+    it("invalidMessage customises the unparseable-JSON 400 (and only that one)", async () => {
+        const e = await thrown(parseJson(json("{nope"), z.object({ a: z.number() }), { invalidMessage: "Cuerpo inválido" }));
+        expect(e.status).toBe(400);
+        expect(e.toJSON()).toEqual({ error: "Cuerpo inválido" });
+        const v = await thrown(parseJson(json('{"a":"x"}'), z.object({ a: z.number() }), { invalidMessage: "Cuerpo inválido" }));
+        expect(v.message).toMatch(/se esperaba número/);
+    });
+
+    it("code adds a machine code to a validation 400 (fixed or derived from the issues)", async () => {
+        const schema = z.object({ a: z.number(), b: z.number() });
+        const fixed = await thrown(() => validate(schema, { a: 1 }, { code: "INVALID_INPUT" }));
+        expect(fixed.toJSON()).toMatchObject({ code: "INVALID_INPUT", issues: [{ path: "b" }] });
+
+        const byIssue = (issues: { path: string }[]) => (issues[0]?.path === "a" ? "INVALID_A" : undefined);
+        const a = await thrown(parseJson(json('{"a":"x","b":1}'), schema, { code: byIssue }));
+        expect(a.code).toBe("INVALID_A");
+        const b = await thrown(parseJson(json('{"a":1}'), schema, { code: byIssue }));
+        expect(b.code).toBeUndefined();
+        expect(b.toJSON()).not.toHaveProperty("code");
+    });
+});
+
 describe("parseQuery", () => {
     const schema = z.object({ scope: z.enum(["shared", "personal"]).optional(), limit: z.string().optional() });
 

@@ -11,9 +11,9 @@ import {
 } from "@/lib/space-policy";
 import { SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 import { withSpaceLock } from "@/lib/expense-tx";
-import { badRequest, HttpError, requireSpace, route } from "@/lib/http";
+import { badRequest, HttpError, parseJson, requireSpace, route } from "@/lib/http";
 import { idParams } from "@/lib/http/schemas";
-import { parseSpaceBody, PatchSpaceBody } from "@/lib/space-schemas";
+import { PatchSpaceBody, SPACE_BODY_OPTIONS } from "@/lib/space-schemas";
 
 /**
  * Space management (OWNER/ADMIN only): lifecycle transitions
@@ -41,7 +41,7 @@ export const PATCH = route(
 
         // Parsed after the role gate: status/type must be enum values (400 "Estado
         // no válido" / "Tipo no válido"); the name is checked by normalizeSpaceName.
-        const body = await parseSpaceBody(req, PatchSpaceBody);
+        const body = await parseJson(req, PatchSpaceBody, SPACE_BODY_OPTIONS);
 
         // The status/type the rules check are re-read UNDER the space row lock, and
         // the archive guard (balances + PENDING settlements) runs in that same

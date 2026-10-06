@@ -119,6 +119,25 @@ describe("route() parsing", () => {
         expect(handler).not.toHaveBeenCalled();
     });
 
+    it("bodyOptions: custom invalid-JSON message and validation code", async () => {
+        const handler = vi.fn(ok);
+        const h = route(
+            {
+                auth: "user",
+                body: z.object({ a: z.number({ error: "Falta a" }) }),
+                bodyOptions: { invalidMessage: "Cuerpo inválido", code: "INVALID_INPUT" },
+            },
+            handler,
+        );
+        expect(await (await h(post("{bad"))).json()).toEqual({ error: "Cuerpo inválido" });
+        expect(await (await h(post("{}"))).json()).toEqual({
+            error: "Falta a",
+            code: "INVALID_INPUT",
+            issues: [{ path: "a", message: "Falta a" }],
+        });
+        expect(handler).not.toHaveBeenCalled();
+    });
+
     it("maps thrown errors; unknown ones become the route's 500", async () => {
         const spy = vi.spyOn(console, "error").mockImplementation(() => {});
         const conflictRes = await route({ auth: "user" }, () => { throw new HttpError(409, "Ya existe", "DUP"); })(post());

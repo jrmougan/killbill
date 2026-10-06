@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { getActiveGroup } from '@/lib/membership';
-import { badRequest, conflict, readJson, requireSpace, route, validate } from '@/lib/http';
+import { badRequest, conflict, requireSpace, route } from '@/lib/http';
 import { jsonObject } from '@/lib/http/schemas';
 
 /** Longest tag name accepted (keeps chips readable and well under the column limit). */
@@ -71,14 +71,17 @@ export const GET = route({ auth: 'user-or-guest' }, async ({ ctx }) => {
  * Errors: 400 invalid input, 403 guest/non-member, 409 duplicate name.
  */
 export const POST = route(
-    { auth: 'user', errorMessage: 'No se pudo crear la etiqueta', logLabel: 'Error al crear la etiqueta:' },
-    async ({ req, ctx }) => {
+    {
+        auth: 'user',
+        body: CreateTagBody,
+        // Unparseable JSON keeps its historical message.
+        bodyOptions: { invalidMessage: BODY_INVALID },
+        errorMessage: 'No se pudo crear la etiqueta',
+        logLabel: 'Error al crear la etiqueta:',
+    },
+    async ({ ctx, body }) => {
         const userId = ctx.userId;
-        // Unparseable JSON keeps its historical message (so not options.body).
-        const raw = await readJson(req).catch(() => {
-            throw badRequest(BODY_INVALID);
-        });
-        const { name, color, personal, groupId: bodyGroupId } = validate(CreateTagBody, raw);
+        const { name, color, personal, groupId: bodyGroupId } = body;
 
         const duplicate = () => conflict(`Ya existe una etiqueta llamada «${name}»`, 'TAG_EXISTS');
 

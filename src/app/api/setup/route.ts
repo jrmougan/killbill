@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import { HttpError, readJson, toErrorResponse, validate } from "@/lib/http";
+import { HttpError, parseJson, toErrorResponse } from "@/lib/http";
 import { jsonObject } from "@/lib/http/schemas";
 
 const SETUP_DONE = "Ya existen usuarios. El setup ya fue completado.";
@@ -40,13 +40,7 @@ export async function POST(request: Request) {
         // authoritative check is repeated inside the transaction below.
         if ((await prisma.user.count()) > 0) throw setupDone();
 
-        let raw: unknown;
-        try {
-            raw = await readJson(request);
-        } catch {
-            throw new HttpError(400, INVALID_BODY);
-        }
-        const { name, email, password } = validate(SetupBody, raw);
+        const { name, email, password } = await parseJson(request, SetupBody, { invalidMessage: INVALID_BODY });
 
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);

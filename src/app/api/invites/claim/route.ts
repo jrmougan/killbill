@@ -15,7 +15,7 @@ import {
 } from "@/lib/invite-policy";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
 import { getClientIp } from "@/lib/rate-limit";
-import { HttpError, badRequest, conflict, enforceRateLimit, forbidden, notFound, readJson, route, validate } from "@/lib/http";
+import { HttpError, badRequest, conflict, enforceRateLimit, forbidden, notFound, parseJson, route } from "@/lib/http";
 import { jsonObject } from "@/lib/http/schemas";
 import { InviteKind, MembershipRole, MembershipStatus, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 
@@ -89,13 +89,7 @@ function featureDisabled() {
 export const POST = route(
     { auth: "public", errorMessage: "Error al unirse al espacio", logLabel: "Error al canjear invitación:" },
     async ({ req, ctx: session }) => {
-        let raw: unknown;
-        try {
-            raw = await readJson(req);
-        } catch {
-            throw new HttpError(400, INVALID_BODY);
-        }
-        const { token, name, asMember, replaceSession } = validate(ClaimBody, raw);
+        const { token, name, asMember, replaceSession } = await parseJson(req, ClaimBody, { invalidMessage: INVALID_BODY });
         const tokenHash = hashInviteToken(token);
 
         const current = sessionKindOf(session);

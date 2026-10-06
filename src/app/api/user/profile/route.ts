@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { badRequest, readJson, route, validate } from '@/lib/http';
+import { route } from '@/lib/http';
 import { jsonObject } from '@/lib/http/schemas';
 
 /** Longest display name accepted (the column is VARCHAR(191); keep it human). */
@@ -38,15 +38,14 @@ const ProfileBody = jsonObject(
 export const PATCH = route(
     {
         auth: 'user',
+        body: ProfileBody,
+        // Unparseable JSON keeps its historical message.
+        bodyOptions: { invalidMessage: BODY_INVALID },
         errorMessage: 'No se pudo guardar el perfil. Inténtalo de nuevo.',
         logLabel: 'Error al actualizar el perfil:',
     },
-    async ({ req, ctx }) => {
-        // Unparseable JSON keeps its historical message (so not options.body).
-        const raw = await readJson(req).catch(() => {
-            throw badRequest(BODY_INVALID);
-        });
-        const { name, avatar } = validate(ProfileBody, raw);
+    async ({ ctx, body }) => {
+        const { name, avatar } = body;
 
         const user = await prisma.user.update({
             where: { id: ctx.userId },

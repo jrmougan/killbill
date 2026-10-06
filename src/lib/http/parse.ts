@@ -3,7 +3,7 @@
  * `toErrorResponse` (route() does that for you).
  */
 import { z } from "zod";
-import { HttpError, INVALID_BODY_MESSAGE, validationError } from "./errors";
+import { HttpError, INVALID_BODY_MESSAGE, validationError, type ValidationCode } from "./errors";
 
 /**
  * Spanish defaults for the issues a schema does not word itself. Applied per
@@ -12,30 +12,47 @@ import { HttpError, INVALID_BODY_MESSAGE, validationError } from "./errors";
  */
 const SPANISH = z.locales.es().localeError;
 
-/** Validate `value` against `schema` (Spanish messages) or throw a 400 with `issues`. */
-export function validate<S extends z.ZodType>(schema: S, value: unknown): z.output<S> {
+export type ValidateOptions = {
+    /** `code` added to the validation 400 (fixed, or derived from the issues). */
+    code?: ValidationCode;
+};
+
+export type ReadJsonOptions = {
+    /** Message of the 400 for a non-empty unparseable body (default "Petición no válida"). */
+    invalidMessage?: string;
+};
+
+export type ParseJsonOptions = ValidateOptions & ReadJsonOptions;
+
+/** Validate `value` against `schema` (Spanish messages) or throw a 400 with `issues` (+ `code`). */
+export function validate<S extends z.ZodType>(schema: S, value: unknown, options: ValidateOptions = {}): z.output<S> {
     const result = schema.safeParse(value, { error: SPANISH });
-    if (!result.success) throw validationError(result.error);
+    if (!result.success) throw validationError(result.error, options.code);
     return result.data;
 }
 
 /**
  * Read the JSON body. An EMPTY body yields `undefined` (so a schema may make the
- * whole body optional); a non-empty unparseable one is a 400 "Petición no válida".
+ * whole body optional); a non-empty unparseable one is a 400 "Petición no válida"
+ * (or `options.invalidMessage`, for routes with a historical wording).
  */
-export async function readJson(req: Request): Promise<unknown> {
+export async function readJson(req: Request, options: ReadJsonOptions = {}): Promise<unknown> {
     const text = await req.text();
     if (text.trim() === "") return undefined;
     try {
         return JSON.parse(text);
     } catch {
-        throw new HttpError(400, INVALID_BODY_MESSAGE);
+        throw new HttpError(400, options.invalidMessage ?? INVALID_BODY_MESSAGE);
     }
 }
 
 /** Read + validate the JSON body. */
-export async function parseJson<S extends z.ZodType>(req: Request, schema: S): Promise<z.output<S>> {
-    return validate(schema, await readJson(req));
+export async function parseJson<S extends z.ZodType>(
+    req: Request,
+    schema: S,
+    options: ParseJsonOptions = {},
+): Promise<z.output<S>> {
+    return validate(schema, await readJson(req, options), options);
 }
 
 /**

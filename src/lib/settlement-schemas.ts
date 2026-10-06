@@ -11,7 +11,7 @@
  * `{ error, issues }` 400.
  */
 import { z } from "zod";
-import { HttpError, readJson, validate, type ValidationIssue } from "@/lib/http";
+import { readJson, validate } from "@/lib/http";
 import { id, jsonObject } from "@/lib/http/schemas";
 import { parseSettlementAmount, SETTLEMENT_METHODS } from "@/lib/settlement-rules";
 
@@ -79,12 +79,5 @@ export type ResolveSettlementBody = z.output<typeof ResolveSettlementBody>;
  */
 export async function parseSettlementInput<S extends z.ZodType>(req: Request, schema: S): Promise<z.output<S>> {
     const raw = await readJson(req).catch(() => null);
-    try {
-        return validate(schema, raw);
-    } catch (e) {
-        if (!(e instanceof HttpError) || e.status !== 400) throw e;
-        const issues = (e.extra.issues as ValidationIssue[] | undefined) ?? [];
-        const code = issues[0]?.path === "amount" ? "INVALID_AMOUNT" : "INVALID_INPUT";
-        throw new HttpError(400, e.message, code, e.extra);
-    }
+    return validate(schema, raw, { code: ([first]) => (first?.path === "amount" ? "INVALID_AMOUNT" : "INVALID_INPUT") });
 }

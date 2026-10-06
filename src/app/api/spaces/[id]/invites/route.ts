@@ -4,9 +4,9 @@ import { allowsGuests, joinByCodeAllowed } from "@/lib/space-policy";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
 import { generateInviteToken, hashInviteToken, tokenPrefix } from "@/lib/invite-token";
 import { InviteKind, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
-import { badRequest, forbidden, notFound, readJson, requireSpace, route } from "@/lib/http";
+import { badRequest, forbidden, notFound, parseJson, readJson, requireSpace, route } from "@/lib/http";
 import { idParams } from "@/lib/http/schemas";
-import { CreateInviteBody, parseSpaceBody } from "@/lib/space-schemas";
+import { CreateInviteBody, SPACE_BODY_OPTIONS } from "@/lib/space-schemas";
 
 /**
  * Invite-link management for registered members (Fase 2, kind MEMBER).
@@ -34,7 +34,7 @@ export const POST = route(options, async ({ req, ctx, params: { id } }) => {
     const auth = await requireSpace(ctx, id, { roles: ["OWNER", "ADMIN"] });
 
     // Body parsed after the role gate. `kind` must be MEMBER | GUEST (default MEMBER).
-    const body = await parseSpaceBody(req, CreateInviteBody);
+    const body = await parseJson(req, CreateInviteBody, SPACE_BODY_OPTIONS);
     const kind = body.kind ?? InviteKind.MEMBER;
 
     const spaceType = auth.space.type as SpaceType;

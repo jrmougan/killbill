@@ -6,27 +6,15 @@
  * Messages are the routes' historical ones ("Cuerpo inválido", "Estado no válido"…).
  */
 import { z } from "zod";
-import { badRequest, readJson, validate } from "@/lib/http";
+import type { ParseJsonOptions } from "@/lib/http";
 import { id } from "@/lib/http/schemas";
 import { InviteKind, MembershipRole, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 
 /** Historical 400 of the space routes for an unparseable / non-object body. */
 export const INVALID_SPACE_BODY = "Cuerpo inválido";
 
-/**
- * Read + validate a JSON body of a space route. Unlike parseJson (whose bad-JSON
- * message is "Petición no válida"), an unparseable body keeps the historical
- * "Cuerpo inválido" of these routes.
- */
-export async function parseSpaceBody<S extends z.ZodType>(req: Request, schema: S): Promise<z.output<S>> {
-    let raw: unknown;
-    try {
-        raw = await readJson(req);
-    } catch {
-        throw badRequest(INVALID_SPACE_BODY);
-    }
-    return validate(schema, raw);
-}
+/** `parseJson` options of the space routes: an unparseable body keeps "Cuerpo inválido". */
+export const SPACE_BODY_OPTIONS: ParseJsonOptions = { invalidMessage: INVALID_SPACE_BODY };
 
 const passthrough = z.unknown().optional();
 

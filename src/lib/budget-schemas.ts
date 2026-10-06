@@ -6,7 +6,7 @@
  */
 import { z } from "zod";
 import { toCents, parseEuroInput } from "@/lib/currency";
-import { badRequest, HttpError, readJson, validate, type ValidationIssue } from "@/lib/http";
+import type { ParseJsonOptions } from "@/lib/http";
 import { jsonObject } from "@/lib/http/schemas";
 
 /** Upper bound for a single budget: 1.000.000 € (fits the INT `amount` column). */
@@ -78,23 +78,14 @@ export const UpsertBudgetBody = jsonObject(
 export type UpsertBudgetBody = z.output<typeof UpsertBudgetBody>;
 
 /**
- * Read + validate the POST body: unparseable JSON keeps its historical
- * "Cuerpo de la petición no válido", and an invalid amount keeps
- * `code: INVALID_AMOUNT` (the kit's `{ error, issues }` 400 + that code).
+ * `parseJson` / `route({ bodyOptions })` options of the POST body: unparseable
+ * JSON keeps its historical "Cuerpo de la petición no válido", and an invalid
+ * amount (not a missing one) carries `code: INVALID_AMOUNT`.
  */
-export async function parseBudgetBody(req: Request): Promise<UpsertBudgetBody> {
-    const raw = await readJson(req).catch(() => {
-        throw badRequest(BUDGET_BODY_INVALID);
-    });
-    try {
-        return validate(UpsertBudgetBody, raw);
-    } catch (e) {
-        if (!(e instanceof HttpError) || e.status !== 400) throw e;
-        const first = (e.extra.issues as ValidationIssue[] | undefined)?.[0];
-        const code = first?.path === "amount" && first.message !== REQUIRED ? "INVALID_AMOUNT" : undefined;
-        throw new HttpError(400, e.message, code, e.extra);
-    }
-}
+export const BUDGET_BODY_OPTIONS: ParseJsonOptions = {
+    invalidMessage: BUDGET_BODY_INVALID,
+    code: ([first]) => (first?.path === "amount" && first.message !== REQUIRED ? "INVALID_AMOUNT" : undefined),
+};
 
 /** GET /api/budget?scope=&groupId= */
 export const BudgetListQuery = z.object({

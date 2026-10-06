@@ -13,7 +13,7 @@ import type { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getSessionCtx, type SessionCtx } from "@/lib/authz";
 import { HttpError, toErrorResponse } from "./errors";
-import { parseJson, parseQuery, validate } from "./parse";
+import { parseJson, parseQuery, validate, type ParseJsonOptions } from "./parse";
 
 /**
  * - `public`        no session required (ctx may be null).
@@ -33,6 +33,8 @@ export type RouteOptions<A extends AuthMode, B, Q, P> = {
     auth: A;
     /** JSON body schema. Parsed BEFORE the handler: keep it context-free (shape/type checks only). */
     body?: B;
+    /** Body parsing options: `invalidMessage` (unparseable JSON) and `code` (validation 400). */
+    bodyOptions?: ParseJsonOptions;
     /** Query-string schema (values are strings). */
     query?: Q;
     /** Dynamic segment schema (e.g. z.object({ id: idSchema })). Without it params are untyped strings. */
@@ -94,7 +96,7 @@ export function route<
             const rawParams = (await context?.params) ?? {};
             const params = options.params ? validate(options.params, rawParams) : rawParams;
             const query = options.query ? parseQuery(req, options.query) : undefined;
-            const body = options.body ? await parseJson(req, options.body) : undefined;
+            const body = options.body ? await parseJson(req, options.body, options.bodyOptions) : undefined;
             return await handler({ req, ctx, body, query, params } as RouteArgs<A, B, Q, P>);
         } catch (e) {
             return toErrorResponse(e, { fallbackMessage: options.errorMessage, logLabel: options.logLabel });

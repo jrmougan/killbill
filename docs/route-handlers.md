@@ -20,13 +20,14 @@ import { jsonObject, id, idParams, cents, eurosToCents, eurosToCentsOrNull, isoD
 | `route(options, handler)` | Devuelve el handler `(req, { params }) => Promise<Response>`. Orden: auth → `params` → `query` → `body` → handler; cualquier `throw` pasa por `toErrorResponse`. |
 | `options.auth` | `'public'` (ctx puede ser `null`), `'user'` (sesión registrada o MCP; invitado → 403), `'user-or-guest'` (cualquier sesión revalidada), `'admin'` (sesión de navegador + `User.isAdmin` leído de la BD; 401/403 "Acceso denegado"). |
 | `options.body` / `query` / `params` | Esquemas Zod. El handler recibe `{ req, ctx, body, query, params }` ya tipados. Sin esquema de `params`, llegan como `Record<string, string>`. |
+| `options.bodyOptions` | Las mismas opciones de `parseJson` (`invalidMessage`, `code`) para el cuerpo de `options.body`. |
 | `options.errorMessage` / `logLabel` | Mensaje del 500 inesperado (el histórico de la ruta) y etiqueta del `console.error`. |
 | `options.unauthorizedMessage` / `guestMessage` | Para conservar mensajes legados (`'Unauthorized'`, `'Los invitados no pueden…'`). |
 | `HttpError(status, message, code?, extra?, headers?)` | Se serializa como `{ error, code?, ...extra }`. Atajos: `badRequest`, `unauthorized`, `forbidden`, `notFound`, `conflict`. |
 | `toErrorResponse(e, { fallbackMessage, logLabel })` | `HttpError` → su JSON; `ZodError` → 400 `{ error: <primer mensaje>, issues: [{ path, message }] }`; `SettlementError`, `SpacePolicyError`, `ListError`, `CategoryError` → `{ error, code, ...extra }` con su `status`; resto → 500 + `console.error`. |
-| `parseJson(req, schema)` | Cuerpo vacío → `undefined` (el esquema decide); JSON inválido → 400 "Petición no válida". |
+| `parseJson(req, schema, opts?)` / `readJson(req, opts?)` | Cuerpo vacío → `undefined` (el esquema decide); JSON inválido → 400 "Petición no válida", o `opts.invalidMessage` si la ruta tenía otro mensaje histórico ("Cuerpo inválido"…). `parseJson` acepta también `opts.code` (ver `validate`). |
 | `parseQuery(req \| url, schema)` | Valores string; clave repetida → el primero (semántica de `searchParams.get`). |
-| `validate(schema, value)` | `safeParse` con mensajes por defecto en español (locale `es` por parseo, no global: MCP no cambia) y 400 si falla. Úsalo en vez de `schema.parse()`. |
+| `validate(schema, value, { code? })` | `safeParse` con mensajes por defecto en español (locale `es` por parseo, no global: MCP no cambia) y 400 `{ error, code?, issues }` si falla. `code` es un string fijo o una función `(issues) => string \| undefined` (p. ej. `INVALID_AMOUNT` si el primer issue es `amount`; ver `BUDGET_BODY_OPTIONS`). Úsalo en vez de `schema.parse()`. |
 | `requireSpace(ctx, groupId, opts)` | `requireSpaceAccess` que lanza su denegación tal cual (status, mensaje, `code` p. ej. 409 `SPACE_NOT_WRITABLE`). Devuelve `SpaceAccessOk`. |
 | `enforceRateLimit(key, limit, windowMs, message?)` | 429 "Demasiadas solicitudes…" con `Retry-After`. |
 
@@ -91,8 +92,11 @@ export const POST = route(
    de los `catch`. Si una ruta mapea un error de dominio con otro mensaje (p. ej. `invites/claim`), captúralo
    localmente y lanza el `HttpError` que corresponda.
 5. **Mantén intactos** `withSpaceLock`/`runLedgerTransaction`, los `assert*UnderLock` y los comentarios de diseño.
-6. **Esquemas compartidos** de un dominio en `src/lib/<dominio>-schemas.ts` (ver `expense-schemas.ts`);
-   reutiliza validadores existentes con `refine`/`transform`, no dupliques reglas.
+6. **Esquemas compartidos** de un dominio en `src/lib/<dominio>-schemas.ts` (`expense-`, `list-`, `space-`,
+   `settlement-`, `budget-`, `category-schemas.ts`…), junto con sus opciones de parseo compartidas
+   (`SPACE_BODY_OPTIONS`, `BUDGET_BODY_OPTIONS`, `PERSONAL_LIST_ROUTE`); reutiliza validadores existentes con
+   `refine`/`transform`, no dupliques reglas. Un mensaje histórico de JSON inválido o un `code` en los 400 de
+   validación se expresan con `bodyOptions` / `parseJson(…, opts)`, no con `try/catch` locales.
 7. **Exports**: `export const GET = route(...)`. No exportes métodos que la ruta no tenía (un GET ausente debe
    seguir siendo 405).
 8. Para respuestas no JSON (CSV, streams) o rutas con auth propia (`cron` con `x-cron-secret`, `mcp` con Bearer),

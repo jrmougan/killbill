@@ -4,8 +4,8 @@ import { getGroupBalances } from "@/lib/ledger-read";
 import { kickBlocker, leaveBlocker, settleUrlFor, type LeaveBlock } from "@/lib/space-policy";
 import { withSpaceLock } from "@/lib/expense-tx";
 import { MembershipRole, MembershipStatus } from "@/generated/prisma/enums";
-import { conflict, forbidden, HttpError, notFound, requireSpace, route } from "@/lib/http";
-import { memberParams, MemberRoleBody, parseSpaceBody } from "@/lib/space-schemas";
+import { conflict, forbidden, HttpError, notFound, parseJson, requireSpace, route } from "@/lib/http";
+import { memberParams, MemberRoleBody, SPACE_BODY_OPTIONS } from "@/lib/space-schemas";
 
 const NOT_IN_SPACE = "Ese miembro no está en el espacio";
 
@@ -129,7 +129,7 @@ export const PATCH = route(
         await requireSpace(ctx, id, { roles: [MembershipRole.OWNER], allowArchived: true });
 
         // Parsed after the OWNER gate: `role` must be OWNER | ADMIN | MEMBER (400 "Rol no válido").
-        const { role } = await parseSpaceBody(req, MemberRoleBody);
+        const { role } = await parseJson(req, MemberRoleBody, SPACE_BODY_OPTIONS);
 
         const target = await prisma.membership.findUnique({
             where: { groupId_userId: { groupId: id, userId: targetUserId } },

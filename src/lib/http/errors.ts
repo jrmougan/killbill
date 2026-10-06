@@ -52,10 +52,17 @@ export function zodIssues(error: ZodError): ValidationIssue[] {
     return error.issues.map((i) => ({ path: i.path.map(String).join("."), message: i.message }));
 }
 
-/** A ZodError as a 400 HttpError: `{ error: <first issue message>, issues: [...] }`. */
-export function validationError(error: ZodError): HttpError {
+/**
+ * Machine `code` of a validation 400: a fixed string, or derived from the issues
+ * (e.g. `INVALID_AMOUNT` when the first one is the amount). `undefined` → no code.
+ */
+export type ValidationCode = string | ((issues: ValidationIssue[]) => string | undefined);
+
+/** A ZodError as a 400 HttpError: `{ error: <first issue message>, code?, issues: [...] }`. */
+export function validationError(error: ZodError, code?: ValidationCode): HttpError {
     const issues = zodIssues(error);
-    return new HttpError(400, issues[0]?.message ?? INVALID_BODY_MESSAGE, undefined, { issues });
+    const resolved = typeof code === "function" ? code(issues) : code;
+    return new HttpError(400, issues[0]?.message ?? INVALID_BODY_MESSAGE, resolved, { issues });
 }
 
 /**
