@@ -20,7 +20,10 @@ export default async function SettingsPage({
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, avatar: true, isAdmin: true },
+    });
     if (!user) redirect("/login");
 
     // F4 (multi-group): resolve ALL the user's ACTIVE groups + the active one.
@@ -41,7 +44,6 @@ export default async function SettingsPage({
             groups={groups.map(g => ({
                 id: g.id,
                 name: g.name ?? "Mi grupo",
-                code: g.code,
                 memberCount: g.memberCount,
                 isActive: g.id === activeGroupId,
                 type: g.type,

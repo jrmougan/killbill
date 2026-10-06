@@ -69,7 +69,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     // A GUEST session is caged to its EPHEMERAL space with no personal economy.
     const isGuest = session.kind === "guest";
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, avatar: true } });
     if (!user) {
         return <div className="p-10 text-center">Usuario no encontrado. <Link href="/login" className="underline">Inicia sesión de nuevo</Link></div>;
     }

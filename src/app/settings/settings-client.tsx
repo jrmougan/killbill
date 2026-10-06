@@ -41,7 +41,6 @@ interface UserData {
 interface GroupData {
     id: string;
     name: string;
-    code: string;
     memberCount: number;
     isActive: boolean;
     type: string;

@@ -81,7 +81,6 @@ export async function getUserGroups(
 ): Promise<{
     id: string;
     name: string | null;
-    code: string;
     memberCount: number;
     type: SpaceType;
     status: SpaceStatus;
@@ -96,7 +95,6 @@ export async function getUserGroups(
                 select: {
                     id: true,
                     name: true,
-                    code: true,
                     type: true,
                     status: true,
                     expiresAt: true,
@@ -109,7 +107,6 @@ export async function getUserGroups(
     return memberships.map((m) => ({
         id: m.group.id,
         name: m.group.name,
-        code: m.group.code,
         memberCount: m.group._count.memberships,
         type: m.group.type,
         status: m.group.status,

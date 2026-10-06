@@ -7,7 +7,7 @@ import { getSessionCtx } from "@/lib/authz";
 import { formatCurrency, formatEuros } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
-import { getGroupMembers, getActiveGroup } from "@/lib/membership";
+import { getGroupMembers, getActiveGroup, PUBLIC_MEMBER_SELECT } from "@/lib/membership";
 import { getEffectiveCategories } from "@/lib/category-db";
 import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
@@ -24,13 +24,10 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
     const expense = await prisma.expense.findUnique({
         where: { id: id },
         include: {
-            paidBy: true,
-            createdBy: true,
-            splits: {
-                include: {
-                    user: true
-                }
-            },
+            // Public projection only (never password/pin/email).
+            paidBy: { select: PUBLIC_MEMBER_SELECT },
+            createdBy: { select: PUBLIC_MEMBER_SELECT },
+            splits: { include: { user: { select: PUBLIC_MEMBER_SELECT } } },
             tags: {
                 include: {
                     tag: true

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
-import { getGroupMembers } from "@/lib/membership";
+import { getGroupMembers, PUBLIC_MEMBER_SELECT } from "@/lib/membership";
 import { calculateSplitAmounts } from "@/lib/splits";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
@@ -32,8 +32,9 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
     const settlement = await prisma.settlement.findUnique({
         where: { id },
         include: {
-            fromUser: true,
-            toUser: true,
+            // Public projection only (never password/pin/email).
+            fromUser: { select: PUBLIC_MEMBER_SELECT },
+            toUser: { select: PUBLIC_MEMBER_SELECT },
             couple: { select: { name: true, type: true, status: true } },
             expenses: {
                 include: {
