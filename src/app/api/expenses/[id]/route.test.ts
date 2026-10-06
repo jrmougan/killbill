@@ -22,6 +22,7 @@ vi.mock('@/lib/db', () => {
     const expense = {
         findUnique: (...a: unknown[]) => mockExpenseFindUnique(...a),
         delete: (...a: unknown[]) => mockExpenseDelete(...a),
+        deleteMany: (...a: unknown[]) => mockExpenseDelete(...a),
         update: (...a: unknown[]) => mockExpenseUpdate(...a),
     };
     const split = {
@@ -32,17 +33,32 @@ vi.mock('@/lib/db', () => {
     };
     const receiptLineItem = { deleteMany: vi.fn(), createMany: vi.fn() };
     const recurringSeries = { update: (...a: unknown[]) => mockTxSeriesUpdate(...a), create: vi.fn() };
+    const membership = {
+        findMany: async () => ((await mockGetGroupMembers()) as { id: string }[]).map((m) => ({ userId: m.id })),
+    };
+    const $queryRaw = async () => {
+        const space = await mockCoupleFindUnique();
+        return space ? [{ status: space.status }] : [];
+    };
     return {
         prisma: {
             expense,
             split,
+            // getSessionCtx revalidates a GUEST session against its Membership row.
+            membership: {
+                ...membership,
+                findUnique: async () => ({ role: 'GUEST', status: 'ACTIVE', group: { status: 'ACTIVE' } }),
+            },
             // Writability gate (SETTLING/ARCHIVED are read-only).
             couple: { findUnique: (...a: unknown[]) => mockCoupleFindUnique(...a) },
             // DELETE and PATCH both wrap their writes in a $transaction; run the
             // callback against a tx double exposing the same model mocks. Phase 5:
             // the series is deactivated only when series.templateId === the id.
+            // A SHARED expense is written under the space lock (A3): the tx double
+            // answers the `SELECT … FOR UPDATE` with the space status and the
+            // in-tx roster re-read with the same members getGroupMembers returns.
             $transaction: (cb: (tx: unknown) => unknown) =>
-                cb({ expense, split, receiptLineItem, recurringSeries }),
+                cb({ expense, split, receiptLineItem, recurringSeries, membership, $queryRaw }),
         },
     };
 });
@@ -385,5 +401,69 @@ describe('PATCH /api/expenses/[id] — date, read-only spaces and explicit split
         const res = await PATCH(patchReq({ amount: -1 }), { params });
         expect(res.status).toBe(400);
         expect((await res.json()).error).toBe('Importe no válido');
+    });
+});
+
+describe('PATCH/DELETE /api/expenses/[id] — space lock (A3) and guest cage (H3)', () => {
+    beforeEach(() => {
+        [mockGetSession, mockExpenseFindUnique, mockExpenseUpdate, mockExpenseDelete, mockSplitFindMany, mockGetGroupMembers, mockPostExpenseLedger, mockCoupleFindUnique]
+            .forEach((m) => m.mockReset());
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        mockGetGroupMembers.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
+        mockCoupleFindUnique.mockResolvedValue({ status: 'ACTIVE' });
+        mockExpenseFindUnique.mockResolvedValue(sharedExpense({ amount: 2000, series: null, lineItems: [], splitStrategy: 'EQUAL' }));
+        mockSplitFindMany.mockResolvedValue([{ userId: 'u1', amount: 1000 }, { userId: 'u2', amount: 1000 }]);
+        mockExpenseUpdate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+            Promise.resolve({ id: 'e1', visibility: 'SHARED', coupleId: 'c1', amount: 2000, date: new Date(0), seriesId: null, paidById: 'u1', ...data }));
+        mockExpenseDelete.mockResolvedValue({ count: 1 });
+    });
+
+    it.each(['SETTLING', 'ARCHIVED'])('PATCH: 409 when the space became %s between the pre-check and the lock', async (status) => {
+        // Pre-check sees ACTIVE; the status read under the row lock does not.
+        mockCoupleFindUnique.mockResolvedValueOnce({ status: 'ACTIVE' }).mockResolvedValue({ status });
+        const res = await PATCH(patchReq({ description: 'Cena' }), { params });
+        expect(res.status).toBe(409);
+        expect((await res.json()).code).toBe('SPACE_NOT_WRITABLE');
+        expect(mockExpenseUpdate).not.toHaveBeenCalled();
+    });
+
+    it('DELETE: 409 when the space was archived concurrently (status re-read under the lock)', async () => {
+        mockCoupleFindUnique.mockResolvedValueOnce({ status: 'ACTIVE' }).mockResolvedValue({ status: 'ARCHIVED' });
+        const res = await DELETE(req(), { params });
+        expect(res.status).toBe(409);
+        expect(mockExpenseDelete).not.toHaveBeenCalled();
+    });
+
+    it('PATCH: 409 MEMBERS_CHANGED when someone left between validation and the lock', async () => {
+        // Validation/split computed for u1+u2+u3; under the lock only u1+u2 remain.
+        mockGetGroupMembers
+            .mockResolvedValueOnce([{ id: 'u1' }, { id: 'u2' }, { id: 'u3' }])
+            .mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
+        const res = await PATCH(patchReq({ amount: 30 }), { params });
+        expect(res.status).toBe(409);
+        expect((await res.json()).code).toBe('MEMBERS_CHANGED');
+        expect(mockExpenseUpdate).not.toHaveBeenCalled();
+        expect(mockPostExpenseLedger).not.toHaveBeenCalled();
+    });
+
+    it('a PERSONAL expense takes no space lock', async () => {
+        mockExpenseFindUnique.mockResolvedValue(personalExpense({ amount: 2000, series: null, lineItems: [] }));
+        const res = await PATCH(patchReq({ description: 'Libro' }), { params });
+        expect(res.status).toBe(200);
+        expect(mockCoupleFindUnique).not.toHaveBeenCalled();
+    });
+
+    it('a guest cannot touch an expense of another space, nor a personal one', async () => {
+        // u2 is a (revalidated) guest member of c1's roster but caged to "other".
+        mockGetSession.mockResolvedValue({ userId: 'u2', kind: 'guest', groupId: 'other' });
+        expect((await DELETE(req(), { params })).status).toBe(403);
+        mockExpenseFindUnique.mockResolvedValue(personalExpense({ ownerId: 'u2' }));
+        expect((await DELETE(req(), { params })).status).toBe(403);
+        expect(mockExpenseDelete).not.toHaveBeenCalled();
+    });
+
+    it('a guest may delete in its own space', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'u2', kind: 'guest', groupId: 'c1' });
+        expect((await DELETE(req(), { params })).status).toBe(200);
     });
 });
