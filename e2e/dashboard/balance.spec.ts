@@ -22,7 +22,7 @@ test.describe('Dashboard - Balance', () => {
     const data = await seedScenario(apiContext, 'couple-with-debt');
     const userA = data.userA;
 
-    await loginAs(page, userA);
+    await loginAs(page, userA!);
     await expect(page).toHaveURL(/\/dashboard/);
 
     const balance = page.locator('[data-testid="balance-amount"]');
@@ -38,7 +38,7 @@ test.describe('Dashboard - Balance', () => {
     const data = await seedScenario(apiContext, 'couple-with-debt');
     const userB = data.userB;
 
-    await loginAs(page, userB);
+    await loginAs(page, userB!);
     await expect(page).toHaveURL(/\/dashboard/);
 
     const balance = page.locator('[data-testid="balance-amount"]');
@@ -57,7 +57,7 @@ test.describe('Dashboard - Balance', () => {
     const data = await seedScenario(apiContext, 'couple-with-pending-settlement');
     const userA = data.userA;
 
-    await loginAs(page, userA);
+    await loginAs(page, userA!);
     await expect(page).toHaveURL(/\/dashboard/);
 
     // UserA is the receiver of the pending settlement - should see "Confirmar Pagos"
@@ -68,7 +68,7 @@ test.describe('Dashboard - Balance', () => {
   test('active card words the balance and switching spaces keeps the server as authority', async ({ page }) => {
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'couple-with-debt');
-    await loginAs(page, data.userA);
+    await loginAs(page, data.userA!);
     await expect(page).toHaveURL(/\/dashboard/);
 
     // Active couple card: "User te debe 50,00 €" + the settle shortcut.
@@ -110,7 +110,7 @@ test.describe('Dashboard - Balance', () => {
   test('pasting an invite link routes to the consent screen', async ({ page }) => {
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'couple-with-debt');
-    await loginAs(page, data.userA);
+    await loginAs(page, data.userA!);
     await page.goto('/spaces?join=1');
     await page.getByLabel('Pega el enlace de invitación').fill('https://example.test/i/abc123TOKEN');
     await page.getByRole('button', { name: 'Continuar' }).click();
@@ -120,7 +120,7 @@ test.describe('Dashboard - Balance', () => {
   test('?saved=<cents> shows a one-shot "Gasto guardado" toast and is stripped', async ({ page }) => {
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'couple-with-debt');
-    await loginAs(page, data.userA);
+    await loginAs(page, data.userA!);
     await page.goto('/dashboard?scope=personal&saved=4385');
     await expect(page.getByRole('status').filter({ hasText: 'Gasto guardado' })).toHaveText(/Gasto guardado · 43,85\s€/);
     await expect(page).toHaveURL(/\/dashboard\?scope=personal$/);

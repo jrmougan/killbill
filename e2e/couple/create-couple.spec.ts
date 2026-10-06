@@ -13,7 +13,7 @@ test.describe('Couple - Create', () => {
     });
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'solo-user');
-    user = data.user;
+    user = data.user!;
   });
 
   test.afterAll(async () => {

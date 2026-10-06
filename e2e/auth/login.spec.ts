@@ -12,7 +12,7 @@ test.describe('Auth - Login', () => {
       baseURL: process.env.TEST_BASE_URL || 'http://localhost:3000',
     });
     const data = await seedScenario(apiContext, 'solo-user');
-    credentials = data.user;
+    credentials = data.user!;
   });
 
   test.afterAll(async () => {

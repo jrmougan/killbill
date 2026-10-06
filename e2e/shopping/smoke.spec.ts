@@ -7,7 +7,7 @@ import { loginAs } from '../fixtures/auth.fixture';
 test('lista de grupo: crear, añadir, auto-pasillo, marcar idempotente, vaciar comprados', async ({ page, context, request }) => {
   const seed = await seedScenario(request, 'couple-with-debt');
   const groupId = seed.coupleId;
-  await loginAs(page, { email: seed.userA.email, password: seed.userA.password });
+  await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password });
   const api = context.request; // comparte cookies de sesión con el contexto logueado
 
   // crear lista
@@ -48,7 +48,7 @@ test('lista de grupo: crear, añadir, auto-pasillo, marcar idempotente, vaciar c
 
 test('lista personal se crea vía /api/me/lists', async ({ page, context, request }) => {
   const seed = await seedScenario(request, 'couple-with-debt');
-  await loginAs(page, { email: seed.userA.email, password: seed.userA.password });
+  await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password });
   const api = context.request;
   const res = await api.post('/api/me/lists', { data: { name: 'Personal smoke' } });
   expect(res.status(), 'crear lista personal').toBe(201);
