@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     analyzeReceiptImage,
     parseReceiptAIResponse,
+    PROVIDER_TIMEOUT_MS,
     ReceiptAIError,
 } from "./receipt-ocr-ai";
 
@@ -73,6 +74,49 @@ describe("analyzeReceiptImage", () => {
         await expect(analyzeReceiptImage("base64", "image/jpeg")).resolves.toEqual(RECEIPT);
         expect(fetchMock).toHaveBeenCalledOnce();
         expect(fetchMock.mock.calls[0][0]).toContain("generativelanguage.googleapis.com");
+    });
+
+    it("sends the Gemini key in the x-goog-api-key header, never in the URL", async () => {
+        vi.stubEnv("GEMINI_API_KEY", "gemini-secret");
+        vi.stubEnv("OPENROUTER_API_KEY", "");
+        const fetchMock = vi.fn().mockResolvedValue(geminiResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await analyzeReceiptImage("base64", "image/jpeg");
+
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).not.toContain("gemini-secret");
+        expect(url).not.toContain("key=");
+        expect(init.headers["x-goog-api-key"]).toBe("gemini-secret");
+        expect(init.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it("treats a Gemini timeout as a failure and falls back to OpenRouter", async () => {
+        vi.stubEnv("GEMINI_API_KEY", "gemini-key");
+        vi.stubEnv("OPENROUTER_API_KEY", "openrouter-key");
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+        // Gemini hangs until its deadline signal fires; OpenRouter answers.
+        const fetchMock = vi.fn((url: string, init: RequestInit) => {
+            if (url.includes("generativelanguage")) {
+                return new Promise<Response>((_, reject) => {
+                    init.signal!.addEventListener("abort", () => reject(init.signal!.reason));
+                });
+            }
+            return Promise.resolve(openRouterResponse(JSON.stringify(RECEIPT)));
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        timeoutSpy.mockImplementationOnce(() => {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(new DOMException("timed out", "TimeoutError")), 5);
+            return controller.signal;
+        });
+
+        await expect(analyzeReceiptImage("base64", "image/jpeg")).resolves.toEqual(RECEIPT);
+        expect(timeoutSpy).toHaveBeenCalledWith(PROVIDER_TIMEOUT_MS);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(fetchMock.mock.calls[1][0]).toBe("https://openrouter.ai/api/v1/chat/completions");
+        expect(fetchMock.mock.calls[1][1].signal).toBeInstanceOf(AbortSignal);
     });
 
     it("sends Gemini a schema without additionalProperties", async () => {
