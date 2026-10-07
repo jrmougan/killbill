@@ -114,7 +114,7 @@ export function DeleteCategoryModal({
                 <Button
                     type="button"
                     variant="destructive"
-                    className="flex-1"
+                    className="flex-1 whitespace-nowrap"
                     onClick={handleDelete}
                     disabled={deleting || !reassignTo}
                 >

@@ -13,12 +13,12 @@ import { JoinLinkForm } from "./join-link-form";
  */
 export function SpaceActionTiles({ defaultJoinOpen = false }: { defaultJoinOpen?: boolean }) {
     const [joinOpen, setJoinOpen] = useState(defaultJoinOpen);
-    const tile = "h-[76px] rounded-2xl px-3.5 py-3 flex flex-col justify-between text-left active:scale-[0.98] transition-transform";
+    const tile = "min-h-[76px] rounded-2xl px-3.5 py-3 flex flex-col justify-between gap-2 text-left active:scale-[0.98] transition-transform";
     return (
         <div className="flex flex-col gap-2.5">
             <div className="grid grid-cols-2 gap-2">
                 <Link href="/spaces/new" className={cn(tile, "bg-foreground text-white")}>
-                    <Plus className="h-5 w-5" aria-hidden="true" />
+                    <Plus className="h-5 w-5 flex-none" aria-hidden="true" />
                     <span className="text-sm font-semibold">Crear espacio</span>
                 </Link>
                 <button
@@ -28,7 +28,7 @@ export function SpaceActionTiles({ defaultJoinOpen = false }: { defaultJoinOpen?
                     onClick={() => setJoinOpen((v) => !v)}
                     className={cn(tile, "bg-card border", joinOpen ? "border-primary" : "border-[color:var(--line)]")}
                 >
-                    <Ticket className="h-5 w-5" aria-hidden="true" />
+                    <Ticket className="h-5 w-5 flex-none" aria-hidden="true" />
                     <span className="text-sm font-semibold">Unirme con enlace</span>
                 </button>
             </div>

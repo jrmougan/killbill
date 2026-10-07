@@ -203,16 +203,15 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         <EqCard className="overflow-hidden">
                             <div className="divide-y divide-[color:var(--line-2)]">
                                 {receiptItems.map((item, idx) => (
-                                    <div key={idx} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 px-4 py-2.5 text-sm">
+                                    <div key={idx} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 px-4 py-2.5 text-sm">
                                         <div className={`flex h-6 w-6 items-center justify-center rounded-full ${item.assignedTo ? "bg-[var(--accent-tint)] text-primary" : "bg-[var(--track)] text-muted-foreground"}`}>
                                             {item.assignedTo ? <User className="h-3.5 w-3.5" /> : <Heart className="h-3.5 w-3.5" />}
                                         </div>
-                                        <div className="min-w-0 break-words font-medium leading-tight text-foreground">{item.description}</div>
-                                        <div className="min-w-[45px] text-right text-[11px] leading-tight text-muted-foreground">
+                                        <div className="min-w-0">
+                                            <div className="break-words font-medium leading-tight text-foreground">{item.description}</div>
                                             {item.quantity > 1 && (
-                                                <div className="flex flex-col tabular-nums">
-                                                    <span>{item.quantity} ×</span>
-                                                    <span>{formatEuros(item.price)}</span>
+                                                <div className="mt-0.5 text-[11px] leading-tight tabular-nums text-muted-foreground">
+                                                    {item.quantity.toLocaleString("es-ES")} × {formatEuros(item.price)}
                                                 </div>
                                             )}
                                         </div>

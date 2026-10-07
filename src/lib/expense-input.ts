@@ -8,6 +8,9 @@ import { addInterval } from '@/lib/recurring-interval';
 export const MIN_EXPENSE_YEAR = 2000;
 export const MIN_EXPENSE_DATE = `${MIN_EXPENSE_YEAR}-01-01`;
 
+/** Free-text columns (description / notes / receiptUrl) are VARCHAR(191). */
+export const MAX_EXPENSE_TEXT = 191;
+
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /** YYYY-MM-DD of `d` in UTC. */

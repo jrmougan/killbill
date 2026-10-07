@@ -185,7 +185,7 @@ export function CategoriesClient({
                                 <div key={cat.id} className="py-3 flex items-center gap-3 border-b border-[color:var(--line-2)] last:border-b-0">
                                     <CategoryBadge meta={cat} variant="emoji" size={40} radius={12} />
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-[15px] font-semibold text-foreground truncate">{cat.label}</p>
+                                        <p className="text-[15px] font-semibold text-foreground line-clamp-2 break-words">{cat.label}</p>
                                         <div className="flex items-center gap-2 mt-0.5">
                                             <span
                                                 className="h-3 w-3 rounded-full shrink-0 border border-[color:var(--line)]"

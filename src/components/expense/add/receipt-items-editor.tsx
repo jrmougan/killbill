@@ -65,7 +65,7 @@ export function ReceiptItemsEditor({
     const partnerAmount = items.reduce((acc, it) => acc + (it.assignedTo === null ? it.total / 2 : it.assignedTo === partner?.id ? it.total : 0), 0);
 
     const seg = (on: boolean) =>
-        cn("px-2.5 py-2 transition-colors", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary");
+        cn("px-2 py-2 transition-colors", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary");
 
     return (
         <div className="space-y-2.5">
@@ -78,45 +78,53 @@ export function ReceiptItemsEditor({
             ) : (
                 <div className="rounded-[14px] border border-[color:var(--line)] bg-card divide-y divide-[color:var(--line-2)] overflow-hidden">
                     {items.map((item, idx) => (
-                        <div key={item._uid} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 p-2 items-center">
-                            <input
-                                aria-label={`Descripción del producto ${idx + 1}`}
-                                className="bg-transparent text-sm w-full focus:outline-none font-medium min-w-0 px-1"
-                                value={item.description}
-                                onChange={(e) => update(idx, { description: e.target.value })}
-                                placeholder="Producto…"
-                            />
-                            <div className="flex items-center gap-1">
+                        // Two rows so the name keeps the width on narrow phones: name + total
+                        // on top; qty × price, the ½/Yo/partner selector and delete below.
+                        <div key={item._uid} className="space-y-1 p-2">
+                            <div className="flex items-center gap-2">
                                 <input
-                                    aria-label={`Cantidad del producto ${idx + 1}`}
-                                    type="text" inputMode="decimal"
-                                    className="bg-transparent text-xs w-7 text-right focus:outline-none text-muted-foreground"
-                                    value={item.quantityStr ?? formatAmountInput(item.quantity)}
-                                    onChange={(e) => updateNumeric(idx, "quantity", e.target.value)}
+                                    aria-label={`Descripción del producto ${idx + 1}`}
+                                    className="bg-transparent text-sm flex-1 focus:outline-none font-medium min-w-0 px-1"
+                                    value={item.description}
+                                    onChange={(e) => update(idx, { description: e.target.value })}
+                                    placeholder="Producto…"
                                 />
-                                <span className="text-xs text-muted-foreground">×</span>
-                                <input
-                                    aria-label={`Precio del producto ${idx + 1}`}
-                                    type="text" inputMode="decimal"
-                                    className="bg-transparent text-xs w-11 text-right focus:outline-none text-muted-foreground"
-                                    value={item.priceStr ?? formatAmountInput(item.price)}
-                                    onChange={(e) => updateNumeric(idx, "price", e.target.value)}
-                                    placeholder="0,00"
-                                />
+                                <div className="shrink-0 font-mono text-xs font-medium text-right tabular-nums whitespace-nowrap">{formatEuros(item.total)}</div>
                             </div>
-                            <div className="font-mono text-xs font-medium w-14 text-right tabular-nums">{item.total.toFixed(2)}</div>
-                            {assignable ? (
-                                <div className="flex items-center rounded-lg overflow-hidden border border-[color:var(--line)] text-[11px] font-bold">
-                                    <button type="button" onClick={() => update(idx, { assignedTo: null })} aria-pressed={item.assignedTo === null} aria-label="Compartido 50/50" className={seg(item.assignedTo === null)}>½</button>
-                                    <button type="button" onClick={() => update(idx, { assignedTo: userId })} aria-pressed={item.assignedTo === userId} aria-label="Solo mío" className={cn(seg(item.assignedTo === userId), "border-l border-[color:var(--line)]")}>Yo</button>
-                                    <button type="button" onClick={() => update(idx, { assignedTo: partner?.id ?? null })} aria-pressed={!!partner && item.assignedTo === partner.id} aria-label={`Solo ${partnerName}`} className={cn(seg(!!partner && item.assignedTo === partner.id), "border-l border-[color:var(--line)]")}>
-                                        {partner?.name?.charAt(0).toUpperCase() ?? "P"}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-1 pl-1">
+                                    <input
+                                        aria-label={`Cantidad del producto ${idx + 1}`}
+                                        type="text" inputMode="decimal"
+                                        className="bg-transparent text-xs w-7 text-right focus:outline-none text-muted-foreground"
+                                        value={item.quantityStr ?? formatAmountInput(item.quantity)}
+                                        onChange={(e) => updateNumeric(idx, "quantity", e.target.value)}
+                                    />
+                                    <span className="text-xs text-muted-foreground">×</span>
+                                    <input
+                                        aria-label={`Precio del producto ${idx + 1}`}
+                                        type="text" inputMode="decimal"
+                                        className="bg-transparent text-xs w-14 focus:outline-none text-muted-foreground"
+                                        value={item.priceStr ?? formatAmountInput(item.price)}
+                                        onChange={(e) => updateNumeric(idx, "price", e.target.value)}
+                                        placeholder="0,00"
+                                    />
+                                </div>
+                                <div className="ml-auto flex shrink-0 items-center gap-0.5">
+                                    {assignable && (
+                                        <div className="flex shrink-0 items-center rounded-lg overflow-hidden border border-[color:var(--line)] text-[11px] font-bold">
+                                            <button type="button" onClick={() => update(idx, { assignedTo: null })} aria-pressed={item.assignedTo === null} aria-label="Compartido 50/50" className={seg(item.assignedTo === null)}>½</button>
+                                            <button type="button" onClick={() => update(idx, { assignedTo: userId })} aria-pressed={item.assignedTo === userId} aria-label="Solo mío" className={cn(seg(item.assignedTo === userId), "border-l border-[color:var(--line)]")}>Yo</button>
+                                            <button type="button" onClick={() => update(idx, { assignedTo: partner?.id ?? null })} aria-pressed={!!partner && item.assignedTo === partner.id} aria-label={`Solo ${partnerName}`} className={cn(seg(!!partner && item.assignedTo === partner.id), "border-l border-[color:var(--line)]")}>
+                                                {partner?.name?.charAt(0).toUpperCase() ?? "P"}
+                                            </button>
+                                        </div>
+                                    )}
+                                    <button type="button" onClick={() => remove(idx)} aria-label={`Eliminar producto ${idx + 1}`} className="p-2 text-muted-foreground hover:text-destructive">
+                                        <Trash2 className="h-4 w-4" />
                                     </button>
                                 </div>
-                            ) : <span />}
-                            <button type="button" onClick={() => remove(idx)} aria-label={`Eliminar producto ${idx + 1}`} className="p-2 text-muted-foreground hover:text-destructive">
-                                <Trash2 className="h-4 w-4" />
-                            </button>
+                            </div>
                         </div>
                     ))}
                 </div>

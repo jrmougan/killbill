@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { resolveCategoryId, getEffectiveCategories } from '@/lib/category-db';
 import type { Prisma } from '@/generated/prisma/client';
-import { checkExpenseDay } from '@/lib/expense-input';
+import { checkExpenseDay, MAX_EXPENSE_TEXT } from '@/lib/expense-input';
 import { badRequest, route } from '@/lib/http';
 import { jsonObject } from '@/lib/http/schemas';
 
@@ -112,7 +112,8 @@ export const POST = route(
             seen.add(fp);
             const r = rows[i];
             data.push({
-                description: r.description.trim(),
+                // Bank concepts can exceed the VARCHAR(191) column: cut, don't reject the statement.
+                description: r.description.trim().slice(0, MAX_EXPENSE_TEXT),
                 amount: r.amountCents,
                 date: new Date(`${r.dateISO}T12:00:00.000Z`), // 12:00 UTC like POST /api/expenses: stable day in Madrid
                 categoryId: await categoryIdFor(r.category ?? defaultCategory),

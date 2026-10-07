@@ -407,6 +407,10 @@ describe('PATCH /api/expenses/[id] — date, read-only spaces and explicit split
             [{ recurringInterval: 'daily' }, 'Periodicidad no válida'],
             [{ amount: 1_000_000 }, 'El importe máximo es 999.999,99 €'],
             [{ customSplits: [{ userId: 'u1', amount: 10.5 }] }, 'Los importes del reparto no son válidos'],
+            // VARCHAR(191) columns: 400 instead of a Prisma P2000 → 500.
+            [{ notes: 'n'.repeat(192) }, 'Las notas no pueden superar 191 caracteres'],
+            [{ description: 'd'.repeat(192) }, 'El concepto no puede superar 191 caracteres'],
+            [{ receiptUrl: 'r'.repeat(192) }, 'La URL del recibo no puede superar 191 caracteres'],
         ] as const) {
             const res = await PATCH(patchReq(body), { params });
             expect(res.status).toBe(400);

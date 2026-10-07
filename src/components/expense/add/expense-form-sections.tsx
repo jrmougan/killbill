@@ -46,10 +46,10 @@ export function SpaceBar({
                             selected={s.id === spaceId}
                             onClick={() => onChange(s.id)}
                             disabled={isEdit}
-                            className="py-1.5"
+                            className="max-w-full py-1.5"
                             data-testid={`space-chip-${s.id}`}
                         >
-                            {spaceEmoji(s.type)} {s.name}
+                            <span className="block truncate">{spaceEmoji(s.type)} {s.name}</span>
                         </EqChip>
                     ))}
                     {allowPersonal && (!isEdit || isPersonal) && (

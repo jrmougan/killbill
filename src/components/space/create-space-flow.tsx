@@ -133,7 +133,7 @@ export function CreateSpaceFlow({
                                 setError(null);
                             }}
                             className={cn(
-                                "h-[104px] rounded-[18px] bg-card p-3.5 flex flex-col justify-between text-left transition-colors",
+                                "min-h-[104px] rounded-[18px] bg-card p-3.5 flex flex-col justify-between gap-2 text-left transition-colors",
                                 sel ? "border-2 border-primary" : "border border-[color:var(--line)]",
                             )}
                         >

@@ -86,3 +86,41 @@ export function normalizeRow(raw: Record<string, string>, m: ColumnMapping): Nor
     const isExpense = m.expenseSign === 'negative' ? signedCents < 0 : signedCents > 0;
     return { dateISO, amountCents: Math.abs(signedCents), description, isExpense };
 }
+
+type GuessedColumns = Pick<ColumnMapping, 'dateCol' | 'amountCol' | 'descriptionCol'>;
+
+// Header patterns per field, strongest first. Bank headers are verbose
+// ("Fecha operación contable del movimiento", "Concepto detallado del cargo"),
+// so weak amount words (cargo/movimiento/euro) only apply after every field had
+// its strong pass, and a column is never assigned to two fields.
+const COLUMN_PATTERNS: Record<keyof GuessedColumns, RegExp[]> = {
+    dateCol: [/fecha|date/i],
+    descriptionCol: [/concepto|descrip|concept|detalle|beneficiario/i],
+    amountCol: [/importe|amount|cantidad/i, /euro|\beur\b|cargo|movimiento/i],
+};
+// A running balance is never the movement amount.
+const NOT_AMOUNT = /saldo|balance/i;
+
+/** Best-effort guess of the date/amount/description columns from the CSV headers. */
+export function guessColumns(headers: string[]): GuessedColumns {
+    const fields = Object.keys(COLUMN_PATTERNS) as (keyof GuessedColumns)[];
+    const picked: Partial<GuessedColumns> = {};
+    const used = new Set<string>();
+    const levels = Math.max(...fields.map((f) => COLUMN_PATTERNS[f].length));
+    for (let level = 0; level < levels; level++) {
+        for (const field of fields) {
+            const re = COLUMN_PATTERNS[field][level];
+            if (picked[field] !== undefined || !re) continue;
+            const hit = headers.find((h) => !used.has(h) && re.test(h) && !(field === 'amountCol' && NOT_AMOUNT.test(h)));
+            if (hit !== undefined) { picked[field] = hit; used.add(hit); }
+        }
+    }
+    // Unmatched fields fall back to the first still-free column (the user can remap).
+    for (const field of fields) {
+        if (picked[field] !== undefined) continue;
+        const free = headers.find((h) => !used.has(h)) ?? headers[0] ?? '';
+        picked[field] = free;
+        used.add(free);
+    }
+    return picked as GuessedColumns;
+}

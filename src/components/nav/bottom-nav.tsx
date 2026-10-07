@@ -28,10 +28,13 @@ const GUEST_TABS: Tab[] = [
 
 const ADD_HREF = "/expenses/new";
 
-// The nav is a global surface but only the top-level "tab" destinations show
-// it — focused full-screen flows (add, expense detail, settle, auth) stay
-// chrome-free. Shopping-list detail keeps the nav (it is still the Listas tab).
-const TAB_ROUTES = TABS.map((t) => t.href);
+// The nav is a global surface but only the top-level "tab" destinations of the
+// session's tab set show it — focused full-screen flows (add, expense detail,
+// settle, auth) stay chrome-free. Shopping-list detail keeps the nav (it is
+// still the Listas tab); the guest "Cuenta" tab (/guest/upgrade) keeps it too.
+export function isTabRoute(pathname: string, isGuest: boolean) {
+    return (isGuest ? GUEST_TABS : TABS).some((t) => isActive(pathname, t.href));
+}
 
 // Personal mode lives in the URL (`?scope=personal`), not in a cookie. Carry it
 // across the tabs that understand it so switching tabs doesn't silently jump
@@ -101,8 +104,7 @@ export function ScopeMemory() {
 
 export function BottomNav({ isGuest = false }: { isGuest?: boolean }) {
     const { pathname, personal } = useScopeMemory();
-    const isTabRoute = TAB_ROUTES.some((r) => isActive(pathname, r));
-    if (!isTabRoute) return null;
+    if (!isTabRoute(pathname, isGuest)) return null;
 
     const tabs = isGuest ? GUEST_TABS : TABS;
     const mid = Math.ceil(tabs.length / 2);

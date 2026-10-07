@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Upload, CheckCircle2, AlertTriangle } from "lucide-react";
 import { EqCard, EqCta, EqHeader, EqLabel } from "@/components/ui/eq";
-import { normalizeRow, type ColumnMapping, type DateFormat } from "@/lib/bank-csv";
+import { guessColumns, normalizeRow, type ColumnMapping, type DateFormat } from "@/lib/bank-csv";
 import { safeReturnTo } from "@/lib/safe-return";
 import { CategoryPicker } from "@/components/category/category-picker";
 
@@ -23,10 +23,6 @@ function formatDay(iso: string): string {
 const AMOUNT_FMT = new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR", useGrouping: "always" });
 function formatAmount(cents: number): string {
     return AMOUNT_FMT.format(cents / 100);
-}
-
-function guessCol(headers: string[], re: RegExp): string {
-    return headers.find((h) => re.test(h)) ?? headers[0] ?? "";
 }
 
 export default function ImportCsvPage() {
@@ -73,9 +69,7 @@ export default function ImportCsvPage() {
                     }
                 } catch { /* ignore */ }
                 setMapping(base ?? {
-                    dateCol: guessCol(headers, /fecha|date/i),
-                    amountCol: guessCol(headers, /importe|amount|euro|cargo|movimiento/i),
-                    descriptionCol: guessCol(headers, /concepto|descrip|concept|detalle|beneficiario/i),
+                    ...guessColumns(headers),
                     dateFormat: "DMY",
                     decimalSep: ",",
                     expenseSign: "negative",
@@ -195,14 +189,14 @@ export default function ImportCsvPage() {
                                 <Field label="Columna de concepto">
                                     <Select value={mapping.descriptionCol} options={parsed.headers} onChange={(v) => setMapping({ ...mapping, descriptionCol: v })} />
                                 </Field>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-1 min-[360px]:grid-cols-2 items-end gap-2">
                                     <Field label="Formato fecha">
                                         <Select value={mapping.dateFormat} options={["DMY", "YMD", "MDY"]} labels={{ DMY: "día/mes/año", YMD: "año-mes-día", MDY: "mes/día/año" }} onChange={(v) => setMapping({ ...mapping, dateFormat: v as DateFormat })} />
                                     </Field>
                                     <Field label="Decimal">
                                         <Select value={mapping.decimalSep} options={[",", "."]} labels={{ ",": "coma (1,5)", ".": "punto (1.5)" }} onChange={(v) => setMapping({ ...mapping, decimalSep: v as "," | "." })} />
                                     </Field>
-                                    <Field label="Gasto = signo">
+                                    <Field label="Gasto = signo" className="min-[360px]:col-span-2">
                                         <Select value={mapping.expenseSign} options={["negative", "positive"]} labels={{ negative: "negativo", positive: "positivo" }} onChange={(v) => setMapping({ ...mapping, expenseSign: v as "negative" | "positive" })} />
                                     </Field>
                                 </div>
@@ -247,7 +241,7 @@ export default function ImportCsvPage() {
                                     className="h-4 w-4 accent-primary"
                                 />
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-[14px] text-foreground truncate">{e.description}</p>
+                                    <p className="text-[14px] text-foreground line-clamp-2 break-words">{e.description}</p>
                                     <p className="text-[11px] text-muted-foreground">{formatDay(e.dateISO)}</p>
                                 </div>
                                 <span className="text-[15px] font-semibold tabular-nums text-foreground shrink-0">{formatAmount(e.amountCents)}</span>
@@ -275,9 +269,9 @@ export default function ImportCsvPage() {
     );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
     return (
-        <div className="space-y-1">
+        <div className={`space-y-1 ${className ?? ""}`}>
             <EqLabel>{label}</EqLabel>
             {children}
         </div>

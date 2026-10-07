@@ -260,14 +260,14 @@ export function SplitEditor({
                             onClick={() => setMode(key)}
                             aria-pressed={sel}
                             className={cn(
-                                "flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-all active:scale-[0.98]",
+                                "flex items-center gap-1.5 px-2 py-2.5 rounded-xl border text-[13px] font-semibold min-[360px]:gap-2 min-[360px]:px-3 min-[360px]:text-sm transition-all active:scale-[0.98]",
                                 sel
                                     ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)] text-foreground"
                                     : "bg-card border-[color:var(--line)] text-muted-foreground hover:bg-secondary",
                             )}
                         >
                             <Icon className="h-4 w-4 shrink-0 text-primary" />
-                            <span className="truncate text-left">
+                            <span className="min-w-0 text-left leading-tight">
                                 {highlight && key === "equal" ? "Mitad y mitad" : label}
                             </span>
                         </button>
@@ -297,10 +297,10 @@ export function SplitEditor({
                 <div className="rounded-xl bg-secondary p-4 space-y-2 animate-in fade-in duration-200">
                     {members.map((m) => (
                         <div key={m.id} className="flex items-center justify-between gap-3">
-                            <label htmlFor={`split-amount-${m.id}`} className="text-sm text-muted-foreground truncate">
+                            <label htmlFor={`split-amount-${m.id}`} className="min-w-0 flex-1 text-sm text-muted-foreground truncate">
                                 {nameOf(m)}
                             </label>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex shrink-0 items-center gap-1.5">
                                 <input
                                     id={`split-amount-${m.id}`}
                                     type="text"
@@ -310,7 +310,7 @@ export function SplitEditor({
                                         onChange({ ...value, amounts: { ...value.amounts, [m.id]: e.target.value } })
                                     }
                                     placeholder="0,00"
-                                    className="w-24 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:outline-none focus:border-[color:var(--accent-border)]"
+                                    className="w-28 tabular-nums bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:outline-none focus:border-[color:var(--accent-border)]"
                                 />
                                 <span className="text-sm text-muted-foreground">€</span>
                             </div>
@@ -332,10 +332,10 @@ export function SplitEditor({
                 <div className="rounded-xl bg-secondary p-4 space-y-2 animate-in fade-in duration-200">
                     {members.map((m) => (
                         <div key={m.id} className="flex items-center justify-between gap-3">
-                            <label htmlFor={`split-pct-${m.id}`} className="text-sm text-muted-foreground truncate">
+                            <label htmlFor={`split-pct-${m.id}`} className="min-w-0 flex-1 text-sm text-muted-foreground truncate">
                                 {nameOf(m)}
                             </label>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex shrink-0 items-center gap-1.5">
                                 <input
                                     id={`split-pct-${m.id}`}
                                     type="number"
@@ -355,7 +355,7 @@ export function SplitEditor({
                                     className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-[color:var(--accent-border)]"
                                 />
                                 <span className="text-sm text-muted-foreground">%</span>
-                                <span className="w-16 text-right text-xs font-mono text-muted-foreground">
+                                <span className="min-w-16 whitespace-nowrap text-right text-xs font-mono text-muted-foreground">
                                     {formatEuros((result.shares[m.id] ?? 0) / 100)}
                                 </span>
                             </div>

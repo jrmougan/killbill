@@ -155,7 +155,7 @@ export function CategoryEditor({ context, existing, onSaved, onCancel }: Categor
             )}
 
             <div className="flex gap-2">
-                <Button type="submit" disabled={!canSave} className={cn("flex-1", !canSave && "opacity-60")}>
+                <Button type="submit" disabled={!canSave} className={cn("flex-1 whitespace-nowrap", !canSave && "opacity-60")}>
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
                     {isEdit ? "Guardar" : "Crear categoría"}
                 </Button>
