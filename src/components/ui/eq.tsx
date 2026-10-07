@@ -62,7 +62,8 @@ export function EqHeader({
                 <h1 className="text-2xl font-bold tracking-[-0.02em] flex-1 min-w-0 truncate">{title}</h1>
             )}
             {children}
-            {meta !== undefined && <span className="text-[13px] text-muted-foreground flex-none">{meta}</span>}
+            {/* The meta (often a space name) truncates and is capped so it never squeezes the title to 0. */}
+            {meta !== undefined && <span className="text-[13px] text-muted-foreground min-w-0 max-w-[55%] truncate">{meta}</span>}
         </header>
     );
 }

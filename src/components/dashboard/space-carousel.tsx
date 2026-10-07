@@ -33,6 +33,16 @@ export type SpaceCardData = {
 };
 
 /**
+ * The cards have a fixed width, so a long amount ("2.633.939,47 €") would lose
+ * its last digits to `truncate`: step the font size down with the text length.
+ */
+function amountSize(amount: string, active: boolean): string {
+    const n = amount.length;
+    if (active) return n <= 12 ? "text-[34px]" : n <= 14 ? "text-[30px]" : "text-[26px]";
+    return n <= 11 ? "text-[22px]" : n <= 13 ? "text-[19px]" : n <= 15 ? "text-[16px]" : "text-[14px]";
+}
+
+/**
  * Horizontal space carousel (prototype `is.home`): the active card is wide and
  * green; tapping another card switches the active space via the existing
  * active-group mechanism. Dots + "Ver espacios" sit underneath.
@@ -78,7 +88,7 @@ export function SpaceCarousel({
                                     aria-hidden={c.signed ? true : undefined}
                                     className={cn(
                                         "font-bold tracking-[-0.03em] leading-[1.05] truncate",
-                                        active ? "text-[34px]" : "text-[22px]",
+                                        amountSize(c.amount, active),
                                         !active && c.tone === "positive" && "text-[color:var(--positive)]",
                                         !active && c.tone === "negative" && "text-[color:var(--negative)]",
                                     )}

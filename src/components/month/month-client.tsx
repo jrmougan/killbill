@@ -70,10 +70,10 @@ export function MonthClient(props: MonthClientProps) {
         <Link
             href={monthHref(view, alt.scope)}
             aria-label={`Cambiar a ${alt.name}`}
-            className="inline-flex items-center gap-1 rounded-full px-1 -mx-1 py-2 hover:text-foreground"
+            className="inline-flex max-w-full items-center gap-1 rounded-full px-1 -mx-1 py-2 hover:text-foreground"
         >
-            {space.emoji} {space.name}
-            <ArrowLeftRight className="h-3 w-3" aria-hidden />
+            <span className="truncate">{space.emoji} {space.name}</span>
+            <ArrowLeftRight className="h-3 w-3 flex-none" aria-hidden />
         </Link>
     ) : (
         `${space.emoji} ${space.name}`

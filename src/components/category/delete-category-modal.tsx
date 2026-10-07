@@ -72,7 +72,7 @@ export function DeleteCategoryModal({
                 </div>
                 <div className="min-w-0">
                     <h3 className="font-bold text-foreground">Borrar categoría</h3>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
                         Los gastos y presupuestos de <span className="font-semibold text-foreground">{category.label}</span> se moverán a la categoría que elijas.
                     </p>
                 </div>
@@ -93,7 +93,7 @@ export function DeleteCategoryModal({
                         id="reassign-target"
                         value={reassignTo}
                         onChange={(e) => setReassignTo(e.target.value)}
-                        className="flex-1 bg-card border border-[color:var(--line)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[color:var(--accent-border)]"
+                        className="min-w-0 flex-1 bg-card border border-[color:var(--line)] rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-[color:var(--accent-border)]"
                     >
                         {targets.map((c) => (
                             <option key={c.id} value={c.id}>
@@ -114,7 +114,7 @@ export function DeleteCategoryModal({
                 <Button
                     type="button"
                     variant="destructive"
-                    className="flex-1"
+                    className="flex-1 whitespace-nowrap"
                     onClick={handleDelete}
                     disabled={deleting || !reassignTo}
                 >

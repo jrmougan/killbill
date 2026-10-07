@@ -18,8 +18,8 @@ export function MonthSummary({
     return (
         <EqCard data-testid="month-summary" className="p-4 flex flex-col gap-3">
             <div className="flex items-baseline justify-between gap-3">
-                <span className="text-[13px] text-muted-foreground truncate">{title}</span>
-                <span className="text-[17px] font-bold">{total}</span>
+                <span className="min-w-0 text-[13px] text-muted-foreground line-clamp-2 break-words">{title}</span>
+                <span className="flex-none whitespace-nowrap text-[17px] font-bold">{total}</span>
             </div>
             <div
                 className="flex h-1.5 gap-0.5 overflow-hidden rounded-[3px] bg-[var(--track)]"

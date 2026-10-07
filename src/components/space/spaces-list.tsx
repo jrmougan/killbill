@@ -61,23 +61,26 @@ export function SpacesList({ rows, activeKey }: { rows: SpaceRowData[]; activeKe
                             >
                                 {r.emoji}
                             </span>
-                            <span className="flex-1 min-w-0" aria-hidden="true">
-                                <span className="block text-[15px] font-semibold truncate">{r.name}</span>
-                                <span className="block text-[12.5px] text-muted-foreground truncate">{r.sub}</span>
-                            </span>
-                            {r.bal && (
-                                <span
-                                    aria-hidden="true"
-                                    className={cn(
-                                        "flex-none text-[15px] font-bold tabular-nums",
-                                        r.tone === "positive" && "text-[color:var(--positive)]",
-                                        r.tone === "negative" && "text-[color:var(--negative)]",
-                                        r.tone === "neutral" && "text-muted-foreground",
-                                    )}
-                                >
-                                    {r.bal}
+                            {/* Name keeps ≥ 8rem; a balance that doesn't fit beside it wraps below (never truncated). */}
+                            <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3">
+                                <span className="flex-1 min-w-[8rem]" aria-hidden="true">
+                                    <span className="block text-[15px] font-semibold truncate">{r.name}</span>
+                                    <span className="block text-[12.5px] text-muted-foreground truncate">{r.sub}</span>
                                 </span>
-                            )}
+                                {r.bal && (
+                                    <span
+                                        aria-hidden="true"
+                                        className={cn(
+                                            "ml-auto flex-none text-[15px] font-bold tabular-nums",
+                                            r.tone === "positive" && "text-[color:var(--positive)]",
+                                            r.tone === "negative" && "text-[color:var(--negative)]",
+                                            r.tone === "neutral" && "text-muted-foreground",
+                                        )}
+                                    >
+                                        {r.bal}
+                                    </span>
+                                )}
+                            </span>
                         </button>
                         {r.manageHref && (
                             <Link

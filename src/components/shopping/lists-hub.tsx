@@ -334,14 +334,25 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
         router.push(buildFinishExpenseUrl(selected));
     };
 
+    // Deep links (/lists/<id>) may select a chip that starts off-screen in the scroller.
+    const chipsRef = useRef<HTMLDivElement>(null);
+    const selectedId = selected?.id;
+    useEffect(() => {
+        const el = chipsRef.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
+        el?.scrollIntoView?.({ inline: "nearest", block: "nearest" });
+    }, [selectedId]);
+
     const chip = (l: HubList, scopeLabel: string) => (
         <EqChip
             key={l.id}
             selected={l.id === selected?.id}
             onClick={() => openList(l.id)}
             aria-label={`${l.name}, ${scopeLabel}, ${chipCount(l)} pendientes`}
+            // Capped width: a long name truncates but the pending count stays visible.
+            className="flex items-center max-w-[min(75vw,280px)]"
         >
-            {l.name} · {chipCount(l)}
+            <span className="truncate min-w-0">{l.name}</span>
+            <span className="flex-none whitespace-pre"> · {chipCount(l)}</span>
         </EqChip>
     );
 
@@ -360,7 +371,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                         </button>
                     )}
                 </EqHeader>
-                <div className="eq-scroll flex items-center gap-1.5 overflow-x-auto px-5">
+                <div ref={chipsRef} className="eq-scroll flex items-center gap-1.5 overflow-x-auto px-5">
                     {groupLists.map((l) => chip(l, "común"))}
                     {groupId && personalLists.length > 0 && (
                         <span className="flex-none flex items-center gap-1.5 pl-1 pr-0.5 text-[11.5px] font-semibold text-[color:var(--ink-3)]">
@@ -397,7 +408,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                             className="flex flex-col gap-2.5 rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 py-3"
                         >
                             <div className="flex items-start gap-2">
-                                <p className="flex-1 min-w-0 text-sm">
+                                <p className="flex-1 min-w-0 text-sm [overflow-wrap:anywhere]">
                                     <span className="font-semibold">«{dup.item.name}»</span> ya está en la lista
                                     {itemQuantityLabel(dup.item)}.
                                 </p>

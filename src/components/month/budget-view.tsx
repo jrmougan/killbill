@@ -186,7 +186,7 @@ export function BudgetView({
                         <span
                             data-testid="budget-remaining"
                             className={cn(
-                                "text-[44px] font-bold tracking-[-0.03em] leading-none tabular-nums",
+                                "text-[length:clamp(30px,11vw,44px)] font-bold tracking-[-0.03em] leading-none tabular-nums",
                                 over && "text-[color:var(--negative)]",
                             )}
                         >

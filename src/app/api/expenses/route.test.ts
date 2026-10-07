@@ -238,6 +238,29 @@ describe('POST /api/expenses', () => {
             expect((await res.json()).issues[0].path).toBe(path);
         });
 
+        // Expense.description/notes/receiptUrl are VARCHAR(191): an overlong value
+        // used to reach tx.expense.create and fail as a 500 (Prisma P2000).
+        it.each([
+            [{ ...base, notes: 'n'.repeat(192) }, 'notes', 'Las notas no pueden superar 191 caracteres'],
+            [{ ...base, description: 'd'.repeat(192) }, 'description', 'El concepto no puede superar 191 caracteres'],
+            [{ ...base, receiptUrl: `/uploads/${'r'.repeat(184)}` }, 'receiptUrl', 'La URL del recibo no puede superar 191 caracteres'],
+        ] as const)('400 (not 500) for an overlong %#: %s', async (body, path, message) => {
+            const res = await post(body);
+            expect(res.status).toBe(400);
+            const json = await res.json();
+            expect(json.error).toBe(message);
+            expect(json.issues[0].path).toBe(path);
+            expect(mockExpenseCreate).not.toHaveBeenCalled();
+        });
+
+        it('accepts text exactly at the column limit (description measured trimmed)', async () => {
+            const res = await post({ ...base, description: `  ${'d'.repeat(191)}  `, notes: 'n'.repeat(191) });
+            expect(res.status).toBe(200);
+            const data = mockExpenseCreate.mock.calls[0][0].data;
+            expect(data.description).toHaveLength(191);
+            expect(data.notes).toHaveLength(191);
+        });
+
         it('a valid body is still authorized against the space before anything is written', async () => {
             mockRequireSpaceAccess.mockResolvedValue({ ok: false, status: 403, error: 'No perteneces a este espacio' });
             const res = await post({ ...base, groupId: 'foreign' });

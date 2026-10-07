@@ -114,27 +114,28 @@ export function MemberList({
                                 )}
                             </span>
                             <span className="flex-1 min-w-0">
-                                <span className="block text-[15px] font-semibold truncate">
-                                    {m.name}
-                                    {isSelf && <span className="text-muted-foreground font-normal"> (tú)</span>}
+                                <span className="flex min-w-0 text-[15px] font-semibold">
+                                    <span className="truncate">{m.name}</span>
+                                    {isSelf && <span className="flex-none whitespace-pre text-muted-foreground font-normal"> (tú)</span>}
                                 </span>
-                                <span className="block text-[12.5px] text-muted-foreground">
-                                    {ROLE_LABEL[m.role] ?? "Miembro"}
-                                    {m.isGuest && m.role !== MembershipRole.GUEST && " · Invitado"}
+                                <span className="flex flex-wrap items-baseline gap-x-2 text-[12.5px] text-muted-foreground">
+                                    <span className="min-w-0 truncate">
+                                        {ROLE_LABEL[m.role] ?? "Miembro"}
+                                        {m.isGuest && m.role !== MembershipRole.GUEST && " · Invitado"}
+                                    </span>
+                                    {m.balanceCents !== undefined && (
+                                        <span
+                                            className={cn(
+                                                "ml-auto flex-none text-sm font-semibold tabular-nums",
+                                                open && cents > 0 && "text-[color:var(--positive)]",
+                                                open && cents < 0 && "text-[color:var(--negative)]",
+                                            )}
+                                        >
+                                            {!open ? "En paz" : `${cents > 0 ? "+" : "−"}${formatCurrency(Math.abs(cents))}`}
+                                        </span>
+                                    )}
                                 </span>
                             </span>
-                            {m.balanceCents !== undefined && (
-                                <span
-                                    className={cn(
-                                        "flex-none text-sm font-semibold tabular-nums",
-                                        !open && "text-muted-foreground",
-                                        open && cents > 0 && "text-[color:var(--positive)]",
-                                        open && cents < 0 && "text-[color:var(--negative)]",
-                                    )}
-                                >
-                                    {!open ? "En paz" : `${cents > 0 ? "+" : "−"}${formatCurrency(Math.abs(cents))}`}
-                                </span>
-                            )}
                             {canEdit(m) && (
                                 <button
                                     type="button"
@@ -186,7 +187,7 @@ export function MemberList({
                                 onClick={() => remove(editing)}
                                 disabled={busy || refreshing}
                                 data-testid="member-remove"
-                                className="h-12 rounded-[14px] bg-[var(--negative-tint)] text-destructive text-sm font-semibold disabled:opacity-50"
+                                className="min-h-12 rounded-[14px] bg-[var(--negative-tint)] px-4 py-3 text-destructive text-sm font-semibold break-words disabled:opacity-50"
                             >
                                 Quitar a {editing.name} del espacio
                             </button>

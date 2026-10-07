@@ -4,7 +4,7 @@ import type { Dispatch } from "react";
 import { Check, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EqChip } from "@/components/ui/eq";
-import { MIN_EXPENSE_DATE } from "@/lib/expense-input";
+import { MAX_EXPENSE_TEXT, MIN_EXPENSE_DATE } from "@/lib/expense-input";
 import { SplitEditor } from "@/components/expense/split-editor";
 import { MoreOptionsSheet, OptionSection } from "./more-options-sheet";
 import { ReceiptItemsEditor } from "./receipt-items-editor";
@@ -155,9 +155,10 @@ export function ExpenseMoreOptions({
                     onChange={(e) => dispatch({ type: "notesChanged", notes: e.target.value })}
                     placeholder="Añade una nota opcional…"
                     rows={3}
+                    maxLength={MAX_EXPENSE_TEXT}
                     className="w-full resize-none bg-transparent text-sm outline-none"
                 />
-                <span className="block text-right text-[10px] text-muted-foreground">{notes.length}/500</span>
+                <span className="block text-right text-[10px] text-muted-foreground">{notes.length}/{MAX_EXPENSE_TEXT}</span>
             </OptionSection>
         </MoreOptionsSheet>
     );
@@ -195,7 +196,8 @@ function TagsSection({
                             type="button"
                             onClick={() => onToggle(tag.id)}
                             aria-pressed={on}
-                            className={cn("rounded-full border px-3 py-1 text-xs font-semibold", on ? "text-white" : "border-[color:var(--line)] bg-card text-muted-foreground")}
+                            title={tag.name}
+                            className={cn("max-w-full truncate rounded-full border px-3 py-1 text-xs font-semibold", on ? "text-white" : "border-[color:var(--line)] bg-card text-muted-foreground")}
                             style={on ? { backgroundColor: tag.color, borderColor: tag.color } : undefined}
                         >
                             {tag.name}

@@ -60,13 +60,13 @@ export function Sheet({
                 // A click on the dialog box itself (not its content) is the backdrop.
                 if (dismissible && e.target === e.currentTarget) onCloseRef.current();
             }}
-            className="eq-in fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-md max-h-[90vh] overflow-y-auto rounded-t-[24px] bg-card p-0 text-foreground backdrop:bg-black/35"
+            className="eq-in fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-md max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-t-[24px] bg-card p-0 text-foreground backdrop:bg-black/35"
         >
             <div className="px-5 pt-4 pb-[calc(20px+env(safe-area-inset-bottom))]">
                 <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-[var(--ink-4)]" aria-hidden />
                 <div className="flex items-center gap-2 mb-4">
                     {title ? (
-                        <h2 id={titleId} className="flex-1 text-[17px] font-bold tracking-[-0.01em]">
+                        <h2 id={titleId} className="flex-1 min-w-0 [overflow-wrap:anywhere] text-[17px] font-bold tracking-[-0.01em]">
                             {title}
                         </h2>
                     ) : (

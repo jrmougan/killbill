@@ -21,7 +21,7 @@ function Kpi({
     return (
         <div className={cn("min-w-0 rounded-2xl bg-card border border-[color:var(--line-2)] px-3 py-2.5", className)}>
             <div className="text-[11.5px] text-muted-foreground truncate">{label}</div>
-            <div data-testid={testId} className="text-[15px] font-bold tracking-[-0.01em] truncate">
+            <div data-testid={testId} className="text-[13px] min-[360px]:text-[15px] font-bold tracking-[-0.01em] tabular-nums break-words">
                 {value}
             </div>
             {sub && <div className="text-[11px] text-muted-foreground truncate">{sub}</div>}
@@ -121,9 +121,9 @@ function BalanceChart({ points }: { points: { label: string; balance: number }[]
 
     return (
         <figure aria-label="Evolución de tu saldo en el espacio" className="flex flex-col gap-2 m-0">
-            <div className="flex items-baseline justify-between gap-2">
-                <span className="text-[13px] text-muted-foreground">A fin de {last.label}</span>
-                <span data-testid="balance-now" className="text-[15px] font-bold">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                <span className="text-[13px] text-muted-foreground whitespace-nowrap">A fin de {last.label}</span>
+                <span data-testid="balance-now" className="text-[15px] font-bold whitespace-nowrap">
                     {last.balance > 0 ? "Te deben " : last.balance < 0 ? "Debes " : "En paz"}
                     {last.balance !== 0 && formatCurrency(Math.abs(last.balance))}
                 </span>
@@ -189,7 +189,7 @@ export function AnalysisView({
             <section aria-label="Gasto del mes" className="flex flex-col gap-1.5">
                 <span className="text-sm text-muted-foreground">Gastado este mes</span>
                 <div className="flex items-baseline gap-2.5 flex-wrap">
-                    <span data-testid="month-total" className="text-[44px] font-bold tracking-[-0.03em] leading-none tabular-nums">
+                    <span data-testid="month-total" className="text-[length:clamp(30px,11vw,44px)] font-bold tracking-[-0.03em] leading-none tabular-nums">
                         {formatCurrency(total)}
                     </span>
                     <span
@@ -256,7 +256,7 @@ export function AnalysisView({
                                 <span className="w-10 text-right text-[13px] text-muted-foreground tabular-nums">
                                     {sharePercent(c.amount, total)}%
                                 </span>
-                                <span className="w-[88px] text-right text-sm font-semibold tabular-nums">
+                                <span className="min-w-[88px] shrink-0 whitespace-nowrap text-right text-sm font-semibold tabular-nums">
                                     {formatCurrency(c.amount)}
                                 </span>
                             </li>
@@ -292,7 +292,7 @@ export function AnalysisView({
                             <li key={item.name} className="flex items-center gap-2.5 py-[9px]">
                                 <span className="flex-1 min-w-0 truncate text-sm font-semibold">{item.name}</span>
                                 <span className="text-[13px] text-muted-foreground tabular-nums">{item.count}×</span>
-                                <span className="w-[88px] text-right text-sm font-semibold tabular-nums">
+                                <span className="min-w-[88px] shrink-0 whitespace-nowrap text-right text-sm font-semibold tabular-nums">
                                     {formatCurrency(item.total)}
                                 </span>
                             </li>

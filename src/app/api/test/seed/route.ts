@@ -472,6 +472,57 @@ export async function POST(request: Request) {
       });
     }
 
+    if (scenario === 'mobile-stress') {
+      // Worst-case content for the 320px overflow sweep (e2e/mobile): names at
+      // their max length, unbreakable words and 7-digit amounts.
+      const LONG_WORD = 'Desoxirribonucleicoextraordinariamentelar'.slice(0, 40);
+      const [userA, userB, userC] = await createUsers(hashedPassword, ['userA', 'userB', 'userC']);
+      await prisma.user.update({
+        where: { id: userA.id },
+        data: { name: 'María de los Ángeles Fernández-Villaverde y Rodríguez' },
+      });
+      const members = [userA, userB, userC];
+      const space = await createSpace('Viaje fin de curso Costa da Morte 2026 con toda la pandilla', members, { type: 'GROUP' });
+
+      // 999.999,99 € split in three: every balance has seven digits.
+      const expense = await createSharedExpense({
+        groupId: space.id, description: LONG_WORD, amount: 99_999_999, paidById: userA.id,
+        splits: [
+          { userId: userA.id, amount: 33_333_333 },
+          { userId: userB.id, amount: 33_333_333 },
+          { userId: userC.id, amount: 33_333_333 },
+        ],
+        members,
+      });
+      await prisma.expense.update({ where: { id: expense.id }, data: { notes: `${LONG_WORD}${LONG_WORD}` } });
+      await prisma.tag.create({ data: { name: LONG_WORD, coupleId: space.id } });
+      const now = new Date();
+      await prisma.budget.create({
+        data: {
+          categoryId: (await resolveCategoryId('other'))!,
+          amount: 5000,
+          periodStart: new Date(now.getFullYear(), now.getMonth(), 1),
+          periodEnd: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+          periodType: 'MONTH',
+          coupleId: space.id,
+        },
+      });
+      const settlement = await prisma.settlement.create({
+        data: {
+          amount: 33_333_333, fromUserId: userB.id, toUserId: userA.id,
+          coupleId: space.id, status: 'PENDING', method: 'BIZUM',
+        },
+      });
+
+      return NextResponse.json({
+        userA: creds(userA, PASSWORD),
+        userB: creds(userB, PASSWORD),
+        coupleId: space.id,
+        expenseId: expense.id,
+        settlementId: settlement.id,
+      });
+    }
+
     if (scenario === 'space-settling') {
       const [userA, userB] = await createUsers(hashedPassword, ['userA', 'userB']);
       const members = [userA, userB];

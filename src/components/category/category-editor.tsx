@@ -89,7 +89,7 @@ export function CategoryEditor({ context, existing, onSaved, onCancel }: Categor
             <div className="flex items-center gap-3">
                 <CategoryBadge meta={preview} variant="emoji" />
                 <CategoryBadge meta={preview} variant="icon" />
-                <span className="text-sm font-semibold text-foreground">{preview.label}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{preview.label}</span>
             </div>
 
             {/* Label */}
@@ -155,7 +155,7 @@ export function CategoryEditor({ context, existing, onSaved, onCancel }: Categor
             )}
 
             <div className="flex gap-2">
-                <Button type="submit" disabled={!canSave} className={cn("flex-1", !canSave && "opacity-60")}>
+                <Button type="submit" disabled={!canSave} className={cn("flex-1 whitespace-nowrap", !canSave && "opacity-60")}>
                     {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}
                     {isEdit ? "Guardar" : "Crear categoría"}
                 </Button>
