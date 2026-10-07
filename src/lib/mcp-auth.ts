@@ -1,15 +1,13 @@
-import { verifyToken } from "@/lib/jwt";
-import { isTokenVersionCurrent } from "@/lib/token-version";
+import { resolveAccessToken } from "@/lib/access-tokens";
 
 /**
  * MCP Bearer-token authentication.
  *
- * Extracts a JWT from the `Authorization: Bearer …` header and validates it
- * using the same `JWT_SECRET` and `verifyToken` used for browser sessions.
- * Only dedicated MCP tokens are accepted; browser and guest tokens are rejected.
- * The token's `tv` claim must still equal User.tokenVersion (one PK lookup), so
- * "cerrar sesión en todos los dispositivos" also revokes every MCP token, and a
- * deleted user's tokens stop working. Tokens without `tv` count as tv=0.
+ * Extracts an opaque access token (`kb_…`) from the `Authorization: Bearer …`
+ * header and resolves it against the AccessToken table (sha256 lookup): it must
+ * exist, not be revoked or expired, and belong to a registered (non-guest)
+ * user. A JWT of any kind (browser session, guest or a legacy 90-day MCP JWT)
+ * is NOT an accepted Bearer → null (401).
  */
 
 export type McpIdentity = {
@@ -18,22 +16,31 @@ export type McpIdentity = {
   isAdmin?: boolean;
 };
 
-export async function validateBearerToken(request: Request): Promise<McpIdentity | null> {
+export type McpBearerIdentity = McpIdentity & {
+  /** AccessToken row id the caller authenticated with. */
+  tokenId: string;
+  /** User.tokenVersion now, baked into the internal per-request JWT. */
+  tokenVersion: number;
+};
+
+export function getBearerToken(request: Request): string | null {
   const auth = request.headers.get("authorization");
   if (!auth?.startsWith("Bearer ")) return null;
+  return auth.slice("Bearer ".length).trim() || null;
+}
 
-  const token = auth.slice("Bearer ".length).trim();
+export async function validateBearerToken(request: Request): Promise<McpBearerIdentity | null> {
+  const token = getBearerToken(request);
   if (!token) return null;
 
-  const payload = await verifyToken(token);
-  if (!payload?.userId || typeof payload.userId !== "string") return null;
-
-  if (payload.kind !== "mcp") return null;
-  if (!(await isTokenVersionCurrent(payload))) return null;
+  const resolved = await resolveAccessToken(token);
+  if (!resolved) return null;
 
   return {
-    userId: payload.userId,
-    email: typeof payload.email === "string" ? payload.email : undefined,
-    isAdmin: payload.isAdmin === true,
+    userId: resolved.userId,
+    email: resolved.email ?? undefined,
+    isAdmin: resolved.isAdmin,
+    tokenId: resolved.tokenId,
+    tokenVersion: resolved.tokenVersion,
   };
 }

@@ -8,7 +8,8 @@ import {
     verifyToken,
     signGuestToken,
     refreshGuestToken,
-    signMcpToken,
+    signInternalMcpToken,
+    INTERNAL_MCP_TOKEN_SECONDS,
     tokenVersionOf,
     GUEST_SESSION_SECONDS,
 } from './jwt';
@@ -142,13 +143,19 @@ describe('token version (revocation) claims', () => {
         expect(tokenVersionOf(payload!)).toBe(4);
     });
 
-    it('MCP tokens carry kind, tv and a unique jti', async () => {
-        const a = await verifyToken(await signMcpToken({ userId: 'u1', tv: 1 }, 30));
-        const b = await verifyToken(await signMcpToken({ userId: 'u1', tv: 1 }, 30));
+    it('internal MCP tokens carry kind, tv, tid, a unique jti and a 5-minute exp', async () => {
+        const claims = { userId: 'u1', email: 'a@b.c', isAdmin: false, tv: 1, tid: 'tok1' };
+        const a = await verifyToken(await signInternalMcpToken(claims));
+        const b = await verifyToken(await signInternalMcpToken(claims));
         expect(a?.kind).toBe('mcp');
+        expect(a?.userId).toBe('u1');
+        expect(a?.email).toBe('a@b.c');
         expect(a?.tv).toBe(1);
+        expect(a?.tid).toBe('tok1');
         expect(typeof a?.jti).toBe('string');
         expect(a?.jti).not.toBe(b?.jti);
+        expect((a!.exp as number) - (a!.iat as number)).toBe(INTERNAL_MCP_TOKEN_SECONDS);
+        expect(INTERNAL_MCP_TOKEN_SECONDS).toBe(300);
     });
 
     it('a legacy payload without tv counts as version 0; a malformed one never matches', () => {

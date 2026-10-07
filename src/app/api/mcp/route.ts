@@ -1,4 +1,5 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { signInternalMcpToken } from "@/lib/jwt";
 import { validateBearerToken } from "@/lib/mcp-auth";
 import { createServer } from "@/mcp/server";
 
@@ -9,7 +10,12 @@ import { createServer } from "@/mcp/server";
  *   GET    /api/mcp   — 405: no server→client SSE stream is offered
  *   DELETE /api/mcp   — 405: there are no sessions to terminate
  *
- * Auth: `Authorization: Bearer <jwt>` (kind 'mcp') validated on EVERY request.
+ * Auth: `Authorization: Bearer <kb_… access token>` (opaque, see
+ * access-tokens.ts) validated on EVERY request. Once validated, the route mints
+ * a short-lived (5 min) internal `kind: 'mcp'` JWT for that request only; the
+ * tools forward it as the `session_token` cookie to the existing API routes, so
+ * the opaque token itself never works as a cookie and a JWT never works as a
+ * Bearer here.
  *
  * Every POST builds a fresh McpServer + transport bound to the bearer of that
  * very request and tears both down once the response is produced. There is no
@@ -31,18 +37,18 @@ function methodNotAllowed(): Response {
   );
 }
 
-function getRawToken(request: Request): string | null {
-  const auth = request.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return null;
-  return auth.slice("Bearer ".length).trim() || null;
-}
-
 export async function POST(request: Request) {
   const identity = await validateBearerToken(request);
-  const rawToken = getRawToken(request);
-  if (!identity || !rawToken) return unauthorized();
+  if (!identity) return unauthorized();
 
-  const server = createServer(rawToken);
+  const internalJwt = await signInternalMcpToken({
+    userId: identity.userId,
+    email: identity.email ?? null,
+    isAdmin: identity.isAdmin === true,
+    tv: identity.tokenVersion,
+    tid: identity.tokenId,
+  });
+  const server = createServer(internalJwt);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     // Plain JSON responses: the promise resolves only once every response is

@@ -13,7 +13,7 @@ vi.mock("./db", () => ({
     prisma: { user: { findUnique: (...a: unknown[]) => mockFindUser(...a) } },
 }));
 
-import { getSession, signToken, signGuestToken } from "./auth";
+import { getSession, signToken, signGuestToken, signInternalMcpToken } from "./auth";
 
 /** A token as minted BEFORE the `tv` claim existed (pre-deploy session). */
 async function legacyToken(payload: Record<string, unknown>) {
@@ -70,9 +70,20 @@ describe("getSession token revocation", () => {
     });
 
     it("checks MCP tokens forwarded as cookie too", async () => {
-        cookieValue = await legacyToken({ userId: "u1", kind: "mcp", tv: 0 });
+        cookieValue = await signInternalMcpToken({ userId: "u1", tv: 0, tid: "tok1" });
         mockFindUser.mockResolvedValue({ tokenVersion: 3 });
         expect(await getSession()).toBeNull();
+    });
+
+    it("accepts the internal per-request MCP JWT (with tid) while tv is current", async () => {
+        cookieValue = await signInternalMcpToken({ userId: "u1", tv: 0, tid: "tok1" });
+        expect((await getSession())?.kind).toBe("mcp");
+    });
+
+    it("rejects a legacy 90-day MCP JWT (no tid) as a cookie even with a current tv", async () => {
+        cookieValue = await legacyToken({ userId: "u1", kind: "mcp", tv: 0 });
+        expect(await getSession()).toBeNull();
+        expect(mockFindUser).not.toHaveBeenCalled();
     });
 
     it("leaves guest sessions to getSessionCtx's membership revalidation (no tv lookup)", async () => {

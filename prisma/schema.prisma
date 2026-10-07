@@ -147,6 +147,25 @@ model GroupInvite {
   @@index([createdById])
 }
 
+// Token de acceso opaco (`kb_…`) para clientes MCP. Solo se persiste su sha256
+// (`tokenHash`) y un prefijo no secreto para identificarlo en la UI; el texto
+// plano se muestra una vez. `expiresAt = null` ⇒ sin caducidad. Revocable uno a
+// uno (`revokedAt`) o todos a la vez con "cerrar sesión en todos los dispositivos".
+model AccessToken {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String    @db.VarChar(60)
+  tokenHash   String    @unique @db.Char(64)
+  tokenPrefix String    @db.VarChar(16)
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  expiresAt   DateTime? // null = sin caducidad
+  revokedAt   DateTime?
+
+  @@index([userId])
+}
+
 model User {
   id        String   @id @default(cuid())
   name      String
@@ -193,6 +212,9 @@ model User {
 
   // Fase 0: enlaces de invitación creados por este usuario.
   groupInvitesCreated GroupInvite[] @relation("GroupInviteCreator")
+
+  // Tokens de acceso opacos para agentes/clientes MCP (solo sha256 en BD).
+  accessTokens AccessToken[]
 
   // Fase 0: gastos creados por este usuario (autoría; backfill COALESCE(ownerId, paidById)).
   expensesCreated Expense[] @relation("ExpenseCreator")

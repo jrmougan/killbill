@@ -3,9 +3,10 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 /**
  * Internal API client for the MCP server.
  *
- * The MCP route handler authenticates the external caller (Hermes Agent) via
- * a Bearer JWT. This client takes that same JWT and injects it as the
- * `session_token` cookie when calling existing API routes over localhost HTTP.
+ * The MCP route handler authenticates the external MCP client via an opaque
+ * Bearer access token and mints a short-lived internal `kind: 'mcp'` JWT for
+ * the request. This client injects that JWT as the `session_token` cookie when
+ * calling existing API routes over localhost HTTP.
  * This means every existing route handler — with all its validation, authz,
  * business logic and error mapping — is reused verbatim. No code duplication.
  */
