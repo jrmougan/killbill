@@ -64,7 +64,7 @@ export function SetupForm() {
     }
 
     return (
-        <div className="flex flex-col justify-center min-h-screen p-6 space-y-8 max-w-md mx-auto">
+        <div className="flex flex-col justify-center min-h-screen p-6 space-y-8 w-full max-w-md mx-auto">
             <div className="w-full flex flex-col gap-3.5">
                 <span className="text-[15px] font-extrabold tracking-[0.14em] text-primary">EQUIL</span>
                 <h1 className="text-[36px] font-bold tracking-[-0.03em] leading-[1.05] flex items-center gap-2.5">

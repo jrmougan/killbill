@@ -302,11 +302,11 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                     )}
                     <TicketRule />
                     <div className="flex justify-between items-baseline gap-3 font-semibold">
-                        <span>{balLabel}</span>
+                        <span className="min-w-0">{balLabel}</span>
                         <span
                             data-testid="settle-balance"
                             className={cn(
-                                "text-[32px] font-bold tracking-[-0.03em] tabular-nums",
+                                "shrink-0 whitespace-nowrap text-[length:clamp(20px,7vw,32px)] font-bold tracking-[-0.03em] tabular-nums",
                                 owed ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"
                             )}
                         >
@@ -353,7 +353,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
 // ---- layout pieces ---------------------------------------------------------
 
 function Screen({ children }: { children: React.ReactNode }) {
-    return <main className="eq-in min-h-dvh max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">{children}</main>;
+    return <main className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">{children}</main>;
 }
 
 function Footer({ children }: { children: React.ReactNode }) {

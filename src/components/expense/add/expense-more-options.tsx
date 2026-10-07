@@ -195,7 +195,8 @@ function TagsSection({
                             type="button"
                             onClick={() => onToggle(tag.id)}
                             aria-pressed={on}
-                            className={cn("rounded-full border px-3 py-1 text-xs font-semibold", on ? "text-white" : "border-[color:var(--line)] bg-card text-muted-foreground")}
+                            title={tag.name}
+                            className={cn("max-w-full truncate rounded-full border px-3 py-1 text-xs font-semibold", on ? "text-white" : "border-[color:var(--line)] bg-card text-muted-foreground")}
                             style={on ? { backgroundColor: tag.color, borderColor: tag.color } : undefined}
                         >
                             {tag.name}

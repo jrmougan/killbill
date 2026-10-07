@@ -397,7 +397,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                             className="flex flex-col gap-2.5 rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 py-3"
                         >
                             <div className="flex items-start gap-2">
-                                <p className="flex-1 min-w-0 text-sm">
+                                <p className="flex-1 min-w-0 text-sm [overflow-wrap:anywhere]">
                                     <span className="font-semibold">«{dup.item.name}»</span> ya está en la lista
                                     {itemQuantityLabel(dup.item)}.
                                 </p>

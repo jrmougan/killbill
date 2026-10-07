@@ -189,7 +189,7 @@ export function AnalysisView({
             <section aria-label="Gasto del mes" className="flex flex-col gap-1.5">
                 <span className="text-sm text-muted-foreground">Gastado este mes</span>
                 <div className="flex items-baseline gap-2.5 flex-wrap">
-                    <span data-testid="month-total" className="text-[44px] font-bold tracking-[-0.03em] leading-none tabular-nums">
+                    <span data-testid="month-total" className="text-[length:clamp(30px,11vw,44px)] font-bold tracking-[-0.03em] leading-none tabular-nums">
                         {formatCurrency(total)}
                     </span>
                     <span

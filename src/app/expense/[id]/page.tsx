@@ -112,7 +112,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     <span className="flex items-center gap-1.5 rounded-full bg-[var(--accent-tint)] px-2.5 py-1 text-xs font-semibold text-primary">
                         <span aria-hidden>{categoryMeta.emoji}</span> {categoryMeta.label}
                     </span>
-                    <h2 className="text-[44px] font-bold leading-none tracking-[-0.03em] text-foreground">
+                    <h2 className="text-[length:clamp(30px,11vw,44px)] font-bold leading-none tracking-[-0.03em] text-foreground">
                         {formatCurrency(expense.amount)}
                     </h2>
                     <p className="text-[13px] text-muted-foreground first-letter:uppercase">{dateLabel}</p>
@@ -149,19 +149,19 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                             ) : (
                                 <div className="divide-y divide-[color:var(--line-2)]">
                                     {expense.splits.map((split) => (
-                                        <div key={split.id} className="flex items-center justify-between py-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-base">
+                                        <div key={split.id} className="flex items-center justify-between gap-3 py-3">
+                                            <div className="flex min-w-0 items-center gap-3">
+                                                <div className="h-8 w-8 shrink-0 rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-base">
                                                     {avatar(split.user)}
                                                 </div>
-                                                <div>
-                                                    <p className="text-sm font-semibold text-foreground">{split.userId === userId ? "Ti" : split.user.name}</p>
+                                                <div className="min-w-0">
+                                                    <p className="truncate text-sm font-semibold text-foreground">{split.userId === userId ? "Ti" : split.user.name}</p>
                                                     {split.userId === expense.paidById && (
                                                         <p className="text-[11px] font-semibold text-primary">Pagó</p>
                                                     )}
                                                 </div>
                                             </div>
-                                            <div className="text-right">
+                                            <div className="shrink-0 text-right">
                                                 <p className="text-[15px] font-semibold tabular-nums text-foreground">{formatCurrency(split.amount)}</p>
                                                 <p className="text-[11px] text-muted-foreground">{split.userId === expense.paidById ? "Su parte" : "Cargo"}</p>
                                             </div>
@@ -176,7 +176,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                 {expense.notes && (
                     <section className="space-y-2">
                         <EqLabel className="px-1">Notas</EqLabel>
-                        <EqCard className="p-4 text-sm whitespace-pre-wrap text-[color:var(--body-ink)]">{expense.notes}</EqCard>
+                        <EqCard className="p-4 text-sm whitespace-pre-wrap [overflow-wrap:anywhere] text-[color:var(--body-ink)]">{expense.notes}</EqCard>
                     </section>
                 )}
 

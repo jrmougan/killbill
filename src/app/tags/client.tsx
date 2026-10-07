@@ -203,13 +203,13 @@ export function TagsClient({ initialTags, hasGroup, personalParam = false }: Tag
                             {tags.map((tag) => (
                                 <div
                                     key={tag.id}
-                                    className="flex items-center gap-2 pl-3 pr-2 py-[7px] rounded-full border border-[color:var(--line)] bg-card"
+                                    className="flex max-w-full min-w-0 items-center gap-2 pl-3 pr-2 py-[7px] rounded-full border border-[color:var(--line)] bg-card"
                                 >
                                     <div
                                         className="h-3 w-3 rounded-full flex-shrink-0"
                                         style={{ backgroundColor: tag.color }}
                                     />
-                                    <span className="text-[13px] font-semibold text-foreground">{tag.name}</span>
+                                    <span className="min-w-0 truncate text-[13px] font-semibold text-foreground" title={tag.name}>{tag.name}</span>
                                     {tag.personal && (
                                         <span className="text-[11px] text-muted-foreground">Personal</span>
                                     )}

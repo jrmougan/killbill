@@ -89,7 +89,7 @@ export function CategoryEditor({ context, existing, onSaved, onCancel }: Categor
             <div className="flex items-center gap-3">
                 <CategoryBadge meta={preview} variant="emoji" />
                 <CategoryBadge meta={preview} variant="icon" />
-                <span className="text-sm font-semibold text-foreground">{preview.label}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{preview.label}</span>
             </div>
 
             {/* Label */}

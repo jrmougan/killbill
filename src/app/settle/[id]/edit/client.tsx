@@ -63,7 +63,7 @@ export function EditSettleClient({ settlementId, initialCents, initialMethod, to
     };
 
     return (
-        <main className="eq-in min-h-dvh max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">
+        <main className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">
             <EqHeader back={`/settle/${settlementId}`} close title="Editar pago" />
 
             <div className="flex-1 flex flex-col gap-8 px-5 pt-8">

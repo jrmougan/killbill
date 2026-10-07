@@ -46,7 +46,7 @@ export default async function SettlementHistoryPage({ searchParams }: { searchPa
     }
 
     return (
-        <main className="eq-in min-h-dvh max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)] pb-10">
+        <main className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)] pb-10">
             <EqHeader back={`/settle?space=${encodeURIComponent(groupId)}`} title="Pagos" meta={spaceName} />
 
             {settlements.length === 0 ? (

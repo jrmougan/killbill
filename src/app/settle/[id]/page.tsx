@@ -87,7 +87,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
     const emojiFor = (key: string) => (catMap[key] ?? catMap.other ?? NEUTRAL_CATEGORY_META).emoji;
 
     return (
-        <main className="eq-in min-h-dvh max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">
+        <main className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">
             <SettleHeader fallback={`/settle/history?space=${encodeURIComponent(settlement.coupleId)}`} title="Pago">
                 {canEdit && (
                     <Link href={`/settle/${id}/edit`} className="text-sm font-semibold text-primary px-1">
@@ -99,7 +99,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
             <div className="flex-1 flex flex-col gap-6 px-5 pt-6 pb-8">
                 <section className="flex flex-col items-center gap-2 text-center" data-testid="settlement-summary">
                     <span className="text-[15px] text-muted-foreground">{headline}</span>
-                    <span className="text-[44px] font-bold tracking-[-0.03em] tabular-nums leading-none" data-testid="settlement-amount">
+                    <span className="text-[length:clamp(30px,11vw,44px)] font-bold tracking-[-0.03em] tabular-nums leading-none" data-testid="settlement-amount">
                         {formatCurrency(settlement.amount)}
                     </span>
                     <SettlementStatusChip status={settlement.status} className="mt-1" />
