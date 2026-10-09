@@ -7,13 +7,16 @@ vi.stubGlobal("fetch", mockFetch);
 vi.mock("@/lib/mcp-auth", () => ({
   validateBearerToken: vi.fn(async (request: Request) => {
     const auth = request.headers.get("authorization");
-    if (auth === "Bearer token-a") return { userId: "user-a" };
-    if (auth === "Bearer token-b") return { userId: "user-b" };
+    if (auth === "Bearer token-a") return { userId: "user-a", email: "a@x.es", isAdmin: false, tokenId: "tok-a", tokenVersion: 2 };
+    if (auth === "Bearer token-b") return { userId: "user-b", tokenId: "tok-b", tokenVersion: 0 };
     return null;
   }),
 }));
 
 import { DELETE, GET, POST } from "./route";
+import { verifyToken } from "@/lib/jwt";
+
+process.env.JWT_SECRET = "test-secret-for-vitest";
 
 let nextId = 1;
 
@@ -83,7 +86,18 @@ describe("/api/mcp (stateless)", () => {
       rpc("tools/call", { name: "list_spaces", arguments: {} }, "token-b", { "mcp-session-id": "session-of-a" }),
     );
     const cookies = mockFetch.mock.calls.map((c) => (c[1] as RequestInit & { headers: Record<string, string> }).headers.Cookie);
-    expect(cookies).toEqual(["session_token=token-a", "session_token=token-b"]);
+    expect(cookies).toHaveLength(2);
+    // The opaque bearer is never forwarded: each call carries a fresh internal JWT of ITS bearer.
+    const payloads = await Promise.all(
+      cookies.map((c) => {
+        expect(c).toMatch(/^session_token=/);
+        expect(c).not.toContain("token-");
+        return verifyToken(c.slice("session_token=".length));
+      }),
+    );
+    expect(payloads[0]).toMatchObject({ userId: "user-a", email: "a@x.es", isAdmin: false, tv: 2, tid: "tok-a", kind: "mcp" });
+    expect(payloads[1]).toMatchObject({ userId: "user-b", tv: 0, tid: "tok-b", kind: "mcp" });
+    expect((payloads[0]!.exp as number) - (payloads[0]!.iat as number)).toBe(300);
   });
 
   it("answers GET and DELETE with 405 (no SSE stream, no sessions)", async () => {

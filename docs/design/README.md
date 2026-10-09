@@ -23,7 +23,9 @@ The prototype contradicts some existing product rules. These are the resolutions
   `EPHEMERAL_SPACES_ENABLED`, otherwise GROUP), Solo yo→INDIVIDUAL.
 - **Budgets**: tapping an unbudgeted category asks for the amount (the
   prototype's fixed 100 € is a demo shortcut).
-- **MCP (Hermes Agent)**: "Conectar" issues a token (copy once); there is no
-  "Desconectar" because MCP JWTs cannot be revoked yet.
+- **MCP ("Agentes IA (MCP)")**: the prototype's single Hermes "Conectar" became a
+  generic "Tokens de acceso" list: named opaque tokens for any MCP client, with
+  30/90/365-day or no expiry, shown once, each revocable individually (and all
+  at once by "Cerrar sesión en todos los dispositivos").
 - **Shopping aisles** are kept (grouping/ordering) even though the prototype
   shows a flat list.

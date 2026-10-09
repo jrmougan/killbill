@@ -6,28 +6,39 @@ test.describe('Ajustes', () => {
   test.beforeEach(async ({ request }) => { await resetDb(request); });
   test.afterEach(async ({ request }) => { await resetDb(request); });
 
-  test('Hermes: confirm before issuing; the token sheet only closes explicitly', async ({ page, request }) => {
+  test('Tokens de acceso: create a never-expiring token, show it once (not dismissible), list it and revoke it', async ({ page, request }) => {
     const seed = await seedScenario(request, 'couple-with-debt');
     await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password! });
     await page.goto('/settings');
 
     let issued = 0;
-    page.on('request', (r) => { if (r.url().endsWith('/api/me/mcp-token') && r.method() === 'POST') issued += 1; });
+    page.on('request', (r) => { if (r.url().endsWith('/api/me/tokens') && r.method() === 'POST') issued += 1; });
 
-    await page.getByRole('button', { name: 'Conectar' }).click();
-    const confirm = page.getByRole('dialog', { name: 'Conectar Hermes Agent' });
-    await expect(confirm).toContainText('90 días');
-    // MCP tokens are revocable via User.tokenVersion ("cerrar sesión en todos los dispositivos").
-    await expect(confirm).toContainText('Cerrar sesión en todos los dispositivos');
-    await confirm.getByRole('button', { name: 'Cancelar' }).click();
-    await expect(confirm).toHaveCount(0);
+    await expect(page.getByText('Agentes IA (MCP)')).toBeVisible();
+    const summary = page.getByTestId('access-tokens-summary');
+    await expect(summary).toHaveText('Conecta un agente o cliente MCP');
+    await page.getByRole('button', { name: /Tokens de acceso/ }).click();
+    const list = page.getByRole('dialog', { name: 'Tokens de acceso' });
+    await expect(list).toContainText('Aún no has creado ningún token');
+    await list.getByRole('button', { name: 'Nuevo token' }).click();
+
+    const create = page.getByRole('dialog', { name: 'Nuevo token' });
+    await expect(create.getByRole('radio', { name: '90 días' })).toBeChecked();
+    await expect(create.getByTestId('token-no-expiry-warning')).toHaveCount(0);
+    await create.getByLabel('Nombre').fill('Agente e2e');
+    await create.locator('label', { hasText: 'Sin caducidad' }).click();
+    await expect(create.getByRole('radio', { name: 'Sin caducidad' })).toBeChecked();
+    await expect(create.getByTestId('token-no-expiry-warning')).toContainText('No caducará nunca');
     expect(issued).toBe(0);
+    await create.getByRole('button', { name: 'Generar token' }).click();
 
-    await page.getByRole('button', { name: 'Conectar' }).click();
-    await page.getByRole('button', { name: 'Generar token' }).click();
     const tokenSheet = page.getByRole('dialog', { name: 'Guarda tu token ahora' });
     await expect(tokenSheet).toBeVisible();
     expect(issued).toBe(1);
+    await expect(tokenSheet.getByTestId('access-token-value')).toHaveText(/^kb_[A-Za-z0-9_-]{43}$/);
+    await expect(tokenSheet).toContainText('No caduca.');
+    await expect(tokenSheet.getByTestId('access-token-config')).toContainText('/api/mcp');
+    await expect(tokenSheet.getByRole('button', { name: 'Copiar token' })).toBeVisible();
     // Escape and a backdrop tap do not lose the one-time token.
     await page.keyboard.press('Escape');
     await expect(tokenSheet).toBeVisible();
@@ -36,6 +47,29 @@ test.describe('Ajustes', () => {
     await expect(tokenSheet.getByRole('button', { name: 'Cerrar' })).toHaveCount(0);
     await tokenSheet.getByRole('button', { name: 'He guardado el token' }).click();
     await expect(tokenSheet).toHaveCount(0);
+
+    // Back on the list: the token is active, never expires, and the plaintext is gone.
+    await expect(list).toBeVisible();
+    const row = list.getByTestId('access-token-row').filter({ hasText: 'Agente e2e' });
+    await expect(row).toHaveAttribute('data-status', 'active');
+    await expect(row).toContainText('Sin caducidad');
+    await expect(row).toContainText('Sin usar');
+    await expect(list.getByText(/^kb_[A-Za-z0-9_-]{43}$/)).toHaveCount(0);
+    await expect(summary).toHaveText('1 activo');
+
+    // Revoke with confirmation (Cancelar first leaves it active).
+    await row.getByRole('button', { name: 'Revocar Agente e2e' }).click();
+    const confirm = page.getByRole('dialog', { name: '¿Revocar «Agente e2e»?' });
+    await confirm.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(row).toHaveAttribute('data-status', 'active');
+    await row.getByRole('button', { name: 'Revocar Agente e2e' }).click();
+    await confirm.getByRole('button', { name: 'Revocar', exact: true }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(row).toHaveAttribute('data-status', 'revoked');
+    await expect(row).toContainText('Revocado');
+    await expect(row.getByRole('button', { name: /Revocar/ })).toHaveCount(0);
+    await expect(summary).toHaveText('Conecta un agente o cliente MCP');
   });
 
   test('Salir: confirm, then explain LAST_OWNER and HAS_BALANCE (with "Salir igualmente" → force)', async ({ page, request }) => {

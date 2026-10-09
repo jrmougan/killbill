@@ -5,6 +5,7 @@ import { SettlementError } from "@/lib/settlement-rules";
 import { SpacePolicyError } from "@/lib/space-policy";
 
 vi.mock("@/lib/membership", () => ({ MAX_GROUP_MEMBERS: 20 }));
+vi.mock("@/lib/db", () => ({ prisma: {} }));
 
 class ListError extends Error {
     constructor(public status: number, public code: string, message: string) {
@@ -49,6 +50,13 @@ describe("toErrorResponse", () => {
         const l = toErrorResponse(new ListError(404, "LIST_NOT_FOUND", "Lista no encontrada"));
         expect(l.status).toBe(404);
         expect(await l.json()).toEqual({ error: "Lista no encontrada", code: "LIST_NOT_FOUND" });
+    });
+
+    it("maps AccessTokenError to { error, code } with its status", async () => {
+        const { AccessTokenError, TOKEN_LIMIT_MESSAGE } = await import("@/lib/access-tokens");
+        const res = toErrorResponse(new AccessTokenError(409, "TOKEN_LIMIT", TOKEN_LIMIT_MESSAGE));
+        expect(res.status).toBe(409);
+        expect(await res.json()).toEqual({ error: TOKEN_LIMIT_MESSAGE, code: "TOKEN_LIMIT" });
     });
 
     it("anything else is a logged 500 with the route's fallback message", async () => {

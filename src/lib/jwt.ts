@@ -11,7 +11,7 @@ function getKey() {
 }
 
 /**
- * Claims of a registered browser session (and the base of an MCP token).
+ * Claims of a registered browser session.
  * `tv` is the User.tokenVersion at mint time: a token is only accepted while it
  * still equals the DB value (see token-version.ts), so bumping the column
  * revokes every outstanding token of that user. Always pass it when minting;
@@ -112,20 +112,35 @@ export async function refreshGuestToken(payload: JWTPayload): Promise<string | n
     );
 }
 
+/** Lifetime of the internal JWT minted per /api/mcp request (see signInternalMcpToken). */
+export const INTERNAL_MCP_TOKEN_SECONDS = 5 * 60;
+
 /**
- * Sign an MCP access token — a longer-lived JWT (default 90 days) carrying
- * `kind: 'mcp'` so it can be distinguished from browser session tokens.
- * Issued by POST /api/me/mcp-token for use as a Bearer credential by external
- * agent clients (e.g. Hermes Agent). Carries the user's `tv` (revoked by
- * bumping User.tokenVersion) and a unique `jti` so individual tokens can be
- * told apart in logs / a future per-token denylist.
+ * Claims of the short-lived internal MCP JWT. `tid` is the AccessToken id the
+ * external caller authenticated with (for logs / traceability).
  */
-export async function signMcpToken(payload: SessionClaims, ttlDays = 90): Promise<string> {
-    return await new SignJWT({ ...payload, kind: 'mcp' })
+export type InternalMcpClaims = {
+    userId: string;
+    email?: string | null;
+    isAdmin?: boolean;
+    tv: number;
+    tid: string;
+};
+
+/**
+ * Sign the INTERNAL JWT of one MCP request. External MCP clients authenticate
+ * with an opaque access token (`kb_…`, see access-tokens.ts); once /api/mcp has
+ * validated it, this mints a 5-minute `kind: 'mcp'` JWT that the
+ * InternalApiClient sends as the `session_token` cookie to the existing API
+ * routes. It never leaves the server process. It carries the user's current
+ * `tv` (so getSession's revocation check still applies) and a unique `jti`.
+ */
+export async function signInternalMcpToken(claims: InternalMcpClaims): Promise<string> {
+    return await new SignJWT({ ...claims, kind: 'mcp' })
         .setProtectedHeader({ alg: 'HS256' })
         .setJti(crypto.randomUUID())
         .setIssuedAt()
-        .setExpirationTime(`${ttlDays}d`)
+        .setExpirationTime(`${INTERNAL_MCP_TOKEN_SECONDS}s`)
         .sign(getKey());
 }
 

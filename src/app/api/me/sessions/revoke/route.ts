@@ -6,8 +6,9 @@ import { forbidden, route } from "@/lib/http";
 /**
  * POST /api/me/sessions/revoke — "Cerrar sesión en todos los dispositivos".
  *
- * Bumps User.tokenVersion, which invalidates EVERY session cookie and MCP token
- * issued to the caller so far (each carries the old `tv`). The current device is
+ * Bumps User.tokenVersion, which invalidates EVERY session cookie issued to the
+ * caller so far (each carries the old `tv`), and revokes every active access
+ * token in the same transaction (see bumpTokenVersion). The current device is
  * logged out too (its cookie is cleared); the client then goes to /login.
  * Browser sessions only: guests have their own revocation (membership) and an
  * MCP token must not be able to act on the account's sessions.

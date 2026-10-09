@@ -2,14 +2,16 @@ import { cache } from "react";
 import type { JWTPayload } from "jose";
 import { prisma } from "./db";
 import { tokenVersionOf } from "./jwt";
+import { activeTokensWhere } from "./access-tokens";
 
 /**
  * Token revocation without a blacklist (H2).
  *
- * Every registered-session and MCP JWT carries `tv` = User.tokenVersion at mint
- * time. A token is accepted only while that still equals the DB value, so
- * bumping the column ("cerrar sesión en todos los dispositivos", password
- * change) revokes every outstanding token of the user at once.
+ * Every registered-session and (internal) MCP JWT carries `tv` =
+ * User.tokenVersion at mint time. A token is accepted only while that still
+ * equals the DB value, so bumping the column ("cerrar sesión en todos los
+ * dispositivos", password change) revokes every outstanding JWT of the user at
+ * once. Opaque MCP access tokens carry no `tv`: the bump revokes them by row.
  *
  * Cost: one primary-key lookup selecting a single INT column. `cache` dedupes it
  * within one React server render (layout + page both read the session), and is
@@ -35,14 +37,22 @@ export async function isTokenVersionCurrent(payload: JWTPayload): Promise<boolea
 }
 
 /**
- * Invalidate every session/MCP token of `userId` issued so far. Returns the new
- * version (to sign a fresh token for the current device, if desired).
+ * Invalidate every session JWT of `userId` issued so far AND revoke all of its
+ * active MCP access tokens, atomically. Returns the new version (to sign a
+ * fresh token for the current device, if desired).
  */
 export async function bumpTokenVersion(userId: string): Promise<number> {
-    const user = await prisma.user.update({
-        where: { id: userId },
-        data: { tokenVersion: { increment: 1 } },
-        select: { tokenVersion: true },
-    });
+    const now = new Date();
+    const [user] = await prisma.$transaction([
+        prisma.user.update({
+            where: { id: userId },
+            data: { tokenVersion: { increment: 1 } },
+            select: { tokenVersion: true },
+        }),
+        prisma.accessToken.updateMany({
+            where: activeTokensWhere(userId, now),
+            data: { revokedAt: now },
+        }),
+    ]);
     return user.tokenVersion;
 }

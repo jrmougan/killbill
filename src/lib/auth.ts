@@ -25,6 +25,9 @@ export async function getSession() {
     const payload = await verifyToken(token);
     if (!payload) return null;
     if (payload.kind === 'guest') return payload;
+    // Only the internal per-request MCP JWT (signInternalMcpToken, carries `tid`)
+    // is a valid MCP cookie; the legacy 90-day MCP JWTs (no `tid`) are cut off.
+    if (payload.kind === 'mcp' && typeof payload.tid !== 'string') return null;
     if (!(await isTokenVersionCurrent(payload))) return null;
     return payload;
 }
