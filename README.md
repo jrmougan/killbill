@@ -5,7 +5,7 @@ con autenticación JWT y lectura de tickets mediante OCR.
 
 ## Desarrollo local
 
-Requisitos: [mise](https://mise.jdx.dev/getting-started.html) y Docker o Podman.
+Requisitos: [mise](https://mise.jdx.dev/getting-started.html) y Docker (Podman es opcional).
 `mise.toml` fija Node 24.21.0 (incluye npm 11.19.0) y Compose 5.5.1.
 
 ```bash
@@ -24,9 +24,9 @@ puertos por checkout. Muestra la URL del servidor; `PORT` queda guardado en `.en
 Repetirlo conserva el entorno y no modifica la base de datos.
 
 `services:up` arranca MySQL 8.0 y espera a que acepte consultas con el usuario de
-la aplicación. Publica el puerto solo en `127.0.0.1`. Utiliza Docker si está
-instalado; en caso contrario utiliza Podman con el Compose que instala mise.
-Puedes elegir con `CONTAINER_ENGINE=podman mise run services:up`.
+la aplicación. Publica el puerto solo en `127.0.0.1`. Utiliza Docker por defecto
+con el Compose que instala mise. Podman es una alternativa opcional:
+`CONTAINER_ENGINE=podman mise run services:up`.
 
 `db:migrate` aplica las migraciones versionadas (`prisma migrate deploy`). Para
 crear una migración nueva usa `mise exec -- npx prisma migrate dev` con una base

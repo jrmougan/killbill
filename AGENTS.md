@@ -7,7 +7,7 @@ Use the versions pinned in `mise.toml` (Node 24.21.0, bundled npm 11.19.0).
 ```bash
 mise install
 mise run setup          # Preserve/create .env, npm ci, Prisma generate; no DB writes
-mise run services:up    # Local MySQL via Docker/Podman; wait for readiness
+mise run services:up    # Local MySQL via Docker (CONTAINER_ENGINE=podman optional); wait for readiness
 mise run db:migrate     # Apply committed migrations explicitly
 mise run db:seed        # Seed system categories and admin explicitly
 mise run dev            # Next.js on the PORT generated in .env
