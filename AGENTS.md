@@ -56,7 +56,7 @@ New/changed routes under `src/app/api/` use the `src/lib/http` toolkit (conventi
 
 All monetary amounts are stored in **cents** (integers). Convert to euros only for display using `src/lib/currency.ts`.
 
-Nine Prisma models: `Couple` → `User[]`, `Expense[]`, `Settlement[]`. An `Expense` has `Split[]` records (one per user) and links to `Tag[]` through `ExpenseTag`. `InviteCode` controls registration, and `Budget` tracks per-category spending limits. `Expense.category`/`recurringInterval` and `Settlement.status`/`method` are Prisma enums (not free-form strings).
+Core Prisma models (see `prisma/schema.prisma` for the full set — memberships, invites, categories, recurring series, ledger, shopping lists…): `Couple` → `User[]`, `Expense[]`, `Settlement[]`. An `Expense` has `Split[]` records (one per user) and links to `Tag[]` through `ExpenseTag`. `InviteCode` controls registration, and `Budget` tracks per-category spending limits. `AccessToken` (per `User`, cascade delete) holds the opaque MCP access tokens — only `tokenHash` (sha256, unique) + display `tokenPrefix`, with `name`, `lastUsedAt`, nullable `expiresAt` (null = never expires) and `revokedAt`. `Expense.category`/`recurringInterval` and `Settlement.status`/`method` are Prisma enums (not free-form strings).
 
 **DB invariants** (MySQL ≥ 8.0.16): named `CHECK` constraints guard money columns and scope rules. Category/Tag/Budget/ShoppingList/Expense carry a VIRTUAL generated `scopeKey` column (`Unsupported(...)` in `schema.prisma`, never written by the app) with `CHECK (scopeKey IS NOT NULL)` enforcing the group XOR personal rule (and `SHARED ⇔ coupleId` on Expense); it also backs `UNIQUE(scopeKey, key|name)`. A write that breaks a scope rule fails in the DB, not silently.
 
@@ -68,7 +68,7 @@ A `Couple` row doubles as a **space** with four modes selected at creation (`Spa
 
 ### Auth flow
 
-Login → bcryptjs password check → JWT signed with `jose` → stored as HttpOnly cookie. Middleware verifies JWT on every protected request. Registered sessions are **not** refreshed per request: fixed 7 days from login (only guest JWTs slide, in the proxy). Each JWT carries `tv` = `User.tokenVersion`; `getSession` rejects a stale `tv`, and `POST /api/me/sessions/revoke` bumps it ("cerrar sesión en todos los dispositivos" — also kills MCP tokens). Route handlers and guest-reachable pages use `getSessionCtx` (`src/lib/authz.ts`), never raw `getSession` — oxlint forbids importing it under `src/app/api/**`. Login is rate-limited per IP **and** per email; the client IP is `X-Real-Ip` or the **last** `X-Forwarded-For` hop (`getClientIp`, assumes Traefik is the only ingress).
+Login → bcryptjs password check → JWT signed with `jose` → stored as HttpOnly cookie. Middleware verifies JWT on every protected request. Registered sessions are **not** refreshed per request: fixed 7 days from login (only guest JWTs slide, in the proxy). Each JWT carries `tv` = `User.tokenVersion`; `getSession` rejects a stale `tv`, and `POST /api/me/sessions/revoke` bumps it ("cerrar sesión en todos los dispositivos" — in the same transaction it also sets `revokedAt` on every active MCP `AccessToken`). Route handlers and guest-reachable pages use `getSessionCtx` (`src/lib/authz.ts`), never raw `getSession` — oxlint forbids importing it under `src/app/api/**`. Login is rate-limited per IP **and** per email; the client IP is `X-Real-Ip` or the **last** `X-Forwarded-For` hop (`getClientIp`, assumes Traefik is the only ingress).
 
 ### Expense & balance flow
 
@@ -104,11 +104,15 @@ Receipt image uploaded → stored via `/api/upload` (session required, per-user 
 
 ### MCP server (Model Context Protocol)
 
-The app exposes an MCP endpoint at `POST /api/mcp` (Streamable HTTP transport) so external AI agents (Hermes Agent, Claude Desktop, etc.) can interact with Kill Bill programmatically.
+The app exposes an MCP endpoint at `POST /api/mcp` (Streamable HTTP transport) so any MCP client (AI agents, desktop apps, scripts…) can interact with Kill Bill programmatically.
 
-**Architecture**: The MCP endpoint is served by the existing Next.js standalone process — no second process or Docker changes. Auth is `Authorization: Bearer <jwt>` validated via the same `JWT_SECRET` used for browser sessions (`src/lib/mcp-auth.ts` `validateBearerToken`). Guest tokens are rejected. The endpoint is **stateless**: every POST builds a fresh `McpServer` (`src/mcp/server.ts` `createServer`) + transport bound to that request's bearer and tears them down after responding (GET/DELETE → 405; no session map, `Mcp-Session-Id` is ignored). The server that wraps the raw JWT in an `InternalApiClient` (`src/mcp/internal-client.ts`) — this client injects the JWT as the `session_token` cookie on internal HTTP calls to the existing API routes, so **every tool reuses the full authorization stack** (`requireSpaceAccess`, role gates, space-policy) with zero duplication. The transport is `WebStandardStreamableHTTPServerTransport` (Web-standard `Request`/`Response`, native to Next.js route handlers). MCP tokens carry `tv` too, so revoking sessions invalidates them.
+**Architecture**: The MCP endpoint is served by the existing Next.js standalone process — no second process or Docker changes. Auth is `Authorization: Bearer kb_…`: an **opaque access token** resolved by `src/lib/mcp-auth.ts` `validateBearerToken` → `resolveAccessToken` (`src/lib/access-tokens.ts`: sha256 lookup; malformed → 401 without touching the DB; revoked, expired or guest-owned → 401; `lastUsedAt` refreshed at most once per hour). A JWT of any kind (browser session, guest, or a legacy 90-day `kind:'mcp'` JWT) is **never** an accepted Bearer. The endpoint is **stateless**: every POST builds a fresh `McpServer` (`src/mcp/server.ts` `createServer`) + transport bound to that request's bearer and tears them down after responding (GET/DELETE → 405; no session map, `Mcp-Session-Id` is ignored). After validating the bearer, the route mints a **short-lived internal JWT** (`signInternalMcpToken` in `jwt.ts`: `kind:'mcp'`, 5 min, `jti`, carries `tv` and the token id `tid`) for that request only and hands it to the server, which wraps it in an `InternalApiClient` (`src/mcp/internal-client.ts`) — this client injects the JWT as the `session_token` cookie on internal HTTP calls to the existing API routes, so **every tool reuses the full authorization stack** (`requireSpaceAccess`, role gates, space-policy) with zero duplication. The transport is `WebStandardStreamableHTTPServerTransport` (Web-standard `Request`/`Response`, native to Next.js route handlers). The opaque token itself never works as a `session_token` cookie (it is not a JWT), and session JWTs never work as a Bearer.
 
-**Token issuance**: `POST /api/me/mcp-token` (requires normal session cookie auth) issues a 90-day JWT with `kind:'mcp'` (`signMcpToken` in `jwt.ts`). TTL configurable via `MCP_TOKEN_TTL_DAYS` env var.
+**Token issuance** (Ajustes → "Agentes IA (MCP)" → "Tokens de acceso"; browser session only — guest and MCP sessions get 403, `Cache-Control: private, no-store`):
+- `GET /api/me/tokens` → `{ tokens: AccessTokenSummary[] }` (newest first, incl. revoked/expired; never the plaintext).
+- `POST /api/me/tokens` `{ name (1..60), expiresInDays: 30 | 90 | 365 | null }` → 201 `{ token, ...summary }`. The token is `kb_` + base64url(32 random bytes); the plaintext is returned **once** and only its sha256 is stored. `null` = sin caducidad. Max 20 active tokens per user (409 `TOKEN_LIMIT`), rate limited to 10 creations/hour.
+- `DELETE /api/me/tokens/[id]` → `{ success: true }` (idempotent for your own token; 404 "Token no encontrado" for a missing/foreign id). Revocation is immediate (the next MCP request is 401).
+- Global revocation: `POST /api/me/sessions/revoke` (`bumpTokenVersion`) revokes every active token of the user along with all session JWTs; deleting the user cascades its tokens.
 
 **Tool modules** (`src/mcp/tools/`): each exports a `ToolRegistrar` function that registers tools on the `McpServer`. Tool inputs are validated with Zod (raw shapes, not `z.object()`); outputs are JSON content blocks. Tool `inputSchema` fields use `.describe()` for agent UX. Tools are wired in the `registrars` array in `src/mcp/server.ts`.
 
@@ -117,13 +121,16 @@ The app exposes an MCP endpoint at `POST /api/mcp` (Streamable HTTP transport) s
 - `ocr.ts` — `parse_receipt` accepts base64 image data, forwards to `/api/ocr` as multipart form.
 - `resources-prompts.ts` — Resources `kb://spaces` and `kb://budget-summary`; Prompts `monthly_report`, `settle_up_guide`, `shopping_trip`.
 
-**Hermes Agent config** (`~/.hermes/config.yaml`):
-```yaml
-mcp_servers:
-  killbill:
-    url: "https://finanzas.mougan.es/api/mcp"
-    headers:
-      Authorization: "Bearer <jwt from POST /api/me/mcp-token>"
+**Client config** (generic; the exact file and key names depend on the client — Claude Desktop/Code, Cursor, Hermes Agent, etc.). Any client that speaks Streamable HTTP needs just the URL and the header:
+```json
+{
+  "mcpServers": {
+    "killbill": {
+      "url": "https://finanzas.mougan.es/api/mcp",
+      "headers": { "Authorization": "Bearer kb_…" }
+    }
+  }
+}
 ```
 
 ### Deployment

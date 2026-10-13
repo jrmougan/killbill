@@ -7,7 +7,8 @@
  *   { error: '<mensaje en español>', code?: 'SOME_CODE', ...extra }
  *
  * Mapping order: HttpError → ZodError (400 + `issues`) → typed domain errors of
- * the lib services (SettlementError, SpacePolicyError, ListError, CategoryError)
+ * the lib services (SettlementError, SpacePolicyError, ListError, CategoryError,
+ * AccessTokenError)
  * → anything else is a 500 logged with console.error.
  */
 import { NextResponse } from "next/server";
@@ -72,7 +73,13 @@ export function validationError(error: ZodError, code?: ValidationCode): HttpErr
  * (category-crud pulls lucide icons, list-crud the DB client…). SettlementError
  * also carries `extra` (e.g. `maxAmountCents`), merged into the body like its toJSON().
  */
-const DOMAIN_ERROR_NAMES = new Set(["SettlementError", "SpacePolicyError", "ListError", "CategoryError"]);
+const DOMAIN_ERROR_NAMES = new Set([
+    "SettlementError",
+    "SpacePolicyError",
+    "ListError",
+    "CategoryError",
+    "AccessTokenError",
+]);
 
 function domainError(e: unknown): HttpError | null {
     if (!(e instanceof Error) || !DOMAIN_ERROR_NAMES.has(e.name)) return null;

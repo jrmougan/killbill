@@ -45,7 +45,9 @@ test.describe('Guest confinement and invite links (QA P0)', () => {
       ['POST', '/api/budget', { category: 'food', amount: 50 }],
       ['DELETE', '/api/budget?id=whatever'],
       ['PATCH', '/api/user/profile', { name: 'Hacker' }],
-      ['POST', '/api/me/mcp-token'],
+      ['GET', '/api/me/tokens'],
+      ['POST', '/api/me/tokens', { name: 'Escapado', expiresInDays: 30 }],
+      ['DELETE', '/api/me/tokens/whatever'],
       ['POST', `/api/spaces/${seed.coupleId}/invites`, { kind: 'GUEST' }],
       ['GET', '/api/export'],
     ];

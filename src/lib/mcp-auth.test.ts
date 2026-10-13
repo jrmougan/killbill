@@ -1,152 +1,79 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { validateBearerToken } from "@/lib/mcp-auth";
 
-const mockVerifyToken = vi.fn();
-const mockFindUser = vi.fn();
+const mockResolve = vi.fn();
+const mockFindToken = vi.fn();
 
-vi.mock("@/lib/jwt", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/lib/jwt")>()),
-  verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
-}));
 vi.mock("@/lib/db", () => ({
-  prisma: { user: { findUnique: (...args: unknown[]) => mockFindUser(...args) } },
+  prisma: { accessToken: { findUnique: (...args: unknown[]) => mockFindToken(...args) } },
+}));
+
+vi.mock("@/lib/access-tokens", () => ({
+  resolveAccessToken: (...args: unknown[]) => mockResolve(...args),
 }));
 
 function makeRequest(headers: Record<string, string> = {}): Request {
   return new Request("https://example.com/api/mcp", { headers });
 }
 
+const OPAQUE = `kb_${"A".repeat(43)}`;
+
 describe("validateBearerToken", () => {
   beforeEach(() => {
-    mockVerifyToken.mockReset();
-    mockFindUser.mockReset();
-    mockFindUser.mockResolvedValue({ tokenVersion: 0 });
+    mockResolve.mockReset();
+    mockResolve.mockResolvedValue(null);
   });
 
-  it("returns null when no Authorization header is present", async () => {
-    const result = await validateBearerToken(makeRequest());
-    expect(result).toBeNull();
-    expect(mockVerifyToken).not.toHaveBeenCalled();
+  it("returns null without touching the DB when there is no usable Bearer", async () => {
+    expect(await validateBearerToken(makeRequest())).toBeNull();
+    expect(await validateBearerToken(makeRequest({ authorization: "Basic abc123" }))).toBeNull();
+    expect(await validateBearerToken(makeRequest({ authorization: "Bearer " }))).toBeNull();
+    expect(mockResolve).not.toHaveBeenCalled();
   });
 
-  it("returns null for non-Bearer schemes", async () => {
-    const result = await validateBearerToken(
-      makeRequest({ authorization: "Basic abc123" }),
-    );
-    expect(result).toBeNull();
-    expect(mockVerifyToken).not.toHaveBeenCalled();
-  });
-
-  it("returns null for an empty token", async () => {
-    const result = await validateBearerToken(
-      makeRequest({ authorization: "Bearer " }),
-    );
-    expect(result).toBeNull();
-    expect(mockVerifyToken).not.toHaveBeenCalled();
-  });
-
-  it("returns null when verifyToken returns null", async () => {
-    mockVerifyToken.mockResolvedValue(null);
-    const result = await validateBearerToken(
-      makeRequest({ authorization: "Bearer invalid.jwt.token" }),
-    );
-    expect(result).toBeNull();
-  });
-
-  it("returns null when payload has no userId", async () => {
-    mockVerifyToken.mockResolvedValue({ email: "test@test.com" });
-    const result = await validateBearerToken(
-      makeRequest({ authorization: "Bearer some.jwt.token" }),
-    );
-    expect(result).toBeNull();
-  });
-
-  it("returns null for guest tokens", async () => {
-    mockVerifyToken.mockResolvedValue({
-      userId: "user-1",
-      kind: "guest",
-      groupId: "group-1",
-    });
-    const result = await validateBearerToken(
-      makeRequest({ authorization: "Bearer guest.jwt.token" }),
-    );
-    expect(result).toBeNull();
-  });
-
-  it("returns null for a regular browser token", async () => {
-    mockVerifyToken.mockResolvedValue({
-      userId: "user-123",
-      email: "test@test.com",
-      isAdmin: true,
-    });
-    const result = await validateBearerToken(
-      makeRequest({ authorization: "Bearer valid.jwt.token" }),
-    );
-    expect(result).toBeNull();
-  });
-
-  it("returns identity for an MCP-kind token", async () => {
-    mockVerifyToken.mockResolvedValue({
-      userId: "user-456",
+  it("returns the identity of a valid opaque access token", async () => {
+    mockResolve.mockResolvedValue({
+      userId: "u1",
+      tokenId: "t1",
       email: "agent@killbill.app",
       isAdmin: false,
-      kind: "mcp",
+      tokenVersion: 3,
     });
-    const result = await validateBearerToken(
-      makeRequest({ authorization: "Bearer mcp.jwt.token" }),
-    );
+    const result = await validateBearerToken(makeRequest({ authorization: `Bearer ${OPAQUE}` }));
+    expect(mockResolve).toHaveBeenCalledWith(OPAQUE);
     expect(result).toEqual({
-      userId: "user-456",
+      userId: "u1",
       email: "agent@killbill.app",
       isAdmin: false,
+      tokenId: "t1",
+      tokenVersion: 3,
     });
   });
 
-  it("returns null for a token without an MCP kind", async () => {
-    mockVerifyToken.mockResolvedValue({
-      userId: "user-789",
-    });
-    const result = await validateBearerToken(
-      makeRequest({ authorization: "Bearer minimal.jwt.token" }),
-    );
-    expect(result).toBeNull();
+  it("maps a null email to undefined", async () => {
+    mockResolve.mockResolvedValue({ userId: "u1", tokenId: "t1", email: null, isAdmin: true, tokenVersion: 0 });
+    const result = await validateBearerToken(makeRequest({ authorization: `Bearer ${OPAQUE}` }));
+    expect(result).toMatchObject({ userId: "u1", email: undefined, isAdmin: true });
   });
 
-  describe("token revocation (tokenVersion)", () => {
-    const mcp = (extra: Record<string, unknown> = {}) => ({ userId: "u1", kind: "mcp", ...extra });
-    const call = () => validateBearerToken(makeRequest({ authorization: "Bearer mcp.jwt.token" }));
+  it("returns null when the token does not resolve (unknown, revoked, expired, guest)", async () => {
+    expect(await validateBearerToken(makeRequest({ authorization: `Bearer ${OPAQUE}` }))).toBeNull();
+  });
 
-    it("accepts a token whose tv matches the DB", async () => {
-      mockVerifyToken.mockResolvedValue(mcp({ tv: 3 }));
-      mockFindUser.mockResolvedValue({ tokenVersion: 3 });
-      expect(await call()).toEqual({ userId: "u1", email: undefined, isAdmin: false });
-      expect(mockFindUser).toHaveBeenCalledWith({ where: { id: "u1" }, select: { tokenVersion: true } });
-    });
-
-    it("rejects a token whose tv is stale (revoked)", async () => {
-      mockVerifyToken.mockResolvedValue(mcp({ tv: 0 }));
-      mockFindUser.mockResolvedValue({ tokenVersion: 1 });
-      expect(await call()).toBeNull();
-    });
-
-    it("accepts a legacy token without tv while the user is still at version 0", async () => {
-      mockVerifyToken.mockResolvedValue(mcp());
-      mockFindUser.mockResolvedValue({ tokenVersion: 0 });
-      expect(await call()).not.toBeNull();
-    });
-
-    it("rejects a legacy token without tv once the user revoked their tokens", async () => {
-      mockVerifyToken.mockResolvedValue(mcp());
-      mockFindUser.mockResolvedValue({ tokenVersion: 1 });
-      expect(await call()).toBeNull();
-    });
-
-    it("rejects a malformed tv claim and a deleted user", async () => {
-      mockVerifyToken.mockResolvedValue(mcp({ tv: "0" }));
-      expect(await call()).toBeNull();
-      mockVerifyToken.mockResolvedValue(mcp({ tv: 0 }));
-      mockFindUser.mockResolvedValue(null);
-      expect(await call()).toBeNull();
-    });
+  it("rejects any JWT (session, guest or legacy MCP) as a Bearer", async () => {
+    // A JWT is not an opaque token: resolveAccessToken rejects its format.
+    const { resolveAccessToken } = await vi.importActual<typeof import("@/lib/access-tokens")>("@/lib/access-tokens");
+    mockResolve.mockImplementation(resolveAccessToken);
+    process.env.JWT_SECRET = "test-secret-for-vitest";
+    const { signToken, signGuestToken, signInternalMcpToken } = await import("@/lib/jwt");
+    const jwts = [
+      await signToken({ userId: "u1", tv: 0 }),
+      await signGuestToken({ userId: "g1", groupId: "s1", role: "GUEST" }),
+      await signInternalMcpToken({ userId: "u1", tv: 0, tid: "t1" }),
+    ];
+    for (const jwt of jwts) {
+      expect(await validateBearerToken(makeRequest({ authorization: `Bearer ${jwt}` }))).toBeNull();
+    }
+    expect(mockFindToken).not.toHaveBeenCalled();
   });
 });
