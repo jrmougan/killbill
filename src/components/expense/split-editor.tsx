@@ -281,7 +281,7 @@ export function SplitEditor({
                     {members.map((m) => (
                         <div key={m.id} className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground truncate">{nameOf(m)}</span>
-                            <span className="font-mono font-semibold text-foreground">
+                            <span className="font-semibold text-foreground">
                                 {formatEuros((result.shares[m.id] ?? 0) / 100)}
                             </span>
                         </div>
@@ -355,7 +355,7 @@ export function SplitEditor({
                                     className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-[color:var(--accent-border)]"
                                 />
                                 <span className="text-sm text-muted-foreground">%</span>
-                                <span className="min-w-16 whitespace-nowrap text-right text-xs font-mono text-muted-foreground">
+                                <span className="min-w-16 whitespace-nowrap text-right text-xs text-muted-foreground">
                                     {formatEuros((result.shares[m.id] ?? 0) / 100)}
                                 </span>
                             </div>

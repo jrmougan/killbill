@@ -8,7 +8,6 @@ import { getActiveGroup, getGroupMembers } from "@/lib/membership";
 import { materializeDueRecurringExpenses, materializeDueRecurringExpensesForOwner } from "@/lib/recurring";
 import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { getEffectiveCategories } from "@/lib/category-db";
-import { getIconComponent } from "@/lib/category-icons";
 import { formatCurrency } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 import { spaceTypeMeta } from "@/lib/space-ui";
@@ -203,7 +202,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const rows: Row[] = [
         ...recentExpenses.map((e) => {
             const meta = metaFor(categoryKeyOf(e));
-            const Icon = getIconComponent(meta.iconName);
             const how = active
                 ? expenseSub({ payerId: e.paidById, meId: userId, splits: e.splits, names, memberCount: active.memberCount })
                 : meta.label;
@@ -214,7 +212,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     <EqRow
                         key={e.id}
                         href={`/expense/${e.id}`}
-                        icon={<Icon className="h-[18px] w-[18px]" style={{ color: meta.hex }} aria-hidden="true" />}
+                        icon={<span aria-hidden>{meta.emoji}</span>}
                         title={e.description}
                         sub={`${how} · ${dayLabel(e.date, now)}`}
                         amount={formatCurrency(e.amount)}

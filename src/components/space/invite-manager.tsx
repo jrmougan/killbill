@@ -193,11 +193,11 @@ export function InviteManager({
                     {kind === "GUEST" ? "Crear enlace para invitados" : "Crear enlace de invitación"}
                 </button>
             ) : (
-                reason && <p className="text-[13px] text-muted-foreground px-1">{reason}</p>
+                reason && <p className="text-[13px] text-muted-foreground">{reason}</p>
             )}
 
             {invites === null ? (
-                <p className="text-xs text-muted-foreground px-1">Cargando enlaces…</p>
+                <p className="text-xs text-muted-foreground">Cargando enlaces…</p>
             ) : invites.length > 0 ? (
                 <ul className="flex flex-col divide-y divide-[color:var(--line-2)] rounded-[18px] bg-card border border-[color:var(--line-2)] px-4">
                     {invites.slice(0, 8).map((inv) => {
@@ -226,9 +226,9 @@ export function InviteManager({
                 </ul>
             ) : null}
             {live.length > 1 && (
-                <p className="text-xs text-muted-foreground px-1">Hay {live.length} enlaces activos. Revoca los que ya no uses.</p>
+                <p className="text-xs text-muted-foreground">Hay {live.length} enlaces activos. Revoca los que ya no uses.</p>
             )}
-            {error && !sheetOpen && <p role="alert" className="text-xs text-destructive px-1">{error}</p>}
+            {error && !sheetOpen && <p role="alert" className="text-xs text-destructive">{error}</p>}
 
             {sheetOpen && kind && (
                 <Sheet title={kind === "GUEST" ? "Enlace para invitados" : "Nuevo enlace"} onClose={() => setSheetOpen(false)}>

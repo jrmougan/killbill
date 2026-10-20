@@ -153,7 +153,7 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                     !archived && (
                         <section aria-labelledby="invites-title" className="flex flex-col gap-2">
                             <h2 id="invites-title" className="text-xs font-semibold text-muted-foreground">Invitaciones</h2>
-                            <p className="text-[13px] text-muted-foreground px-1">{memberInviteHint(members)}</p>
+                            <p className="text-[13px] text-muted-foreground">{memberInviteHint(members)}</p>
                         </section>
                     )
                 )}

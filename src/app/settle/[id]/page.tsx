@@ -112,7 +112,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                     <DetailRow label="De" value={fromName} />
                     <DetailRow label="Para" value={toName} />
                     <DetailRow label="Método" value={methodName(settlement.method)} />
-                    <DetailRow label="Fecha" value={dateFmt.format(settlement.date)} mono />
+                    <DetailRow label="Fecha" value={dateFmt.format(settlement.date)} />
                     <DetailRow label="Espacio" value={spaceName} last />
                 </EqCard>
 
@@ -151,11 +151,11 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
     );
 }
 
-function DetailRow({ label, value, mono, last }: { label: string; value: string; mono?: boolean; last?: boolean }) {
+function DetailRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
     return (
         <div className={`flex justify-between gap-3 py-3.5 text-[15px] ${last ? "" : "border-b border-[color:var(--line-2)]"}`}>
             <span className="text-muted-foreground">{label}</span>
-            <span className={mono ? "font-mono text-[13px] self-center" : "font-semibold text-right truncate"}>{value}</span>
+            <span className="font-semibold text-right truncate">{value}</span>
         </div>
     );
 }

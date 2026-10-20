@@ -89,7 +89,7 @@ export function ReceiptItemsEditor({
                                     onChange={(e) => update(idx, { description: e.target.value })}
                                     placeholder="Producto…"
                                 />
-                                <div className="shrink-0 font-mono text-xs font-medium text-right tabular-nums whitespace-nowrap">{formatEuros(item.total)}</div>
+                                <div className="shrink-0 text-xs font-medium text-right tabular-nums whitespace-nowrap">{formatEuros(item.total)}</div>
                             </div>
                             <div className="flex flex-wrap items-center justify-between gap-2">
                                 <div className="flex items-center gap-1 pl-1">

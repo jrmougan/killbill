@@ -19,6 +19,8 @@
 - Estados vacíos: `EqEmpty` (`eq.tsx`) con `title`, `hint` y `action` + `href`/`onClick`.
 - Enlaces de texto en cabeceras: `-my-2.5 min-h-11 flex items-center` da 44 px sin cambiar la altura de la fila.
 - Texto rojo sobre `--negative-tint`: usa `--negative-ink` (#A04830); `--negative`/`text-destructive` ahí no llega a 4,5:1.
+- Tipografía: Schibsted en todo (cifras incluidas); `font-mono` (DM Mono) solo en códigos/enlaces/tokens y la meta del ticket.
+- Emoji de espacio: `SPACE_TYPE_META` (`src/lib/space-ui.ts`) es la única fuente; categoría en filas = `meta.emoji` en el `icon` de `EqRow`.
 
 ## Iteraciones
 
@@ -162,3 +164,18 @@
 - Aprendizajes: `Screen.anonymous` captura sin sesión (pantallas de entrada). Tras `useActionState` React resetea el formulario
   no controlado: para conservar valores, devuélvelos en el estado y úsalos como `defaultValue`. Las capturas justo después de
   cambiar un color con `transition-colors` salen a medias: espera ~300 ms en `act`. e2e de Login: `e2e/auth/*`.
+
+## 2026-10-20 · UX-13 Transversal · coherencia visual
+- Corregido: "Recientes" de Inicio con el emoji de la categoría (antes icono lucide, distinto de Gastos); barra del mes en
+  rampa verde (top-3, resto en la pista) y leyenda sin puntos como 2a; DM Mono fuera de importes del reparto, líneas del
+  ticket y fecha del pago; `Button` primario sin sombra ni `scale`; `px-1` de los textos de Invitaciones; `spaceEmoji`
+  lee `SPACE_TYPE_META`; borrado `ExpenseCard` (sin uso). Sin restos de crema/terracota/Instrument/Spline en `src/`.
+- Pendiente / fuera de alcance: 🏠 por espacio (no hay emoji guardado); emojis/hex de categoría sembrados (dato);
+  mosaico de espacio en `--surface-raised` frente a paper.
+- Ficheros: `src/app/dashboard/page.tsx`, `src/components/dashboard/month-summary.tsx`, `src/components/expense/split-editor.tsx`,
+  `src/components/expense/add/receipt-items-editor.tsx`, `src/app/settle/[id]/page.tsx`, `src/components/ui/button.tsx`,
+  `src/components/space/invite-manager.tsx`, `src/app/spaces/[id]/page.tsx`, `src/components/expenses/space-meta.ts`.
+- Aprendizajes: el `hex` de las categorías del sistema es la paleta Tailwind-400 sembrada en BD (no las `--cat-*` de
+  `globals.css`); para gráficos con la estética 2a usa la rampa `--accent-hex/--accent-soft/--accent-softer` por rango.
+  DM Mono solo para códigos/enlaces/tokens y la meta del ticket. El `while pgrep -f capture` se encuentra a sí mismo:
+  lanza `ux:capture` en primer plano.

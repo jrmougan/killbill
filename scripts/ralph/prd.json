@@ -237,8 +237,8 @@
         "Escala tipográfica, radios, sombras y espaciados consistentes entre pantallas",
         "Iconos de categoría y emojis de espacio coherentes"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Inicio con emoji de categoría y barra del mes en rampa verde; DM Mono solo en códigos/meta del ticket; Button primario plano; un solo mapa de emoji de espacio. Fuera de alcance: 🏠 por espacio y emojis/hex de categoría (datos sembrados)."
     },
     {
       "id": "UX-14",
