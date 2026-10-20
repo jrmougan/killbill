@@ -1204,8 +1204,8 @@
         "src/app/api/settle/route.ts",
         "e2e/settlements/rules.api.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "MCP create/confirm_settlement piden confirmación explícita y usan 'Saldar deuda'/'Lo he recibido'; settle_up_guide corregido; comentarios y AGENTS.md (ARCHIVED terminal, 'Cerrando cuentas') al día. Quedan en el grep solo el glosario del plan y los mockups .dc.html (fuera de alcance)."
     }
   ],
   "goal2": "Acciones críticas claras y vocabulario 'Saldar deuda' (historias CF-*): plan en docs/ux/plan-acciones-criticas.md, generado por un workflow de auditoría de flujos."

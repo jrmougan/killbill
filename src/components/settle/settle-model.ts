@@ -1,4 +1,4 @@
-// Pure, DB-free helpers for the "Quedar en paz" (/settle) screen. Everything is
+// Pure, DB-free helpers for the "Saldar deuda" (/settle) screen. Everything is
 // in integer CENTS. No new money math: the balance and the pairwise transfers
 // come from the canonical ledger balances + finance.resolveMyDebts; the ticket
 // only SUMS what it displays and reconciles the rest into one honest row.

@@ -202,7 +202,7 @@ export const registerFinanceTools: ToolRegistrar = (server, api) => {
     "create_settlement",
     {
       description:
-        "Record a payment (settlement) from the caller to another member. Amount in euros. Creates a PENDING settlement that the receiver must confirm.",
+        "Settle a debt (\"Saldar deuda\"): record that the caller paid another member. Amount in euros. Creates a PENDING payment that counts only after the receiver confirms it. Before calling, restate the amount and the receiver to the user and get explicit confirmation.",
       inputSchema: {
         amount: z
           .number()
@@ -232,7 +232,7 @@ export const registerFinanceTools: ToolRegistrar = (server, api) => {
     "confirm_settlement",
     {
       description:
-        "Confirm or reject a pending settlement. Only the receiver can do this. Confirming posts the ledger entry that zeros out the debt.",
+        "Confirm (\"Lo he recibido\") or reject (\"No lo he recibido\") a pending payment. Only the receiver can do this. Confirming posts the ledger entry that reduces the debt; rejecting leaves the debt pending. Before calling, restate the payer, the amount and the action to the user and get explicit confirmation.",
       inputSchema: {
         id: z.string().describe("Settlement id to confirm or reject."),
         status: z

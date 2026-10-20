@@ -1,5 +1,5 @@
 /**
- * Pure (DB-free) rules for settlements ("Quedar en paz"). All money is integer
+ * Pure (DB-free) rules for settlements ("Saldar deuda"). All money is integer
  * CENTS. The DB side (locking, conditional updates, ledger posting) lives in
  * settlement-service.ts and applies these rules inside one transaction.
  */

@@ -544,3 +544,15 @@
 - Aprendizajes: `ux-showcase` devuelve ahora `admin` (Sergio, `isAdmin`) con 2 invitaciones libres, 1 caducada y 1 usada por Pablo (códigos aleatorios: busca por
   `/^Anular invitación /`). Capturas `admin` y `hoja-anular-invitacion` (`as: (d) => d.admin`). No había e2e de la pantalla `/admin`: `e2e/features/admin.spec.ts`
   usa el escenario `admin-with-invite` (invitación sin caducidad). En los tests jsdom de una página con Server Actions, `vi.mock('./actions')` + `await import()` evita cargar Prisma.
+
+## 2026-10-20 · CF-28 MCP, comentarios y barrido final de vocabulario
+- Corregido: descripciones MCP de `create_settlement` ("Saldar deuda", pago PENDING, confirmar importe y receptor con el usuario)
+  y `confirm_settlement` ("Lo he recibido"/"No lo he recibido", rechazar deja la deuda pendiente, confirmar antes);
+  prompt `settle_up_guide` (solo confirma quien recibe, `toUserId`, confirmación antes de cada llamada); comentarios
+  "Quedar en paz" → "Saldar deuda"; AGENTS.md: ARCHIVED es terminal, solo SETTLING se reabre y se muestra "Cerrando cuentas".
+- Pendiente / fuera de alcance: el grep de vocabulario aún encuentra el glosario de `docs/ux/plan-acciones-criticas.md`
+  (enumera lo retirado) y los mockups `docs/design/EQUIL *.dc.html` (fuente congelada del diseño).
+- Ficheros: `src/mcp/tools/finance.ts`, `src/mcp/resources-prompts.ts`, `AGENTS.md`, `src/app/api/settle/route.ts`,
+  `src/components/settle/settle-model.ts`, `src/lib/settlement-{rules,service}.ts`, `e2e/settlements/rules.api.spec.ts`.
+- Aprendizajes: el ciclo de vida real está en `ALLOWED_TRANSITIONS` de `src/lib/space-policy.ts` (ARCHIVED → []);
+  los tests de `src/mcp` no afirman el texto de las descripciones, así que cambiarlas no rompe nada.
