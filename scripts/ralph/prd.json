@@ -219,8 +219,8 @@
         "Estética 2a (fondo, tipografía, verde) aunque no haya mockup",
         "Campos con label, autocompletado correcto y error de credenciales claro"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Email conservado tras error, copy claro de error, aria-invalid/describedby, contraste del aviso (--negative-ink) y Regístrate a 44 px; pendiente: mostrar contraseña (UX-14) y recuperación (sin API)."
     },
     {
       "id": "UX-13",

@@ -108,6 +108,7 @@
   --negative: #B4553A;   /* I owe / over budget / logout */
   --positive-tint: #EEF4F0;
   --negative-tint: rgba(180, 85, 58, 0.1);
+  --negative-ink: #A04830; /* red text on --negative-tint (≥4.5:1; --negative is ~4:1 there) */
 
   /* Category accent colours (match the category catalog) */
   --cat-food: #D9713C;

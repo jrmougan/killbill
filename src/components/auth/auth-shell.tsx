@@ -41,7 +41,7 @@ export function AuthShell({
 
 /** Shared input styling for the entry screens (48px, 14px radius, hairline). */
 export const AUTH_INPUT_CLASS =
-    "h-12 w-full rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 text-[15px] outline-none transition-colors focus:border-primary focus-visible:ring-2 focus-visible:ring-primary/25 placeholder:text-[color:var(--ink-3)]";
+    "h-12 w-full rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 text-[15px] outline-none transition-colors focus:border-primary focus-visible:ring-2 focus-visible:ring-primary/25 aria-[invalid=true]:border-destructive placeholder:text-[color:var(--ink-3)]";
 
 /** Labelled input (visible label → accessible name, IE-17). */
 export function AuthField({
@@ -74,7 +74,7 @@ export function AuthError({ children, ...props }: React.HTMLAttributes<HTMLDivEl
     return (
         <div
             role="alert"
-            className="rounded-[14px] bg-[var(--negative-tint)] px-3.5 py-3 text-sm text-destructive text-pretty"
+            className="rounded-[14px] bg-[var(--negative-tint)] px-3.5 py-3 text-sm font-medium text-[color:var(--negative-ink)] text-pretty"
             {...props}
         >
             {children}

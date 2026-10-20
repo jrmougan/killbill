@@ -28,6 +28,8 @@ type Screen = {
   act?: (page: Page) => Promise<void>;
   /** Space pinned as active (`active_group` cookie); default: the seed's `coupleId`. */
   activeGroup?: (d: SeedResult) => string;
+  /** Captured logged out (entry screens). */
+  anonymous?: boolean;
 };
 
 const SCREENS: Screen[] = [
@@ -83,7 +85,17 @@ const SCREENS: Screen[] = [
   { id: 'gastos-vacio', scenario: 'couple-no-expenses', path: () => '/expenses/list' },
   { id: 'inicio-liquidando', scenario: 'space-settling', path: () => '/dashboard' },
   { id: 'inicio-archivado', scenario: 'space-archived', path: () => '/dashboard' },
-  { id: 'login', scenario: 'ux-showcase', path: () => '/login' },
+  { id: 'login', scenario: 'ux-showcase', path: () => '/login', anonymous: true },
+  {
+    id: 'login-error', scenario: 'ux-showcase', path: () => '/login', anonymous: true,
+    act: async (page) => {
+      await page.fill('[data-testid="login-email"]', 'alvaro@example.com');
+      await page.fill('[data-testid="login-password"]', 'no-es-esta');
+      await page.click('[data-testid="login-submit"]');
+      await page.waitForSelector('[data-testid="login-error"]');
+      await page.waitForTimeout(300); // let the border colour transition finish
+    },
+  },
 ];
 
 const OUT = 'scripts/ralph/shots';
@@ -124,7 +136,7 @@ for (const screen of SCREENS.filter((s) => !only?.length || only.includes(s.id))
 
     const data = await seed(screen.scenario);
     const user = screen.asUserB ? data.userB : data.userA ?? data.user;
-    if (screen.id !== 'login') {
+    if (!screen.anonymous) {
       await login(page, user!, !!screen.keepWelcome);
       // Pin the space the screen is about (the active_group cookie otherwise picks the primary one).
       const activeGroup = screen.activeGroup?.(data) ?? data.coupleId;

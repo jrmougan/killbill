@@ -18,6 +18,7 @@
 - El layout raíz ya renderiza `<main>`: las páginas no deben anidar otro (usa `<div>`).
 - Estados vacíos: `EqEmpty` (`eq.tsx`) con `title`, `hint` y `action` + `href`/`onClick`.
 - Enlaces de texto en cabeceras: `-my-2.5 min-h-11 flex items-center` da 44 px sin cambiar la altura de la fila.
+- Texto rojo sobre `--negative-tint`: usa `--negative-ink` (#A04830); `--negative`/`text-destructive` ahí no llega a 4,5:1.
 
 ## Iteraciones
 
@@ -149,3 +150,15 @@
 - Aprendizajes: los e2e buscan "Todavía no hay gastos." (lista) y el texto de los avisos de ciclo de vida (`lifecycle.spec.ts`):
   si cambias el copy, actualízalos. Detalle de gasto y `/settle` ya ocultan editar/borrar en SETTLING/ARCHIVED.
   e2e de ciclo de vida: `e2e/spaces/lifecycle.spec.ts`, `e2e/shopping/lifecycle.spec.ts`.
+
+## 2026-10-20 · UX-12 Login
+- Corregido: el email ya no se borra tras un intento fallido (la acción devuelve `email`, usado como `defaultValue`); errores
+  en español natural ("El email o la contraseña no son correctos."); campos con `aria-invalid` + `aria-describedby` al aviso
+  y borde rojo; texto de `AuthError` con contraste ≥4,5 (token `--negative-ink`); "Regístrate" a 44 px; captura `login-error`.
+- Pendiente / fuera de alcance: botón "Mostrar contraseña" (colisiona con `getByLabel('Contraseña')` de los e2e; UX-14);
+  "¿Has olvidado la contraseña?" (no hay API); otros avisos `text-destructive` sobre `--negative-tint` (~4:1, UX-14).
+- Ficheros: `src/app/login/{page,actions}.tsx`, `src/lib/auth-types.ts`, `src/components/auth/auth-shell.tsx`,
+  `src/app/globals.css`, `scripts/ralph/capture.spec.ts`.
+- Aprendizajes: `Screen.anonymous` captura sin sesión (pantallas de entrada). Tras `useActionState` React resetea el formulario
+  no controlado: para conservar valores, devuélvelos en el estado y úsalos como `defaultValue`. Las capturas justo después de
+  cambiar un color con `transition-colors` salen a medias: espera ~300 ms en `act`. e2e de Login: `e2e/auth/*`.
