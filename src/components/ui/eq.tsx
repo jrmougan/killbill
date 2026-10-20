@@ -260,26 +260,53 @@ export function EqEmpty({
     );
 }
 
+/** Optional toast button: a callback ("Deshacer") or a link ("Ver qué falta"). */
+export type EqToastAction = { label: string; onAction: () => void; href?: never } | { label: string; href: string; onAction?: never };
+
 /** Ephemeral bottom toast (dark pill above the nav). Render conditionally. */
-export function EqToast({ children }: { children: React.ReactNode }) {
+export function EqToast({ children, action }: { children: React.ReactNode; action?: EqToastAction | null }) {
+    // 44 px tap target that does not grow the pill (negative vertical margin).
+    const actionCls = "-my-2.5 -mr-1.5 min-h-11 flex flex-none items-center px-1.5 font-semibold text-[color:var(--accent-tint)] underline-offset-2 hover:underline";
     return (
         <output
-            className="eq-in fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 whitespace-nowrap rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]"
+            className={cn(
+                "eq-in fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 whitespace-nowrap rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]",
+                action && "flex items-center gap-3",
+            )}
         >
-            {children}
+            {action ? <span>{children}</span> : children}
+            {action?.href && (
+                <Link href={action.href} className={actionCls}>
+                    {action.label}
+                </Link>
+            )}
+            {action?.onAction && (
+                <button type="button" onClick={action.onAction} className={actionCls}>
+                    {action.label}
+                </button>
+            )}
         </output>
     );
 }
 
-/** Hook: `const [toast, show] = useEqToast()` → `{toast && <EqToast>{toast}</EqToast>}`. */
-export function useEqToast(ms = 2000): [string | null, (m: string) => void] {
-    const [msg, setMsg] = React.useState<string | null>(null);
+/**
+ * Hook: `const [toast, show, action] = useEqToast()` →
+ * `{toast && <EqToast action={action}>{toast}</EqToast>}`. `show(m, action)`
+ * keeps a toast with an action on screen for at least 5 s so it can be reached;
+ * tapping a callback action dismisses it.
+ */
+export function useEqToast(ms = 2000): [string | null, (m: string, action?: EqToastAction) => void, EqToastAction | null] {
+    const [state, setState] = React.useState<{ msg: string; action: EqToastAction | null } | null>(null);
     const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-    const show = React.useCallback((m: string) => {
+    const show = React.useCallback((m: string, action?: EqToastAction) => {
         if (timer.current) clearTimeout(timer.current);
-        setMsg(m);
-        timer.current = setTimeout(() => setMsg(null), ms);
+        // Tapping a callback action also dismisses the toast.
+        const wrapped: EqToastAction | null = action?.onAction
+            ? { label: action.label, onAction: () => { if (timer.current) clearTimeout(timer.current); setState(null); action.onAction(); } }
+            : action ?? null;
+        setState({ msg: m, action: wrapped });
+        timer.current = setTimeout(() => setState(null), action ? Math.max(ms, 5000) : ms);
     }, [ms]);
-    return [msg, show];
+    return [state?.msg ?? null, show, state?.action ?? null];
 }

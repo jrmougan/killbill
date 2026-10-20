@@ -4,6 +4,7 @@ import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { EqCta } from "@/components/ui/eq";
+import { FlashToast } from "@/components/ui/flash-toast";
 import { AuthShell, AuthField, AuthError } from "@/components/auth/auth-shell";
 import { loginAction } from "./actions";
 import type { AuthState } from "@/lib/auth-types";
@@ -84,6 +85,7 @@ export default function LoginPage() {
     return (
         <Suspense>
             <LoginForm />
+            <FlashToast />
         </Suspense>
     );
 }

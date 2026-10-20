@@ -87,6 +87,13 @@ const SCREENS: Screen[] = [
   { id: 'inicio-liquidando', scenario: 'space-settling', path: () => '/dashboard' },
   { id: 'inicio-deudor', scenario: 'ux-showcase', path: () => '/dashboard', design: '2a-inicio', asUserB: true },
   { id: 'espacio-cerrando', scenario: 'space-settling', path: (d) => `/spaces/${d.coupleId}` },
+  {
+    id: 'hoja-archivar', scenario: 'space-settling', path: (d) => `/spaces/${d.coupleId}`,
+    act: async (page) => {
+      await page.getByTestId('space-action-archive').click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
   { id: 'gasto-cerrando', scenario: 'space-settling', path: (d) => `/expense/${d.expenseId}` },
   { id: 'gastos-cerrando', scenario: 'space-settling', path: () => '/expenses/list' },
   { id: 'mes-cerrando', scenario: 'space-settling', path: () => '/month' },

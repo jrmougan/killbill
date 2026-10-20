@@ -512,8 +512,8 @@
         "src/lib/flash-toast.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "CriticalActionSheet (facts, consecuencias, reversible, alertdialog con foco en Cancelar, busy sin cierre, CTA desactivado con motivo, error con enlace) + ConfirmSheet delegando; toast con acción (~5 s) y flash toast montado en Inicio/Gastos/Espacios/Listas/login; captura hoja-archivar. Pendiente: copy y facts de la hoja de archivar (ciclo de vida)."
     },
     {
       "id": "CF-08",

@@ -10,18 +10,21 @@ import { X } from "lucide-react";
  * your own heading inside. `dismissible={false}` ignores backdrop taps and
  * Escape and hides the X — for content that must be acknowledged explicitly
  * (e.g. a secret shown once); the content then provides its own close action.
+ * `role="alertdialog"` marks a destructive confirmation (see CriticalActionSheet).
  */
 export function Sheet({
     title,
     label,
     onClose,
     dismissible = true,
+    role = "dialog",
     children,
 }: {
     title?: string;
     label?: string;
     onClose: () => void;
     dismissible?: boolean;
+    role?: "dialog" | "alertdialog";
     children: React.ReactNode;
 }) {
     const titleId = useId();
@@ -39,7 +42,9 @@ export function Sheet({
             else dialog.setAttribute("open", "");
         }
         return () => {
-            if (dialog.open) dialog.close();
+            if (!dialog.open) return;
+            if (typeof dialog.close === "function") dialog.close();
+            else dialog.removeAttribute("open");
         };
     }, []);
 
@@ -49,6 +54,8 @@ export function Sheet({
         // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
         <dialog
             ref={ref}
+            role={role === "alertdialog" ? "alertdialog" : undefined}
+            aria-modal="true"
             aria-labelledby={title ? titleId : undefined}
             aria-label={title ? undefined : label}
             onCancel={(e) => {
@@ -77,7 +84,7 @@ export function Sheet({
                             type="button"
                             onClick={() => onCloseRef.current()}
                             aria-label="Cerrar"
-                            className="h-8 w-8 -mr-1 flex items-center justify-center text-muted-foreground"
+                            className="h-11 w-11 -my-1.5 -mr-3 flex items-center justify-center text-muted-foreground"
                         >
                             <X className="h-5 w-5" />
                         </button>

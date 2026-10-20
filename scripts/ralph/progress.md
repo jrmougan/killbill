@@ -21,6 +21,9 @@
 - Texto rojo sobre `--negative-tint`: usa `--negative-ink` (#A04830); `--negative`/`text-destructive` ahí no llega a 4,5:1.
 - Grises de texto: `--ink-2`/`muted-foreground` y `--ink-3` ya pasan 4,5:1 sobre papel, blanco, `--track` y tintes; `--placeholder` y `--ink-4` nunca para texto.
 - Tipografía: Schibsted en todo (cifras incluidas); `font-mono` (DM Mono) solo en códigos/enlaces/tokens y la meta del ticket.
+- Confirmaciones: `CriticalActionSheet` (`src/components/ui/critical-action-sheet.tsx`) con facts/consequences/`reversible`; `tone="danger"`
+  = alertdialog con foco en Cancelar. Toast con acción: `const [t, show, action] = useEqToast()` + `<EqToast action={action}>`.
+  Aviso tras navegar: `setFlashToast(msg, {label, href})` antes de `router.push` (se pinta en Inicio, Gastos, Espacios, Listas y login).
 - Emoji de espacio: `SPACE_TYPE_META` (`src/lib/space-ui.ts`) es la única fuente; categoría en filas = `meta.emoji` en el `icon` de `EqRow`.
 
 ## Iteraciones
@@ -266,3 +269,20 @@
 - Aprendizajes: los e2e localizan las filas de pago con `a[href^="/settle/"]` + `hasText: 'Pago de deuda'` y afirman "Pendiente",
   "Confirmado" y "User B → User A" (Inicio): conserva esas cadenas. `ux-showcase` tiene ahora en Casa un REJECTED Lucía→Álvaro de ayer
   (sale en el ticket de /settle y en Gastos de Álvaro como "Pago de Lucía · rechazado").
+
+## 2026-10-20 · CF-07 Patrón compartido: CriticalActionSheet, toast con acción y flash toast
+- Corregido: `src/components/ui/critical-action-sheet.tsx` (title, facts, consequences, `reversible=false` → "No se puede deshacer.",
+  tone danger → `alertdialog` + `aria-modal` + foco inicial en Cancelar, `confirmDisabled`/`disabledReason` con `aria-describedby`,
+  `secondary`, `busy` con `aria-busy` y sin cierre por X/Escape/fondo/Cancelar, error con enlace aunque el CTA esté desactivado; testids
+  `confirm-sheet-{confirm,cancel,error,reason}`); `ConfirmSheet` delega con la misma API; `Sheet` admite `role`, X a 44 px y desmonta
+  sin `dialog.close`; `useEqToast` devuelve `[msg, show, action]` y `EqToast action` (callback que además cierra, o enlace; ≥5 s);
+  `src/lib/flash-toast.ts` + `<FlashToast/>` (en layouts de dashboard, expenses/list y lists; páginas spaces y login); captura `hoja-archivar`.
+- Pendiente / fuera de alcance: CTA "Archivar para siempre" y facts de la hoja de archivar (historia de ciclo de vida); nadie usa aún
+  `setFlashToast` ni acciones de toast (lo harán las historias siguientes).
+- Ficheros: `src/components/ui/{critical-action-sheet,critical-action-sheet.test,eq-toast.test,flash-toast,sheet,eq}.tsx`,
+  `src/lib/flash-toast{,.test}.ts`, `src/components/space/confirm-sheet.tsx`, `src/app/{dashboard,expenses/list,lists}/layout.tsx`,
+  `src/app/{spaces,login}/page.tsx`, `scripts/ralph/capture.spec.ts`.
+- Aprendizajes: en jsdom `<dialog>` no tiene `showModal`/`close` (Sheet cae a `open`); `getByRole` no lo ve si no está abierto: búscalo
+  con `document.querySelector('dialog')`, y Escape se simula con `fireEvent(dialog, new Event('cancel', { cancelable: true }))`.
+  El efecto del padre corre después del de `Sheet` (showModal), así que el padre puede mover el foco inicial. `FlashToast` re-lee en
+  cada cambio de `pathname` porque los layouts de pestaña no se remontan al navegar dentro del segmento.
