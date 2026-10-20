@@ -263,28 +263,45 @@ export function EqEmpty({
 /** Optional toast button: a callback ("Deshacer") or a link ("Ver qué falta"). */
 export type EqToastAction = { label: string; onAction: () => void; href?: never } | { label: string; href: string; onAction?: never };
 
-/** Ephemeral bottom toast (dark pill above the nav). Render conditionally. */
+/** Time the empty live region gets to be registered before its text arrives. */
+const TOAST_ANNOUNCE_DELAY_MS = 150;
+
+/**
+ * Ephemeral bottom toast (dark pill above the nav). Render conditionally.
+ * The `<output>` live region mounts empty and is filled a moment later:
+ * screen readers ignore a live region that enters the tree already filled.
+ */
 export function EqToast({ children, action, className }: { children: React.ReactNode; action?: EqToastAction | null; className?: string }) {
+    const [ready, setReady] = React.useState(false);
+    React.useEffect(() => {
+        const t = setTimeout(() => setReady(true), TOAST_ANNOUNCE_DELAY_MS);
+        return () => clearTimeout(t);
+    }, []);
     // 44 px tap target that does not grow the pill (negative vertical margin).
     const actionCls = "-my-2.5 -mr-1.5 min-h-11 flex flex-none items-center px-1.5 font-semibold text-[color:var(--accent-tint)] underline-offset-2 hover:underline";
     return (
         <output
             className={cn(
-                "eq-in fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 w-max max-w-[calc(100vw-2rem)] rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]",
+                "fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 w-max max-w-[calc(100vw-2rem)] rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]",
+                ready ? "eq-in" : "opacity-0",
                 action && "flex items-center gap-3",
                 className,
             )}
         >
-            {action ? <span>{children}</span> : children}
-            {action?.href && (
-                <Link href={action.href} className={actionCls}>
-                    {action.label}
-                </Link>
-            )}
-            {action?.onAction && (
-                <button type="button" onClick={action.onAction} className={actionCls}>
-                    {action.label}
-                </button>
+            {ready && (
+                <>
+                    {action ? <span>{children}</span> : children}
+                    {action?.href && (
+                        <Link href={action.href} className={actionCls}>
+                            {action.label}
+                        </Link>
+                    )}
+                    {action?.onAction && (
+                        <button type="button" onClick={action.onAction} className={actionCls}>
+                            {action.label}
+                        </button>
+                    )}
+                </>
             )}
         </output>
     );

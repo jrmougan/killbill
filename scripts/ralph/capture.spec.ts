@@ -197,7 +197,7 @@ const SCREENS: Screen[] = [
       await page.getByTestId('space-action-settle').click();
       await page.getByTestId('confirm-sheet-confirm').click();
       await page.getByTestId('space-action-reopen').waitFor();
-      await page.waitForTimeout(400);
+      await page.waitForTimeout(600); // the toast fills 150 ms after mounting, then slides in
     },
   },
   { id: 'cierre-activo', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}/close` },

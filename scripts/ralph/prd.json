@@ -1342,8 +1342,8 @@
         "src/components/ui/eq.tsx",
         "src/components/ui/sheet.tsx"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Foco vuelve al disparador (useLayoutEffect en Sheet, h1 si desaparece), toast con región viva montada vacía, CTA busy con aria-disabled + \"Procesando…\", aria-describedby con hechos/consecuencias y enlace de error #235F45; nada pendiente."
     },
     {
       "id": "RV-06",

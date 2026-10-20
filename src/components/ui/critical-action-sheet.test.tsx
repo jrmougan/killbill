@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { CriticalActionSheet } from './critical-action-sheet';
 
@@ -78,10 +79,48 @@ describe('CriticalActionSheet', () => {
         expect(busy.onClose).not.toHaveBeenCalled();
     });
 
-    it('busy sets aria-busy and disables the CTA', () => {
-        renderSheet({ busy: true, testId: 'archive-sheet' });
-        expect(screen.getByTestId('archive-sheet')).toHaveAttribute('aria-busy', 'true');
-        expect(screen.getByTestId('confirm-sheet-confirm')).toBeDisabled();
+    it('busy keeps the CTA focusable (aria-disabled), ignores clicks and announces it', () => {
+        const { onConfirm } = renderSheet({ busy: true });
+        const cta = screen.getByTestId('confirm-sheet-confirm');
+        expect(cta).not.toBeDisabled();
+        expect(cta).toHaveAttribute('aria-disabled', 'true');
+        fireEvent.click(cta);
+        expect(onConfirm).not.toHaveBeenCalled();
+        expect(screen.getByText('Procesando…')).toBeInTheDocument();
+    });
+
+    it('describes the dialog with facts and consequences', () => {
+        const { dialog } = renderSheet({
+            tone: 'danger',
+            reversible: false,
+            facts: [{ label: 'Cuánto', value: '79,30 €' }],
+            consequences: ['Ana dejará el espacio.'],
+        });
+        const ids = (dialog.getAttribute('aria-describedby') ?? '').split(' ');
+        const text = ids.map((id) => document.getElementById(id)?.textContent).join(' ');
+        expect(text).toContain('79,30 €');
+        expect(text).toContain('Ana dejará el espacio.');
+        expect(text).toContain('No se puede deshacer.');
+    });
+
+    it('returns focus to the trigger when it closes', () => {
+        function Harness() {
+            const [open, setOpen] = useState(false);
+            return (
+                <>
+                    <button type="button" onClick={() => setOpen(true)}>Eliminar gasto</button>
+                    {open && <CriticalActionSheet tone="danger" title="¿Eliminar?" confirmLabel="Eliminar" onConfirm={() => {}} onClose={() => setOpen(false)} />}
+                </>
+            );
+        }
+        render(<Harness />);
+        const trigger = screen.getByRole('button', { name: 'Eliminar gasto' });
+        trigger.focus();
+        fireEvent.click(trigger);
+        expect(document.activeElement).toBe(screen.getByTestId('confirm-sheet-cancel'));
+        fireEvent.click(screen.getByTestId('confirm-sheet-cancel'));
+        expect(document.querySelector('dialog')).toBeNull();
+        expect(document.activeElement).toBe(trigger);
     });
 
     it('renders the server error with its link, even when the CTA is disabled', () => {

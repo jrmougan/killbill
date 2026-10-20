@@ -22,7 +22,7 @@
 - Grises de texto: `--ink-2`/`muted-foreground` y `--ink-3` ya pasan 4,5:1 sobre papel, blanco, `--track` y tintes; `--placeholder` y `--ink-4` nunca para texto.
 - Tipografía: Schibsted en todo (cifras incluidas); `font-mono` (DM Mono) solo en códigos/enlaces/tokens y la meta del ticket.
 - Confirmaciones: `CriticalActionSheet` (`src/components/ui/critical-action-sheet.tsx`) con facts/consequences/`reversible`; `tone="danger"`
-  = alertdialog con foco en Cancelar; `confirmTestId` conserva el testid del CTA al migrar una confirmación antigua. Toast con acción: `const [t, show, action] = useEqToast()` + `<EqToast action={action}>`.
+  = alertdialog con foco en Cancelar (al cerrar, `Sheet` devuelve el foco al disparador; `busy` = `aria-disabled`, no `disabled`); `confirmTestId` conserva el testid del CTA al migrar una confirmación antigua. Toast con acción: `const [t, show, action] = useEqToast()` + `<EqToast action={action}>`.
   Aviso tras navegar: `setFlashToast(msg, {label, href})` antes de `router.push` (se pinta en Inicio, Gastos, Espacios, Listas y login).
 - Emoji de espacio: `SPACE_TYPE_META` (`src/lib/space-ui.ts`) es la única fuente; categoría en filas = `meta.emoji` en el `icon` de `EqRow`.
 
@@ -605,3 +605,14 @@
 - Aprendizajes: al reutilizar el título de un pago en Recientes, `getByText('X dice que te ha pagado')` deja de ser único en Inicio:
   acota con `getByTestId('pending-settlement')`. El escenario `space-settling` ya trae 2 productos tachados en la lista común (el
   "Terminar compra" del e2e quita 3).
+
+## 2026-10-20 · RV-05 Accesibilidad de Sheet, CriticalActionSheet y toasts
+- Corregido: `Sheet` abre/cierra en `useLayoutEffect` (la limpieza corre con el `<dialog>` aún en el DOM) y devuelve el foco al disparador;
+  si el disparador ya no existe, al `h1` de la página. `EqToast` monta su `<output>` vacío y lo rellena 150 ms después (región viva anunciable).
+  `CriticalActionSheet`: con `busy` el CTA/Cancelar/secundaria usan `aria-disabled` (conservan el foco) y una región sr-only dice "Procesando…";
+  `aria-describedby` del diálogo = hechos + consecuencias + `children`; enlace del error en `--accent-hover` (≈6,6:1 sobre `--negative-tint`).
+- Pendiente / fuera de alcance: nada.
+- Ficheros: `src/components/ui/{sheet,critical-action-sheet,eq}.tsx`, `src/components/ui/{critical-action-sheet,eq-toast}.test.tsx`,
+  `scripts/ralph/capture.spec.ts`, `scripts/ralph/findings/RV-05.md`.
+- Aprendizajes: el texto de un toast aparece ~150 ms después de montarlo: en tests unitarios usa `findBy*` o avanza timers; en capturas espera ≥600 ms.
+  `Sheet` acepta `describedBy`. Verde oscuro para texto sobre tintes: `--accent-hover` (#235F45).
