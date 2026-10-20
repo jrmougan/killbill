@@ -103,3 +103,15 @@
   `src/app/api/test/seed/route.ts`.
 - Aprendizajes: `EqChip touch` metía `block` después del `className` y `twMerge` anulaba un `flex` del llamante (truncado de
   nombres largos); ahora el `block` va primero. e2e de Listas: `e2e/shopping/{ui,lifecycle}.spec.ts`.
+
+## 2026-10-20 · UX-08 Espacios
+- Corregido: saldo de la fila activa junto al nombre (no bajaba a otra línea por el borde de 2 px); saldos de miembros en
+  una columna alineada (hueco del ⋯ en las filas sin opciones); un MEMBER ve en "Invitaciones" quién puede invitar; texto
+  vacío de "Invitar a…" en sans y sin cortes; capturas `espacios-invitar`, `espacios-unirme`, `espacio-detalle-grupo`.
+- Pendiente / fuera de alcance: "Personal · 0,00 €" (seed sin gastos personales); Lisboa 🏢 sin `EPHEMERAL_SPACES_ENABLED`;
+  "Unirme con código" del mockup (producto: solo enlaces); 💑 vs 🏠 y `px-1` de los textos de ayuda (UX-13).
+- Ficheros: `src/components/space/{spaces-list,member-list,space-invite-card}.tsx`, `src/app/spaces/[id]/page.tsx`,
+  `src/app/api/test/seed/route.ts`, `scripts/ralph/capture.spec.ts`.
+- Aprendizajes: `Screen.activeGroup` fija la cookie `active_group` de la captura (por defecto `coupleId`); la tarjeta
+  "Invitar a…" de `/spaces` solo sale para OWNER/ADMIN de un espacio con plazas (Casa está completa): en `ux-showcase`
+  Álvaro es ADMIN de Lisboa. e2e de Espacios: `e2e/spaces/{manage,lifecycle,settle-up}.spec.ts`.

@@ -746,6 +746,11 @@ export async function POST(request: Request) {
 
       const trip = [alvaro, lucia, marta, pablo];
       const lisboa = await createSpace('Lisboa', [marta, alvaro, lucia, pablo], { type: 'GROUP' });
+      // Álvaro co-administers the trip, so Espacios shows him the "Invitar a Lisboa" card.
+      await prisma.membership.update({
+        where: { groupId_userId: { groupId: lisboa.id, userId: alvaro.id } },
+        data: { role: 'ADMIN' },
+      });
       await createSharedExpense({
         groupId: lisboa.id, description: 'Pastéis de nata', amount: 3000, paidById: marta.id,
         splits: trip.map((u) => ({ userId: u.id, amount: 750 })), members: trip,

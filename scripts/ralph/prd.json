@@ -151,8 +151,8 @@
         "Invitar crea y comparte un enlace seguro /i/[token]; Unirme acepta un enlace pegado (sin códigos cortos)",
         "Detalle de espacio coherente con 3a: miembros, estado (activo / liquidando / archivado) y acciones"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Saldo de la fila activa en línea, saldos de miembros en una columna, aviso de invitación para miembros y texto vacío del enlace sin cortes; capturas de invitar/unirme/grupo; Personal 0 € (seed) y ✈️ (flag) pendientes."
     },
     {
       "id": "UX-09",

@@ -31,6 +31,15 @@ function noInviteReason(type: SpaceType, status: SpaceStatus, memberCount: numbe
     return "Ahora mismo no se pueden crear enlaces.";
 }
 
+/** Members can't mint links: tell them who can (instead of hiding invitations silently). */
+function memberInviteHint(members: SpaceMember[]): string {
+    const owner = members.find((m) => m.role === "OWNER");
+    const who = owner ? owner.name.trim().split(/\s+/)[0] : null;
+    return who
+        ? `Solo quien administra el espacio puede invitar. Pídele un enlace a ${who}.`
+        : "Solo quien administra el espacio puede invitar.";
+}
+
 /**
  * Space management (EQUIL): members with roles and balances, invite links,
  * lifecycle, rename and leave. Authorized against THIS space's Membership (not
@@ -130,7 +139,7 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                     />
                 </section>
 
-                {canManage && (
+                {canManage ? (
                     <section aria-labelledby="invites-title" className="flex flex-col gap-2">
                         <h2 id="invites-title" className="text-xs font-semibold text-muted-foreground">Invitaciones</h2>
                         <InviteManager
@@ -140,6 +149,13 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                             reason={noInviteReason(space.type, space.status, members.length, ephemeralOn)}
                         />
                     </section>
+                ) : (
+                    !archived && (
+                        <section aria-labelledby="invites-title" className="flex flex-col gap-2">
+                            <h2 id="invites-title" className="text-xs font-semibold text-muted-foreground">Invitaciones</h2>
+                            <p className="text-[13px] text-muted-foreground px-1">{memberInviteHint(members)}</p>
+                        </section>
+                    )
                 )}
 
                 {canManage && !archived && (

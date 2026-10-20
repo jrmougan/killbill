@@ -61,9 +61,10 @@ export function SpacesList({ rows, activeKey }: { rows: SpaceRowData[]; activeKe
                             >
                                 {r.emoji}
                             </span>
-                            {/* Name keeps ≥ 8rem; a balance that doesn't fit beside it wraps below (never truncated). */}
+                            {/* Name keeps ≥ 7rem (room for "+79,30 €" beside it even with the 2px active border);
+                                a balance that doesn't fit wraps below (never truncated). */}
                             <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3">
-                                <span className="flex-1 min-w-[8rem]" aria-hidden="true">
+                                <span className="flex-1 min-w-[7rem]" aria-hidden="true">
                                     <span className="block text-[15px] font-semibold truncate">{r.name}</span>
                                     <span className="block text-[12.5px] text-muted-foreground truncate">{r.sub}</span>
                                 </span>

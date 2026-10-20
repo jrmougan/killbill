@@ -133,11 +133,11 @@ export function SpaceInviteCard({
                 <span
                     data-testid="invite-link"
                     className={cn(
-                        "flex-1 min-w-0 h-11 rounded-xl bg-card flex items-center px-3 font-mono text-[13px] truncate select-all",
-                        !url && "text-muted-foreground",
+                        "flex-1 min-w-0 h-11 rounded-xl bg-card flex items-center px-3 text-[13px] truncate",
+                        url ? "font-mono select-all" : "text-muted-foreground",
                     )}
                 >
-                    <span className="truncate">{url ? url.replace(/^https?:\/\//, "") : "Enlace seguro · se crea al enviar"}</span>
+                    <span className="truncate">{url ? url.replace(/^https?:\/\//, "") : "Se crea un enlace seguro"}</span>
                 </span>
                 <button
                     type="button"

@@ -26,6 +26,8 @@ type Screen = {
   asUserB?: boolean;
   /** Interaction run before the screenshots (e.g. type an amount, open a sheet). */
   act?: (page: Page) => Promise<void>;
+  /** Space pinned as active (`active_group` cookie); default: the seed's `coupleId`. */
+  activeGroup?: (d: SeedResult) => string;
 };
 
 const SCREENS: Screen[] = [
@@ -64,6 +66,16 @@ const SCREENS: Screen[] = [
   { id: 'listas', scenario: 'ux-showcase', path: (d) => `/lists/${d.listId}`, design: '3a-listas-de-la-compra' },
   { id: 'espacios', scenario: 'ux-showcase', path: () => '/spaces', design: '3a-espacios' },
   { id: 'espacio-detalle', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}` },
+  // Lisboa active: Casa (a full couple) can't invite, so this shows the "Invitar a…" card.
+  { id: 'espacios-invitar', scenario: 'ux-showcase', path: () => '/spaces', activeGroup: (d) => d.groupId as string },
+  {
+    id: 'espacios-unirme', scenario: 'ux-showcase', path: () => '/spaces',
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Unirme con enlace' }).click();
+      await page.waitForTimeout(600); // let the form/sheet finish opening
+    },
+  },
+  { id: 'espacio-detalle-grupo', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}` },
   { id: 'ajustes', scenario: 'ux-showcase', path: () => '/settings', design: '3a-ajustes' },
   { id: 'historial-pagos', scenario: 'ux-showcase', path: () => '/settle/history' },
   { id: 'bienvenida', scenario: 'solo-user', path: () => '/welcome', design: '3a-bienvenida', keepWelcome: true },
@@ -115,8 +127,9 @@ for (const screen of SCREENS.filter((s) => !only?.length || only.includes(s.id))
     if (screen.id !== 'login') {
       await login(page, user!, !!screen.keepWelcome);
       // Pin the space the screen is about (the active_group cookie otherwise picks the primary one).
-      if (typeof data.coupleId === 'string') {
-        await context.addCookies([{ name: 'active_group', value: data.coupleId, url: page.url() }]);
+      const activeGroup = screen.activeGroup?.(data) ?? data.coupleId;
+      if (typeof activeGroup === 'string') {
+        await context.addCookies([{ name: 'active_group', value: activeGroup, url: page.url() }]);
       }
     }
     await page.goto(screen.path(data));
