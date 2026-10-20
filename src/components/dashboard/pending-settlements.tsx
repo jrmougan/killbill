@@ -17,7 +17,7 @@ interface PendingSettlement {
     fromUser: { name: string; avatar: string | null };
     date: string;
     method: string;
-    /** What the payer owes me in the suggested pairing (cents, before this payment counts). */
+    /** What the payer really owes (`debtOf`, cents, before this payment counts). */
     owedCents: number;
 }
 

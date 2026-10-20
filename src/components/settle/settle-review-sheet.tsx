@@ -133,8 +133,8 @@ export function RecordSettlementSheet({
 /**
  * Answer to a PENDING payment someone says they sent me (Inicio "Pagos por
  * confirmar" and the incoming CTA of /settle): confirm it as received or
- * reject it. `owedCents` is what the payer owes me in the suggested pairing
- * and `balanceCents` my net balance, both before it counts.
+ * reject it. `owedCents` is what the payer really owes (`debtOf`) and
+ * `balanceCents` my net balance, both before it counts.
  */
 export function PendingPaymentSheet({
     status,

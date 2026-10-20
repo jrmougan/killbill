@@ -1255,8 +1255,8 @@
         "src/app/settle/[id]/edit/page.tsx",
         "src/app/spaces/[id]/close/page.tsx"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Tope de edición con settlementCap, deuda real del pagador (debtOf) en hoja/toast/detalle, /close con PENDING aplicados antes del plan y bloqueo/banner con el predicado de la API (close-plan.ts); nada pendiente."
     },
     {
       "id": "RV-03",

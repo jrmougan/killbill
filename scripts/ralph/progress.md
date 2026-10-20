@@ -568,3 +568,15 @@
   `e2e/refresh/committed-mutations.spec.ts`, `scripts/ralph/findings/RV-01.md`.
 - Aprendizajes: el deudor puede editar su PENDING con `PATCH /api/settle/{id}` `{ amount }` (euros), útil para provocar 409 SETTLEMENT_CHANGED en e2e.
   `owedCents` (resolveMyDebts) es la deuda por pareja del plan voraz, no el saldo: para "saldada" usa el saldo neto del receptor.
+
+## 2026-10-20 · RV-02 Coherencia de saldos: tope de edición, rechazo, /close y bloqueo de archivado
+- Corregido: `/settle/[id]/edit` limita con `settlementCap` (la regla de `pairCap`); `owedCents` pasa a ser la deuda real del pagador
+  (`debtOf` en `settle-model.ts`, −saldo neto) en Inicio, `/settle` (prop `debts`) y `/settle/[id]` (rechazado: «Tu deuda de X sigue pendiente» + «Saldar deuda»);
+  `/close` aplica los PENDING a los saldos antes del plan (`closePlan`); bloqueo de archivar con `openDebtCount` (cualquier saldo abierto, como
+  `assertCanArchive`) y banner «Cerrando cuentas · faltan N» con `closeItemCount` (= «Faltan N» de `/close`; Inicio y Gestión cargan los PENDING).
+- Pendiente / fuera de alcance: nada. `RecordSettlementSheet` de `/settle` sigue topando con la sugerencia del plan (es la propuesta, no un PENDING existente).
+- Ficheros: `src/lib/close-plan{,.test}.ts` (nuevo), `src/components/settle/settle-model{,.test}.ts`, `src/app/settle/{page,client}.tsx`,
+  `src/app/settle/[id]/{page,edit/page}.tsx`, `src/app/spaces/[id]/{page,close/page}.tsx`, `src/app/dashboard/page.tsx`,
+  `src/components/{dashboard/pending-settlements,settle/settlement-actions,settle/settle-review-sheet}.tsx`, `scripts/ralph/findings/RV-02.md`.
+- Aprendizajes: `resolveMyDebts` es el plan voraz (propuesta), no la deuda: para topes usa `settlementCap` (`settlement-rules.ts`, puro) y para «sigue
+  debiendo» `debtOf`. Todo recuento de «qué falta» al cerrar sale de `src/lib/close-plan.ts`. e2e de cierre: `e2e/spaces/{lifecycle,settle-up}.spec.ts`.

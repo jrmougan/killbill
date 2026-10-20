@@ -14,7 +14,8 @@ import { spaceTypeMeta } from "@/lib/space-ui";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
 import { getSettlementStatusLabel } from "@/lib/settlement-labels";
 import { monthRange } from "@/lib/month-range";
-import { resolveMyDebts } from "@/lib/finance";
+import { closeItemCount } from "@/lib/close-plan";
+import { debtOf } from "@/components/settle/settle-model";
 import { hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
 import { getPersonalMonthTotal, getSpaceSummaries, type SpaceSummary } from "@/lib/space-summaries";
 import {
@@ -114,7 +115,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const rejectedSince = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const archived = active?.status === SpaceStatus.ARCHIVED;
 
-    const [monthExpenses, recentExpenses, recentSettlements, pendingToMe, pendingFromMe, members, anyPersonalExpense, myRejected, archivedPendingCount] = await Promise.all([
+    const [monthExpenses, recentExpenses, recentSettlements, pendingToMe, pendingFromMe, members, anyPersonalExpense, myRejected, archivedPendingCount, settlingPending] = await Promise.all([
         prisma.expense.findMany({
             where: { ...expenseWhere, date: { gte: month.start, lt: month.end } },
             select: { amount: true, ...CATEGORY_REF_SELECT },
@@ -167,6 +168,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         active && archived
             ? prisma.settlement.count({ where: { coupleId: active.id, status: "PENDING" } })
             : Promise.resolve(0),
+        // SETTLING banner: "faltan N" counts every PENDING too, like /close.
+        active?.status === SpaceStatus.SETTLING
+            ? prisma.settlement.findMany({
+                where: { coupleId: active.id, status: "PENDING", amount: { gt: 0 } },
+                select: { fromUserId: true, toUserId: true, amount: true },
+            })
+            : Promise.resolve([]),
     ]);
 
     const names: Record<string, string> = Object.fromEntries(members.map((m) => [m.id, m.name]));
@@ -287,12 +295,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         .sort((a, b) => b.date.getTime() - a.date.getTime() || b.id.localeCompare(a.id))
         .slice(0, 4);
 
-    // What each payer owes me now (same greedy pairing as /settle); with my net balance it
-    // words the sheet's consequence and toast ("Deuda saldada" only when it reaches 0).
+    // What each payer really owes (their net balance, not the greedy pairing); with my net
+    // balance it words the sheet's consequence and toast ("Deuda saldada" only when it reaches 0).
     const activeBalances: Record<string, number> = Object.fromEntries((active?.members ?? []).map((m) => [m.id, m.balanceCents]));
     const pending = pendingToMe.map((s) => ({
         id: s.id,
-        owedCents: resolveMyDebts(activeBalances, s.fromUserId)[userId] ?? 0,
+        owedCents: debtOf(activeBalances, s.fromUserId),
         amount: s.amount,
         fromUser: { name: names[s.fromUserId] ?? "Alguien", avatar: avatars[s.fromUserId] ?? null },
         date: s.date.toISOString(),
@@ -365,7 +373,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         expiresAt={active.expiresAt}
                         canManage={canManage}
                         settleHref={settleUrlFor(active.id)}
-                        openDebts={active.members.filter((m) => m.balanceCents < 0 && hasOpenBalance(m.balanceCents)).length}
+                        openDebts={closeItemCount(activeBalances, settlingPending)}
                         myBalanceOpen={hasOpenBalance(active.balanceCents)}
                         isGuest={isGuest}
                     />

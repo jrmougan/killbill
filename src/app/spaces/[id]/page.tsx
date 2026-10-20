@@ -8,6 +8,7 @@ import { resolveMyDebts } from "@/lib/finance";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
 import { capFor, hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
 import { MembershipStatus, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
+import { closeItemCount, openDebtCount } from "@/lib/close-plan";
 import { archiveBlockReason, spaceTypeMeta, spaceStatusMeta } from "@/lib/space-ui";
 import { SpaceStatusBanner } from "@/components/space/space-status-banner";
 import { MemberList, type SpaceMember } from "@/components/space/member-list";
@@ -70,14 +71,17 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
     if (!myMembership || myMembership.status !== MembershipStatus.ACTIVE) redirect("/spaces");
     if (myMembership.role === "GUEST") redirect("/dashboard");
 
-    const [roster, balances, pendingPayments, myPending] = await Promise.all([
+    const [roster, balances, pending, myPending] = await Promise.all([
         prisma.membership.findMany({
             where: { groupId: id, status: MembershipStatus.ACTIVE },
             include: { user: { select: { id: true, name: true, avatar: true, isGuest: true } } },
             orderBy: [{ joinedAt: "asc" }, { userId: "asc" }],
         }),
         getGroupBalances(id),
-        prisma.settlement.count({ where: { coupleId: id, status: "PENDING" } }),
+        prisma.settlement.findMany({
+            where: { coupleId: id, status: "PENDING" },
+            select: { fromUserId: true, toUserId: true, amount: true },
+        }),
         prisma.settlement.findFirst({
             where: { coupleId: id, status: "PENDING", fromUserId: userId },
             orderBy: { createdAt: "desc" },
@@ -112,7 +116,8 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
     const fullCouple = space.type === SpaceType.COUPLE && space.status === SpaceStatus.ACTIVE && members.length >= capFor(space.type);
     const settleHref = settleUrlFor(space.id);
     // Same rule as the archive guard of the API (it still answers 409 if this goes stale).
-    const openDebts = Object.values(balances).filter((c) => c < 0 && hasOpenBalance(c)).length;
+    // Archive: same predicate as the API guard; banner: the same "Faltan N" as /close.
+    const openDebts = openDebtCount(balances);
     const showArchive = canManage && space.status === SpaceStatus.SETTLING;
     // "Salir": the first sheet already knows my debt, who sees it and whether I'm the last owner.
     const nameOf = new Map(roster.map((m) => [m.user.id, m.user.name]));
@@ -153,7 +158,7 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                     expiresAt={space.expiresAt}
                     canManage={canManage}
                     settleHref={settleHref}
-                    openDebts={openDebts}
+                    openDebts={closeItemCount(balances, pending)}
                     myBalanceOpen={hasOpenBalance(balances[userId] ?? 0)}
                 />
 
@@ -212,7 +217,7 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                         <ArchiveSpaceAction
                             spaceId={space.id}
                             spaceName={displayName}
-                            blockReason={archiveBlockReason(pendingPayments, openDebts)}
+                            blockReason={archiveBlockReason(pending.length, openDebts)}
                         />
                     )}
                     <LeaveSpace

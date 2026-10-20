@@ -31,7 +31,7 @@ export function SettlementActions({
     myName: string;
     amountCents: number;
     method: string;
-    /** What the payer owes me in the suggested pairing (cents, before this payment counts). */
+    /** What the payer really owes (`debtOf`, cents, before this payment counts). */
     owedCents: number;
     /** My net balance (cents, positive = I'm owed). */
     balanceCents: number;

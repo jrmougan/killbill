@@ -4,9 +4,9 @@ import { getSessionCtx } from "@/lib/authz";
 import { MembershipStatus } from "@/generated/prisma/enums";
 import { getGroupMembers } from "@/lib/membership";
 import { getGroupBalances } from "@/lib/ledger-read";
-import { resolveMyDebts } from "@/lib/finance";
+import { closePlan, openDebtCount } from "@/lib/close-plan";
 import { archiveBlockReason, spaceTypeMeta } from "@/lib/space-ui";
-import { hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
+import { settleUrlFor } from "@/lib/space-policy";
 import { CloseSpaceClient, type CloseItem } from "./client";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
  * "Cerrar {espacio}": the three-step close checklist. Step 2 lists EVERY debt of
  * the space, not only mine: the PENDING payments plus the simplified plan from
  * the ledger balances (the same greedy matching /settle uses, per debtor). A
- * PENDING payment never posts to the ledger, so it is subtracted from its
- * pair's planned debt to avoid listing the same money twice. CONFIRMED
+ * PENDING payment never posts to the ledger, so it is applied to the balances
+ * before pairing (`closePlan`) to avoid listing the same money twice. CONFIRMED
  * history is not shown (there is no settlingAt to scope it to this close).
  */
 export default async function CloseSpacePage({ params }: { params: Promise<{ id: string }> }) {
@@ -44,12 +44,6 @@ export default async function CloseSpacePage({ params }: { params: Promise<{ id:
     ]);
 
     const nameOf = (uid: string) => members.find((m) => m.id === uid)?.name ?? "Alguien";
-    const pendingByPair = new Map<string, number>();
-    for (const p of pending) {
-        const key = `${p.fromUserId}>${p.toUserId}`;
-        pendingByPair.set(key, (pendingByPair.get(key) ?? 0) + p.amount);
-    }
-
     const items: CloseItem[] = pending.map((p) => ({
         kind: "pending",
         id: p.id,
@@ -59,28 +53,24 @@ export default async function CloseSpacePage({ params }: { params: Promise<{ id:
         toName: nameOf(p.toUserId),
         amountCents: p.amount,
     }));
-    for (const debtorId of Object.keys(balances)) {
-        for (const [creditorId, cents] of Object.entries(resolveMyDebts(balances, debtorId))) {
-            const open = cents - (pendingByPair.get(`${debtorId}>${creditorId}`) ?? 0);
-            if (open <= 0) continue;
-            items.push({
-                kind: "debt",
-                id: `${debtorId}>${creditorId}`,
-                fromId: debtorId,
-                fromName: nameOf(debtorId),
-                toId: creditorId,
-                toName: nameOf(creditorId),
-                amountCents: open,
-            });
-        }
+    for (const d of closePlan(balances, pending)) {
+        items.push({
+            kind: "debt",
+            id: `${d.fromId}>${d.toId}`,
+            fromId: d.fromId,
+            fromName: nameOf(d.fromId),
+            toId: d.toId,
+            toName: nameOf(d.toId),
+            amountCents: d.amountCents,
+        });
     }
     // Mine first (what I can act on), then the biggest amounts.
     const mine = (i: CloseItem) => (i.fromId === userId || i.toId === userId ? 0 : 1);
     items.sort((a, b) => mine(a) - mine(b) || b.amountCents - a.amountCents);
 
     const canManage = myMembership.role === "OWNER" || myMembership.role === "ADMIN";
-    const openDebts = Object.values(balances).filter((c) => c < 0 && hasOpenBalance(c)).length;
-    const blockReason = archiveBlockReason(pending.length, openDebts);
+    // Same predicate as the API's archive guard (any open balance, either sign).
+    const blockReason = archiveBlockReason(pending.length, openDebtCount(balances));
 
     return (
         <CloseSpaceClient

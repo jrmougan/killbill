@@ -13,9 +13,8 @@ import { EqCard, EqLabel, EqRow } from "@/components/ui/eq";
 import { SettleHeader } from "@/components/settle/settle-header";
 import { AskToConfirmButton, SettlementActions } from "@/components/settle/settlement-actions";
 import { SettlementStatusChip } from "@/components/settle/status-chip";
-import { methodName } from "@/components/settle/settle-model";
+import { debtOf, methodName } from "@/components/settle/settle-model";
 import { getGroupBalances } from "@/lib/ledger-read";
-import { resolveMyDebts } from "@/lib/finance";
 import { settleUrlFor } from "@/lib/space-policy";
 
 export const dynamic = 'force-dynamic';
@@ -82,12 +81,13 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
     const spaceName = settlement.couple.name ?? spaceTypeMeta(settlement.couple.type).label;
     const amount = formatCurrency(settlement.amount);
 
-    // What the payer owes the receiver right now (a PENDING or REJECTED payment
-    // is not in the ledger): the receiver's confirm sheet and the payer's
-    // "Tu deuda de X sigue pendiente" after a rejection.
+    // What the payer really owes right now (a PENDING or REJECTED payment is not
+    // in the ledger; their net balance, not the greedy pairing, which in a group
+    // may pair them with someone else): the receiver's confirm sheet and the
+    // payer's "Tu deuda de X sigue pendiente" after a rejection.
     const needsDebt = canResolve || (rejected && iPay);
     const balances: Record<string, number> = needsDebt ? await getGroupBalances(settlement.coupleId) : {};
-    const owedCents = needsDebt ? resolveMyDebts(balances, settlement.fromUserId)[settlement.toUserId] ?? 0 : 0;
+    const owedCents = needsDebt ? debtOf(balances, settlement.fromUserId) : 0;
     const receiverBalance = balances[settlement.toUserId] ?? 0;
     const canSettleRejected = rejected && iPay && !archived && owedCents > 0;
 

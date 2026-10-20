@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { redirect, notFound } from "next/navigation";
 import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
 import { getGroupBalances } from "@/lib/ledger-read";
-import { resolveMyDebts } from "@/lib/finance";
+import { settlementCap } from "@/lib/settlement-rules";
 import { EditSettleClient } from "./client";
 
 export const dynamic = 'force-dynamic';
@@ -31,9 +31,11 @@ export default async function EditSettlePage({ params }: EditSettlePageProps) {
         redirect(`/settle/${id}`);
     }
 
-    // What I owe the receiver now (this PENDING payment is not in the ledger
-    // yet): the cap under the amount, same as the /settle review sheet.
-    const debtCents = resolveMyDebts(await getGroupBalances(settlement.coupleId), ctx.userId)[settlement.toUserId] ?? 0;
+    // The most I may pay the receiver now (this PENDING payment is not in the
+    // ledger yet): the API's own cap (settlementCap of both net balances), not
+    // the greedy pairing, which in a group may give this pair less or nothing.
+    const balances = await getGroupBalances(settlement.coupleId);
+    const debtCents = settlementCap(balances[ctx.userId] ?? 0, balances[settlement.toUserId] ?? 0);
 
     return (
         <EditSettleClient

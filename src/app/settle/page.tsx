@@ -7,6 +7,7 @@ import { calculateSplitAmounts } from "@/lib/splits";
 import { spaceTypeMeta } from "@/lib/space-ui";
 import { resolveSettleSpace } from "@/lib/settlement-space";
 import {
+    debtOf,
     buildTicket,
     everyoneAtPeace,
     myTransfers,
@@ -137,6 +138,7 @@ export default async function SettlePage({ searchParams }: { searchParams: Promi
             meta={meta}
             transfers={myTransfers(balances, userId)}
             pending={settlements}
+            debts={Object.fromEntries(Object.keys(balances).map((id) => [id, debtOf(balances, id)]))}
         />
     );
 }

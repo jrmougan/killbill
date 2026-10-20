@@ -30,12 +30,21 @@ export function isAtPeace(balanceCents: number): boolean {
 }
 
 /**
+ * What a member really owes in the space (cents): minus their net balance.
+ * Not the greedy pairing of resolveMyDebts — in a group the API lets a debtor
+ * pay any creditor up to settlementCap, so a payer the plan pairs with someone
+ * else still owes this much after a rejection (RV-02).
+ */
+export function debtOf(balances: Record<string, number>, userId: string): number {
+    return Math.max(0, -(balances[userId] ?? 0));
+}
+
+/**
  * What is left after I (the receiver) confirm a payment of `amountCents`.
- * "Deuda saldada" only when MY net balance reaches 0 (glossary), not when the
- * pairwise suggestion `owedCents` is covered: the API caps a payment at the
- * net balances, which can exceed that pairing. `payer` = the remainder is
- * exactly what the payer still owes me (always in a couple), so it can be
- * named; otherwise it is only what I am still owed in total.
+ * "Deuda saldada" only when MY net balance reaches 0 (glossary). `owedCents`
+ * is the payer's real debt (`debtOf`, before this payment counts). `payer` =
+ * what the payer still owes is exactly what I'm still owed (always in a
+ * couple), so it can be named; otherwise only my total left is stated.
  */
 export type IncomingOutcome = { kind: "settled" } | { kind: "payer" | "total"; rest: number };
 

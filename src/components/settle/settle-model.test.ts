@@ -3,6 +3,7 @@ import {
     buildTicket,
     everyoneAtPeace,
     formatPeriod,
+    debtOf,
     incomingOutcome,
     isAtPeace,
     methodName,
@@ -134,12 +135,24 @@ describe("incomingOutcome (RV-01)", () => {
         expect(incomingOutcome(5000, 5000, 5000)).toEqual({ kind: "settled" });
     });
 
-    it("group: covering the pairwise debt is not 'saldada' while others still owe me", () => {
+    it("group: covering the payer's debt is not 'saldada' while others still owe me", () => {
         // X owes 30 €, Y owes 20 €: X pays 30 €.
         expect(incomingOutcome(5000, 3000, 3000)).toEqual({ kind: "total", rest: 2000 });
     });
 
-    it("a payer the plan pairs with someone else (owed 0) never 'stops owing' me", () => {
-        expect(incomingOutcome(5000, 0, 1000)).toEqual({ kind: "total", rest: 4000 });
+    it("group (RV-02): a payer the plan pairs with someone else is not 'saldado' when I am", () => {
+        // B owes 30 € (plan: B→D), pays me (C, owed 20 €) 20 €: I'm settled, B still owes D.
+        expect(incomingOutcome(2000, 3000, 2000)).toEqual({ kind: "settled" });
+        // B pays me 10 €: what's left is my total, not "B aún te deberá".
+        expect(incomingOutcome(2000, 3000, 1000)).toEqual({ kind: "total", rest: 1000 });
+    });
+});
+
+describe("debtOf (RV-02)", () => {
+    it("is minus the net balance, never the greedy pairing", () => {
+        const balances = { A: -5000, B: -3000, C: 6000, D: 2000 };
+        expect(debtOf(balances, "B")).toBe(3000);
+        expect(debtOf(balances, "C")).toBe(0);
+        expect(debtOf(balances, "nobody")).toBe(0);
     });
 });

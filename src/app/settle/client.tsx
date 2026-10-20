@@ -44,6 +44,8 @@ interface SettleClientProps {
     meta: string;
     transfers: Transfer[];
     pending: PendingSettlement[];
+    /** What each member really owes (`debtOf`, cents): the confirm sheet's consequence. */
+    debts: Record<string, number>;
 }
 
 /** Rule failures after which the screen is stale: refresh it so it shows the truth. */
@@ -64,7 +66,7 @@ async function failure(res: Response, fallback: string): Promise<Error> {
     return STALE_CODES.has(json.code) ? new StaleError(message) : new Error(message);
 }
 
-export function SettleClient({ space, me, isGuest, canArchive, memberCount, partnerId, names, balance, everyoneSettled, ticket, meta, transfers, pending }: SettleClientProps) {
+export function SettleClient({ space, me, isGuest, canArchive, memberCount, partnerId, names, balance, everyoneSettled, ticket, meta, transfers, pending, debts }: SettleClientProps) {
     const router = useRouter();
     const [toast, showToast] = useEqToast(2400);
     const [method, setMethod] = useState<SettleMethod>("BIZUM");
@@ -455,7 +457,7 @@ export function SettleClient({ space, me, isGuest, canArchive, memberCount, part
                     myName={nameOf(me)}
                     amountCents={review.incoming.amount}
                     method={review.incoming.method}
-                    owedCents={review.t.amount}
+                    owedCents={debts[review.t.userId] ?? 0}
                     balanceCents={balance}
                     busy={submitting}
                     error={error}
