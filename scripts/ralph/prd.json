@@ -729,8 +729,8 @@
         "src/components/month/analysis-view.tsx",
         "src/app/month/page.tsx"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Nota de pago rechazado (updatedAt 7 días) en la tarjeta activa de Inicio, 'Saldar deuda' junto al saldo de Mes > Análisis y tarjeta de pagos sin confirmar en ARCHIVED; queda: saldo de Análisis bajo el pliegue."
     },
     {
       "id": "CF-14",

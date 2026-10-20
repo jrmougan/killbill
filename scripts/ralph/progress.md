@@ -357,3 +357,15 @@
   REJECTED no está en el ledger). `capture.spec.ts` admite `as: (d) => d.userC` para entrar como otro usuario; `ux-showcase` expone
   `userC` (Marta, receptora de `settlementId`) y `rejectedSettlementId` (Lucía → Álvaro, 15 €). Con el tope en Editar pago, el e2e S-09
   ya no llega al 409 SETTLEMENT_EXCEEDS_DEBT: comprueba el error en línea.
+
+## 2026-10-20 · CF-13 Entradas a Saldar deuda: Análisis, aviso de rechazo y pendientes en archivados
+- Corregido: tarjeta activa del carrusel con `rejectedNote` ("Álvaro no recibió tu pago de 15,00 €" → `/settle/{id}`, testid `rejected-note`):
+  `findFirst` REJECTED con `fromUserId` = yo y `updatedAt >= rejectedSince` (7 días, el mismo corte que Recientes); Mes > Análisis con
+  "Saldar deuda" (`analysis-settle`) bajo el saldo si no es cero, solo en compartido y no ARCHIVED (`settleHref` de `month/page.tsx`);
+  Inicio ARCHIVED con `archived-pending` "Hay {n} pagos sin confirmar. El espacio está archivado y ya no se pueden resolver.".
+- Pendiente / fuera de alcance: el saldo de Análisis sigue bajo el pliegue (orden del mockup); es saldo "a fin de mes".
+- Ficheros: `src/app/dashboard/page.tsx`, `src/components/dashboard/space-carousel.tsx`, `src/components/month/{analysis-view,month-client}.tsx`,
+  `src/app/month/page.tsx`, `src/app/api/test/seed/route.ts`, `scripts/ralph/capture.spec.ts`.
+- Aprendizajes: `space-archived` lleva ahora un PENDING de 10 € (A → B, fuera del ledger, saldo 0) para ver pagos atascados en un archivado.
+  `scrollIntoViewIfNeeded` deja el elemento bajo la barra inferior fija: en `act` usa `el.scrollIntoView({ block: 'center' })`.
+  La captura `mes-analisis` ya no es el primer pantallazo de la página: se desplaza hasta "Evolución de tu saldo".

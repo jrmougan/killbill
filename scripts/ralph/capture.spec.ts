@@ -72,7 +72,11 @@ const SCREENS: Screen[] = [
       await page.waitForTimeout(600); // let the sheet finish sliding in
     },
   },
-  { id: 'mes-analisis', scenario: 'ux-showcase', path: () => '/month?view=analysis', design: '3a-mes-analisis' },
+  {
+    id: 'mes-analisis', scenario: 'ux-showcase', path: () => '/month?view=analysis', design: '3a-mes-analisis',
+    // The balance and its "Saldar deuda" link sit below the fold (CF-13).
+    act: async (page) => { await page.getByTestId('analysis-settle').evaluate((el) => el.scrollIntoView({ block: 'center' })); await page.waitForTimeout(200); },
+  },
   { id: 'listas', scenario: 'ux-showcase', path: (d) => `/lists/${d.listId}`, design: '3a-listas-de-la-compra' },
   { id: 'espacios', scenario: 'ux-showcase', path: () => '/spaces', design: '3a-espacios' },
   { id: 'espacio-detalle', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}` },

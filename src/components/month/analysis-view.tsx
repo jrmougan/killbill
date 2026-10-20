@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { HandCoins } from "lucide-react";
 import { EqCard, EqLabel } from "@/components/ui/eq";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
@@ -123,7 +125,7 @@ function MonthBars({ months }: { months: MonthAnalysis["months"] }) {
 }
 
 /** Caller's balance at each month end: one line around a zero baseline. */
-function BalanceChart({ points }: { points: { label: string; balance: number }[] }) {
+function BalanceChart({ points, settleHref }: { points: { label: string; balance: number }[]; settleHref: string | null }) {
     const W = 300;
     const H = 110;
     const PAD = 10;
@@ -147,6 +149,16 @@ function BalanceChart({ points }: { points: { label: string; balance: number }[]
                     {last.balance !== 0 && formatCurrency(Math.abs(last.balance))}
                 </span>
             </div>
+            {settleHref && last.balance !== 0 && (
+                <Link
+                    href={settleHref}
+                    data-testid="analysis-settle"
+                    className="-my-2.5 -ml-1 self-start min-h-11 px-1 flex items-center gap-1.5 text-[13px] font-semibold text-primary"
+                >
+                    <HandCoins className="h-[15px] w-[15px] flex-none" aria-hidden="true" />
+                    Saldar deuda
+                </Link>
+            )}
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[110px] overflow-visible" role="presentation">
                 <line
                     x1={PAD}
@@ -198,10 +210,13 @@ export function AnalysisView({
     analysis,
     categories,
     prevMonthShort,
+    settleHref = null,
 }: {
     analysis: MonthAnalysis;
     categories: MonthCategory[];
     prevMonthShort: string;
+    /** "Saldar deuda" target next to the current balance (shared, writable space); null hides it. */
+    settleHref?: string | null;
 }) {
     const { months, byCategory, myShare, topExpenses, topItems, comparison, kpis, balance } = analysis;
     const total = months[months.length - 1]?.total ?? 0;
@@ -260,7 +275,7 @@ export function AnalysisView({
                 <section aria-labelledby="month-balance" className="flex flex-col gap-1">
                     <EqLabel id="month-balance" className="pb-1">Evolución de tu saldo</EqLabel>
                     <EqCard className="p-4">
-                        <BalanceChart points={balance!} />
+                        <BalanceChart points={balance!} settleHref={settleHref} />
                     </EqCard>
                 </section>
             )}

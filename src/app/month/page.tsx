@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getActiveGroup } from "@/lib/membership";
+import { settleUrlFor } from "@/lib/space-policy";
 import { getEffectiveCategories } from "@/lib/category-db";
 import { monthRange } from "@/lib/month-range";
 import { spaceTypeMeta, SPACE_TYPE_META } from "@/lib/space-ui";
@@ -74,6 +75,7 @@ export default async function MonthPage({
             budgets={budgets}
             spentByCategory={spentByCategory}
             analysis={analysis}
+            settleHref={scope === "shared" && groupId && spaceStatus !== SpaceStatus.ARCHIVED ? settleUrlFor(groupId) : null}
         />
     );
 }

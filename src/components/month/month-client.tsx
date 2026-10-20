@@ -28,6 +28,8 @@ export interface MonthClientProps {
     /** Current-month spend per category key (cents), for budgets added on the client. */
     spentByCategory?: Record<string, number>;
     analysis: MonthAnalysis;
+    /** "Saldar deuda" target for Análisis (shared scope, not archived). */
+    settleHref?: string | null;
 }
 
 const VIEWS: { value: MonthView; label: string }[] = [
@@ -131,6 +133,7 @@ export function MonthClient(props: MonthClientProps) {
                     analysis={props.analysis}
                     categories={props.categories}
                     prevMonthShort={props.prevMonthShort}
+                    settleHref={props.settleHref ?? null}
                 />
             </div>
         </div>

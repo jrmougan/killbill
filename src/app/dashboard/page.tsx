@@ -110,7 +110,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         ? { coupleId: active.id, visibility: "SHARED" as const }
         : { ownerId: userId, visibility: "PERSONAL" as const };
 
-    const [monthExpenses, recentExpenses, recentSettlements, pendingToMe, pendingFromMe, members, anyPersonalExpense] = await Promise.all([
+    // My own payments rejected this week: "news" is when the rejection happened (updatedAt), not the payment date.
+    const rejectedSince = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const archived = active?.status === SpaceStatus.ARCHIVED;
+
+    const [monthExpenses, recentExpenses, recentSettlements, pendingToMe, pendingFromMe, members, anyPersonalExpense, myRejected, archivedPendingCount] = await Promise.all([
         prisma.expense.findMany({
             where: { ...expenseWhere, date: { gte: month.start, lt: month.end } },
             select: { amount: true, ...CATEGORY_REF_SELECT },
@@ -128,7 +132,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     coupleId: active.id,
                     OR: [
                         { status: { in: ["PENDING", "CONFIRMED"] } },
-                        { status: "REJECTED", fromUserId: userId, updatedAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } },
+                        { status: "REJECTED", fromUserId: userId, updatedAt: { gte: rejectedSince } },
                     ],
                 },
                 orderBy: [{ date: "desc" }, { id: "desc" }],
@@ -152,6 +156,17 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         !isGuest && summaries.length === 0
             ? prisma.expense.findFirst({ where: { ownerId: userId, visibility: "PERSONAL" }, select: { id: true } })
             : Promise.resolve(null),
+        active && !archived
+            ? prisma.settlement.findFirst({
+                where: { coupleId: active.id, fromUserId: userId, status: "REJECTED", updatedAt: { gte: rejectedSince } },
+                orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+                select: { id: true, amount: true, toUserId: true },
+            })
+            : Promise.resolve(null),
+        // An archived space can't resolve payments any more: just say how many were left open.
+        active && archived
+            ? prisma.settlement.count({ where: { coupleId: active.id, status: "PENDING" } })
+            : Promise.resolve(0),
     ]);
 
     const names: Record<string, string> = Object.fromEntries(members.map((m) => [m.id, m.name]));
@@ -181,6 +196,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 pendingNote:
                     isActive && pendingOutCents > 0 && s.status !== SpaceStatus.ARCHIVED
                         ? `Pago de ${formatCurrency(pendingOutCents)} pendiente de confirmar`
+                        : null,
+                rejectedNote:
+                    isActive && myRejected
+                        ? {
+                            text: `${names[myRejected.toUserId] ?? "Alguien"} no recibió tu pago de ${formatCurrency(myRejected.amount)}`,
+                            href: `/settle/${myRejected.id}`,
+                        }
                         : null,
             };
         });
@@ -343,6 +365,22 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         canManage={canManage}
                         settleHref={settleUrlFor(active.id)}
                     />
+                )}
+
+                {archived && archivedPendingCount > 0 && (
+                    <div
+                        role="note"
+                        data-testid="archived-pending"
+                        className="rounded-[18px] bg-[var(--track)] px-4 py-3.5 flex items-start gap-3"
+                    >
+                        <Clock className="mt-0.5 h-[18px] w-[18px] flex-none text-muted-foreground" aria-hidden="true" />
+                        <p className="text-[13.5px] leading-snug text-muted-foreground">
+                            <span className="block text-[15px] font-semibold text-foreground">
+                                {archivedPendingCount === 1 ? "Hay 1 pago sin confirmar." : `Hay ${archivedPendingCount} pagos sin confirmar.`}
+                            </span>
+                            El espacio está archivado y ya no se pueden resolver.
+                        </p>
+                    </div>
                 )}
 
                 {active && active.status !== "ARCHIVED" && (

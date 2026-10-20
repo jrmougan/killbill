@@ -584,6 +584,15 @@ export async function POST(request: Request) {
         return s;
       });
 
+      // A payment left PENDING before archiving (legacy data): Inicio says it
+      // can no longer be resolved (CF-13). Not in the ledger, balance stays 0.
+      await prisma.settlement.create({
+        data: {
+          coupleId: space.id, fromUserId: userA.id, toUserId: userB.id,
+          amount: 1000, method: 'CASH', status: 'PENDING', date: new Date(now - 35 * DAY_MS),
+        },
+      });
+
       await prisma.couple.update({
         where: { id: space.id },
         data: { status: 'ARCHIVED', archivedAt: new Date(now - 30 * DAY_MS) },

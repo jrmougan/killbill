@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { Clock, HandCoins } from "lucide-react";
+import { CircleAlert, Clock, HandCoins } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useActivateSpace } from "@/components/space/use-activate-space";
 
@@ -32,6 +32,8 @@ export type SpaceCardData = {
     settleSub?: string | null;
     /** A payment I sent is waiting for confirmation (debtor side). */
     pendingNote?: string | null;
+    /** A payment I sent was rejected this week: "Álvaro no recibió tu pago de 15,00 €" → its detail. */
+    rejectedNote?: { text: string; href: string } | null;
 };
 
 /**
@@ -122,6 +124,16 @@ export function SpaceCarousel({
                                 className="snap-center flex-none w-[248px] min-h-[150px] rounded-[22px] bg-primary text-primary-foreground border border-primary p-4 flex flex-col justify-between gap-2 transition-[width,background-color] duration-250"
                             >
                                 {body}
+                                {c.rejectedNote && (
+                                    <Link
+                                        href={c.rejectedNote.href}
+                                        data-testid="rejected-note"
+                                        className="-my-2 -ml-1 self-start min-h-11 px-1 flex items-center gap-1.5 text-[13px] font-semibold"
+                                    >
+                                        <CircleAlert className="h-[15px] w-[15px] flex-none" aria-hidden="true" />
+                                        <span className="line-clamp-2">{c.rejectedNote.text}</span>
+                                    </Link>
+                                )}
                                 {c.pendingNote ? (
                                     <Link
                                         href={c.settleHref ?? "/settle"}
