@@ -858,8 +858,8 @@
         "src/app/spaces/[id]/page.tsx",
         "e2e/spaces/lifecycle.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Banner SETTLING con progreso ('falta 1 deuda'/'faltan N deudas'/'estáis al día') y un único CTA (Saldar deudas / Ver qué falta solo registrados / Todo saldado · Archivar para OWNER/ADMIN); test jsdom sin /close para invitados; captura nueva inicio-cerrando-al-dia."
     },
     {
       "id": "CF-18",

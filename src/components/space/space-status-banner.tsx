@@ -6,8 +6,10 @@ import { daysUntil } from "@/lib/space-ui";
 /**
  * Contextual banner for a space's lifecycle state. Rendered on Inicio and the
  * space management page:
- *  - SETTLING → "cerrando cuentas": a link to settle THIS space for everyone
- *    (`settleHref`, i.e. /settle?space=<id>) and the close flow for OWNER/ADMIN.
+ *  - SETTLING → "cerrando cuentas · faltan N deudas" with a single CTA: settle
+ *    THIS space (`settleHref`) if the viewer has something open; else "Ver qué
+ *    falta" (/close, registered members only) or, once everything is settled,
+ *    "Archivar" for OWNER/ADMIN. Guests only see the progress text.
  *  - ARCHIVED → read-only "recuerdo".
  *  - EPHEMERAL + expiresAt (while ACTIVE) → trip end. The space is never closed
  *    automatically, but guest access ends with that day (their session is capped
@@ -22,6 +24,9 @@ export function SpaceStatusBanner({
     expiresAt,
     canManage = false,
     settleHref,
+    openDebts = 0,
+    myBalanceOpen = false,
+    isGuest = false,
 }: {
     spaceId: string;
     type: SpaceType | string;
@@ -31,6 +36,12 @@ export function SpaceStatusBanner({
     canManage?: boolean;
     /** Where to settle this space (SETTLING). Omit to hide the link. */
     settleHref?: string;
+    /** SETTLING: members who still owe (same rule as the archive guard). */
+    openDebts?: number;
+    /** SETTLING: the viewer still owes or is owed something here. */
+    myBalanceOpen?: boolean;
+    /** Guests never get a link to the close flow. */
+    isGuest?: boolean;
 }) {
     if (status === SpaceStatus.ARCHIVED) {
         return (
@@ -45,33 +56,32 @@ export function SpaceStatusBanner({
     }
 
     if (status === SpaceStatus.SETTLING) {
+        const done = openDebts === 0;
+        // One CTA: settle my part first; else what's missing (registered only), or archive when all is settled.
+        const cta =
+            settleHref && myBalanceOpen
+                ? { href: settleHref, testId: "space-status-settle-link", label: "Saldar deudas →" }
+                : done && canManage && !isGuest
+                    ? { href: `/spaces/${spaceId}/close`, testId: "space-status-close-link", label: "Todo saldado · Archivar →" }
+                    : !done && !isGuest
+                        ? { href: `/spaces/${spaceId}/close`, testId: "space-status-close-link", label: "Ver qué falta →" }
+                        : null;
         return (
             <div data-testid="space-status-banner" data-status={status} className="flex items-start gap-3 rounded-2xl bg-[var(--accent-tint)] border border-[color:var(--accent-border)] px-4 py-3">
                 <Clock className="h-4 w-4 mt-0.5 text-primary shrink-0" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-semibold text-foreground">Cerrando cuentas</p>
-                    <p className="text-[12px] text-muted-foreground">Ya no se pueden añadir gastos, pero sí saldar lo pendiente.</p>
-                    {(settleHref || canManage) && (
-                        <div className="flex flex-wrap gap-x-4 -mb-2">
-                            {settleHref && (
-                                <Link
-                                    href={settleHref}
-                                    data-testid="space-status-settle-link"
-                                    className="min-h-11 flex items-center text-[13px] font-semibold text-primary"
-                                >
-                                    Saldar deudas →
-                                </Link>
-                            )}
-                            {canManage && (
-                                <Link
-                                    href={`/spaces/${spaceId}/close`}
-                                    data-testid="space-status-close-link"
-                                    className="min-h-11 flex items-center text-[13px] font-semibold text-primary"
-                                >
-                                    Ver cierre →
-                                </Link>
-                            )}
-                        </div>
+                    <p data-testid="space-status-progress" className="text-[13px] font-semibold text-foreground">
+                        Cerrando cuentas · {done ? "estáis al día" : openDebts === 1 ? "falta 1 deuda" : `faltan ${openDebts} deudas`}
+                    </p>
+                    <p className="text-[12px] text-muted-foreground">No se pueden añadir ni editar gastos; sí saldar deudas.</p>
+                    {cta && (
+                        <Link
+                            href={cta.href}
+                            data-testid={cta.testId}
+                            className="-mb-2 min-h-11 inline-flex items-center text-[13px] font-semibold text-primary"
+                        >
+                            {cta.label}
+                        </Link>
                     )}
                 </div>
             </div>

@@ -406,3 +406,15 @@
   (`space-ui.ts`). Escenario nuevo `group-settling` (Lisboa de 4 en SETTLING, Álvaro OWNER al día, `userC` = Marta acreedora); capturas
   `cierre-cerrando` (sin hoja), `cierre-cerrando-acreedora`, `cierre-al-dia` y `cierre-archivar` (la hoja de archivar). /close tiene ahora
   varios encabezados con "Cerrar": en e2e usa `getByRole('heading', { level: 1, name: /Cerrar/ })`.
+
+## 2026-10-20 · CF-17 Banner de "Cerrando cuentas" con progreso y un único CTA
+- Corregido: `SpaceStatusBanner` en SETTLING pinta "Cerrando cuentas · falta 1 deuda / faltan N deudas / estáis al día" (`space-status-progress`)
+  y "No se pueden añadir ni editar gastos; sí saldar deudas."; un único CTA: "Saldar deudas →" (`space-status-settle-link`) si quien mira tiene
+  saldo abierto; si no, "Ver qué falta →" (`space-status-close-link`, solo registrados) o, con todo saldado y OWNER/ADMIN, "Todo saldado · Archivar →".
+  Invitados: solo texto (o Saldar deudas si deben). Inicio y la página del espacio pasan `openDebts`, `myBalanceOpen` e `isGuest`.
+- Pendiente / fuera de alcance: el recuento son deudores con saldo abierto (misma regla que el motivo de archivar), no las filas de /close
+  ("Faltan N" allí incluye pagos PENDING por separado).
+- Ficheros: `src/components/space/space-status-banner{,.test}.tsx`, `src/app/dashboard/page.tsx`, `src/app/spaces/[id]/page.tsx`,
+  `e2e/spaces/lifecycle.spec.ts`, `scripts/ralph/capture.spec.ts`.
+- Aprendizajes: captura nueva `inicio-cerrando-al-dia` (group-settling en Inicio: OWNER al día → "Ver qué falta"). Los tests jsdom de
+  componentes de servidor sin hooks (como el banner) se renderizan tal cual con `@testing-library/react`.

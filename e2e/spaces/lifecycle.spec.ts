@@ -116,13 +116,15 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await expect(page.getByTestId('space-status-banner')).toHaveAttribute('data-status', 'SETTLING');
     await expect(page.getByTestId('space-status-settle-link')).toHaveAttribute('href', `/settle?space=${spaceId}`);
 
-    // Dashboard: SETTLING banner with the OWNER close CTA; the balance is untouched.
+    // Dashboard: SETTLING banner with the progress and ONE CTA — the owner is still owed,
+    // so it is "Saldar deudas" (not the close flow); the balance is untouched.
     await page.goto('/dashboard');
     const banner = page.getByTestId('space-status-banner');
     await expect(banner).toHaveAttribute('data-status', 'SETTLING');
-    await expect(banner).toContainText('Cerrando cuentas');
-    await expect(banner).toContainText('Ya no se pueden añadir gastos, pero sí saldar lo pendiente.');
-    await expect(page.getByTestId('space-status-close-link')).toHaveAttribute('href', `/spaces/${spaceId}/close`);
+    await expect(page.getByTestId('space-status-progress')).toHaveText('Cerrando cuentas · falta 1 deuda');
+    await expect(banner).toContainText('No se pueden añadir ni editar gastos; sí saldar deudas.');
+    await expect(banner.getByRole('link', { name: 'Saldar deudas →' })).toHaveAttribute('href', `/settle?space=${spaceId}`);
+    await expect(page.getByTestId('space-status-close-link')).toHaveCount(0);
     await expect(page.getByTestId('balance-amount')).toHaveText(PLUS_50);
 
     // Adding a shared expense is blocked: the API answers 409 with the reason.

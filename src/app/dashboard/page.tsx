@@ -364,6 +364,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         expiresAt={active.expiresAt}
                         canManage={canManage}
                         settleHref={settleUrlFor(active.id)}
+                        openDebts={active.members.filter((m) => m.balanceCents < 0 && hasOpenBalance(m.balanceCents)).length}
+                        myBalanceOpen={hasOpenBalance(active.balanceCents)}
+                        isGuest={isGuest}
                     />
                 )}
 

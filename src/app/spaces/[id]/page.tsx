@@ -130,6 +130,8 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                     expiresAt={space.expiresAt}
                     canManage={canManage}
                     settleHref={settleHref}
+                    openDebts={openDebts}
+                    myBalanceOpen={hasOpenBalance(balances[userId] ?? 0)}
                 />
 
                 <section aria-labelledby="members-title" className="flex flex-col gap-2">

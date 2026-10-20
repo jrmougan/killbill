@@ -125,6 +125,8 @@ const SCREENS: Screen[] = [
   { id: 'saldar-al-dia', scenario: 'couple-no-expenses', path: () => '/settle' },
   { id: 'gastos-vacio', scenario: 'couple-no-expenses', path: () => '/expenses/list' },
   { id: 'inicio-liquidando', scenario: 'space-settling', path: () => '/dashboard' },
+  // Álvaro (OWNER) al día en un grupo que aún debe: el banner lleva "Ver qué falta" (CF-17).
+  { id: 'inicio-cerrando-al-dia', scenario: 'group-settling', path: () => '/dashboard' },
   {
     id: 'hoja-confirmar-pago', scenario: 'space-settling', path: () => '/dashboard',
     act: async (page) => {
