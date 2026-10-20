@@ -15,6 +15,8 @@
   píldora en un `<span>` hijo (`group-focus-visible:ring-2` para el foco). `EqChip` lo hace con `touch`.
 - Estados con interacción en las capturas: campo `act` del `Screen` en `capture.spec.ts`
   (p. ej. `anadir-gasto-relleno`, `anadir-gasto-opciones`; espera ~600 ms a que entren las hojas).
+- El layout raíz ya renderiza `<main>`: las páginas no deben anidar otro (usa `<div>`).
+- Enlaces de texto en cabeceras: `-my-2.5 min-h-11 flex items-center` da 44 px sin cambiar la altura de la fila.
 
 ## Iteraciones
 
@@ -40,3 +42,15 @@
 - Aprendizajes: el input del importe mide más que su texto, así que `items-baseline` desalinea el "€"; centrar la fila
   lo arregla. Las capturas de un `<dialog>` modal no salen en `*.full.png` (scroll interno): desplaza el diálogo en `act`.
   e2e de Añadir gasto: `e2e/expenses/{create,qa-fixes,personal,edit-delete}.spec.ts`.
+
+## 2026-10-20 · UX-03 Quedar en paz · ticket
+- Corregido: 44 px en "Historial", "Recordárselo", "Ver el pago", "Seguir saldando", "Editar" y el Volver/Cerrar
+  de `EqHeader` (para toda la app); `<main>` anidado en `/settle/**`; saldo del ticket a 32 px como 2a;
+  historial con "Pago de X" en los rechazados y fecha sin año (se cortaba).
+- Pendiente / fuera de alcance: estado "pago pendiente" redundante (sugerido + fila + aviso); fecha mono en el detalle (UX-13).
+- Ficheros: `src/app/settle/{client.tsx,history/page.tsx,[id]/page.tsx,[id]/edit/client.tsx}`, `src/components/ui/eq.tsx`,
+  `src/app/api/test/seed/route.ts`, `scripts/ralph/capture.spec.ts`.
+- Aprendizajes: el layout raíz ya pinta `<main>`: las páginas usan `<div>`. `ux-showcase` tiene ahora pagos (Casa:
+  confirmado + rechazado del mes pasado; Lisboa: Bizum pendiente Álvaro→Marta, `settlementId`); para fechar
+  movimientos en el pasado hay que fijar `createdAt` del gasto y `updatedAt` del pago (el ticket ordena por ellos).
+  `Screen.asUserB` captura como el segundo usuario. e2e de pagos: `e2e/settlements/*`.

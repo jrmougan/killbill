@@ -24,6 +24,9 @@ export function EqLabel({ className, ...props }: React.HTMLAttributes<HTMLSpanEl
     return <span className={cn("text-xs font-semibold text-muted-foreground", className)} {...props} />;
 }
 
+// 44×44 touch area around the 24px icon; the negative margin keeps the layout of a 24px box.
+const BACK_CLASS = "-m-2.5 h-11 w-11 flex-none flex items-center justify-center";
+
 /**
  * Screen header. `back` renders an arrow (href or onClick) before the title;
  * `meta` is the right-aligned context (usually the active space "🏠 Casa").
@@ -47,11 +50,11 @@ export function EqHeader({
 }) {
     const Icon = close ? X : ArrowLeft;
     const backEl = back ? (
-        <Link href={back} aria-label={close ? "Cerrar" : "Volver"} className="h-6 w-6 flex-none">
+        <Link href={back} aria-label={close ? "Cerrar" : "Volver"} className={BACK_CLASS}>
             <Icon className="h-6 w-6" />
         </Link>
     ) : onBack ? (
-        <button type="button" onClick={onBack} aria-label={close ? "Cerrar" : "Volver"} className="h-6 w-6 flex-none">
+        <button type="button" onClick={onBack} aria-label={close ? "Cerrar" : "Volver"} className={BACK_CLASS}>
             <Icon className="h-6 w-6" />
         </button>
     ) : null;

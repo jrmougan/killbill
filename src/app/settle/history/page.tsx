@@ -11,7 +11,7 @@ import { methodName } from "@/components/settle/settle-model";
 
 export const dynamic = 'force-dynamic';
 
-const dayFmt = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short", year: "numeric" });
+const dayFmt = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short" });
 const monthFmt = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", month: "long", year: "numeric" });
 
 /**
@@ -46,7 +46,7 @@ export default async function SettlementHistoryPage({ searchParams }: { searchPa
     }
 
     return (
-        <main className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)] pb-10">
+        <div className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)] pb-10">
             <EqHeader back={`/settle?space=${encodeURIComponent(groupId)}`} title="Pagos" meta={spaceName} />
 
             {settlements.length === 0 ? (
@@ -65,10 +65,12 @@ export default async function SettlementHistoryPage({ searchParams }: { searchPa
                             {g.items.map((s) => {
                                 const toMe = s.toUserId === userId;
                                 const fromMe = s.fromUserId === userId;
+                                // A rejected payment did not happen: name it, don't claim it was paid.
+                                const rejected = s.status === "REJECTED";
                                 const title = fromMe
-                                    ? `Pagaste a ${s.toUser.name}`
+                                    ? rejected ? `Pago a ${s.toUser.name}` : `Pagaste a ${s.toUser.name}`
                                     : toMe
-                                        ? `${s.fromUser.name} te pagó`
+                                        ? rejected ? `Pago de ${s.fromUser.name}` : `${s.fromUser.name} te pagó`
                                         : `${s.fromUser.name} → ${s.toUser.name}`;
                                 const awaitingMe = toMe && s.status === "PENDING";
                                 return (
@@ -96,6 +98,6 @@ export default async function SettlementHistoryPage({ searchParams }: { searchPa
                     ))}
                 </div>
             )}
-        </main>
+        </div>
     );
 }

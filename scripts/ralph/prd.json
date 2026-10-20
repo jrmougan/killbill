@@ -59,8 +59,8 @@
         "\"Recordárselo a X\" como acción secundaria; estado pendiente comprensible",
         "Historial de pagos con el mismo lenguaje visual"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Zonas táctiles de 44px (Historial, Recordárselo, Editar, Volver de EqHeader), sin <main> anidado, saldo a 32px como 2a y copy/fechas del historial; pendiente la redundancia del estado pendiente y la fecha mono (UX-13)."
     },
     {
       "id": "UX-04",

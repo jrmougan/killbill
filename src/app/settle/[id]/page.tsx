@@ -87,10 +87,10 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
     const emojiFor = (key: string) => (catMap[key] ?? catMap.other ?? NEUTRAL_CATEGORY_META).emoji;
 
     return (
-        <main className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">
+        <div className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">
             <SettleHeader fallback={`/settle/history?space=${encodeURIComponent(settlement.coupleId)}`} title="Pago">
                 {canEdit && (
-                    <Link href={`/settle/${id}/edit`} className="text-sm font-semibold text-primary px-1">
+                    <Link href={`/settle/${id}/edit`} className="-my-2.5 min-h-11 flex items-center text-sm font-semibold text-primary px-1">
                         Editar
                     </Link>
                 )}
@@ -147,7 +147,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                     <SettlementActions id={settlement.id} fromName={settlement.fromUser.name} amountCents={settlement.amount} />
                 </div>
             )}
-        </main>
+        </div>
     );
 }
 

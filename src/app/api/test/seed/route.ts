@@ -702,6 +702,30 @@ export async function POST(request: Request) {
         { userId: first, amount: Math.ceil(amount / 2) },
         { userId: second, amount: Math.floor(amount / 2) },
       ];
+      // Last month's account, already settled (history: a confirmed Bizum and a
+      // rejected cash payment). Backdated createdAt/updatedAt so /settle's ticket
+      // period (since the balance was last 0) starts before this month's expenses.
+      const seguro = await createSharedExpense({
+        groupId: casa.id, description: 'Seguro hogar', amount: 12000, paidById: alvaro.id,
+        splits: half(12000, alvaro.id, lucia.id), members: couple,
+        categoryId: await resolveCategoryId('utilities'), date: daysAgo(40),
+      });
+      await prisma.expense.update({ where: { id: seguro.id }, data: { createdAt: daysAgo(40) } });
+      await prisma.settlement.create({
+        data: {
+          coupleId: casa.id, fromUserId: lucia.id, toUserId: alvaro.id, amount: 2000,
+          method: 'CASH', status: 'REJECTED', date: daysAgo(36), createdAt: daysAgo(36), updatedAt: daysAgo(36),
+        },
+      });
+      await prisma.$transaction(async (tx) => {
+        const s = await tx.settlement.create({
+          data: {
+            coupleId: casa.id, fromUserId: lucia.id, toUserId: alvaro.id, amount: 6000,
+            method: 'BIZUM', status: 'CONFIRMED', date: daysAgo(35), createdAt: daysAgo(35), updatedAt: daysAgo(35),
+          },
+        });
+        await postSettlementLedger(tx, s);
+      });
       const casaExpenses: [string, number, typeof alvaro, string, number][] = [
         ['Mercadona', 6420, alvaro, 'shopping', 0],
         ['Cena sushi', 3800, lucia, 'food', 0],
@@ -726,6 +750,13 @@ export async function POST(request: Request) {
         groupId: lisboa.id, description: 'Pastéis de nata', amount: 3000, paidById: marta.id,
         splits: trip.map((u) => ({ userId: u.id, amount: 750 })), members: trip,
         categoryId: await resolveCategoryId('food'), date: daysAgo(1),
+      });
+      // Álvaro already paid his share to Marta; she has not confirmed it yet.
+      const pendingPayment = await prisma.settlement.create({
+        data: {
+          coupleId: lisboa.id, fromUserId: alvaro.id, toUserId: marta.id, amount: 750,
+          method: 'BIZUM', status: 'PENDING', date: now,
+        },
       });
 
       const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -761,6 +792,7 @@ export async function POST(request: Request) {
         groupId: lisboa.id,
         expenseId: casaIds[0],
         listId: list.id,
+        settlementId: pendingPayment.id,
       });
     }
 

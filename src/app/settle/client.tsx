@@ -155,7 +155,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
     const header = (
         <EqHeader back="/dashboard">
             <h1 className="sr-only">Quedar en paz</h1>
-            <Link href={`/settle/history?space=${encodeURIComponent(space.id)}`} className="ml-auto text-sm font-semibold text-primary px-1">
+            <Link href={`/settle/history?space=${encodeURIComponent(space.id)}`} className="ml-auto -my-2.5 min-h-11 flex items-center text-sm font-semibold text-primary px-1">
                 Historial
             </Link>
         </EqHeader>
@@ -175,7 +175,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                 <Footer>
                     <EqCta onClick={() => router.push("/dashboard")}>Volver al inicio</EqCta>
                     {done.id && (
-                        <Link href={`/settle/${done.id}`} className="text-sm font-semibold text-primary p-1">
+                        <Link href={`/settle/${done.id}`} className="min-h-11 px-2 text-sm font-semibold text-primary inline-flex items-center">
                             Ver el pago
                         </Link>
                     )}
@@ -214,7 +214,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                 <Footer>
                     <EqCta onClick={() => router.push("/dashboard")}>Volver al inicio</EqCta>
                     {stillOpen && (
-                        <button type="button" onClick={() => { setDone(null); setSelected(0); }} className="text-sm font-semibold text-primary p-1">
+                        <button type="button" onClick={() => { setDone(null); setSelected(0); }} className="min-h-11 px-2 text-sm font-semibold text-primary inline-flex items-center">
                             Seguir saldando
                         </button>
                     )}
@@ -252,7 +252,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                     <EqCta onClick={confirmIncoming} disabled={submitting} aria-busy={submitting}>
                         Confirmar pago de {nameOf(t.userId)}
                     </EqCta>
-                    <Link href={`/settle/${incoming.id}`} className="text-sm font-semibold text-primary p-1">
+                    <Link href={`/settle/${incoming.id}`} className="min-h-11 px-2 text-sm font-semibold text-primary inline-flex items-center">
                         {nameOf(t.userId)} dice que te ha pagado {formatCurrency(incoming.amount)} · ver
                     </Link>
                 </>
@@ -306,7 +306,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                         <span
                             data-testid="settle-balance"
                             className={cn(
-                                "shrink-0 whitespace-nowrap text-[length:clamp(20px,7vw,32px)] font-bold tracking-[-0.03em] tabular-nums",
+                                "shrink-0 whitespace-nowrap text-[length:clamp(20px,8.9vw,32px)] font-bold tracking-[-0.03em] tabular-nums",
                                 owed ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"
                             )}
                         >
@@ -340,7 +340,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                 {error && <p role="alert" className="text-sm text-destructive text-center">{error}</p>}
                 {cta}
                 {canRemind && (
-                    <button type="button" onClick={remind} className="text-sm font-semibold text-primary p-1">
+                    <button type="button" onClick={remind} className="min-h-11 px-2 text-sm font-semibold text-primary inline-flex items-center">
                         {isCouple ? `Recordárselo a ${partnerName}` : "Recordárselo al grupo"}
                     </button>
                 )}
@@ -353,7 +353,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
 // ---- layout pieces ---------------------------------------------------------
 
 function Screen({ children }: { children: React.ReactNode }) {
-    return <main className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">{children}</main>;
+    return <div className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">{children}</div>;
 }
 
 function Footer({ children }: { children: React.ReactNode }) {
