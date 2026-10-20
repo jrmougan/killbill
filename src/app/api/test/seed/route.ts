@@ -856,10 +856,21 @@ export async function POST(request: Request) {
         },
       });
 
+      // A personal expense of Álvaro: "Compartir con el grupo" previews
+      // "Lucía pasará a deberte…" (CF-22 "hoja-compartir-gasto").
+      const farmacia = await prisma.expense.create({
+        data: {
+          description: 'Farmacia', amount: 1240, categoryId: await resolveCategoryId('health'),
+          paidById: alvaro.id, ownerId: alvaro.id, createdById: alvaro.id,
+          visibility: 'PERSONAL', coupleId: null, date: daysAgo(4),
+        },
+      });
+
       return NextResponse.json({
         userA: creds(alvaro, PASSWORD),
         userB: creds(lucia, PASSWORD),
         coupleId: casa.id,
+        personalExpenseId: farmacia.id,
         groupId: lisboa.id,
         expenseId: casaIds[0],
         listId: list.id,

@@ -22,6 +22,8 @@ import { ExpenseMoreOptions } from "./expense-more-options";
 import { useAmountKeyboard } from "./use-amount-keyboard";
 import { useReceiptScan } from "./use-receipt-scan";
 import { useSaveExpense } from "./use-save-expense";
+import { balanceDelta } from "./quick-split";
+import { editEffectLine } from "../share-effect";
 
 export type { AddMember, AddSpace, BlockedSpace, ExpenseFormInitial, FormTag } from "./expense-form-state";
 
@@ -168,6 +170,20 @@ export function ExpenseForm({
     // ---------- Split ----------
     const split = deriveSplit({ state, members, userId, isShared, partnerId: partner?.id ?? null, totalCents });
     const { itemized, linesCents, linesMismatch } = split;
+
+    // Edit of a shared expense (CF-22): how much my balance moves against the
+    // saved version, shown under "Guardar cambios" (only for a valid split).
+    const editEffect = initial && isShared && split.preview
+        ? editEffectLine({
+            beforeCents: balanceDelta(
+                initial.paidById, userId,
+                Object.fromEntries(initial.splits.map((s) => [s.userId, s.amount])),
+                initial.amountCents,
+            ),
+            afterCents: balanceDelta(payerId, userId, split.shares, totalCents),
+            partnerName: partner?.name ?? null,
+        })
+        : null;
 
     // A stale error disappears as soon as the user changes what caused it (G-13).
     useEffect(() => {
@@ -316,26 +332,33 @@ export function ExpenseForm({
                         <Numpad onKey={pressKey} />
                     </div>
 
-                    <div className="flex gap-2.5 px-5 pt-3 pb-[30px] [@media(max-height:640px)]:pt-2 [@media(max-height:640px)]:pb-4">
-                        <button
-                            type="button"
-                            onClick={openScanner}
-                            aria-label="Escanear recibo"
-                            className={cn(
-                                "h-14 w-14 flex-none rounded-[18px] border bg-card flex items-center justify-center transition-colors",
-                                state.scanHint ? "border-primary text-primary ring-4 ring-[var(--accent-tint)]" : "border-[color:var(--line)]",
-                            )}
-                        >
-                            <ScanLine className="h-6 w-6" />
-                        </button>
-                        <EqCta
-                            data-testid="expense-submit"
-                            className="flex-1"
-                            disabled={totalCents <= 0 || state.saving || !category}
-                            onClick={save}
-                        >
-                            {state.saving ? "Guardando…" : isEdit ? "Guardar cambios" : "Guardar"}
-                        </EqCta>
+                    <div className="flex flex-col gap-2 px-5 pt-3 pb-[30px] [@media(max-height:640px)]:pt-2 [@media(max-height:640px)]:pb-4">
+                        <div className="flex gap-2.5">
+                            <button
+                                type="button"
+                                onClick={openScanner}
+                                aria-label="Escanear recibo"
+                                className={cn(
+                                    "h-14 w-14 flex-none rounded-[18px] border bg-card flex items-center justify-center transition-colors",
+                                    state.scanHint ? "border-primary text-primary ring-4 ring-[var(--accent-tint)]" : "border-[color:var(--line)]",
+                                )}
+                            >
+                                <ScanLine className="h-6 w-6" />
+                            </button>
+                            <EqCta
+                                data-testid="expense-submit"
+                                className="flex-1"
+                                disabled={totalCents <= 0 || state.saving || !category}
+                                onClick={save}
+                            >
+                                {state.saving ? "Guardando…" : isEdit ? "Guardar cambios" : "Guardar"}
+                            </EqCta>
+                        </div>
+                        {isEdit && (
+                            <p aria-live="polite" data-testid="expense-edit-effect" className="text-center text-[12.5px] leading-[1.4] text-muted-foreground empty:hidden">
+                                {editEffect}
+                            </p>
+                        )}
                     </div>
                 </>
             )}

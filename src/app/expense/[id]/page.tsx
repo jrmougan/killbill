@@ -6,12 +6,14 @@ import { DeleteExpenseButton } from "@/components/expense/delete-button";
 import { getSessionCtx } from "@/lib/authz";
 import { formatCurrency, formatEuros } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
-import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
+import { linesForSplit, receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
+import { calculateSplitAmountsFromLines, hasExclusiveReceiptLines } from "@/lib/splits";
 import { getGroupMembers, getActiveGroup, PUBLIC_MEMBER_SELECT } from "@/lib/membership";
 import { getEffectiveCategories } from "@/lib/category-db";
 import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
 import { PromoteButton } from "@/components/expense/promote-button";
+import { promoteEffectLines } from "@/components/expense/share-effect";
 import { EqCard, EqHeader, EqLabel } from "@/components/ui/eq";
 
 export default async function ExpenseDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -73,6 +75,25 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
     // A personal expense can be promoted to shared if the owner belongs to a group.
     const myGroupId = isPersonal && expense.ownerId === userId ? await getActiveGroup(userId) : null;
     const canPromote = Boolean(myGroupId);
+    // The confirmation previews the split the share endpoint will create (same
+    // helper, same roster) so it can say "{X} pasará a deberte {importe}".
+    const promote = myGroupId
+        ? await (async () => {
+            const [target, targetMembers] = await Promise.all([
+                prisma.couple.findUnique({ where: { id: myGroupId }, select: { name: true } }),
+                getGroupMembers(myGroupId),
+            ]);
+            const shares = Object.fromEntries(
+                calculateSplitAmountsFromLines(expense.amount, linesForSplit(expense.lineItems), targetMembers)
+                    .map((s) => [s.userId, s.amount]),
+            );
+            return {
+                spaceName: target?.name || "el grupo",
+                itemized: hasExclusiveReceiptLines(expense.lineItems),
+                effect: promoteEffectLines({ viewerId: userId, payerId: expense.paidById, members: targetMembers, shares }),
+            };
+        })()
+        : null;
 
     // Category tile, resolved in the expense's own context (personal → owner
     // scope, shared → group scope).
@@ -102,7 +123,14 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         >
                             <Pencil className="h-4 w-4" />
                         </Link>
-                        {canPromote && <PromoteButton expenseId={expense.id} />}
+                        {canPromote && promote && (
+                            <PromoteButton
+                                expenseId={expense.id}
+                                description={expense.description}
+                                amount={expense.amount}
+                                {...promote}
+                            />
+                        )}
                         <DeleteExpenseButton
                             expenseId={expense.id}
                             description={expense.description}

@@ -42,6 +42,7 @@ export function CriticalActionSheet({
     onConfirm,
     onClose,
     testId,
+    confirmTestId = "confirm-sheet-confirm",
 }: {
     title: string;
     facts?: CriticalFact[];
@@ -61,6 +62,8 @@ export function CriticalActionSheet({
     onConfirm: () => void;
     onClose: () => void;
     testId?: string;
+    /** Keeps a pre-existing CTA testid when a confirmation migrates here. */
+    confirmTestId?: string;
 }) {
     const cancelRef = useRef<HTMLButtonElement>(null);
     const danger = tone === "danger";
@@ -123,7 +126,7 @@ export function CriticalActionSheet({
                         onClick={onConfirm}
                         disabled={busy || confirmDisabled}
                         aria-describedby={reasonShown ? `${testId ?? "confirm-sheet"}-reason` : undefined}
-                        data-testid="confirm-sheet-confirm"
+                        data-testid={confirmTestId}
                         className={cn(
                             "h-14 rounded-[18px] text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]",
                             danger ? "bg-destructive text-white" : "bg-primary text-primary-foreground",

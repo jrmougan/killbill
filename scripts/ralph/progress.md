@@ -22,7 +22,7 @@
 - Grises de texto: `--ink-2`/`muted-foreground` y `--ink-3` ya pasan 4,5:1 sobre papel, blanco, `--track` y tintes; `--placeholder` y `--ink-4` nunca para texto.
 - Tipografía: Schibsted en todo (cifras incluidas); `font-mono` (DM Mono) solo en códigos/enlaces/tokens y la meta del ticket.
 - Confirmaciones: `CriticalActionSheet` (`src/components/ui/critical-action-sheet.tsx`) con facts/consequences/`reversible`; `tone="danger"`
-  = alertdialog con foco en Cancelar. Toast con acción: `const [t, show, action] = useEqToast()` + `<EqToast action={action}>`.
+  = alertdialog con foco en Cancelar; `confirmTestId` conserva el testid del CTA al migrar una confirmación antigua. Toast con acción: `const [t, show, action] = useEqToast()` + `<EqToast action={action}>`.
   Aviso tras navegar: `setFlashToast(msg, {label, href})` antes de `router.push` (se pinta en Inicio, Gastos, Espacios, Listas y login).
 - Emoji de espacio: `SPACE_TYPE_META` (`src/lib/space-ui.ts`) es la única fuente; categoría en filas = `meta.emoji` en el `icon` de `EqRow`.
 
@@ -471,3 +471,15 @@
 - Aprendizajes: ya no existe `Expense.isRecurring`: una plantilla recurrente se detecta con `templateForSeries: { select: { isActive } }`.
   El testid `expense-delete-confirm` desaparece: en e2e pulsa `getByRole('button', { name: 'Eliminar gasto' })` dentro del alertdialog.
   Ojo con `getByText('X')` tras un flash toast que contiene X: usa `{ exact: true }`.
+
+## 2026-10-20 · CF-22 Editar y promover un gasto compartido: consecuencia visible en el saldo
+- Corregido: `PromoteButton` usa `CriticalActionSheet` (`expense-promote-sheet`): "¿Compartir «X» con {espacio}?", importe, "Lucía pasará a deberte
+  6,20 €" (o "Pasarás a deber…"; >3 resumidos), reparto igual/por productos y "Dejará de ser privado"; `expense/[id]/page.tsx` calcula el reparto con
+  `calculateSplitAmountsFromLines` sobre los miembros del grupo activo (lo mismo que `/share`). Editar compartido: `expense-edit-effect` bajo "Guardar
+  cambios" con "Al guardar, el saldo con {X|el grupo} cambia en N a tu favor/en tu contra. Si ya saldasteis, puede volver a quedar deuda.".
+- Pendiente / fuera de alcance: en grupos no se avisa si solo cambia el saldo entre otras personas.
+- Ficheros: `src/components/expense/{promote-button,share-effect,share-effect.test}.ts(x)`, `src/components/expense/add/add-expense-client.tsx`,
+  `src/components/ui/critical-action-sheet.tsx`, `src/app/expense/[id]/page.tsx`, `src/app/api/test/seed/route.ts`, `scripts/ralph/capture.spec.ts`.
+- Aprendizajes: `CriticalActionSheet` acepta `confirmTestId` (por defecto `confirm-sheet-confirm`). `ux-showcase` tiene ahora un gasto personal de
+  Álvaro ("Farmacia", 12,40 €, `personalExpenseId`). Capturas nuevas `hoja-compartir-gasto` y `editar-gasto-efecto` (numpad por testid `numpad-del`/`numpad-8`).
+  El delta de mi saldo en el formulario = `balanceDelta(payerId, userId, split.shares, totalCents)` (`quick-split.ts`).

@@ -1016,8 +1016,8 @@
         "src/app/expense/[id]/edit/page.tsx",
         "src/components/expense/add/expense-form-sections.tsx"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Compartir gasto con CriticalActionSheet (espacio, importe, 'Lucía pasará a deberte X' con el reparto real de /share) y línea de efecto en el saldo bajo 'Guardar cambios' al editar compartidos; pendiente: efecto entre terceros en grupos."
     },
     {
       "id": "CF-23",

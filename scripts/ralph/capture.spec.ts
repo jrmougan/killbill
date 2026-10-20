@@ -71,6 +71,24 @@ const SCREENS: Screen[] = [
       await page.waitForTimeout(600);
     },
   },
+  {
+    id: 'hoja-compartir-gasto', scenario: 'ux-showcase', path: (d) => `/expense/${d.personalExpenseId}`,
+    act: async (page) => {
+      await page.getByTestId('expense-promote').click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    // Editing a shared expense: changing the amount shows how the balance moves.
+    id: 'editar-gasto-efecto', scenario: 'ux-showcase', path: (d) => `/expense/${d.expenseId}/edit`,
+    act: async (page) => {
+      // 64,20 € → 80 €
+      for (let i = 0; i < 5; i++) await page.getByTestId('numpad-del').click();
+      await page.getByTestId('numpad-8').click();
+      await page.getByTestId('numpad-0').click();
+      await page.waitForTimeout(300);
+    },
+  },
   { id: 'mes-presupuestos', scenario: 'ux-showcase', path: () => '/month', design: '3a-mes-presupuestos' },
   {
     id: 'mes-presupuestos-anadir', scenario: 'ux-showcase', path: () => '/month',
