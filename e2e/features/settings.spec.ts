@@ -33,9 +33,48 @@ test.describe('Ajustes', () => {
     await expect(tokenSheet).toBeVisible();
     await page.mouse.click(5, 5);
     await expect(tokenSheet).toBeVisible();
-    await expect(tokenSheet.getByRole('button', { name: 'Cerrar' })).toHaveCount(0);
+    await expect(tokenSheet.getByRole('button', { name: 'Cerrar', exact: true })).toHaveCount(0);
+    await expect(tokenSheet).toContainText('Generar otro no desactiva este');
+    // Not copied yet: closing asks first ("Volver" keeps the token on screen).
     await tokenSheet.getByRole('button', { name: 'He guardado el token' }).click();
+    await tokenSheet.getByRole('button', { name: 'Volver' }).click();
+    await expect(tokenSheet.getByTestId('mcp-close-unsaved')).toHaveCount(0);
+    await tokenSheet.getByRole('button', { name: 'He guardado el token' }).click();
+    await tokenSheet.getByRole('button', { name: 'Cerrar sin copiar' }).click();
     await expect(tokenSheet).toHaveCount(0);
+  });
+
+  test('cerrar sesión en todos los dispositivos: hoja danger, vuelve al login con aviso y el token MCP deja de valer', async ({ page, request }) => {
+    const seed = await seedScenario(request, 'couple-with-debt');
+    await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password! });
+    const issued = await page.request.post('/api/me/mcp-token');
+    expect(issued.ok()).toBe(true);
+    const { token } = await issued.json();
+    await page.goto('/settings');
+
+    const account = page.getByRole('region', { name: 'Cuenta' });
+    await account.getByRole('button', { name: /^Cerrar sesión en todos los dispositivos/ }).click();
+    const sheet = page.getByRole('alertdialog', { name: '¿Cerrar sesión en todos los dispositivos?' });
+    await expect(sheet).toContainText('Hermes Agent');
+    await expect(sheet.getByTestId('confirm-sheet-confirm')).toHaveText('Cerrar todas las sesiones');
+    await sheet.getByTestId('confirm-sheet-confirm').click();
+
+    await expect(page).toHaveURL(/\/login\?signedOut=all/);
+    await expect(page.getByRole('status')).toContainText('todos tus dispositivos');
+    const mcp = await request.post('/api/mcp', {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json, text/event-stream' },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+    });
+    expect(mcp.status()).toBe(401);
+  });
+
+  test('cerrar sesión lleva al login con aviso', async ({ page, request }) => {
+    const seed = await seedScenario(request, 'couple-with-debt');
+    await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password! });
+    await page.goto('/settings');
+    await page.getByRole('region', { name: 'Cuenta' }).getByRole('button', { name: 'Cerrar sesión', exact: true }).click();
+    await expect(page).toHaveURL(/\/login\?signedOut=1/);
+    await expect(page.getByRole('status')).toHaveText('Has cerrado la sesión.');
   });
 
   test('only profile, tools and account: spaces (leave/join) live in Espacios', async ({ page, request }) => {

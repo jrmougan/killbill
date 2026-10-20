@@ -21,6 +21,7 @@ import { EqCta, EqHeader, EqLabel, useEqToast, EqToast } from "@/components/ui/e
 import { LogoutButton } from "@/components/auth/logout-button";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
 import { Sheet, SheetField } from "@/components/ui/sheet";
+import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
 import { usePersonalMode } from "./personal-mode";
 import { withPersonal } from "./personal-scope";
 import { cn } from "@/lib/utils";
@@ -122,12 +123,13 @@ function LinkRow({
     );
 }
 
-export function SettingsClient({ user, groups, personalParam = false }: SettingsClientProps) {
+export function SettingsClient({ user, groups, activeGroupId, personalParam = false }: SettingsClientProps) {
     const router = useRouter();
     const [toast, showToast] = useEqToast(2600);
     const [sheet, setSheet] = useState<"profile" | "mcp-confirm" | "mcp" | "revoke" | null>(null);
     // Personal mode: without a space everything is personal anyway.
     const personal = usePersonalMode(personalParam) || groups.length === 0;
+    const activeGroup = groups.find((g) => g.id === activeGroupId) ?? groups.find((g) => g.isActive) ?? groups[0];
 
     // MCP token (shown once). Generating again just issues another 90-day token;
     // all of them (and every session) are revoked with "Cerrar sesión en todos los
@@ -137,6 +139,8 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
     const [mcpError, setMcpError] = useState<string | null>(null);
     const [mcpCopied, setMcpCopied] = useState(false);
     const [mcpIssued, setMcpIssued] = useState(false);
+    // Closing the token sheet before copying asks once ("¿Cerrar sin copiar?").
+    const [mcpLeaving, setMcpLeaving] = useState(false);
     const mcpRequestRef = useRef<AbortController | null>(null);
     useEffect(() => () => mcpRequestRef.current?.abort(), []);
 
@@ -147,7 +151,17 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
         setMcpToken(null);
         setMcpError(null);
         setMcpCopied(false);
+        setMcpLeaving(false);
         setMcpBusy(false);
+    };
+
+    // The token is shown once: leaving without having copied it asks first.
+    const requestCloseMcp = () => {
+        if (mcpToken && !mcpCopied && !mcpLeaving) {
+            setMcpLeaving(true);
+            return;
+        }
+        closeMcp();
     };
 
     const connectMcp = async () => {
@@ -190,8 +204,9 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
         if (!mcpToken) return;
         try {
             await navigator.clipboard.writeText(mcpToken.value);
+            // Stays true: it also tells the close button the token was saved.
             setMcpCopied(true);
-            setTimeout(() => setMcpCopied(false), 2000);
+            setMcpLeaving(false);
         } catch {
             setMcpError("No se pudo copiar el token. Selecciónalo y cópialo manualmente.");
         }
@@ -235,7 +250,13 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
                         sub={personal ? "Personal" : undefined}
                     />
                     {groups.length > 0 && (
-                        <LinkRow href="/api/export" icon={Download} label="Exportar gastos (CSV)" sub="Espacio en uso" download />
+                        <LinkRow
+                            href="/api/export"
+                            icon={Download}
+                            label="Exportar gastos (CSV)"
+                            sub={`${activeGroup?.name ?? "Espacio en uso"} · gastos compartidos y tu parte`}
+                            download
+                        />
                     )}
                     <LinkRow
                         href="/api/export?scope=personal"
@@ -271,12 +292,18 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
 
                 <Section label="Cuenta">
                     {user.isAdmin && <LinkRow href="/admin" icon={ShieldCheck} label="Administración" />}
-                    <button type="button" onClick={() => setSheet("revoke")} className={rowCls}>
-                        <MonitorSmartphone className="h-[19px] w-[19px] flex-none text-muted-foreground" />
-                        <span className="flex-1 text-[15px]">Cerrar sesión en todos los dispositivos</span>
-                        <ChevronRight className="h-[17px] w-[17px] flex-none text-[color:var(--ink-4)]" />
+                    <LogoutButton className={rowCls} />
+                    <button
+                        type="button"
+                        onClick={() => setSheet("revoke")}
+                        className={cn(rowCls, "text-[color:var(--negative-ink)]")}
+                    >
+                        <MonitorSmartphone className="h-[19px] w-[19px] flex-none" />
+                        <span className="flex-1 min-w-0">
+                            <span className="block text-[15px] font-semibold">Cerrar sesión en todos los dispositivos</span>
+                            <span className="block text-xs text-muted-foreground">También desconecta Hermes y otros clientes MCP</span>
+                        </span>
                     </button>
-                    <LogoutButton className={cn(rowCls, "text-destructive")} />
                 </Section>
 
                 <p className="pt-2 text-center text-[11px] text-[color:var(--ink-3)]">EQUIL · v1.0.0 beta</p>
@@ -326,7 +353,7 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
             {sheet === "mcp" && (
                 <Sheet
                     title={mcpToken ? "Guarda tu token ahora" : "Conectar Hermes Agent"}
-                    onClose={closeMcp}
+                    onClose={requestCloseMcp}
                     // A token shown once must not vanish on a stray backdrop tap / Escape.
                     dismissible={!mcpToken && !mcpBusy}
                 >
@@ -353,13 +380,48 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
                             <div className="flex items-start gap-2 rounded-[14px] bg-[var(--negative-tint)] px-3 py-2.5 text-xs">
                                 <ShieldAlert className="h-4 w-4 flex-none text-destructive mt-px" />
                                 <span>
-                                    Trátalo como una contraseña: da acceso a tu cuenta hasta que caduque. Aún no se puede revocar; genera
-                                    un token nuevo cuando lo necesites.
+                                    Trátalo como una contraseña: da acceso a tu cuenta durante {mcpToken.expiresInDays} días.
+                                    Generar otro <strong>no</strong> desactiva este. Si crees que alguien lo tiene, usa «Cerrar
+                                    sesión en todos los dispositivos».
                                 </span>
                             </div>
-                            <EqCta className="mt-1" onClick={closeMcp}>
-                                {mcpCopied ? "Listo, lo he guardado" : "He guardado el token"}
-                            </EqCta>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    closeMcp();
+                                    setSheet("revoke");
+                                }}
+                                className="-mt-1 min-h-11 flex items-center justify-center text-sm font-semibold text-[color:var(--negative-ink)]"
+                            >
+                                Cerrar sesión en todos los dispositivos
+                            </button>
+                            {mcpLeaving ? (
+                                <div
+                                    role="alert"
+                                    data-testid="mcp-close-unsaved"
+                                    className="flex flex-col gap-2.5 rounded-[14px] bg-[var(--track)] px-3.5 py-3"
+                                >
+                                    <p className="text-sm font-semibold">
+                                        No has copiado el token. Si cierras, no podrás volver a verlo.
+                                    </p>
+                                    <div className="flex gap-2.5">
+                                        <EqCta
+                                            variant="outline"
+                                            className="flex-1 h-12 rounded-2xl text-[15px]"
+                                            onClick={() => setMcpLeaving(false)}
+                                        >
+                                            Volver
+                                        </EqCta>
+                                        <EqCta className="flex-1 h-12 rounded-2xl text-[15px]" onClick={closeMcp}>
+                                            Cerrar sin copiar
+                                        </EqCta>
+                                    </div>
+                                </div>
+                            ) : (
+                                <EqCta className="mt-1" onClick={requestCloseMcp}>
+                                    {mcpCopied ? "Listo, lo he guardado" : "He guardado el token"}
+                                </EqCta>
+                            )}
                         </div>
                     ) : (
                         <div className="flex flex-col gap-3">
@@ -446,7 +508,8 @@ function ProfileSheet({ user, onClose, onSaved }: { user: UserData; onClose: () 
 
 /**
  * Confirm + POST /api/me/sessions/revoke: invalidates every session cookie and
- * MCP token of the account (this device included), then hard-navigates to /login.
+ * MCP token of the account (this device included), then hard-navigates to
+ * /login?signedOut=all (the login page explains what happened).
  */
 function RevokeSessionsSheet({ onClose }: { onClose: () => void }) {
     const [busy, setBusy] = useState(false);
@@ -463,7 +526,7 @@ function RevokeSessionsSheet({ onClose }: { onClose: () => void }) {
                 setBusy(false);
                 return;
             }
-            window.location.assign("/login");
+            window.location.assign("/login?signedOut=all");
         } catch {
             setError("Error de conexión. Inténtalo de nuevo.");
             setBusy(false);
@@ -471,26 +534,20 @@ function RevokeSessionsSheet({ onClose }: { onClose: () => void }) {
     };
 
     return (
-        <Sheet title="¿Cerrar sesión en todos los dispositivos?" onClose={onClose} dismissible={!busy}>
-            <div className="flex flex-col gap-3">
-                <p className="text-sm text-muted-foreground">
-                    Se cerrará la sesión en todos tus dispositivos, también en este, y dejarán de funcionar los tokens de
-                    Hermes Agent que hayas generado. Tendrás que volver a iniciar sesión.
-                </p>
-                {error && (
-                    <p role="alert" className="text-sm text-destructive">
-                        {error}
-                    </p>
-                )}
-                <div className="flex gap-2.5 pt-1">
-                    <EqCta variant="outline" className="flex-1 h-12 rounded-2xl text-[15px]" onClick={onClose} disabled={busy}>
-                        Cancelar
-                    </EqCta>
-                    <EqCta className="flex-1 h-12 rounded-2xl text-[15px]" onClick={revoke} disabled={busy}>
-                        {busy ? "Cerrando…" : "Cerrar sesiones"}
-                    </EqCta>
-                </div>
-            </div>
-        </Sheet>
+        <CriticalActionSheet
+            title="¿Cerrar sesión en todos los dispositivos?"
+            tone="danger"
+            testId="revoke-sessions-sheet"
+            consequences={[
+                "Se cerrará la sesión en todos tus dispositivos, también en este.",
+                "Dejarán de funcionar los tokens de Hermes Agent y otros clientes MCP que hayas generado.",
+                "Tendrás que volver a iniciar sesión.",
+            ]}
+            confirmLabel={busy ? "Cerrando sesiones…" : "Cerrar todas las sesiones"}
+            busy={busy}
+            error={error}
+            onConfirm={revoke}
+            onClose={onClose}
+        />
     );
 }

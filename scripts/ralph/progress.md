@@ -519,3 +519,16 @@
   `src/app/api/test/seed/route.ts`, `scripts/ralph/capture.spec.ts`.
 - Aprendizajes: oxlint exige `<output>` en vez de `role="status"`. "Farmacia" (`personalExpenseId`) tiene ahora foto (`/icon-192x192.png`, de `public/`) y dos
   líneas (Ibuprofeno 3,90 + Crema solar 8,50): captura nueva `editar-gasto-ticket`; `anadir-gasto-opciones` añade una línea vacía para medir la papelera.
+
+## 2026-10-20 · CF-26 Ajustes: aviso del token, cerrar todas las sesiones en rojo, aviso en el login y exportar
+- Corregido: hoja del token "Trátalo como una contraseña: … durante 90 días. Generar otro no desactiva este…" + botón "Cerrar sesión en todos los dispositivos"
+  que abre la revocación; cerrar sin copiar pide confirmación en línea (`mcp-close-unsaved`, "Volver" / "Cerrar sin copiar"; `mcpCopied` ya no se resetea).
+  En "Cuenta": "Cerrar sesión" neutro y "Cerrar sesión en todos los dispositivos" en `--negative-ink`, sin chevron, con "También desconecta Hermes y otros clientes MCP".
+  `RevokeSessionsSheet` → `CriticalActionSheet` danger (`revoke-sessions-sheet`, CTA "Cerrar todas las sesiones") → `/login?signedOut=all`; `LogoutButton` comprueba
+  `res.ok`, "Cerrando sesión…" + `aria-busy`, error en línea → `/login?signedOut=1`; el login pinta el aviso en `<output>` (`login-signed-out`). Exportar: "{espacio} ·
+  gastos compartidos y tu parte". `docs/design/README.md` (MCP revocable por tokenVersion). Capturas nuevas `ajustes-revocar` y `login-sesiones-cerradas`.
+- Pendiente / fuera de alcance: lista de tokens MCP activos y revocación uno a uno (API).
+- Ficheros: `src/app/settings/settings-client.tsx`, `src/app/login/page.tsx`, `src/components/auth/logout-button.tsx`, `docs/design/README.md`,
+  `e2e/features/settings.spec.ts`, `scripts/ralph/capture.spec.ts`, `scripts/ralph/findings/CF-26.md`.
+- Aprendizajes: `getByRole('button', { name: 'Cerrar' })` sin `exact` casa con cualquier "Cerrar sesión…": usa `exact: true`. `POST /api/mcp` con un token revocado
+  da 401 (sirve para comprobar la revocación en e2e). `LogoutButton` solo se usa en Ajustes y ahora va envuelto en un `<div>` (su error no rompe los separadores de `Section`).

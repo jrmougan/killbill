@@ -12,6 +12,13 @@ import type { AuthState } from "@/lib/auth-types";
 function LoginForm() {
     const searchParams = useSearchParams();
     const inviteCode = searchParams.get("code");
+    const signedOut = searchParams.get("signedOut");
+    const signedOutNote =
+        signedOut === "all"
+            ? "Has cerrado la sesión en todos tus dispositivos. Los tokens de Hermes y otros clientes MCP ya no funcionan."
+            : signedOut === "1"
+              ? "Has cerrado la sesión."
+              : null;
 
     // Server Action handles auth + cookie + redirect in a single server response,
     // so navigation never races the cookie write (the old "tap login twice on
@@ -39,6 +46,15 @@ function LoginForm() {
             }
         >
             <form action={formAction} className="flex flex-col gap-3">
+                {signedOutNote && !state.error && (
+                    // <output> = role="status": announced politely on arrival.
+                    <output
+                        data-testid="login-signed-out"
+                        className="block rounded-[14px] bg-[var(--positive-tint)] px-3.5 py-3 text-sm font-medium text-pretty"
+                    >
+                        {signedOutNote}
+                    </output>
+                )}
                 {state.error && (
                     <AuthError id="login-error" data-testid="login-error">
                         {state.error}

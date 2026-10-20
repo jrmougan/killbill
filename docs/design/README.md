@@ -43,7 +43,8 @@ The prototype contradicts some existing product rules. These are the resolutions
 - **Budgets**: tapping an unbudgeted category asks for the amount (the
   prototype's fixed 100 € is a demo shortcut).
 - **MCP (Hermes Agent)**: "Conectar" issues a token (copy once); there is no
-  "Desconectar" because MCP JWTs cannot be revoked yet.
+  per-token "Desconectar": every MCP token is revoked together with the sessions
+  by "Cerrar sesión en todos los dispositivos" (bumps `User.tokenVersion`).
 - **Shopping aisles** are kept (grouping/ordering) even though the prototype
   shows a flat list.
 

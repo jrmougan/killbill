@@ -246,6 +246,13 @@ const SCREENS: Screen[] = [
     },
   },
   { id: 'ajustes', scenario: 'ux-showcase', path: () => '/settings', design: '3a-ajustes' },
+  {
+    id: 'ajustes-revocar', scenario: 'ux-showcase', path: () => '/settings',
+    act: async (page) => {
+      await page.getByRole('button', { name: /^Cerrar sesión en todos los dispositivos/ }).click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
   { id: 'historial-pagos', scenario: 'ux-showcase', path: () => '/settle/history' },
   { id: 'historial-pagos-pendiente', scenario: 'ux-showcase', path: (d) => `/settle/history?space=${d.groupId}` },
   { id: 'bienvenida', scenario: 'solo-user', path: () => '/welcome', design: '3a-bienvenida', keepWelcome: true },
@@ -307,6 +314,7 @@ const SCREENS: Screen[] = [
   { id: 'mes-cerrando', scenario: 'space-settling', path: () => '/month' },
   { id: 'inicio-archivado', scenario: 'space-archived', path: () => '/dashboard' },
   { id: 'login', scenario: 'ux-showcase', path: () => '/login', anonymous: true },
+  { id: 'login-sesiones-cerradas', scenario: 'ux-showcase', path: () => '/login?signedOut=all', anonymous: true },
   {
     id: 'login-error', scenario: 'ux-showcase', path: () => '/login', anonymous: true,
     act: async (page) => {

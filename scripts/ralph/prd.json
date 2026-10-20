@@ -1146,8 +1146,8 @@
         "e2e/features/settings.spec.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Aviso del token corregido + botón a la revocación y confirmación 'Cerrar sin copiar'; 'todos los dispositivos' en rojo con subtexto MCP y CriticalActionSheet danger; login con aviso ?signedOut=1|all; LogoutButton con res.ok y aria-busy; exportar con el nombre del espacio. Pendiente: tokens uno a uno (API)."
     },
     {
       "id": "CF-27",
