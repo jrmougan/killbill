@@ -79,3 +79,15 @@
 - Aprendizajes: el slot `meta` de `EqHeader` es un `<span truncate>`: recorta (y deja sin zona táctil) cualquier enlace
   con padding/márgenes negativos; los enlaces de cabecera van en `children` con `-my-2.5 min-h-11 max-w-[55%] flex-none`.
   e2e de Mes: `e2e/features/{month,budget-errors,financial-features}.spec.ts`.
+
+## 2026-10-20 · UX-06 Mes · Análisis
+- Corregido: importe redondeado ("271 €") sobre las barras del mes actual y del anterior; meses antiguos al 50 % en
+  modo compartido para que se lea la comparación; etiquetas de "Evolución de tu saldo" centradas bajo cada punto;
+  barras y etiquetas `aria-hidden` (el `figcaption` sr-only ya lo cuenta todo).
+- Pendiente / fuera de alcance: `ux-showcase` sin gasto en may–ago (añadirlo mueve los saldos de otras capturas);
+  paleta de categorías sembrada en BD (en Análisis se distinguen por emoji + nombre; en Inicio hay hueco entre tramos);
+  flechas de mes (UX-05).
+- Ficheros: `src/components/month/analysis-view.tsx`.
+- Aprendizajes: en el SVG de saldo las x van en unidades de `viewBox`; para alinear HTML debajo usa `left: x/W·100%`
+  con `-translate-x-1/2`. `month.spec.ts` busca "100%" exacto en el panel: no pongas porcentajes en las etiquetas de barra.
+  e2e de Análisis: `e2e/features/month.spec.ts`, `e2e/mobile/overflow.spec.ts` ("month analysis").

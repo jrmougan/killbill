@@ -113,8 +113,8 @@
         "Gráfico y cifras del mes legibles a 360px, con comparación con el mes anterior",
         "Colores de categoría distinguibles también por claridad, no solo por tono"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Importe sobre las barras de este mes y del anterior, meses antiguos atenuados, etiquetas del saldo alineadas y gráfico aria-hidden con figcaption; pendiente: meses antiguos en ux-showcase y paleta de categorías (datos sembrados)."
     },
     {
       "id": "UX-07",

@@ -29,6 +29,11 @@ function Kpi({
     );
 }
 
+/** Whole euros for the bar labels ("271 €"): the exact amount is in the header and the caption. */
+function formatCompact(cents: number) {
+    return `${Math.round(cents / 100).toLocaleString("es-ES")} €`;
+}
+
 /** 6-month bars: total (light) with "tu parte" nested inside (shared scope). */
 function MonthBars({ months }: { months: MonthAnalysis["months"] }) {
     const shared = months.some((m) => m.myShare !== null);
@@ -47,21 +52,35 @@ function MonthBars({ months }: { months: MonthAnalysis["months"] }) {
                     </span>
                 </div>
             )}
-            <div className="h-[120px] flex items-end gap-2.5">
+            <div className="h-[140px] flex items-end gap-2.5" aria-hidden>
                 {months.map((m, i) => {
                     const isCurrent = i === months.length - 1;
                     const isPrev = i === months.length - 2;
-                    const h = Math.max(3, (m.total / max) * 100);
+                    // Leave room above the tallest bar for its amount label.
+                    const h = Math.max(3, (m.total / max) * 82);
                     return (
                         <div
                             key={`${m.label}-${i}`}
                             title={describe(m)}
-                            className="flex-1 h-full flex items-end"
+                            className="relative flex-1 min-w-0 h-full flex flex-col items-center justify-end gap-1"
                         >
+                            {(isCurrent || isPrev) && (
+                                <span
+                                    data-testid={isCurrent ? "bar-current" : "bar-prev"}
+                                    className={cn(
+                                        "whitespace-nowrap text-[11px] leading-none tabular-nums",
+                                        isCurrent ? "font-bold text-foreground" : "text-muted-foreground",
+                                    )}
+                                >
+                                    {formatCompact(m.total)}
+                                </span>
+                            )}
                             <div
                                 className="relative w-full rounded-t-[6px] rounded-b-[2px] overflow-hidden transition-[height] duration-300"
                                 style={{
                                     height: `${h}%`,
+                                    // Older months step back so the month-vs-previous comparison reads first.
+                                    opacity: shared && !isCurrent && !isPrev ? 0.5 : 1,
                                     background: shared
                                         ? "var(--accent-softer)"
                                         : isCurrent
@@ -85,7 +104,7 @@ function MonthBars({ months }: { months: MonthAnalysis["months"] }) {
                     );
                 })}
             </div>
-            <div className="flex gap-2.5 text-[11px] text-center">
+            <div className="flex gap-2.5 text-[11px] text-center" aria-hidden>
                 {months.map((m, i) => (
                     <span
                         key={`${m.label}-${i}`}
@@ -156,9 +175,14 @@ function BalanceChart({ points }: { points: { label: string; balance: number }[]
                     </g>
                 ))}
             </svg>
-            <div className="flex justify-between text-[11px] text-muted-foreground px-[3%]" aria-hidden>
+            {/* Labels centred under each point (same x as the SVG, in % of its width). */}
+            <div className="relative h-4 text-[11px] text-muted-foreground" aria-hidden>
                 {points.map((p, i) => (
-                    <span key={`${p.label}-${i}`} className={cn(i === points.length - 1 && "text-foreground font-semibold")}>
+                    <span
+                        key={`${p.label}-${i}`}
+                        className={cn("absolute -translate-x-1/2 whitespace-nowrap", i === points.length - 1 && "text-foreground font-semibold")}
+                        style={{ left: `${(x(i) / W) * 100}%` }}
+                    >
                         {p.label}
                     </span>
                 ))}
