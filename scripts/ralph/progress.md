@@ -300,3 +300,15 @@
 - Aprendizajes: el resto de la deuda de X conmigo sale de `resolveMyDebts(balances de active.members, X)[yo]` (mismo emparejamiento que
   /settle). `PendingSettlements` se monta siempre (con `key` = espacio) y solo pinta la tarjeta si hay pagos: así el toast sobrevive al
   refresh que la vacía. A 360 px dos botones de texto no caben con la sangría del avatar: fila de botones a todo el ancho.
+
+## 2026-10-20 · CF-09 /settle: frase de quién debe a quién, CTA con persona e importe y textos del método
+- Corregido: titular `settle-summary` bajo el h1 ("Lucía te debe 79,30 €" / "Le debes 79,30 € a Álvaro"; grupo "Debes/Te deben X en total"
+  + `settle-summary-transfer` "Le pagas Y a Marta" / "Marta te paga Y" según la transferencia elegida); CTAs "Ya le he pagado {t.amount} a X",
+  "X ya me ha pagado {t.amount}" y "Sí, he recibido {incoming.amount} de X" (pueden partir en dos líneas: `CTA_WRAP`); leyenda del método
+  "¿Cómo le has pagado?" / "¿Cómo te ha pagado?"; "Transfer." → "Transferencia" (tiles a 13 px); filas de "Pagos por confirmar" de /settle
+  "X dice que te ha pagado" / "Pago a X" + "Falta que X lo confirme"; README de diseño (Settle) y e2e con regex.
+- Pendiente / fuera de alcance: aviso redundante del pendiente del deudor y "Pedirle que lo confirme" (CF-11); hoja de revisión (CF-10).
+- Ficheros: `src/app/settle/client.tsx`, `src/components/settle/{method-picker.tsx,settle-model.ts}`, `docs/design/README.md`,
+  `e2e/settlements/{create-and-confirm,partial-and-scope}.spec.ts`, `e2e/spaces/settle-up.spec.ts`.
+- Aprendizajes: `MethodPicker` también lo usa `/settle/[id]/edit` (label "Método"). A 360 px una tile de método mide ~101 px: "Transferencia"
+  solo cabe a 13 px. Los e2e de /settle localizan los CTA por regex (`/^Ya le he pagado/`, `/ya me ha pagado/`, `/^Sí, he recibido .* de User B/`).

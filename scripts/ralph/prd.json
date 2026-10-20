@@ -589,8 +589,8 @@
         "e2e/settlements/partial-and-scope.spec.ts",
         "e2e/spaces/settle-up.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Frase 'X te debe / Le debes / Debes … en total + Le pagas … a X' bajo el h1, CTAs con nombre e importe (t.amount; incoming.amount al confirmar), '¿Cómo le has/te ha pagado?', 'Transferencia', filas pendientes en presente; queda la redundancia del pendiente del deudor (CF-11) y la hoja de revisión (CF-10)."
     },
     {
       "id": "CF-10",

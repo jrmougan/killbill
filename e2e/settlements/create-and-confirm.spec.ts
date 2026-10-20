@@ -48,7 +48,7 @@ test.describe('Settlements - Create and Confirm', () => {
     const settleResponsePromise = pageB.waitForResponse(
       (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST'
     );
-    await pageB.getByRole('button', { name: 'Ya he pagado' }).click();
+    await pageB.getByRole('button', { name: /^Ya le he pagado/ }).click();
     const settleResponse = await settleResponsePromise;
     expect(settleResponse.ok()).toBeTruthy();
     expect(settleResponse.request().postDataJSON()).toMatchObject({ toUserId: userA.id, amount: 50, method: 'TRANSFER' });
@@ -68,7 +68,7 @@ test.describe('Settlements - Create and Confirm', () => {
     await pageB.goto('/settle');
     await expect(pageB.getByTestId('settle-balance')).toHaveText(/50,00\s*€/);
     await expect(pageB.getByTestId('settle-outgoing-pending')).toBeVisible();
-    await expect(pageB.getByRole('button', { name: 'Ya he pagado' })).toHaveCount(0);
+    await expect(pageB.getByRole('button', { name: /^Ya le he pagado/ })).toHaveCount(0);
     expect(pageErrors, 'el flujo de liquidación debe hidratar sin errores del navegador').toEqual([]);
 
     await pageB.close();
@@ -86,8 +86,8 @@ test.describe('Settlements - Create and Confirm', () => {
 
     // ...and on /settle the creditor confirms the pending one instead of a new "Ya me ha pagado".
     await pageA.goto('/settle');
-    await expect(pageA.getByRole('button', { name: 'Confirmar pago de User B' })).toBeVisible();
-    await expect(pageA.getByRole('button', { name: 'Ya me ha pagado' })).toHaveCount(0);
+    await expect(pageA.getByRole('button', { name: /^Sí, he recibido .* de User B/ })).toBeVisible();
+    await expect(pageA.getByRole('button', { name: /ya me ha pagado/ })).toHaveCount(0);
     expect(pageErrors, 'el acreedor debe ver el pago pendiente sin errores del navegador').toEqual([]);
 
     await pageA.close();
@@ -239,6 +239,8 @@ test.describe('Settlements - Create and Confirm', () => {
     const pageA = await ctxA.newPage();
     await pageA.goto('/settle');
     await expect(pageA.getByTestId('settle-ticket')).toContainText('User B te debe');
+    await expect(pageA.getByTestId('settle-summary')).toHaveText(/^User B te debe 50,00\s€$/);
+    await expect(pageA.getByRole('group', { name: '¿Cómo te ha pagado?' })).toBeVisible();
     await expect(pageA.getByTestId('settle-balance')).toHaveText(/50,00\s*€/);
     await expect(pageA.getByRole('button', { name: 'Recordarle la deuda a User B' })).toBeVisible();
 
@@ -246,7 +248,7 @@ test.describe('Settlements - Create and Confirm', () => {
     const post = pageA.waitForResponse(
       (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST'
     );
-    await pageA.getByRole('button', { name: 'Ya me ha pagado' }).click();
+    await pageA.getByRole('button', { name: /^User B ya me ha pagado 50,00\s€$/ }).click();
     const res = await post;
     expect(res.ok()).toBeTruthy();
     expect((await res.json()).settlement.status).toBe('CONFIRMED');
@@ -296,7 +298,7 @@ test.describe('Settlements - Create and Confirm', () => {
     const post = pageB.waitForResponse(
       (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST'
     );
-    await pageB.getByRole('button', { name: 'Ya he pagado' }).click();
+    await pageB.getByRole('button', { name: /^Ya le he pagado/ }).click();
     const res = await post;
     expect(res.ok()).toBeTruthy();
     expect(res.request().postDataJSON()).toMatchObject({ toUserId: userA.id, amount: 33.33 });

@@ -125,7 +125,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     const settlePromise = pageB.waitForResponse(
       (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST',
     );
-    await pageB.getByRole('button', { name: 'Ya he pagado' }).click();
+    await pageB.getByRole('button', { name: /^Ya le he pagado/ }).click();
     expect((await settlePromise).ok()).toBeTruthy();
     await expect(pageB.getByTestId('settle-pending')).toContainText('Pendiente de que User A confirme');
 

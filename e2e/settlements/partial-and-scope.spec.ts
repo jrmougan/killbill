@@ -36,7 +36,7 @@ test.describe('Settlements - partial payments, explicit space, archived, edit', 
     const page = await (await as(newContext, A)).newPage();
     await page.goto('/settle');
     const patch = page.waitForResponse((r) => /\/api\/settle\/[^/]+\/status$/.test(new URL(r.url()).pathname));
-    await page.getByRole('button', { name: 'Confirmar pago de User B' }).click();
+    await page.getByRole('button', { name: /^Sí, he recibido .* de User B/ }).click();
     const res = await patch;
     expect(res.ok()).toBeTruthy();
     expect(res.request().postDataJSON()).toEqual({ status: 'CONFIRMED', expectedAmountCents: 2000 });
@@ -146,7 +146,7 @@ test.describe('Settlements - partial payments, explicit space, archived, edit', 
 
     const page = await guestCtx.newPage();
     await page.goto('/settle');
-    const confirm = page.getByRole('button', { name: /^Confirmar pago de/ });
+    const confirm = page.getByRole('button', { name: /^Sí, he recibido 20,00\s€ de / });
     await expect(confirm).toBeVisible();
     await confirm.click();
     await expect(page.getByTestId('settle-peace')).toContainText('Deuda saldada');

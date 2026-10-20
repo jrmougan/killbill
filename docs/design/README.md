@@ -14,9 +14,13 @@ The prototype contradicts some existing product rules. These are the resolutions
   the money still comes from OCR / manual entry.
 - **Invites**: no short codes. The "Invitar" card creates and shares a secure
   `/i/[token]` link (Web Share API / copy); "Unirme" accepts a pasted link.
-- **Settle** ("Saldar deuda"): two-step confirmation is kept. "Ya he pagado"
-  creates a PENDING settlement ("Pendiente de que X confirme"); "Ya me ha
-  pagado" (creditor) confirms immediately. Reminders use the share sheet (no
+- **Settle** ("Saldar deuda"): two-step confirmation is kept. A headline says
+  who owes whom ("Lucía te debe 79,30 €" / "Le debes 79,30 € a Álvaro"; in a
+  group "Debes 7,50 € en total" + "Le pagas 7,50 € a Marta"), and the CTAs carry
+  the person and the amount of the chosen transfer. "Ya le he pagado {importe}
+  a {nombre}" creates a PENDING settlement ("Pendiente de que X confirme");
+  "{nombre} ya me ha pagado {importe}" (creditor) confirms immediately, and an
+  incoming pending one is confirmed with "Sí, he recibido {importe} de {nombre}". Reminders use the share sheet (no
   push infra): "Recordarle la deuda" is creditor-only, and the debtor of a
   pending payment gets "Pedirle que lo confirme" instead. "Deuda saldada" is
   shown only right after a confirmed payment that leaves the balance at 0;

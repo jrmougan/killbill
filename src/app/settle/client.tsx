@@ -238,6 +238,17 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
         : owed ? "Te deben" : "Debes";
     const eachLabel = shareLabel(ticket, memberCount);
     const showTransfers = !isCouple || transfers.length > 1;
+    const total = formatCurrency(Math.abs(balance));
+    // The headline says who owes whom on its own; in a group, the second line
+    // names the transfer the CTA will record.
+    const headline = isCouple
+        ? owed ? `${partnerName} te debe ${total}` : `Le debes ${total} a ${partnerName}`
+        : owed ? `Te deben ${total} en total` : `Debes ${total} en total`;
+    const transferLine = !isCouple && t
+        ? t.direction === "pay"
+            ? `Le pagas ${formatCurrency(t.amount)} a ${nameOf(t.userId)}`
+            : `${nameOf(t.userId)} te paga ${formatCurrency(t.amount)}`
+        : null;
 
     let cta: React.ReactNode = null;
     if (!archived && t) {
@@ -251,12 +262,16 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                 </>
             );
         } else if (t.direction === "pay") {
-            cta = <EqCta onClick={iPaid} disabled={submitting} aria-busy={submitting}>Ya he pagado</EqCta>;
+            cta = (
+                <EqCta onClick={iPaid} disabled={submitting} aria-busy={submitting} className={CTA_WRAP}>
+                    Ya le he pagado {formatCurrency(t.amount)} a {nameOf(t.userId)}
+                </EqCta>
+            );
         } else if (incoming) {
             cta = (
                 <>
-                    <EqCta onClick={confirmIncoming} disabled={submitting} aria-busy={submitting}>
-                        Confirmar pago de {nameOf(t.userId)}
+                    <EqCta onClick={confirmIncoming} disabled={submitting} aria-busy={submitting} className={CTA_WRAP}>
+                        Sí, he recibido {formatCurrency(incoming.amount)} de {nameOf(t.userId)}
                     </EqCta>
                     <Link href={`/settle/${incoming.id}`} className="min-h-11 px-2 text-sm font-semibold text-primary inline-flex items-center">
                         {nameOf(t.userId)} dice que te ha pagado {formatCurrency(incoming.amount)} · ver
@@ -264,7 +279,11 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                 </>
             );
         } else {
-            cta = <EqCta onClick={theyPaid} disabled={submitting} aria-busy={submitting}>Ya me ha pagado</EqCta>;
+            cta = (
+                <EqCta onClick={theyPaid} disabled={submitting} aria-busy={submitting} className={CTA_WRAP}>
+                    {nameOf(t.userId)} ya me ha pagado {formatCurrency(t.amount)}
+                </EqCta>
+            );
         }
     }
     const canRemind = !archived && owed && !incoming;
@@ -281,7 +300,12 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                     </p>
                 )}
 
-                <ReceiptTicket className="mx-5 mt-4" data-testid="settle-ticket">
+                <div className="px-5 pt-3 flex flex-col gap-1" data-testid="settle-summary">
+                    <p className="text-[24px] font-bold tracking-[-0.02em] leading-tight text-balance">{headline}</p>
+                    {transferLine && <p className="text-[15px] text-muted-foreground" data-testid="settle-summary-transfer">{transferLine}</p>}
+                </div>
+
+                <ReceiptTicket className="mx-5" data-testid="settle-ticket">
                     <h2 className="text-[22px] font-bold tracking-[-0.02em] text-center">Cuenta de {space.name}</h2>
                     <p className="text-center text-muted-foreground font-mono text-[11px] -mt-1.5" data-testid="settle-ticket-meta">{meta}</p>
                     <TicketRule />
@@ -333,7 +357,11 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
 
                 {usesMethod && (
                     <div className="px-5">
-                        <MethodPicker value={method} onChange={setMethod} />
+                        <MethodPicker
+                            value={method}
+                            onChange={setMethod}
+                            label={t?.direction === "pay" ? "¿Cómo le has pagado?" : "¿Cómo te ha pagado?"}
+                        />
                     </div>
                 )}
 
@@ -357,6 +385,9 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
 }
 
 // ---- layout pieces ---------------------------------------------------------
+
+/** The CTAs carry a name and an amount: let a long one wrap instead of clipping. */
+const CTA_WRAP = "h-auto min-h-14 px-5 py-3 text-center leading-snug text-balance";
 
 function Screen({ children }: { children: React.ReactNode }) {
     return <div className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">{children}</div>;
@@ -474,8 +505,8 @@ function PendingList({ pending, me, nameOf }: { pending: PendingSettlement[]; me
                         href={`/settle/${p.id}`}
                         icon={<Clock className="h-[18px] w-[18px]" />}
                         iconTint={toMe}
-                        title={toMe ? `${nameOf(p.fromUserId)} te ha pagado` : `Pagaste a ${nameOf(p.toUserId)}`}
-                        sub={toMe ? "Te toca confirmarlo" : `Esperando a ${nameOf(p.toUserId)}`}
+                        title={toMe ? `${nameOf(p.fromUserId)} dice que te ha pagado` : `Pago a ${nameOf(p.toUserId)}`}
+                        sub={toMe ? "Te toca confirmarlo" : `Falta que ${nameOf(p.toUserId)} lo confirme`}
                         amount={formatCurrency(p.amount)}
                     />
                 );

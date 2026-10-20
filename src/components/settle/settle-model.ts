@@ -11,11 +11,11 @@ export type SettleMethod = "BIZUM" | "TRANSFER" | "CASH";
 
 export const SETTLE_METHODS: { value: SettleMethod; label: string; phrase: string }[] = [
     { value: "BIZUM", label: "Bizum", phrase: "por Bizum" },
-    { value: "TRANSFER", label: "Transfer.", phrase: "por transferencia" },
+    { value: "TRANSFER", label: "Transferencia", phrase: "por transferencia" },
     { value: "CASH", label: "Efectivo", phrase: "en efectivo" },
 ];
 
-/** Full method name for detail/history views ("Transferencia", not "Transfer."). */
+/** Full method name for detail/history views. */
 export function methodName(method: string): string {
     return getSettlementMethodLabel(method);
 }
