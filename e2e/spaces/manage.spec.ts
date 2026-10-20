@@ -111,9 +111,53 @@ test.describe('Spaces - Management', () => {
     await page.getByRole('button', { name: 'Opciones de User B' }).click();
     const rolePatch = page.waitForResponse((r) => r.url().includes('/members/') && r.request().method() === 'PATCH');
     await page.getByRole('button', { name: /^Propietario/ }).click();
+    await expect(page.getByTestId('owner-confirm')).toContainText('User B podrá cambiar roles');
+    await page.getByRole('button', { name: 'Hacer propietaria a User B' }).click();
     expect((await rolePatch).status()).toBe(200);
+    await expect(page.getByText('User B ahora es propietario')).toBeVisible();
     const left = await page.request.delete(`/api/spaces/${spaceId}/members/${userA.id}?force=1`);
     expect(left.status()).toBe(200);
+  });
+
+  test('removing a member: danger sheet before the DELETE; an open balance shows the debt instead', async ({ page }) => {
+    const data = await seedScenario(apiContext, 'couple-no-expenses');
+    const spaceId = data.coupleId as string;
+    const userB = data.userB as Creds;
+    await loginAs(page, data.userA as Creds); // OWNER, B at 0
+    await page.goto(`/spaces/${spaceId}`);
+
+    let deletes = 0;
+    page.on('request', (r) => {
+      if (r.method() === 'DELETE' && r.url().includes(`/members/${userB.id}`)) deletes++;
+    });
+    await page.getByRole('button', { name: 'Opciones de User B' }).click();
+    await page.getByTestId('member-remove').click();
+    const sheet = page.getByTestId('remove-sheet');
+    await expect(sheet).toContainText('Para volver necesitará un enlace nuevo.');
+    await expect(page.getByTestId('confirm-sheet-cancel')).toBeFocused();
+    await page.getByTestId('confirm-sheet-cancel').click();
+    await expect(sheet).toHaveCount(0);
+    expect(deletes).toBe(0);
+
+    await page.getByRole('button', { name: 'Opciones de User B' }).click();
+    await page.getByTestId('member-remove').click();
+    const removed = page.waitForResponse((r) => r.request().method() === 'DELETE' && r.url().includes(`/members/${userB.id}`));
+    await page.getByTestId('remove-sheet').getByTestId('confirm-sheet-confirm').click();
+    expect((await removed).status()).toBe(200);
+    await expect(page.getByText(/User B ya no está en/)).toBeVisible();
+    await expect(page.getByTestId('member-row')).toHaveCount(1);
+  });
+
+  test('a member who owes: the sheet shows the debt and the reminder, not the red button', async ({ page }) => {
+    const data = await seedScenario(apiContext, 'group-of-3');
+    const spaceId = data.coupleId as string;
+    await loginAs(page, data.userA as Creds); // OWNER, C owes 33,33 € (to A)
+    await page.goto(`/spaces/${spaceId}`);
+    await page.getByRole('button', { name: 'Opciones de User C' }).click();
+    const block = page.getByTestId('member-balance-block');
+    await expect(block).toContainText(/User C debe 33,33\s€ en este espacio/);
+    await expect(block.getByRole('button', { name: 'Recordarle la deuda a User C' })).toBeVisible();
+    await expect(page.getByTestId('member-remove')).toHaveCount(0);
   });
 
   test('archived space is read-only: no convert, no rename, no lifecycle actions', async ({ page }) => {

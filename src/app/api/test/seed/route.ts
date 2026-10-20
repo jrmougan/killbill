@@ -732,8 +732,8 @@ export async function POST(request: Request) {
       // Realistic data mirroring the EQUIL mockups (docs/design) for the Ralph UX
       // loop's screenshots (scripts/ralph): a couple "Casa" where Lucía owes Álvaro,
       // a 4-person trip "Lisboa" where Álvaro owes, budgets and a shared list.
-      const [alvaro, lucia, marta, pablo] = await createUsers(hashedPassword, ['alvaro', 'lucia', 'marta', 'pablo']);
-      const names: [typeof alvaro, string][] = [[alvaro, 'Álvaro'], [lucia, 'Lucía'], [marta, 'Marta'], [pablo, 'Pablo']];
+      const [alvaro, lucia, marta, pablo, sergio] = await createUsers(hashedPassword, ['alvaro', 'lucia', 'marta', 'pablo', 'sergio']);
+      const names: [typeof alvaro, string][] = [[alvaro, 'Álvaro'], [lucia, 'Lucía'], [marta, 'Marta'], [pablo, 'Pablo'], [sergio, 'Sergio']];
       // No emoji avatar: the mockups show the initial ("Á").
       await Promise.all(names.map(([u, name]) => prisma.user.update({ where: { id: u.id }, data: { name, avatar: null } })));
 
@@ -796,7 +796,9 @@ export async function POST(request: Request) {
       }
 
       const trip = [alvaro, lucia, marta, pablo];
-      const lisboa = await createSpace('Lisboa', [marta, alvaro, lucia, pablo], { type: 'GROUP' });
+      // Sergio joined the trip but shares no expense (balance 0): the member that
+      // can be removed straight away (CF-18 "hoja-quitar-miembro").
+      const lisboa = await createSpace('Lisboa', [marta, alvaro, lucia, pablo, sergio], { type: 'GROUP' });
       // Álvaro co-administers the trip, so Espacios shows him the "Invitar a Lisboa" card.
       await prisma.membership.update({
         where: { groupId_userId: { groupId: lisboa.id, userId: alvaro.id } },

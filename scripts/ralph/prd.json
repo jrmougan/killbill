@@ -890,8 +890,8 @@
         "e2e/spaces/manage.spec.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Quitar con hoja danger (remove-sheet); con saldo, cifra + 'Recordarle la deuda'/'Saldar deuda' según el plan simplificado (pairCents); 'Hacer propietaria a X' en línea; toasts. Lisboa con Sergio al día (5 personas)."
     },
     {
       "id": "CF-19",

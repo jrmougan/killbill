@@ -116,7 +116,23 @@ const SCREENS: Screen[] = [
       await page.waitForTimeout(600); // let the sheet finish sliding in
     },
   },
-  { id: 'espacio-detalle-grupo', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}` },
+  // Lucía debe 7,50 €: su hoja enseña la deuda y "Recordarle la deuda", no el botón rojo (CF-18).
+  {
+    id: 'espacio-detalle-grupo', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}`,
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Opciones de Lucía' }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  // Sergio está al día: "Quitar a Sergio del espacio" abre la hoja danger.
+  {
+    id: 'hoja-quitar-miembro', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}`,
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Opciones de Sergio' }).click();
+      await page.getByTestId('member-remove').click();
+      await page.waitForTimeout(600);
+    },
+  },
   { id: 'ajustes', scenario: 'ux-showcase', path: () => '/settings', design: '3a-ajustes' },
   { id: 'historial-pagos', scenario: 'ux-showcase', path: () => '/settle/history' },
   { id: 'historial-pagos-pendiente', scenario: 'ux-showcase', path: (d) => `/settle/history?space=${d.groupId}` },

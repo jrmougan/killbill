@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getGroupBalances } from "@/lib/ledger-read";
+import { resolveMyDebts } from "@/lib/finance";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
 import { capFor, hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
 import { MembershipStatus, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
@@ -74,6 +75,10 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
         prisma.settlement.count({ where: { coupleId: id, status: "PENDING" } }),
     ]);
 
+    // What I settle with each member in the simplified plan (the same matching
+    // /settle and /close use): they owe me (+) or I owe them (−).
+    const iOwe = resolveMyDebts(balances, userId);
+    const pairWith = (uid: string) => (resolveMyDebts(balances, uid)[userId] ?? 0) - (iOwe[uid] ?? 0);
     const members: SpaceMember[] = roster.map((m) => ({
         id: m.user.id,
         name: m.user.name,
@@ -81,6 +86,7 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
         role: m.role,
         isGuest: m.user.isGuest,
         balanceCents: balances[m.user.id] ?? 0,
+        pairCents: m.user.id === userId ? 0 : pairWith(m.user.id),
     }));
 
     const typeMeta = spaceTypeMeta(space.type);
@@ -138,6 +144,7 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                     <h2 id="members-title" className="text-xs font-semibold text-muted-foreground">Miembros ({members.length})</h2>
                     <MemberList
                         spaceId={space.id}
+                        spaceName={displayName}
                         members={members}
                         currentUserId={userId}
                         myRole={myMembership.role}

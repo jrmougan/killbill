@@ -418,3 +418,15 @@
   `e2e/spaces/lifecycle.spec.ts`, `scripts/ralph/capture.spec.ts`.
 - Aprendizajes: captura nueva `inicio-cerrando-al-dia` (group-settling en Inicio: OWNER al día → "Ver qué falta"). Los tests jsdom de
   componentes de servidor sin hooks (como el banner) se renderizan tal cual con `@testing-library/react`.
+
+## 2026-10-20 · CF-18 Quitar miembro y cambiar rol con confirmación
+- Corregido: "Quitar a X del espacio" (solo con saldo ≤ 1 céntimo) abre `remove-sheet` (`CriticalActionSheet` danger, "¿Quitar a X?", CTA
+  "Quitar a X") y el 409 HAS_BALANCE se pinta con `settleUrl`; con saldo, `member-balance-block` "X debe N en este espacio" / "A X le deben N"
+  con "Recordarle la deuda a X" (`member-remind`, share/portapapeles) y "Saldar deuda" (`member-settle`) si quien gestiona es su acreedor/deudor;
+  rol OWNER con confirmación en línea (`owner-confirm`, "Hacer propietaria a X"); separador Rol/acción; toasts "X ahora es {rol}" / "X ya no está en {espacio}".
+- Pendiente / fuera de alcance: deshacer al quitar (necesita endpoint restore).
+- Ficheros: `src/components/space/member-list.tsx`, `src/app/spaces/[id]/page.tsx`, `src/app/api/test/seed/route.ts`,
+  `scripts/ralph/capture.spec.ts`, `e2e/spaces/manage.spec.ts`.
+- Aprendizajes: `SpaceMember.pairCents` = lo que quien mira salda con ese miembro en el plan simplificado (`resolveMyDebts` en los dos
+  sentidos; + me debe, − le debo), calculado en `spaces/[id]/page.tsx`. `ux-showcase` tiene ahora a Sergio en Lisboa (saldo 0, 5 personas).
+  `espacio-detalle-grupo` se captura con la hoja de Lucía abierta; `hoja-quitar-miembro` abre la de Sergio y pulsa `member-remove`.
