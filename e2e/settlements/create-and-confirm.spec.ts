@@ -48,7 +48,20 @@ test.describe('Settlements - Create and Confirm', () => {
     const settleResponsePromise = pageB.waitForResponse(
       (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST'
     );
+    // The CTA only opens the review sheet; the POST waits for its own CTA.
+    let posted = false;
+    pageB.on('request', (r) => { if (new URL(r.url()).pathname === '/api/settle' && r.method() === 'POST') posted = true; });
     await pageB.getByRole('button', { name: /^Ya le he pagado/ }).click();
+    const review = pageB.getByTestId('settle-review-sheet');
+    await expect(review).toContainText('EQUIL no envía dinero: haz primero la transferencia desde tu banco.');
+    await expect(review).toContainText('Contará cuando User A confirme que lo ha recibido.');
+    await expect(pageB.getByTestId('confirm-sheet-cancel')).toHaveText('Todavía no');
+    await pageB.getByTestId('confirm-sheet-cancel').click();
+    await expect(review).toHaveCount(0);
+    expect(posted).toBe(false);
+    await pageB.getByRole('button', { name: /^Ya le he pagado/ }).click();
+    await expect(pageB.getByTestId('confirm-sheet-confirm')).toHaveText(/^Sí, ya le he pagado 50,00\s€$/);
+    await pageB.getByTestId('confirm-sheet-confirm').click();
     const settleResponse = await settleResponsePromise;
     expect(settleResponse.ok()).toBeTruthy();
     expect(settleResponse.request().postDataJSON()).toMatchObject({ toUserId: userA.id, amount: 50, method: 'TRANSFER' });
@@ -249,6 +262,11 @@ test.describe('Settlements - Create and Confirm', () => {
       (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST'
     );
     await pageA.getByRole('button', { name: /^User B ya me ha pagado 50,00\s€$/ }).click();
+    const review = pageA.getByTestId('settle-review-sheet');
+    await expect(pageA.getByRole('dialog', { name: /¿Has recibido 50,00\s€ de User B\?/ })).toBeVisible();
+    await expect(review).toContainText('Se dará por saldado al momento.');
+    await expect(review).toContainText('No se puede deshacer.');
+    await pageA.getByTestId('confirm-sheet-confirm').click();
     const res = await post;
     expect(res.ok()).toBeTruthy();
     expect((await res.json()).settlement.status).toBe('CONFIRMED');
@@ -299,6 +317,7 @@ test.describe('Settlements - Create and Confirm', () => {
       (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST'
     );
     await pageB.getByRole('button', { name: /^Ya le he pagado/ }).click();
+    await pageB.getByTestId('confirm-sheet-confirm').click();
     const res = await post;
     expect(res.ok()).toBeTruthy();
     expect(res.request().postDataJSON()).toMatchObject({ toUserId: userA.id, amount: 33.33 });

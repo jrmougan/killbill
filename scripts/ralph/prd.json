@@ -625,8 +625,8 @@
         "e2e/settlements/partial-and-scope.spec.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Hojas de revisión en /settle (deudor 'Antes de marcarlo como pagado' / acreedor '¿Has recibido…?' / entrante = hoja de CF-08 compartida en settle-review-sheet.tsx) con importe parcial editable y tope en línea; validación compartida con /settle/[id]/edit; e2e y capturas nuevas. Pendiente: el error 409 'stale' se pierde si el refresh deja el espacio al día."
     },
     {
       "id": "CF-11",

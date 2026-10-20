@@ -20,7 +20,11 @@ The prototype contradicts some existing product rules. These are the resolutions
   the person and the amount of the chosen transfer. "Ya le he pagado {importe}
   a {nombre}" creates a PENDING settlement ("Pendiente de que X confirme");
   "{nombre} ya me ha pagado {importe}" (creditor) confirms immediately, and an
-  incoming pending one is confirmed with "Sí, he recibido {importe} de {nombre}". Reminders use the share sheet (no
+  incoming pending one is confirmed with "Sí, he recibido {importe} de {nombre}".
+  No tap on /settle writes by itself: every CTA opens a review sheet (debtor:
+  "Antes de marcarlo como pagado" + "EQUIL no envía dinero…"; creditor: "¿Has
+  recibido {importe} de {nombre}?", no undo), with the amount editable for a
+  partial payment up to the transfer ("máx. {importe}"). Reminders use the share sheet (no
   push infra): "Recordarle la deuda" is creditor-only, and the debtor of a
   pending payment gets "Pedirle que lo confirme" instead. "Deuda saldada" is
   shown only right after a confirmed payment that leaves the balance at 0;

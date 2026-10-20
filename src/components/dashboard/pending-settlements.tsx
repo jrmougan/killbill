@@ -7,7 +7,7 @@ import { formatCurrency } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 import { getSettlementMethodLabel } from "@/lib/settlement-labels";
 import { useApiMutation } from "@/hooks/use-api-mutation";
-import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
+import { PendingPaymentSheet } from "@/components/settle/settle-review-sheet";
 import { EqToast, useEqToast } from "@/components/ui/eq";
 
 interface PendingSettlement {
@@ -162,69 +162,21 @@ export function PendingSettlements({ settlements, settling = false, myName }: Pe
                 </section>
             )}
 
-            {review && <ReviewSheet review={review} myName={myName} busy={busy} error={sheetError} onConfirm={submit} onClose={() => setReview(null)} />}
+            {review && (
+                <PendingPaymentSheet
+                    status={review.status}
+                    name={review.s.fromUser.name}
+                    myName={myName}
+                    amountCents={review.s.amount}
+                    method={review.s.method}
+                    owedCents={review.s.owedCents}
+                    busy={busy}
+                    error={sheetError}
+                    onConfirm={submit}
+                    onClose={() => setReview(null)}
+                />
+            )}
             {toast && <EqToast>{toast}</EqToast>}
         </>
-    );
-}
-
-function ReviewSheet({
-    review: { s, status },
-    myName,
-    busy,
-    error,
-    onConfirm,
-    onClose,
-}: {
-    review: Review;
-    myName: string;
-    busy: boolean;
-    error: string | null;
-    onConfirm: () => void;
-    onClose: () => void;
-}) {
-    const name = s.fromUser.name;
-    const amount = formatCurrency(s.amount);
-    if (status === "REJECTED") {
-        return (
-            <CriticalActionSheet
-                testId="reject-settlement-sheet"
-                tone="danger"
-                title={`¿No has recibido el pago de ${name}?`}
-                facts={[
-                    { label: "De", value: name },
-                    { label: "Importe", value: amount, emphasis: true },
-                    { label: "Método", value: getSettlementMethodLabel(s.method) },
-                ]}
-                consequences={[`La deuda de ${amount} seguirá pendiente y ${name} verá que no lo has recibido. Podrá registrarlo de nuevo.`]}
-                confirmLabel="Rechazar el pago"
-                busy={busy}
-                error={error}
-                errorHref={null}
-                onConfirm={onConfirm}
-                onClose={onClose}
-            />
-        );
-    }
-    const rest = Math.max(0, s.owedCents - s.amount);
-    return (
-        <CriticalActionSheet
-            testId="confirm-settlement-sheet"
-            title={`¿Has recibido ${amount} de ${name}?`}
-            facts={[
-                { label: "De", value: name },
-                { label: "Para", value: `${myName} (tú)` },
-                { label: "Importe", value: amount, emphasis: true },
-                { label: "Método", value: getSettlementMethodLabel(s.method) },
-            ]}
-            consequences={[rest > 0 ? `${name} aún te deberá ${formatCurrency(rest)}.` : `${name} dejará de deberte ${amount}.`]}
-            reversible={false}
-            confirmLabel={`Sí, he recibido ${amount}`}
-            busy={busy}
-            error={error}
-            errorHref={null}
-            onConfirm={onConfirm}
-            onClose={onClose}
-        />
     );
 }

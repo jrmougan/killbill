@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { EqCta, EqHeader } from "@/components/ui/eq";
 import { MethodPicker } from "@/components/settle/method-picker";
 import type { SettleMethod } from "@/components/settle/settle-model";
-import { parseEuroInput } from "@/lib/currency";
-import { MAX_SETTLEMENT_CENTS } from "@/lib/settlement-rules";
+import { settleAmountText, validateSettleAmount } from "@/components/settle/settle-amount";
 
 interface EditSettleClientProps {
     settlementId: string;
@@ -16,25 +15,15 @@ interface EditSettleClientProps {
     toName: string;
 }
 
-/** Strict es-ES amount → cents, or an error message for the field. */
-function validate(text: string): { cents: number | null; error: string | null } {
-    if (!text.trim()) return { cents: null, error: "Escribe un importe" };
-    const cents = parseEuroInput(text);
-    if (cents === null) return { cents: null, error: "Importe no válido. Usa, por ejemplo, 12,50" };
-    if (cents < 1) return { cents: null, error: "El importe debe ser de al menos 0,01 €" };
-    if (cents > MAX_SETTLEMENT_CENTS) return { cents: null, error: "El importe no puede superar 1.000.000 €" };
-    return { cents, error: null };
-}
-
 export function EditSettleClient({ settlementId, initialCents, initialMethod, toName }: EditSettleClientProps) {
     const router = useRouter();
-    const [amount, setAmount] = useState<string>((initialCents / 100).toFixed(2).replace(".", ","));
+    const [amount, setAmount] = useState<string>(settleAmountText(initialCents));
     const [method, setMethod] = useState<SettleMethod>(initialMethod);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const [touched, setTouched] = useState(false);
-    const check = validate(amount);
+    const check = validateSettleAmount(amount);
     const valid = check.cents !== null;
     const fieldError = touched ? check.error : null;
 

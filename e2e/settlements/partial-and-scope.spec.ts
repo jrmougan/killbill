@@ -37,6 +37,9 @@ test.describe('Settlements - partial payments, explicit space, archived, edit', 
     await page.goto('/settle');
     const patch = page.waitForResponse((r) => /\/api\/settle\/[^/]+\/status$/.test(new URL(r.url()).pathname));
     await page.getByRole('button', { name: /^Sí, he recibido .* de User B/ }).click();
+    // Same review sheet as "Lo he recibido" on Inicio.
+    await expect(page.getByTestId('confirm-settlement-sheet')).toContainText(/User B aún te deberá 30,00\s€/);
+    await page.getByTestId('confirm-sheet-confirm').click();
     const res = await patch;
     expect(res.ok()).toBeTruthy();
     expect(res.request().postDataJSON()).toEqual({ status: 'CONFIRMED', expectedAmountCents: 2000 });
@@ -51,6 +54,35 @@ test.describe('Settlements - partial payments, explicit space, archived, edit', 
     await expect(page.getByTestId('settle-ticket-meta')).toContainText('1 GASTO');
     await expect(page.getByTestId('settle-ticket-payments')).toContainText(/Pagos recibidos\s*−20,00\s*€/);
     await expect(page.getByTestId('settle-ticket-carry')).toHaveCount(0);
+  });
+
+  test('CF-10: a partial payment of 20 € from the review sheet leaves the rest owed; above the max is an inline error', async ({ request, newContext }) => {
+    const seed = await seedScenario(request, 'couple-with-debt');
+    const B = seed.userB as User;
+    const page = await (await as(newContext, seed.userA as User)).newPage();
+    const posts: unknown[] = [];
+    page.on('request', (r) => { if (new URL(r.url()).pathname === '/api/settle' && r.method() === 'POST') posts.push(r.postDataJSON()); });
+    await page.goto('/settle');
+    await page.getByRole('button', { name: /^User B ya me ha pagado 50,00\s€$/ }).click();
+
+    const amount = page.getByTestId('settle-review-amount');
+    await expect(amount).toHaveValue('50,00');
+    await expect(page.getByTestId('settle-review-sheet')).toContainText(/máx\. 50,00\s€/);
+    await amount.fill('60');
+    await expect(page.getByTestId('settle-review-amount-error')).toContainText(/No puede ser más de 50,00\s€/);
+    await expect(page.getByTestId('confirm-sheet-confirm')).toBeDisabled();
+    expect(posts).toEqual([]);
+
+    await amount.fill('20');
+    await expect(page.getByTestId('settle-review-sheet')).toContainText(/User B aún te deberá 30,00\s€/);
+    await expect(page.getByRole('dialog', { name: /¿Has recibido 20,00\s€ de User B\?/ })).toBeVisible();
+    const post = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/settle' && r.request().method() === 'POST');
+    await page.getByTestId('confirm-sheet-confirm').click();
+    const res = await post;
+    expect(res.ok()).toBeTruthy();
+    expect(res.request().postDataJSON()).toMatchObject({ fromUserId: B.id, amount: 20 });
+    await expect(page.getByTestId('settle-peace')).toContainText(/Pago registrado · aún te debe 30,00\s*€/);
+    expect(posts).toHaveLength(1);
   });
 
   test('opening /settle with nothing owed says "al día", never "Deuda saldada"', async ({ request, newContext }) => {
@@ -149,6 +181,7 @@ test.describe('Settlements - partial payments, explicit space, archived, edit', 
     const confirm = page.getByRole('button', { name: /^Sí, he recibido 20,00\s€ de / });
     await expect(confirm).toBeVisible();
     await confirm.click();
+    await page.getByTestId('confirm-sheet-confirm').click();
     await expect(page.getByTestId('settle-peace')).toContainText('Deuda saldada');
   });
 });

@@ -99,6 +99,21 @@ const SCREENS: Screen[] = [
       await page.waitForTimeout(600); // let the sheet finish sliding in
     },
   },
+  {
+    id: 'hoja-saldar-deudor', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.coupleId}`, asUserB: true,
+    act: async (page) => {
+      await page.getByRole('button', { name: /^Ya le he pagado/ }).click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  {
+    id: 'hoja-saldar-acreedor', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.coupleId}`,
+    act: async (page) => {
+      await page.getByRole('button', { name: /ya me ha pagado/ }).click();
+      await page.getByTestId('settle-review-amount').fill('20');
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
   { id: 'inicio-deudor', scenario: 'ux-showcase', path: () => '/dashboard', design: '2a-inicio', asUserB: true },
   { id: 'espacio-cerrando', scenario: 'space-settling', path: (d) => `/spaces/${d.coupleId}` },
   {

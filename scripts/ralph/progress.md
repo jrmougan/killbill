@@ -312,3 +312,18 @@
   `e2e/settlements/{create-and-confirm,partial-and-scope}.spec.ts`, `e2e/spaces/settle-up.spec.ts`.
 - Aprendizajes: `MethodPicker` también lo usa `/settle/[id]/edit` (label "Método"). A 360 px una tile de método mide ~101 px: "Transferencia"
   solo cabe a 13 px. Los e2e de /settle localizan los CTA por regex (`/^Ya le he pagado/`, `/ya me ha pagado/`, `/^Sí, he recibido .* de User B/`).
+
+## 2026-10-20 · CF-10 /settle: hoja de revisión antes de registrar o confirmar, con importe parcial
+- Corregido: ningún CTA de /settle escribe con un toque; abren `RecordSettlementSheet` (deudor "Antes de marcarlo como pagado", facts
+  De → Para / Importe editable / Método, "EQUIL no envía dinero: haz primero el {Bizum|la transferencia} desde tu banco." / "dale primero
+  el dinero en efectivo", "Avisaremos a X.", "Contará cuando X confirme…", CTA "Sí, ya le he pagado {importe}", Cancelar "Todavía no";
+  acreedor "¿Has recibido {importe} de X?", no reversible, CTA "Sí, lo he recibido") o `PendingPaymentSheet` (la de CF-08, ahora compartida
+  con Inicio) para el entrante; importe parcial con "máx. X", resto en las consecuencias y error en línea por encima del tope;
+  validación `validateSettleAmount` compartida con `/settle/[id]/edit`; capturas `hoja-saldar-deudor` y `hoja-saldar-acreedor`; e2e nuevo de parcial.
+- Pendiente / fuera de alcance: un 409 "stale" que deje el espacio al día pierde el mensaje de la hoja (pasa a la pantalla "al día").
+- Ficheros: `src/components/settle/{settle-review-sheet.tsx,settle-amount.ts,settle-amount.test.ts}`, `src/app/settle/client.tsx`,
+  `src/app/settle/[id]/edit/client.tsx`, `src/components/dashboard/pending-settlements.tsx`, `scripts/ralph/capture.spec.ts`, `docs/design/README.md`,
+  `e2e/settlements/{create-and-confirm,partial-and-scope}.spec.ts`, `e2e/spaces/settle-up.spec.ts`.
+- Aprendizajes: el `title` de `CriticalActionSheet` lo pinta `Sheet` fuera del div con `testId`: en e2e búscalo con
+  `getByRole('dialog', { name })`. `facts[].value` admite un nodo (aquí el `<input>` del importe con su "máx."). En /settle la hoja guarda
+  la transferencia en el estado `review` para no depender de `t` tras un `router.refresh()`.
