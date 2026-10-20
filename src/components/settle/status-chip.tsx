@@ -1,8 +1,11 @@
 import { cn } from "@/lib/utils";
-import { getSettlementStatusLabel } from "@/lib/settlement-labels";
+import { getSettlementChipLabel } from "@/lib/settlement-labels";
 
-/** Small status pill for a settlement (Pendiente / Confirmado / Rechazado). */
-export function SettlementStatusChip({ status, className }: { status: string; className?: string }) {
+/**
+ * Small status pill for a settlement (Pendiente de confirmar / Confirmado /
+ * Rechazado, or "No recibido" when `side="payer"` looks at a rejected one).
+ */
+export function SettlementStatusChip({ status, side, className }: { status: string; side?: "payer" | "receiver"; className?: string }) {
     return (
         <span
             data-status={status}
@@ -14,7 +17,7 @@ export function SettlementStatusChip({ status, className }: { status: string; cl
                 className
             )}
         >
-            {getSettlementStatusLabel(status)}
+            {getSettlementChipLabel(status, side)}
         </span>
     );
 }

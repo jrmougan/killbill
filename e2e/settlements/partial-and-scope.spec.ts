@@ -142,6 +142,8 @@ test.describe('Settlements - partial payments, explicit space, archived, edit', 
     await page.goto(`/settle/${id}/edit`);
     const input = page.getByLabel(/Importe pagado a/);
     const save = page.getByRole('button', { name: 'Guardar cambios' });
+    await expect(page.getByText(/^máx\. 50,00\s€$/)).toBeVisible();
+    await expect(page.getByTestId('settle-edit-notice')).toHaveText('User A tendrá que confirmar el nuevo importe.');
 
     for (const bad of ['abc', '0,004', '1.2.3', '0']) {
       await input.fill(bad);
@@ -149,15 +151,11 @@ test.describe('Settlements - partial payments, explicit space, archived, edit', 
       await expect(save).toBeDisabled();
     }
 
-    // "1.000,50" is 1.000,50 € (not 1 €): above the 50 € debt → the API refuses it.
+    // "1.000,50" is 1.000,50 € (not 1 €): above the 50 € debt → inline error
+    // (the cap is the "máx." under the field), nothing reaches the API.
     await input.fill('1.000,50');
-    await expect(save).toBeEnabled();
-    const patch = page.waitForResponse((r) => new URL(r.url()).pathname === `/api/settle/${id}` && r.request().method() === 'PATCH');
-    await save.click();
-    const res = await patch;
-    expect(res.request().postDataJSON()).toMatchObject({ amount: 1000.5 });
-    expect(res.status()).toBe(409);
-    await expect(page.getByText(/supera la deuda pendiente/)).toBeVisible();
+    await expect(page.getByTestId('settle-amount-error')).toHaveText(/No puede ser más de 50,00\s€/);
+    await expect(save).toBeDisabled();
 
     await input.fill('12,50');
     await save.click();

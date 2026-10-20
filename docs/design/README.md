@@ -18,7 +18,7 @@ The prototype contradicts some existing product rules. These are the resolutions
   who owes whom ("Lucía te debe 79,30 €" / "Le debes 79,30 € a Álvaro"; in a
   group "Debes 7,50 € en total" + "Le pagas 7,50 € a Marta"), and the CTAs carry
   the person and the amount of the chosen transfer. "Ya le he pagado {importe}
-  a {nombre}" creates a PENDING settlement ("Pendiente de que X confirme");
+  a {nombre}" creates a PENDING settlement ("Falta que X confirme que lo ha recibido");
   "{nombre} ya me ha pagado {importe}" (creditor) confirms immediately, and an
   incoming pending one is confirmed with "Sí, he recibido {importe} de {nombre}".
   No tap on /settle writes by itself: every CTA opens a review sheet (debtor:
@@ -29,6 +29,13 @@ The prototype contradicts some existing product rules. These are the resolutions
   pending payment gets "Pedirle que lo confirme" instead. "Deuda saldada" is
   shown only right after a confirmed payment that leaves the balance at 0;
   opening /settle with nothing owed says "Estáis al día" / "Ya estás al día".
+  The payment detail (/settle/[id]) speaks in the present while PENDING ("Pago
+  a X · por confirmar" / "X dice que te ha pagado", chip "Pendiente de
+  confirmar") and in the past only once CONFIRMED; a REJECTED payment reads "No
+  recibido" to the payer (with "Saldar deuda") and "Rechazado" to the
+  receiver. Confirm/reject there open the same review sheets as Inicio, and
+  editing a pending payment shows "máx. {deuda}" and "X tendrá que confirmar
+  el nuevo importe". The list of all payments is "Historial de pagos".
 - **Add expense**: the numpad quick flow (equal / only me / only them) is the
   default; "Más opciones" exposes custom splits, tags, date and recurrence.
 - **Spaces**: Pareja→COUPLE, Piso→GROUP, Viaje→EPHEMERAL (only when

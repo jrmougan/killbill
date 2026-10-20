@@ -339,3 +339,21 @@
 - Ficheros: `src/app/settle/{client,page}.tsx`, `scripts/ralph/capture.spec.ts`, `e2e/settlements/create-and-confirm.spec.ts`, `e2e/spaces/settle-up.spec.ts`.
 - Aprendizajes: `resolveSettleSpace` ya devuelve `auth.role`/`auth.isGuest` (DB, no JWT). `Done` lleva ahora `id/name/amount/method` en ambos
   tipos; compartir va por `share(title, text, path)` (navigator.share → portapapeles + toast). Los e2e del éxito del deudor buscan "Avisado a User A".
+
+## 2026-10-20 · CF-12 Detalle del pago, acciones sin window.confirm, rechazado explicado, edición e historial
+- Corregido: titular de `/settle/[id]` en presente mientras está PENDING ("Pago a X · por confirmar" / "X dice que te ha pagado"), pasado
+  solo en CONFIRMED ("Confirmaste que lo recibiste. Ya cuenta en el saldo." / "X confirmó que lo recibió."); chip por lado
+  (`getSettlementChipLabel`: "Pendiente de confirmar", "No recibido" al pagador, "Rechazado" al receptor); `SettlementActions` con
+  "Sí, he recibido {importe}" / "No lo he recibido" → `PendingPaymentSheet` (sin `window.confirm`); deudor con `AskToConfirmButton`
+  ("Pedirle que lo confirme") y nota provisional; REJECTED al deudor con su deuda actual y CTA "Saldar deuda" (`settlement-settle`);
+  edición con "máx. {deuda}" (cap en `validateSettleAmount`) y `settle-edit-notice`; "Historial de pagos", "Confírmalo cuando lo recibas"
+  (también en /settle), "Esperando a X"; capturas nuevas `pago-detalle-acreedor`, `pago-rechazado`, `pago-editar`, `historial-pagos-pendiente`.
+- Pendiente / fuera de alcance: un 409 de un pago ya resuelto desmonta las acciones y su mensaje; "€" lejos de la cifra en Editar pago;
+  "Anular el pago" necesita backend.
+- Ficheros: `src/app/settle/[id]/{page.tsx,edit/page.tsx,edit/client.tsx}`, `src/app/settle/{history/page.tsx,client.tsx}`,
+  `src/components/settle/{settlement-actions,status-chip}.tsx`, `src/lib/settlement-labels.ts`, `src/app/api/test/seed/route.ts`,
+  `scripts/ralph/capture.spec.ts`, `docs/design/README.md`, `e2e/settlements/{create-and-confirm,partial-and-scope}.spec.ts`.
+- Aprendizajes: lo que el pagador debe al receptor ahora = `resolveMyDebts(await getGroupBalances(groupId), fromId)[toId]` (un PENDING o
+  REJECTED no está en el ledger). `capture.spec.ts` admite `as: (d) => d.userC` para entrar como otro usuario; `ux-showcase` expone
+  `userC` (Marta, receptora de `settlementId`) y `rejectedSettlementId` (Lucía → Álvaro, 15 €). Con el tope en Editar pago, el e2e S-09
+  ya no llega al 409 SETTLEMENT_EXCEEDS_DEBT: comprueba el error en línea.

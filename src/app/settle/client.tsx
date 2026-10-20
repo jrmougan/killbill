@@ -612,7 +612,7 @@ function PendingList({ pending, me, nameOf }: { pending: PendingSettlement[]; me
                         icon={<Clock className="h-[18px] w-[18px]" />}
                         iconTint={toMe}
                         title={toMe ? `${nameOf(p.fromUserId)} dice que te ha pagado` : `Pago a ${nameOf(p.toUserId)}`}
-                        sub={toMe ? "Te toca confirmarlo" : `Falta que ${nameOf(p.toUserId)} lo confirme`}
+                        sub={toMe ? "Confírmalo cuando lo recibas" : `Falta que ${nameOf(p.toUserId)} lo confirme`}
                         amount={formatCurrency(p.amount)}
                     />
                 );

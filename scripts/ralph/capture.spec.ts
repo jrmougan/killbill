@@ -24,6 +24,8 @@ type Screen = {
   keepWelcome?: boolean;
   /** Log in as the seed's second user (default: userA). */
   asUserB?: boolean;
+  /** Log in as another user of the seed (e.g. `d.userC`); wins over `asUserB`. */
+  as?: (d: SeedResult) => unknown;
   /** Interaction run before the screenshots (e.g. type an amount, open a sheet). */
   act?: (page: Page) => Promise<void>;
   /** Space pinned as active (`active_group` cookie); default: the seed's `coupleId`. */
@@ -54,6 +56,12 @@ const SCREENS: Screen[] = [
   { id: 'quedar-en-paz-deudor', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.coupleId}`, design: '2a-quedar-en-paz-ticket', asUserB: true },
   { id: 'quedar-en-paz-pendiente', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.groupId}` },
   { id: 'pago-detalle', scenario: 'ux-showcase', path: (d) => `/settle/${d.settlementId}` },
+  {
+    id: 'pago-detalle-acreedor', scenario: 'ux-showcase', path: (d) => `/settle/${d.settlementId}`,
+    as: (d) => d.userC, activeGroup: (d) => d.groupId as string,
+  },
+  { id: 'pago-rechazado', scenario: 'ux-showcase', path: (d) => `/settle/${d.rejectedSettlementId}`, asUserB: true },
+  { id: 'pago-editar', scenario: 'ux-showcase', path: (d) => `/settle/${d.settlementId}/edit` },
   { id: 'gastos', scenario: 'ux-showcase', path: () => '/expenses/list', design: '3a-gastos' },
   { id: 'gasto-detalle', scenario: 'ux-showcase', path: (d) => `/expense/${d.expenseId}` },
   { id: 'mes-presupuestos', scenario: 'ux-showcase', path: () => '/month', design: '3a-mes-presupuestos' },
@@ -80,6 +88,7 @@ const SCREENS: Screen[] = [
   { id: 'espacio-detalle-grupo', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}` },
   { id: 'ajustes', scenario: 'ux-showcase', path: () => '/settings', design: '3a-ajustes' },
   { id: 'historial-pagos', scenario: 'ux-showcase', path: () => '/settle/history' },
+  { id: 'historial-pagos-pendiente', scenario: 'ux-showcase', path: (d) => `/settle/history?space=${d.groupId}` },
   { id: 'bienvenida', scenario: 'solo-user', path: () => '/welcome', design: '3a-bienvenida', keepWelcome: true },
   { id: 'inicio-vacio', scenario: 'couple-no-expenses', path: () => '/dashboard' },
   { id: 'saldar-al-dia', scenario: 'couple-no-expenses', path: () => '/settle' },
@@ -186,7 +195,7 @@ for (const screen of SCREENS.filter((s) => !only?.length || only.includes(s.id))
     page.on('pageerror', (e) => consoleErrors.push(String(e)));
 
     const data = await seed(screen.scenario);
-    const user = screen.asUserB ? data.userB : data.userA ?? data.user;
+    const user = (screen.as?.(data) ?? (screen.asUserB ? data.userB : data.userA ?? data.user)) as { email: string; password: string } | undefined;
     if (!screen.anonymous) {
       await login(page, user!, !!screen.keepWelcome);
       // Pin the space the screen is about (the active_group cookie otherwise picks the primary one).

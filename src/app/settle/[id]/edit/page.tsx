@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import { redirect, notFound } from "next/navigation";
 import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
+import { getGroupBalances } from "@/lib/ledger-read";
+import { resolveMyDebts } from "@/lib/finance";
 import { EditSettleClient } from "./client";
 
 export const dynamic = 'force-dynamic';
@@ -29,12 +31,17 @@ export default async function EditSettlePage({ params }: EditSettlePageProps) {
         redirect(`/settle/${id}`);
     }
 
+    // What I owe the receiver now (this PENDING payment is not in the ledger
+    // yet): the cap under the amount, same as the /settle review sheet.
+    const debtCents = resolveMyDebts(await getGroupBalances(settlement.coupleId), ctx.userId)[settlement.toUserId] ?? 0;
+
     return (
         <EditSettleClient
             settlementId={id}
             initialCents={settlement.amount}
             initialMethod={settlement.method}
             toName={settlement.toUser.name}
+            maxCents={debtCents > 0 ? debtCents : undefined}
         />
     );
 }

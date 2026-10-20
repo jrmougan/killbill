@@ -6,6 +6,7 @@ import { EqCta, EqHeader } from "@/components/ui/eq";
 import { MethodPicker } from "@/components/settle/method-picker";
 import type { SettleMethod } from "@/components/settle/settle-model";
 import { settleAmountText, validateSettleAmount } from "@/components/settle/settle-amount";
+import { formatCurrency } from "@/lib/currency";
 
 interface EditSettleClientProps {
     settlementId: string;
@@ -13,9 +14,11 @@ interface EditSettleClientProps {
     initialCents: number;
     initialMethod: SettleMethod;
     toName: string;
+    /** What I owe `toName` now (cents): the cap. Undefined when nothing is owed any more. */
+    maxCents?: number;
 }
 
-export function EditSettleClient({ settlementId, initialCents, initialMethod, toName }: EditSettleClientProps) {
+export function EditSettleClient({ settlementId, initialCents, initialMethod, toName, maxCents }: EditSettleClientProps) {
     const router = useRouter();
     const [amount, setAmount] = useState<string>(settleAmountText(initialCents));
     const [method, setMethod] = useState<SettleMethod>(initialMethod);
@@ -23,7 +26,7 @@ export function EditSettleClient({ settlementId, initialCents, initialMethod, to
     const [error, setError] = useState<string | null>(null);
 
     const [touched, setTouched] = useState(false);
-    const check = validateSettleAmount(amount);
+    const check = validateSettleAmount(amount, maxCents);
     const valid = check.cents !== null;
     const fieldError = touched ? check.error : null;
 
@@ -69,16 +72,18 @@ export function EditSettleClient({ settlementId, initialCents, initialMethod, to
                             onChange={(e) => { setAmount(e.target.value); setTouched(true); }}
                             onBlur={() => setTouched(true)}
                             aria-invalid={!!fieldError}
-                            aria-describedby={fieldError ? "settle-amount-error" : undefined}
+                            aria-describedby={fieldError ? "settle-amount-error" : maxCents !== undefined ? "settle-amount-max" : undefined}
                             className="w-[200px] bg-transparent text-center text-[44px] font-bold tracking-[-0.03em] tabular-nums outline-none border-b border-[color:var(--line)] focus:border-primary transition-colors"
                             placeholder="0,00"
                         />
                         <span className="text-[28px] font-bold text-muted-foreground">€</span>
                     </div>
-                    {fieldError && (
+                    {fieldError ? (
                         <p id="settle-amount-error" role="alert" className="text-[13px] text-destructive" data-testid="settle-amount-error">{fieldError}</p>
+                    ) : maxCents !== undefined && (
+                        <p id="settle-amount-max" className="text-[13px] text-muted-foreground">máx. {formatCurrency(maxCents)}</p>
                     )}
-                    <p className="text-[13px] text-muted-foreground">Seguirá pendiente hasta que {toName} lo confirme.</p>
+                    <p className="text-[13px] text-muted-foreground" data-testid="settle-edit-notice">{toName} tendrá que confirmar el nuevo importe.</p>
                 </div>
 
                 <MethodPicker value={method} onChange={setMethod} label="Método" />

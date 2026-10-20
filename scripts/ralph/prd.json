@@ -699,8 +699,8 @@
         "src/app/api/test/seed/route.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Detalle en presente mientras está PENDING, chips por lado (No recibido/Rechazado), hojas de CF-08 sin window.confirm, 'Pedirle que lo confirme' y nota provisional, rechazado con 'Saldar deuda', edición con 'máx.' y aviso, 'Historial de pagos'; pendiente: 409 de un pago ya resuelto pierde el mensaje, '€' lejos en Editar pago."
     },
     {
       "id": "CF-13",

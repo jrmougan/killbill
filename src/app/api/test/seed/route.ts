@@ -728,7 +728,7 @@ export async function POST(request: Request) {
       });
       // This week Lucía said she paid 15 € in cash and Álvaro said he never got it:
       // her Inicio lists it under Recientes as "Álvaro no lo recibió" (CF-06).
-      await prisma.settlement.create({
+      const rejectedPayment = await prisma.settlement.create({
         data: {
           coupleId: casa.id, fromUserId: lucia.id, toUserId: alvaro.id, amount: 1500,
           method: 'CASH', status: 'REJECTED', date: daysAgo(2), createdAt: daysAgo(2), updatedAt: daysAgo(1),
@@ -819,6 +819,9 @@ export async function POST(request: Request) {
         expenseId: casaIds[0],
         listId: list.id,
         settlementId: pendingPayment.id,
+        // Marta receives settlementId (the creditor's view of the detail).
+        userC: creds(marta, PASSWORD),
+        rejectedSettlementId: rejectedPayment.id,
       });
     }
 

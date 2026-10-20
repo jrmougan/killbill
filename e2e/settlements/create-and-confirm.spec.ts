@@ -224,7 +224,9 @@ test.describe('Settlements - Create and Confirm', () => {
     const pageB = await ctxB.newPage();
     await pageB.goto(`/settle/${settlementId}`);
     await expect(pageB.getByTestId('settlement-amount')).toHaveText(/50,00\s*€/);
-    await expect(pageB.getByText('Pendiente de que User A confirme.', { exact: false })).toBeVisible();
+    await expect(pageB.getByText('Pago a User A · por confirmar')).toBeVisible();
+    await expect(pageB.getByText('Falta que User A confirme que lo ha recibido.')).toBeVisible();
+    await expect(pageB.getByTestId('settlement-ask-confirm')).toHaveText('Pedirle que lo confirme');
     await expect(pageB.getByRole('button', { name: /Confirmar/ })).toHaveCount(0);
     await expect(pageB.getByRole('link', { name: 'Editar' })).toBeVisible();
     await ctxB.close();
@@ -232,14 +234,18 @@ test.describe('Settlements - Create and Confirm', () => {
     const ctxA = await createAuthenticatedContext(newContext, userA);
     const pageA = await ctxA.newPage();
     await pageA.goto(`/settle/${settlementId}`);
-    await expect(pageA.getByText('User B te pagó')).toBeVisible();
+    await expect(pageA.getByText('User B dice que te ha pagado', { exact: true })).toBeVisible();
+    await expect(pageA.locator('[data-status="PENDING"]')).toHaveText('Pendiente de confirmar');
     const patch = pageA.waitForResponse(
       (res) => res.url().endsWith(`/api/settle/${settlementId}/status`) && res.request().method() === 'PATCH'
     );
-    await pageA.getByRole('button', { name: 'Confirmar, lo he recibido' }).click();
+    await pageA.getByRole('button', { name: /^Sí, he recibido 50,00/ }).click();
+    await pageA.getByTestId('confirm-sheet-confirm').click();
     expect((await patch).ok()).toBeTruthy();
+    await expect(pageA.getByText('User B te pagó')).toBeVisible();
+    await expect(pageA.getByText('Confirmaste que lo recibiste. Ya cuenta en el saldo.')).toBeVisible();
     await expect(pageA.locator('[data-status="CONFIRMED"]')).toHaveText('Confirmado');
-    await expect(pageA.getByRole('button', { name: /Confirmar/ })).toHaveCount(0);
+    await expect(pageA.getByRole('button', { name: /recibido/ })).toHaveCount(0);
 
     // History lists it as confirmed.
     await pageA.goto('/settle/history');

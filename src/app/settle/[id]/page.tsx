@@ -11,9 +11,12 @@ import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
 import { spaceTypeMeta } from "@/lib/space-ui";
 import { EqCard, EqLabel, EqRow } from "@/components/ui/eq";
 import { SettleHeader } from "@/components/settle/settle-header";
-import { SettlementActions } from "@/components/settle/settlement-actions";
+import { AskToConfirmButton, SettlementActions } from "@/components/settle/settlement-actions";
 import { SettlementStatusChip } from "@/components/settle/status-chip";
 import { methodName } from "@/components/settle/settle-model";
+import { getGroupBalances } from "@/lib/ledger-read";
+import { resolveMyDebts } from "@/lib/finance";
+import { settleUrlFor } from "@/lib/space-policy";
 
 export const dynamic = 'force-dynamic';
 
@@ -65,18 +68,43 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
 
     const fromName = iPay ? "Tú" : settlement.fromUser.name;
     const toName = iReceive ? "Tú" : settlement.toUser.name;
+    const payer = settlement.fromUser.name;
+    const receiver = settlement.toUser.name;
+    const rejected = settlement.status === "REJECTED";
+    const confirmed = settlement.status === "CONFIRMED";
+    // Only a CONFIRMED payment is worded as done: a pending one is still a
+    // claim and a rejected one never happened (glossary, plan-acciones-criticas).
     const headline = iPay
-        ? `Pagaste a ${settlement.toUser.name}`
+        ? confirmed ? `Pagaste a ${receiver}` : isPending ? `Pago a ${receiver} · por confirmar` : `Pago a ${receiver}`
         : iReceive
-            ? `${settlement.fromUser.name} te pagó`
-            : `${settlement.fromUser.name} pagó a ${settlement.toUser.name}`;
+            ? confirmed ? `${payer} te pagó` : isPending ? `${payer} dice que te ha pagado` : `Pago de ${payer}`
+            : confirmed ? `${payer} pagó a ${receiver}` : `Pago de ${payer} a ${receiver}`;
     const spaceName = settlement.couple.name ?? spaceTypeMeta(settlement.couple.type).label;
+    const amount = formatCurrency(settlement.amount);
+
+    // What the payer owes the receiver right now (a PENDING or REJECTED payment
+    // is not in the ledger): the receiver's confirm sheet and the payer's
+    // "Tu deuda de X sigue pendiente" after a rejection.
+    const needsDebt = canResolve || (rejected && iPay);
+    const owedCents = needsDebt
+        ? resolveMyDebts(await getGroupBalances(settlement.coupleId), settlement.fromUserId)[settlement.toUserId] ?? 0
+        : 0;
+    const canSettleRejected = rejected && iPay && !archived && owedCents > 0;
 
     let explanation: string | null = null;
-    if (isPending && iReceive) explanation = `${settlement.fromUser.name} dice que te ha pagado. Confírmalo cuando lo hayas recibido: hasta entonces no cuenta en el saldo.`;
-    else if (isPending && iPay) explanation = `Pendiente de que ${settlement.toUser.name} confirme. Contará en el saldo cuando lo haga.`;
-    else if (isPending) explanation = `Pendiente de que ${settlement.toUser.name} confirme.`;
-    else if (settlement.status === "REJECTED") explanation = "Este pago se rechazó y no cuenta en el saldo.";
+    let note: string | null = null;
+    if (isPending && iReceive) explanation = `${payer} dice que te ha pagado. Confírmalo cuando lo hayas recibido: hasta entonces la deuda sigue pendiente.`;
+    else if (isPending && iPay) {
+        explanation = `Falta que ${receiver} confirme que lo ha recibido.`;
+        if (!archived) note = `Si te has equivocado, edítalo o pide a ${receiver} que lo rechace.`;
+    } else if (isPending) explanation = `Falta que ${receiver} confirme que lo ha recibido.`;
+    else if (confirmed && iReceive) explanation = "Confirmaste que lo recibiste. Ya cuenta en el saldo.";
+    else if (confirmed) explanation = `${receiver} confirmó que lo recibió.`;
+    else if (rejected && iPay) {
+        explanation = `${receiver} indicó que no recibió este pago.`;
+        if (owedCents > 0) explanation += ` Tu deuda de ${formatCurrency(owedCents)} sigue pendiente.`;
+    } else if (rejected && iReceive) explanation = `Indicaste que no recibiste este pago. La deuda de ${payer} sigue pendiente.`;
+    else if (rejected) explanation = `${receiver} indicó que no recibió este pago.`;
     if (isPending && archived) explanation = `${explanation ?? ""} El espacio está archivado: ya no se puede confirmar ni editar.`.trim();
 
     // Legacy settlements may link covered expenses (pre running-balance model).
@@ -100,11 +128,14 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                 <section className="flex flex-col items-center gap-2 text-center" data-testid="settlement-summary">
                     <span className="text-[15px] text-muted-foreground">{headline}</span>
                     <span className="text-[length:clamp(30px,11vw,44px)] font-bold tracking-[-0.03em] tabular-nums leading-none" data-testid="settlement-amount">
-                        {formatCurrency(settlement.amount)}
+                        {amount}
                     </span>
-                    <SettlementStatusChip status={settlement.status} className="mt-1" />
+                    <SettlementStatusChip status={settlement.status} side={iPay ? "payer" : "receiver"} className="mt-1" />
                     {explanation && (
-                        <p className="text-sm text-muted-foreground leading-[1.45] text-pretty max-w-[300px] mt-1">{explanation}</p>
+                        <p className="text-sm text-muted-foreground leading-[1.45] text-pretty max-w-[300px] mt-1" data-testid="settlement-explanation">{explanation}</p>
+                    )}
+                    {note && (
+                        <p className="text-[13px] text-muted-foreground leading-[1.45] text-pretty max-w-[300px]" data-testid="settlement-note">{note}</p>
                     )}
                 </section>
 
@@ -144,7 +175,26 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
 
             {canResolve && (
                 <div className="px-5 pb-[max(env(safe-area-inset-bottom),30px)]">
-                    <SettlementActions id={settlement.id} fromName={settlement.fromUser.name} amountCents={settlement.amount} />
+                    <SettlementActions
+                        id={settlement.id}
+                        fromName={payer}
+                        myName={receiver}
+                        amountCents={settlement.amount}
+                        method={settlement.method}
+                        owedCents={owedCents}
+                    />
+                </div>
+            )}
+            {canEdit && (
+                <div className="px-5 pb-[max(env(safe-area-inset-bottom),30px)]">
+                    <AskToConfirmButton id={settlement.id} toName={receiver} amountCents={settlement.amount} method={settlement.method} spaceName={spaceName} />
+                </div>
+            )}
+            {canSettleRejected && (
+                <div className="px-5 pb-[max(env(safe-area-inset-bottom),30px)]">
+                    <Link href={settleUrlFor(settlement.coupleId)} data-testid="settlement-settle" className="w-full h-14 rounded-[18px] bg-primary text-primary-foreground text-base font-semibold flex items-center justify-center transition-transform active:scale-[0.98]">
+                        Saldar deuda
+                    </Link>
                 </div>
             )}
         </div>
