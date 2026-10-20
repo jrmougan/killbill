@@ -91,3 +91,15 @@
 - Aprendizajes: en el SVG de saldo las x van en unidades de `viewBox`; para alinear HTML debajo usa `left: x/W·100%`
   con `-translate-x-1/2`. `month.spec.ts` busca "100%" exacto en el panel: no pongas porcentajes en las etiquetas de barra.
   e2e de Análisis: `e2e/features/month.spec.ts`, `e2e/mobile/overflow.spec.ts` ("month analysis").
+
+## 2026-10-20 · UX-07 Listas de la compra
+- Corregido: casilla de cada artículo con zona táctil de 44×44 (label con `-ml-2.5 pl-2.5`, carro con `min-h-11`); chips de
+  lista y "+ Nueva" con `EqChip touch`; ⋯ de opciones, botón + y campo "Añadir producto" a 44 px; aviso de duplicado
+  (✕, "Sumar 1", "Añadir igualmente") a 44 px; cantidad de los artículos del carro en `--ink-3` (era ilegible);
+  `ux-showcase` con lista personal "Farmacia" para ver "Común primero, luego Personal".
+- Pendiente / fuera de alcance: "×2" a la derecha y avatar del autor del mockup (la cantidad lleva unidad/nota; no se guarda
+  el autor por artículo); pasillos y ⋯ se mantienen por decisión de producto.
+- Ficheros: `src/components/shopping/{lists-hub,add-item-input,shopping-item-row}.tsx`, `src/components/ui/eq.tsx`,
+  `src/app/api/test/seed/route.ts`.
+- Aprendizajes: `EqChip touch` metía `block` después del `className` y `twMerge` anulaba un `flex` del llamante (truncado de
+  nombres largos); ahora el `block` va primero. e2e de Listas: `e2e/shopping/{ui,lifecycle}.spec.ts`.

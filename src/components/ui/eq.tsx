@@ -99,7 +99,7 @@ export function EqChip({
             className={touch ? "group flex-none min-w-0 min-h-11 flex items-center outline-none" : pill}
             {...props}
         >
-            {touch ? <span className={cn(pill, "block group-focus-visible:ring-2 group-focus-visible:ring-ring")}>{children}</span> : children}
+            {touch ? <span className={cn("block", pill, "group-focus-visible:ring-2 group-focus-visible:ring-ring")}>{children}</span> : children}
         </button>
     );
 }

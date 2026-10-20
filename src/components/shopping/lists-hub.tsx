@@ -346,6 +346,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
         <EqChip
             key={l.id}
             selected={l.id === selected?.id}
+            touch
             onClick={() => openList(l.id)}
             aria-label={`${l.name}, ${scopeLabel}, ${chipCount(l)} pendientes`}
             // Capped width: a long name truncates but the pending count stays visible.
@@ -365,13 +366,13 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                             type="button"
                             onClick={() => setSheet({ kind: "menu" })}
                             aria-label={`Opciones de ${selected.name}`}
-                            className="h-9 w-9 -mr-1.5 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                            className="h-11 w-11 -my-1 -mr-2.5 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
                         >
                             <MoreHorizontal className="h-[22px] w-[22px]" />
                         </button>
                     )}
                 </EqHeader>
-                <div ref={chipsRef} className="eq-scroll flex items-center gap-1.5 overflow-x-auto px-5">
+                <div ref={chipsRef} className="eq-scroll -my-1 flex items-center gap-1.5 overflow-x-auto px-5">
                     {groupLists.map((l) => chip(l, "común"))}
                     {groupId && personalLists.length > 0 && (
                         <span className="flex-none flex items-center gap-1.5 pl-1 pr-0.5 text-[11.5px] font-semibold text-[color:var(--ink-3)]">
@@ -380,7 +381,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                         </span>
                     )}
                     {personalLists.map((l) => chip(l, "personal"))}
-                    <EqChip tone="add" onClick={() => setSheet({ kind: "new" })}>
+                    <EqChip tone="add" touch onClick={() => setSheet({ kind: "new" })}>
                         + Nueva
                     </EqChip>
                 </div>
@@ -416,15 +417,16 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                                     type="button"
                                     aria-label="Descartar"
                                     onClick={() => setDup(null)}
-                                    className="-mr-1.5 -mt-1 h-9 w-9 flex-none flex items-center justify-center text-muted-foreground"
+                                    className="-mr-3 -mt-2.5 -mb-1.5 h-11 w-11 flex-none flex items-center justify-center text-muted-foreground"
                                 >
                                     <X className="h-4 w-4" />
                                 </button>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="-my-1 flex gap-2">
                                 <EqChip
                                     tone="accent"
                                     selected
+                                    touch
                                     onClick={async () => {
                                         const d = dup;
                                         setDup(null);
@@ -440,6 +442,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                                     Sumar 1
                                 </EqChip>
                                 <EqChip
+                                    touch
                                     onClick={async () => {
                                         const d = dup;
                                         setDup(null);

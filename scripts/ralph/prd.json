@@ -132,8 +132,8 @@
         "Pendientes agrupados por pasillo (se mantienen aunque el mockup sea plano) y \"En el carro\" separado",
         "\"Terminar y apuntar gasto\" visible y comprensible"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Casillas, chips, ⋯, + y campo de añadir a 44 px; cantidad del carro legible; ux-showcase con lista personal Farmacia. Fuera: \"×2\"/avatar del mockup, pasillos se mantienen."
     },
     {
       "id": "UX-08",

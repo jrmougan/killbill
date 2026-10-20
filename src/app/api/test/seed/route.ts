@@ -785,6 +785,18 @@ export async function POST(request: Request) {
           },
         },
       });
+      // Personal list so the chips show "Común first, then Personal".
+      await prisma.shoppingList.create({
+        data: {
+          name: 'Farmacia', ownerId: alvaro.id, createdById: alvaro.id,
+          items: {
+            create: [
+              { name: 'Ibuprofeno', quantity: 1, unit: 'caja', sortOrder: 0 },
+              { name: 'Crema solar', sortOrder: 1 },
+            ],
+          },
+        },
+      });
 
       return NextResponse.json({
         userA: creds(alvaro, PASSWORD),
