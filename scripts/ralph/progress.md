@@ -369,3 +369,16 @@
 - Aprendizajes: `space-archived` lleva ahora un PENDING de 10 € (A → B, fuera del ledger, saldo 0) para ver pagos atascados en un archivado.
   `scrollIntoViewIfNeeded` deja el elemento bajo la barra inferior fija: en `act` usa `el.scrollIntoView({ block: 'center' })`.
   La captura `mes-analisis` ya no es el primer pantallazo de la página: se desplaza hasta "Evolución de tu saldo".
+
+## 2026-10-20 · CF-14 Gestión del espacio: hojas de ciclo de vida y zona de peligro
+- Corregido: "Empezar a cerrar cuentas" abre `settle-sheet` ("¿Cerrar las cuentas de {espacio}?" con lo que se bloquea y "Puedes reabrir…") y,
+  al confirmar, refresca en sitio y muestra el toast "Estáis cerrando cuentas. Ahora saldad las deudas." + "Ver qué falta" (/close); "Reabrir
+  espacio" con subtítulo, `reopen-sheet` y toast; Convertir en grupo con `CriticalActionSheet` reversible=false y toast "{espacio} ya es un grupo";
+  Archivar solo en SETTLING (`ArchiveSpaceAction`, sección "Zona de peligro" con Salir): `page.tsx` calcula el motivo ("Falta confirmar N pagos" /
+  "Falta saldar N deudas") → CTA "Archivar para siempre" desactivado + "Ver qué falta"; `EqToast` ya no se sale de la pantalla (hace wrap).
+- Pendiente / fuera de alcance: orden de miembros inestable con `joinedAt` iguales (servidor).
+- Ficheros: `src/app/spaces/[id]/{actions-client,page}.tsx`, `src/components/ui/eq.tsx`, `scripts/ralph/capture.spec.ts`,
+  `e2e/spaces/lifecycle.spec.ts`, `e2e/refresh/committed-mutations.spec.ts`.
+- Aprendizajes: no exportes helpers de un módulo `"use client"` para usarlos en un server component (se vuelven referencias de cliente):
+  déjalos en `page.tsx`. Capturas nuevas `hoja-cerrar-cuentas` y `cerrar-cuentas-toast` (confirma la hoja y espera a `space-action-reopen`).
+  testids de hojas de Gestión: `settle-sheet`, `reopen-sheet`, `convert-sheet`, `archive-sheet`.

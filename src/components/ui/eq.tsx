@@ -270,7 +270,7 @@ export function EqToast({ children, action }: { children: React.ReactNode; actio
     return (
         <output
             className={cn(
-                "eq-in fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 whitespace-nowrap rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]",
+                "eq-in fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 w-max max-w-[calc(100vw-2rem)] rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]",
                 action && "flex items-center gap-3",
             )}
         >

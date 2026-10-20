@@ -89,6 +89,22 @@ const SCREENS: Screen[] = [
       await page.waitForTimeout(600); // let the form/sheet finish opening
     },
   },
+  {
+    id: 'hoja-cerrar-cuentas', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}`,
+    act: async (page) => {
+      await page.getByTestId('space-action-settle').click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  {
+    id: 'cerrar-cuentas-toast', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}`,
+    act: async (page) => {
+      await page.getByTestId('space-action-settle').click();
+      await page.getByTestId('confirm-sheet-confirm').click();
+      await page.getByTestId('space-action-reopen').waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
   { id: 'espacio-detalle-grupo', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}` },
   { id: 'ajustes', scenario: 'ux-showcase', path: () => '/settings', design: '3a-ajustes' },
   { id: 'historial-pagos', scenario: 'ux-showcase', path: () => '/settle/history' },

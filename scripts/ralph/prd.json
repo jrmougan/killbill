@@ -766,8 +766,8 @@
         "e2e/refresh/committed-mutations.spec.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Hojas CriticalActionSheet para cerrar cuentas (toast 'Ver qué falta'), reabrir, convertir (reversible=false) y archivar (solo SETTLING, CTA desactivado con motivo); 'Zona de peligro'; EqToast hace wrap. Pendiente: nada."
     },
     {
       "id": "CF-15",

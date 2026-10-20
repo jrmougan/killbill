@@ -81,15 +81,30 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     const header = page.getByTestId('space-header-status');
     await expect(header).toHaveText('Pareja · Activo');
     await expect(page.getByTestId('space-action-reopen')).toHaveCount(0);
+    // Archiving is not offered while ACTIVE (close accounts first).
+    await expect(page.getByTestId('space-action-archive')).toHaveCount(0);
 
-    const patchPromise = spacePatch(page, spaceId);
+    // The button only opens the review sheet: nothing is written until it is confirmed.
+    let patched = false;
+    page.on('request', (r) => {
+      if (r.method() === 'PATCH' && r.url().endsWith(`/api/spaces/${spaceId}`)) patched = true;
+    });
     await page.getByTestId('space-action-settle').click();
+    const settleSheet = page.getByTestId('settle-sheet');
+    await expect(settleSheet).toBeVisible();
+    await expect(page.getByRole('dialog', { name: /¿Cerrar las cuentas de/ })).toBeVisible();
+    expect(patched).toBe(false);
+    const patchPromise = spacePatch(page, spaceId);
+    await settleSheet.getByTestId('confirm-sheet-confirm').click();
     const patch = await patchPromise;
     expect(patch.status()).toBe(200);
     expect(JSON.parse(patch.request().postData() ?? '{}')).toEqual({ status: 'SETTLING' });
 
-    // The page reloads with the committed lifecycle status.
+    // The page refreshes in place with the committed lifecycle status and points to /close.
     await expect(header).toHaveText('Pareja · Cerrando cuentas');
+    await expect(page).toHaveURL(new RegExp(`/spaces/${spaceId}$`));
+    await expect(page.getByText('Estáis cerrando cuentas. Ahora saldad las deudas.')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Ver qué falta' })).toHaveAttribute('href', `/spaces/${spaceId}/close`);
     await expect(header).toHaveAttribute('data-status', 'SETTLING');
     await expect(page.getByTestId('space-action-settle')).toHaveCount(0);
     await expect(page.getByTestId('space-action-reopen')).toBeVisible();
@@ -139,8 +154,11 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     const header = page.getByTestId('space-header-status');
     await expect(header).toHaveText('Pareja · Cerrando cuentas');
 
-    const patchPromise = spacePatch(page, spaceId);
     await page.getByTestId('space-action-reopen').click();
+    const reopenSheet = page.getByTestId('reopen-sheet');
+    await expect(reopenSheet).toBeVisible();
+    const patchPromise = spacePatch(page, spaceId);
+    await reopenSheet.getByTestId('confirm-sheet-confirm').click();
     const patch = await patchPromise;
     expect(patch.status()).toBe(200);
     expect(JSON.parse(patch.request().postData() ?? '{}')).toEqual({ status: 'ACTIVE' });
@@ -180,39 +198,27 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     const header = page.getByTestId('space-header-status');
     await expect(header).toHaveText('Pareja · Cerrando cuentas');
 
-    // Archiving asks for confirmation in a sheet; with a PENDING payment the API refuses (409).
+    // The archive sheet always opens; with a PENDING payment it explains why and the CTA is disabled.
     await page.getByTestId('space-action-archive').click();
     const sheet = page.getByTestId('archive-sheet');
     await expect(sheet).toBeVisible();
-    let patchPromise = spacePatch(page, spaceId);
-    await sheet.getByTestId('confirm-sheet-confirm').click();
-    let patch = await patchPromise;
-    expect(patch.status()).toBe(409);
-    const blocked = await patch.json();
-    expect(blocked.code).toBe('PENDING_SETTLEMENTS');
-    expect(blocked.settleUrl).toBe(`/settle?space=${spaceId}`);
-    await expect(sheet.getByTestId('confirm-sheet-error')).toContainText('pago pendiente de confirmar');
-    await expect(sheet.getByRole('link', { name: /Saldar deudas/ })).toHaveAttribute('href', `/settle?space=${spaceId}`);
+    await expect(page.getByRole('alertdialog', { name: /¿Archivar/ })).toBeVisible();
+    await expect(sheet.getByTestId('confirm-sheet-confirm')).toBeDisabled();
+    await expect(sheet.getByTestId('confirm-sheet-reason')).toHaveText('Falta confirmar 1 pago');
+    await expect(sheet.getByRole('link', { name: 'Ver qué falta' })).toHaveAttribute('href', `/spaces/${spaceId}/close`);
+    await sheet.getByTestId('confirm-sheet-cancel').click();
     await expect(header).toHaveText('Pareja · Cerrando cuentas');
 
-    // Rejecting the payment leaves the 50 € debt open → still 409, now OPEN_BALANCES.
-    const reject = await page.request.patch(`/api/settle/${settlementId}/status`, { data: { status: 'REJECTED' } });
-    expect(reject.ok()).toBeTruthy();
-    const stillOpen = await page.request.patch(`/api/spaces/${spaceId}`, { data: { status: 'ARCHIVED' } });
-    expect(stillOpen.status()).toBe(409);
-    expect((await stillOpen.json()).code).toBe('OPEN_BALANCES');
-
-    // The creditor records the payment ("Ya me ha pagado") → everyone at peace.
-    const received = await page.request.post('/api/settle', {
-      data: { groupId: spaceId, fromUserId: (data.userB as Creds).id, amount: 50, method: 'CASH' },
-    });
-    expect(received.ok(), await received.text()).toBeTruthy();
+    // The creditor confirms the payment → everyone at peace.
+    const confirmed = await page.request.patch(`/api/settle/${settlementId}/status`, { data: { status: 'CONFIRMED' } });
+    expect(confirmed.ok(), await confirmed.text()).toBeTruthy();
 
     await page.reload();
     await page.getByTestId('space-action-archive').click();
-    patchPromise = spacePatch(page, spaceId);
-    await page.getByTestId('archive-sheet').getByTestId('confirm-sheet-confirm').click();
-    patch = await patchPromise;
+    await expect(sheet.getByTestId('confirm-sheet-reason')).toHaveCount(0);
+    const patchPromise = spacePatch(page, spaceId);
+    await sheet.getByTestId('confirm-sheet-confirm').click();
+    const patch = await patchPromise;
     expect(patch.status()).toBe(200);
     expect(JSON.parse(patch.request().postData() ?? '{}')).toEqual({ status: 'ARCHIVED' });
 

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getGroupBalances } from "@/lib/ledger-read";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
-import { capFor, settleUrlFor } from "@/lib/space-policy";
+import { capFor, hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
 import { MembershipStatus, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 import { spaceTypeMeta, spaceStatusMeta } from "@/lib/space-ui";
 import { SpaceStatusBanner } from "@/components/space/space-status-banner";
@@ -14,7 +14,7 @@ import { InviteManager } from "@/components/space/invite-manager";
 import { inviteConfigFor } from "@/components/space/invite-eligibility";
 import { RenameSpace } from "@/components/space/rename-space";
 import { LeaveSpace } from "@/components/space/leave-space";
-import { SpaceActions } from "./actions-client";
+import { ArchiveSpaceAction, SpaceActions } from "./actions-client";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +29,13 @@ function noInviteReason(type: SpaceType, status: SpaceStatus, memberCount: numbe
             : "El espacio está completo.";
     }
     return "Ahora mismo no se pueden crear enlaces.";
+}
+
+/** "Falta confirmar 1 pago" / "Falta saldar 2 deudas": why the space can't be archived yet. */
+function archiveBlockReason(pendingPayments: number, openDebts: number): string | null {
+    if (pendingPayments > 0) return `Falta confirmar ${pendingPayments} ${pendingPayments === 1 ? "pago" : "pagos"}`;
+    if (openDebts > 0) return `Falta saldar ${openDebts} ${openDebts === 1 ? "deuda" : "deudas"}`;
+    return null;
 }
 
 /** Members can't mint links: tell them who can (instead of hiding invitations silently). */
@@ -64,13 +71,14 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
     if (!myMembership || myMembership.status !== MembershipStatus.ACTIVE) redirect("/spaces");
     if (myMembership.role === "GUEST") redirect("/dashboard");
 
-    const [roster, balances] = await Promise.all([
+    const [roster, balances, pendingPayments] = await Promise.all([
         prisma.membership.findMany({
             where: { groupId: id, status: MembershipStatus.ACTIVE },
             include: { user: { select: { id: true, name: true, avatar: true, isGuest: true } } },
             orderBy: [{ joinedAt: "asc" }, { userId: "asc" }],
         }),
         getGroupBalances(id),
+        prisma.settlement.count({ where: { coupleId: id, status: "PENDING" } }),
     ]);
 
     const members: SpaceMember[] = roster.map((m) => ({
@@ -93,6 +101,9 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
         ephemeralOn,
     );
     const settleHref = settleUrlFor(space.id);
+    // Same rule as the archive guard of the API (it still answers 409 if this goes stale).
+    const openDebts = Object.values(balances).filter((c) => c < 0 && hasOpenBalance(c)).length;
+    const showArchive = canManage && space.status === SpaceStatus.SETTLING;
 
     return (
         <div className="min-h-screen pb-28 eq-in">
@@ -161,11 +172,27 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                 {canManage && !archived && (
                     <section aria-labelledby="manage-title" className="flex flex-col gap-2">
                         <h2 id="manage-title" className="text-xs font-semibold text-muted-foreground">Gestión</h2>
-                        <SpaceActions spaceId={space.id} type={space.type} status={space.status} settleHref={settleHref} />
+                        <SpaceActions
+                            spaceId={space.id}
+                            spaceName={displayName}
+                            type={space.type}
+                            status={space.status}
+                            settleHref={settleHref}
+                        />
                     </section>
                 )}
 
-                <LeaveSpace spaceId={space.id} userId={userId} spaceName={displayName} />
+                <section aria-labelledby="danger-title" className="mt-4 flex flex-col gap-2">
+                    <h2 id="danger-title" className="text-xs font-semibold text-muted-foreground">Zona de peligro</h2>
+                    {showArchive && (
+                        <ArchiveSpaceAction
+                            spaceId={space.id}
+                            spaceName={displayName}
+                            blockReason={archiveBlockReason(pendingPayments, openDebts)}
+                        />
+                    )}
+                    <LeaveSpace spaceId={space.id} userId={userId} spaceName={displayName} />
+                </section>
             </div>
         </div>
     );

@@ -36,9 +36,11 @@ test('lifecycle refreshes update the header and actions repeatedly in the same d
   const header = page.getByTestId('space-header-status');
   for (let cycle = 0; cycle < 10; cycle++) {
     await page.getByTestId('space-action-settle').click();
+    await page.getByTestId('confirm-sheet-confirm').click();
     await expect(header).toHaveAttribute('data-status', 'SETTLING');
     await expect(page.getByTestId('space-status-banner')).toHaveAttribute('data-status', 'SETTLING');
     await page.getByTestId('space-action-reopen').click();
+    await page.getByTestId('confirm-sheet-confirm').click();
     await expect(header).toHaveAttribute('data-status', 'ACTIVE');
     await expect(page.getByTestId('space-status-banner')).toHaveCount(0);
     await assertSameDocument();
