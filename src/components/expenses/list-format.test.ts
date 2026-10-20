@@ -47,9 +47,16 @@ describe("expenseSubtitle", () => {
 describe("settlementText", () => {
     it("words the direction from my point of view", () => {
         expect(settlementText({ meId: "me", fromId: "lu", toId: "me", members: [me, lu], methodLabel: "Efectivo", status: "CONFIRMED" }))
-            .toEqual({ title: "Lucía te pagó", sub: "Liquidación · Efectivo · Confirmado" });
+            .toEqual({ title: "Lucía te pagó", sub: "Liquidación · Confirmado · Efectivo" });
         expect(settlementText({ meId: "me", fromId: "me", toId: "lu", members: [me, lu], methodLabel: "", status: "PENDING" }))
             .toEqual({ title: "Pagaste a Lucía", sub: "Liquidación · Pendiente" });
+    });
+
+    it("never words a rejected payment as paid", () => {
+        expect(settlementText({ meId: "me", fromId: "lu", toId: "me", members: [me, lu], methodLabel: "Efectivo", status: "REJECTED" }))
+            .toEqual({ title: "Pago de Lucía", sub: "Liquidación · Rechazado · Efectivo" });
+        expect(settlementText({ meId: "me", fromId: "me", toId: "lu", members: [me, lu], methodLabel: "Bizum", status: "REJECTED" }))
+            .toEqual({ title: "Pago a Lucía", sub: "Liquidación · Rechazado · Bizum" });
     });
 });
 

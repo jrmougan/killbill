@@ -49,7 +49,7 @@ export function DeleteExpenseButton({ expenseId, redirectTo = "/expenses/list" }
                 size="icon"
                 aria-label="Eliminar"
                 aria-haspopup="dialog"
-                className="h-9 w-9 rounded-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="-my-1 h-11 w-11 rounded-full text-destructive hover:text-destructive hover:bg-destructive/10"
                 onClick={() => { setError(null); setShowConfirm(true); }}
                 data-testid="expense-delete"
             >

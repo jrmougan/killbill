@@ -148,7 +148,7 @@ export function EqSegmented<T extends string>({
                         tabIndex={active ? 0 : -1}
                         onClick={() => onChange(o.value)}
                         className={cn(
-                            "flex-1 rounded-[10px] py-2 text-center transition-colors",
+                            "flex-1 min-h-11 rounded-[10px] py-2 text-center transition-colors",
                             active ? "bg-card text-foreground" : "text-muted-foreground"
                         )}
                     >

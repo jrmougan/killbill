@@ -21,7 +21,11 @@ export function activeFilterCount(f: AdvancedFilters): number {
     return f.categories.length + (f.dateRange !== "all" ? 1 : 0);
 }
 
-/** Small "Filtros" toggle (sits next to the payer chips). */
+/**
+ * Round "Filtros" icon toggle (sits next to the payer chips, as in 3a). The
+ * button is a transparent 44px touch target around the 36px circle; the
+ * active-filter count rides as a badge.
+ */
 export function FiltersToggle({
     open,
     count,
@@ -37,13 +41,22 @@ export function FiltersToggle({
             onClick={onToggle}
             aria-expanded={open}
             aria-controls="expense-filters-panel"
-            className={cn(
-                "ml-auto flex-none inline-flex items-center gap-1.5 rounded-full border px-3 py-[7px] text-[13px] font-semibold transition-colors",
-                open || count > 0 ? "border-foreground bg-card" : "border-[color:var(--line)] bg-card text-muted-foreground",
-            )}
+            aria-label={count > 0 ? `Filtros (${count} activos)` : "Filtros"}
+            className="group ml-auto flex-none min-h-11 min-w-11 flex items-center justify-center outline-none"
         >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            Filtros{count > 0 && <span className="tabular-nums">· {count}</span>}
+            <span
+                className={cn(
+                    "relative flex h-9 w-9 items-center justify-center rounded-full border bg-card transition-colors group-focus-visible:ring-2 group-focus-visible:ring-ring",
+                    open || count > 0 ? "border-foreground text-foreground" : "border-[color:var(--line)] text-foreground",
+                )}
+            >
+                <SlidersHorizontal className="h-4 w-4" aria-hidden />
+                {count > 0 && (
+                    <span aria-hidden className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-semibold tabular-nums text-white">
+                        {count}
+                    </span>
+                )}
+            </span>
         </button>
     );
 }

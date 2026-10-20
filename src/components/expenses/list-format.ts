@@ -121,13 +121,16 @@ export function settlementText({
     status?: string | null;
 }): { title: string; sub: string } {
     const nameOf = (id: string | undefined) => members.find((m) => m.id === id)?.name ?? "otra persona";
+    // A rejected payment didn't happen: "Pago de Lucía", never "Lucía te pagó".
+    const rejected = status === "REJECTED";
     const title = fromId === meId
-        ? `Pagaste a ${nameOf(toId)}`
+        ? `${rejected ? "Pago a" : "Pagaste a"} ${nameOf(toId)}`
         : toId === meId
-            ? `${nameOf(fromId)} te pagó`
-            : `${nameOf(fromId)} pagó a ${nameOf(toId)}`;
-    const statusLabel = status === "PENDING" ? "Pendiente" : status === "CONFIRMED" ? "Confirmado" : status === "REJECTED" ? "Rechazado" : null;
-    const sub = [`Liquidación${methodLabel ? ` · ${methodLabel}` : ""}`, statusLabel]
+            ? rejected ? `Pago de ${nameOf(fromId)}` : `${nameOf(fromId)} te pagó`
+            : rejected ? `Pago de ${nameOf(fromId)} a ${nameOf(toId)}` : `${nameOf(fromId)} pagó a ${nameOf(toId)}`;
+    const statusLabel = status === "PENDING" ? "Pendiente" : status === "CONFIRMED" ? "Confirmado" : rejected ? "Rechazado" : null;
+    // Status before the method so a narrow row truncates the method, not the state.
+    const sub = ["Liquidación", statusLabel, methodLabel || null]
         .filter(Boolean)
         .join(" · ");
     return { title, sub };

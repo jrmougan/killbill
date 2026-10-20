@@ -78,8 +78,8 @@
         "Cada fila: icono de categoría, concepto, quién pagó y reparto, importe",
         "El detalle del gasto sigue el estilo 2a/3a (sin restos del diseño anterior) y sus acciones son claras"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Pago rechazado ya no se lee como pagado, Filtros como icono redondo 3a, zonas de 44px (chips, pestañas, Editar/Eliminar) y copy/avatares del detalle; pendiente iconos de categoría (UX-13) y fila 'Quedasteis en paz'."
     },
     {
       "id": "UX-05",

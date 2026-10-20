@@ -54,7 +54,7 @@ export function PromoteButton({ expenseId }: { expenseId: string }) {
             variant="ghost"
             size="icon"
             aria-label="Compartir con el grupo"
-            className="h-9 w-9 rounded-full text-primary hover:text-primary hover:bg-[var(--accent-tint)]"
+            className="-my-1 h-11 w-11 rounded-full text-primary hover:text-primary hover:bg-[var(--accent-tint)]"
             onClick={() => setShowConfirm(true)}
             disabled={loading || refreshing}
             data-testid="expense-promote"

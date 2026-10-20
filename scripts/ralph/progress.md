@@ -54,3 +54,16 @@
   confirmado + rechazado del mes pasado; Lisboa: Bizum pendiente Álvaro→Marta, `settlementId`); para fechar
   movimientos en el pasado hay que fijar `createdAt` del gasto y `updatedAt` del pago (el ticket ordena por ellos).
   `Screen.asUserB` captura como el segundo usuario. e2e de pagos: `e2e/settlements/*`.
+
+## 2026-10-20 · UX-04 Gastos
+- Corregido: pago rechazado como "Pago de X" (✕ neutro, importe tachado) en vez de "X te pagó" en verde; estado antes
+  del método en el subtítulo; "Filtros" como botón redondo con icono (3a) y contador en insignia; chips de quién pagó y
+  `EqSegmented` a 44 px; buscador "Buscar gasto o importe" a toda la altura; detalle con Editar/Eliminar/Compartir
+  de 44 px, "Pagaste tú"/"Pagó X", "Tú", "Tu parte"/"Su parte" y avatares con la inicial (sin 👤).
+- Pendiente / fuera de alcance: fila "Quedasteis en paz" de 3a (habría que saber si el pago salda); emojis de categoría (UX-13).
+- Ficheros: `src/app/expenses/list/client.tsx`, `src/components/expenses/{filters,list-format,list-format.test}.ts(x)`,
+  `src/components/ui/eq.tsx`, `src/app/expense/[id]/page.tsx`, `src/components/expense/{delete-button,promote-button}.tsx`,
+  `e2e/expenses/edit-delete.spec.ts`.
+- Aprendizajes: los e2e de pagos buscan "Liquidación", "Pendiente" y "Confirmado" en las filas de `/expenses/list`
+  (no quites esas palabras). `EqSegmented` lo usa también Mes. Botones de icono en cabeceras: `h-11 w-11 -my-1`.
+  `qa-fixes.spec.ts:25` (returnTo) falla a veces en la tanda completa y pasa solo: es inestable, no regresión.

@@ -142,7 +142,7 @@ test.describe('Expenses - Edit and Delete', () => {
 
     // Detail page now attributes the payment to userB
     await expect(pageA).toHaveURL(new RegExp(`/expense/${expenseId}$`), { timeout: 10000 });
-    await expect(pageA.getByText(/Pagado por/)).toBeVisible({ timeout: 10000 });
+    await expect(pageA.getByText('Pagó User B', { exact: true })).toBeVisible({ timeout: 10000 });
     await expect(pageA.getByText('User B', { exact: true }).first()).toBeVisible();
 
     // Balances inverted: userA owes 50€

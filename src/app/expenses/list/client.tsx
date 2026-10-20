@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Search } from "lucide-react";
+import { Check, Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { EqChip, EqHeader, EqRow, EqSegmented } from "@/components/ui/eq";
 import type { CategoryBadgeMeta } from "@/components/category/category-badge";
@@ -150,20 +150,20 @@ export function ExpensesListClient({
                             : "Este espacio se está liquidando: no admite gastos nuevos."}
                     </p>
                 )}
-                <label className="flex h-[42px] items-center gap-2 rounded-xl border border-[color:var(--line)] bg-card px-3 text-[color:var(--ink-3)]">
+                <label className="flex h-11 items-center gap-2 rounded-xl border border-[color:var(--line)] bg-card px-3 text-[color:var(--ink-3)] focus-within:border-foreground">
                     <Search className="h-[17px] w-[17px] flex-none" aria-hidden />
                     <input
                         type="search"
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
-                        placeholder="Buscar gasto"
-                        aria-label="Buscar gasto"
-                        className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+                        placeholder="Buscar gasto o importe"
+                        aria-label="Buscar gasto o importe"
+                        className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
                     />
                 </label>
-                <div className="eq-scroll flex items-center gap-1.5 overflow-x-auto">
+                <div className="eq-scroll -my-1 flex items-center gap-1.5 overflow-x-auto">
                     {shared && payerChips.map((c) => (
-                        <EqChip key={c.value} selected={payer === c.value} onClick={() => setPayer(c.value)}>
+                        <EqChip key={c.value} touch selected={payer === c.value} onClick={() => setPayer(c.value)}>
                             {c.label}
                         </EqChip>
                     ))}
@@ -194,16 +194,21 @@ export function ExpensesListClient({
                                         methodLabel: e.method ? getSettlementMethodLabel(e.method) : "",
                                         status: e.status,
                                     });
+                                    // A rejected payment never moved money: neutral tile and a
+                                    // struck-through amount instead of the green "paid" look.
+                                    const rejected = e.status === "REJECTED";
                                     return (
                                         <EqRow
                                             key={e.id}
                                             href={`/settle/${e.id}`}
-                                            icon={<Check className="h-5 w-5" />}
-                                            iconTint
+                                            icon={rejected
+                                                ? <X className="h-5 w-5 text-muted-foreground" aria-hidden />
+                                                : <Check className="h-5 w-5" aria-hidden />}
+                                            iconTint={!rejected}
                                             title={t.title}
                                             sub={t.sub}
                                             amount={formatCurrency(e.amountCents)}
-                                            amountClassName="text-primary"
+                                            amountClassName={rejected ? "text-muted-foreground line-through" : "text-primary"}
                                         />
                                     );
                                 }

@@ -87,7 +87,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
         isAvatarUrl(u.avatar)
             // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
             ? <img src={u.avatar} alt={u.name} className="h-full w-full object-cover" />
-            : (u.avatar || "👤");
+            : ((u.avatar ?? "").trim() || u.name.charAt(0).toUpperCase());
 
     return (
         <div className="eq-in flex flex-col min-h-screen w-full pt-3 pb-10 overflow-x-hidden">
@@ -97,7 +97,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                         <Link
                             href={`/expense/${expense.id}/edit`}
                             aria-label="Editar"
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-[var(--track)] hover:text-foreground"
+                            className="-my-1 inline-flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground hover:bg-[var(--track)] hover:text-foreground"
                         >
                             <Pencil className="h-4 w-4" />
                         </Link>
@@ -117,10 +117,10 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     </h2>
                     <p className="text-[13px] text-muted-foreground first-letter:uppercase">{dateLabel}</p>
                     <div className="flex items-center gap-2">
-                        <div className="h-6 w-6 rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-sm">
+                        <div aria-hidden className="h-6 w-6 rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-xs font-semibold text-foreground">
                             {avatar(expense.paidBy)}
                         </div>
-                        <p className="text-sm font-medium text-[color:var(--body-ink)]">Pagado por <span className="text-primary">{isMe ? "Ti" : expense.paidBy.name}</span></p>
+                        <p className="text-sm font-medium text-[color:var(--body-ink)]">{isMe ? "Pagaste tú" : <>Pagó <span className="text-primary">{expense.paidBy.name}</span></>}</p>
                     </div>
                     {expense.createdBy && expense.createdById !== expense.paidById && (
                         <p className="text-xs text-muted-foreground">
@@ -151,19 +151,19 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                     {expense.splits.map((split) => (
                                         <div key={split.id} className="flex items-center justify-between gap-3 py-3">
                                             <div className="flex min-w-0 items-center gap-3">
-                                                <div className="h-8 w-8 shrink-0 rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-base">
+                                                <div aria-hidden className="h-8 w-8 shrink-0 rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-sm font-semibold text-foreground">
                                                     {avatar(split.user)}
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <p className="truncate text-sm font-semibold text-foreground">{split.userId === userId ? "Ti" : split.user.name}</p>
+                                                    <p className="truncate text-sm font-semibold text-foreground">{split.userId === userId ? "Tú" : split.user.name}</p>
                                                     {split.userId === expense.paidById && (
-                                                        <p className="text-[11px] font-semibold text-primary">Pagó</p>
+                                                        <p className="text-[11px] font-semibold text-primary">Pagó {formatCurrency(expense.amount)}</p>
                                                     )}
                                                 </div>
                                             </div>
                                             <div className="shrink-0 text-right">
                                                 <p className="text-[15px] font-semibold tabular-nums text-foreground">{formatCurrency(split.amount)}</p>
-                                                <p className="text-[11px] text-muted-foreground">{split.userId === expense.paidById ? "Su parte" : "Cargo"}</p>
+                                                <p className="text-[11px] text-muted-foreground">{split.userId === userId ? "Tu parte" : "Su parte"}</p>
                                             </div>
                                         </div>
                                     ))}
