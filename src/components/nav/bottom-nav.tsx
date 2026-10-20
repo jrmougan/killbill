@@ -61,7 +61,7 @@ function NavTab({ tab, active, personal }: { tab: Tab; active: boolean; personal
                 aria-current={active ? "page" : undefined}
                 aria-label={tab.ariaLabel}
                 className={cn(
-                    "flex flex-col items-center gap-1 pt-2.5 text-[10.5px] font-medium transition-colors active:scale-95",
+                    "w-full min-h-11 flex flex-col items-center gap-1 pt-2.5 text-[10.5px] font-medium transition-colors active:scale-95",
                     active ? "text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
                 )}
             >

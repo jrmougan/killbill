@@ -691,7 +691,8 @@ export async function POST(request: Request) {
       // a 4-person trip "Lisboa" where Álvaro owes, budgets and a shared list.
       const [alvaro, lucia, marta, pablo] = await createUsers(hashedPassword, ['alvaro', 'lucia', 'marta', 'pablo']);
       const names: [typeof alvaro, string][] = [[alvaro, 'Álvaro'], [lucia, 'Lucía'], [marta, 'Marta'], [pablo, 'Pablo']];
-      await Promise.all(names.map(([u, name]) => prisma.user.update({ where: { id: u.id }, data: { name } })));
+      // No emoji avatar: the mockups show the initial ("Á").
+      await Promise.all(names.map(([u, name]) => prisma.user.update({ where: { id: u.id }, data: { name, avatar: null } })));
 
       const couple = [alvaro, lucia];
       const casa = await createSpace('Casa', couple, { type: 'COUPLE' });

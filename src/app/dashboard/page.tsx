@@ -292,7 +292,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 locked={isGuest}
             />
 
-            <div className="flex flex-col gap-5 px-5 pt-[18px]">
+            <div className="flex flex-col gap-5 px-5 pt-1.5">
                 {showWelcome && (
                     <Link
                         href="/welcome"

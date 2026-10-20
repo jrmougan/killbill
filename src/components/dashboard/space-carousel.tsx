@@ -72,18 +72,27 @@ export function SpaceCarousel({
             <div className="eq-scroll flex gap-2.5 overflow-x-auto px-5 snap-x">
                 {cards.map((c) => {
                     const active = c.key === activeKey;
+                    const title = (
+                        <span className="flex items-center gap-1.5 min-w-0 text-sm font-semibold">
+                            <span aria-hidden="true" className="flex-none">{c.emoji}</span>
+                            <span className="truncate">{c.name}</span>
+                        </span>
+                    );
+                    // Mockup 2a: the wide active card puts "con Lucía" beside the name;
+                    // the narrow ones move it to the bottom so neither is cut to "Perso…".
+                    const header = active ? (
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                            {title}
+                            <span className="min-w-0 max-w-[50%] truncate text-xs font-medium opacity-75">{c.sub}</span>
+                        </div>
+                    ) : (
+                        title
+                    );
                     const body = (
                         <>
-                            {/* Title and subtitle on their own lines so neither is cut to "Perso…". */}
-                            <div className="min-w-0 text-sm font-semibold">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                    <span aria-hidden="true" className="flex-none">{c.emoji}</span>
-                                    <span className="truncate">{c.name}</span>
-                                </div>
-                                <div className="truncate text-xs font-medium opacity-75">{c.sub}</div>
-                            </div>
+                            {header}
                             <div className="min-w-0">
-                                <div className="text-[13px] opacity-80 truncate">{c.label}</div>
+                                <div className={cn("truncate", active ? "text-[13px] opacity-80" : "text-xs text-muted-foreground")}>{c.label}</div>
                                 <div
                                     aria-hidden={c.signed ? true : undefined}
                                     className={cn(
@@ -143,6 +152,7 @@ export function SpaceCarousel({
                             className="snap-center flex-none w-[156px] min-h-[150px] rounded-[22px] bg-card text-foreground border border-[color:var(--line)] p-4 flex flex-col justify-between gap-2 text-left transition-[width,opacity] duration-250 disabled:opacity-60 active:scale-[0.98]"
                         >
                             {body}
+                            <span className="truncate text-xs text-muted-foreground">{c.sub}</span>
                         </button>
                     );
                 })}
