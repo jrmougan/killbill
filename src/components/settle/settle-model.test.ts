@@ -3,6 +3,7 @@ import {
     buildTicket,
     everyoneAtPeace,
     formatPeriod,
+    incomingOutcome,
     isAtPeace,
     methodName,
     myTransfers,
@@ -124,5 +125,21 @@ describe("period formatting", () => {
         expect(ticketMeta(new Date("2026-10-01T10:00:00Z"), new Date("2026-10-05T10:00:00Z"), 10)).toBe("1 – 5 OCT · 10 GASTOS");
         expect(ticketMeta(new Date("2026-10-05T10:00:00Z"), new Date("2026-10-05T10:00:00Z"), 1)).toBe("5 OCT · 1 GASTO");
         expect(ticketMeta(null, new Date(), 0)).toBe("SIN GASTOS NUEVOS");
+    });
+});
+
+describe("incomingOutcome (RV-01)", () => {
+    it("couple: the remainder is what the payer still owes", () => {
+        expect(incomingOutcome(5000, 5000, 2000)).toEqual({ kind: "payer", rest: 3000 });
+        expect(incomingOutcome(5000, 5000, 5000)).toEqual({ kind: "settled" });
+    });
+
+    it("group: covering the pairwise debt is not 'saldada' while others still owe me", () => {
+        // X owes 30 €, Y owes 20 €: X pays 30 €.
+        expect(incomingOutcome(5000, 3000, 3000)).toEqual({ kind: "total", rest: 2000 });
+    });
+
+    it("a payer the plan pairs with someone else (owed 0) never 'stops owing' me", () => {
+        expect(incomingOutcome(5000, 0, 1000)).toEqual({ kind: "total", rest: 4000 });
     });
 });

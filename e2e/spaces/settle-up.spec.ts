@@ -48,7 +48,7 @@ async function payFromSettle(page: Page, spaceId: string, toName: string) {
   await page.getByRole('button', { name: /^Ya le he pagado/ }).click();
   await page.getByTestId('confirm-sheet-confirm').click();
   expect((await settlePromise).ok()).toBeTruthy();
-  await expect(page.getByTestId('settle-pending')).toContainText(`Avisado a ${toName}`);
+  await expect(page.getByTestId('settle-pending')).toContainText(`Pago a ${toName} · por confirmar`);
 }
 
 function settlementStatusPatch(page: Page) {
@@ -140,7 +140,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await pageB.getByRole('button', { name: /^Ya le he pagado/ }).click();
     await pageB.getByTestId('confirm-sheet-confirm').click();
     expect((await settlePromise).ok()).toBeTruthy();
-    await expect(pageB.getByTestId('settle-pending')).toContainText('Avisado a User A');
+    await expect(pageB.getByTestId('settle-pending')).toContainText('Pago a User A · por confirmar');
 
     // Creditor's checklist: exactly one PENDING B → A of 50,00 €.
     await pageA.goto(`/spaces/${spaceId}/close`);

@@ -80,7 +80,7 @@ test('starting to close refreshes the checklist without reloading; the debtor\'s
   await page.goto(`/settle?space=${data.coupleId}`);
   await page.getByRole('button', { name: /^Ya le he pagado/ }).click();
   await page.getByTestId('confirm-sheet-confirm').click();
-  await expect(page.getByTestId('settle-pending')).toContainText('Avisado a User B');
+  await expect(page.getByTestId('settle-pending')).toContainText('Pago a User B · por confirmar');
   await page.goto(`/spaces/${data.coupleId}/close`);
   await expect(page.getByTestId('close-progress')).toHaveText('Faltan 1');
   await expect(page.getByTestId('close-settlement-row')).toHaveAttribute('data-status', 'PENDING');

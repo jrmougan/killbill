@@ -5,7 +5,7 @@ import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
 import { formatCurrency } from "@/lib/currency";
 import { getSettlementMethodLabel } from "@/lib/settlement-labels";
 import { settleAmountText, validateSettleAmount } from "@/components/settle/settle-amount";
-import type { SettleMethod } from "@/components/settle/settle-model";
+import { incomingOutcome, type SettleMethod } from "@/components/settle/settle-model";
 
 /** "EQUIL no envía dinero: …" — what the debtor has to do outside the app first. */
 const SEND_FIRST: Record<SettleMethod, string> = {
@@ -93,7 +93,7 @@ export function RecordSettlementSheet({
                 consequences={[
                     ...(rest ? [`Te quedará por pagar ${rest}.`] : []),
                     `EQUIL no envía dinero: ${SEND_FIRST[method]}.`,
-                    `Avisaremos a ${name}.`,
+                    `${name} lo verá en Pagos por confirmar la próxima vez que entre.`,
                     `Contará cuando ${name} confirme que lo ha recibido.`,
                 ]}
                 confirmLabel={`Sí, ya le he pagado ${amount}`}
@@ -133,7 +133,8 @@ export function RecordSettlementSheet({
 /**
  * Answer to a PENDING payment someone says they sent me (Inicio "Pagos por
  * confirmar" and the incoming CTA of /settle): confirm it as received or
- * reject it. `owedCents` is what the payer owes me before it counts.
+ * reject it. `owedCents` is what the payer owes me in the suggested pairing
+ * and `balanceCents` my net balance, both before it counts.
  */
 export function PendingPaymentSheet({
     status,
@@ -142,6 +143,7 @@ export function PendingPaymentSheet({
     amountCents,
     method,
     owedCents,
+    balanceCents,
     busy,
     error,
     onConfirm,
@@ -154,6 +156,8 @@ export function PendingPaymentSheet({
     amountCents: number;
     method: string;
     owedCents: number;
+    /** My net balance (cents, positive = I'm owed). */
+    balanceCents: number;
     busy: boolean;
     error: string | null;
     onConfirm: () => void;
@@ -171,7 +175,9 @@ export function PendingPaymentSheet({
                     { label: "Importe", value: amount, emphasis: true },
                     { label: "Método", value: getSettlementMethodLabel(method) },
                 ]}
-                consequences={[`La deuda de ${amount} seguirá pendiente y ${name} verá que no lo has recibido. Podrá registrarlo de nuevo.`]}
+                consequences={[
+                    `${owedCents > 0 ? `La deuda de ${formatCurrency(owedCents)}` : "La deuda"} seguirá pendiente y ${name} verá que no lo has recibido. Podrá registrarlo de nuevo.`,
+                ]}
                 confirmLabel="Rechazar el pago"
                 busy={busy}
                 error={error}
@@ -181,7 +187,7 @@ export function PendingPaymentSheet({
             />
         );
     }
-    const rest = Math.max(0, owedCents - amountCents);
+    const outcome = incomingOutcome(balanceCents, owedCents, amountCents);
     return (
         <CriticalActionSheet
             testId="confirm-settlement-sheet"
@@ -192,7 +198,13 @@ export function PendingPaymentSheet({
                 { label: "Importe", value: amount, emphasis: true },
                 { label: "Método", value: getSettlementMethodLabel(method) },
             ]}
-            consequences={[rest > 0 ? `${name} aún te deberá ${formatCurrency(rest)}.` : `${name} dejará de deberte ${amount}.`]}
+            consequences={[
+                outcome.kind === "settled"
+                    ? `${name} ya no te deberá nada.`
+                    : outcome.kind === "payer"
+                        ? `${name} aún te deberá ${formatCurrency(outcome.rest)}.`
+                        : `Te quedarán ${formatCurrency(outcome.rest)} por cobrar en total.`,
+            ]}
             reversible={false}
             confirmLabel={`Sí, he recibido ${amount}`}
             busy={busy}

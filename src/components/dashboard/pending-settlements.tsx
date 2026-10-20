@@ -8,6 +8,7 @@ import { isAvatarUrl } from "@/lib/avatar";
 import { getSettlementMethodLabel } from "@/lib/settlement-labels";
 import { useApiMutation } from "@/hooks/use-api-mutation";
 import { PendingPaymentSheet } from "@/components/settle/settle-review-sheet";
+import { incomingOutcome } from "@/components/settle/settle-model";
 import { EqToast, useEqToast } from "@/components/ui/eq";
 
 interface PendingSettlement {
@@ -16,7 +17,7 @@ interface PendingSettlement {
     fromUser: { name: string; avatar: string | null };
     date: string;
     method: string;
-    /** What the payer owes me right now (cents, before this payment counts). */
+    /** What the payer owes me in the suggested pairing (cents, before this payment counts). */
     owedCents: number;
 }
 
@@ -25,6 +26,8 @@ interface PendingSettlementsProps {
     /** The space is SETTLING: these confirmations are what closes it. */
     settling?: boolean;
     myName: string;
+    /** My net balance in the space (cents, positive = I'm owed). */
+    balanceCents: number;
 }
 
 type Review = { s: PendingSettlement; status: "CONFIRMED" | "REJECTED" };
@@ -39,7 +42,7 @@ const shortDate = (iso: string) =>
  * answered meanwhile) refreshes and shows the error on that row. The card
  * stays mounted while empty so the success toast survives the refresh.
  */
-export function PendingSettlements({ settlements, settling = false, myName }: PendingSettlementsProps) {
+export function PendingSettlements({ settlements, settling = false, myName, balanceCents }: PendingSettlementsProps) {
     const router = useRouter();
     const { mutate, busy } = useApiMutation();
     const [review, setReview] = useState<Review | null>(null);
@@ -65,13 +68,15 @@ export function PendingSettlements({ settlements, settling = false, myName }: Pe
         if (result.ok) {
             setReview(null);
             setRowErrors(({ [s.id]: _, ...rest }) => rest);
-            const rest = Math.max(0, s.owedCents - s.amount);
+            const outcome = incomingOutcome(balanceCents, s.owedCents, s.amount);
             showToast(
                 status === "REJECTED"
                     ? `Pago rechazado: la deuda con ${name} sigue pendiente`
-                    : rest > 0
-                        ? `Pago confirmado · ${name} aún te debe ${formatCurrency(rest)}`
-                        : `Deuda saldada: ${name} ya no te debe nada`,
+                    : outcome.kind === "settled"
+                        ? `Deuda saldada: ${name} ya no te debe nada`
+                        : outcome.kind === "payer"
+                            ? `Pago confirmado · ${name} aún te debe ${formatCurrency(outcome.rest)}`
+                            : `Pago confirmado · aún te deben ${formatCurrency(outcome.rest)} en total`,
             );
         } else if (result.status === 409) {
             // The payment changed or was already answered: show the fresh state.
@@ -170,6 +175,7 @@ export function PendingSettlements({ settlements, settling = false, myName }: Pe
                     amountCents={review.s.amount}
                     method={review.s.method}
                     owedCents={review.s.owedCents}
+                    balanceCents={balanceCents}
                     busy={busy}
                     error={sheetError}
                     onConfirm={submit}

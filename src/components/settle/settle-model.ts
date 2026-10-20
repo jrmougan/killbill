@@ -29,6 +29,22 @@ export function isAtPeace(balanceCents: number): boolean {
     return normalizeCents(balanceCents) === 0;
 }
 
+/**
+ * What is left after I (the receiver) confirm a payment of `amountCents`.
+ * "Deuda saldada" only when MY net balance reaches 0 (glossary), not when the
+ * pairwise suggestion `owedCents` is covered: the API caps a payment at the
+ * net balances, which can exceed that pairing. `payer` = the remainder is
+ * exactly what the payer still owes me (always in a couple), so it can be
+ * named; otherwise it is only what I am still owed in total.
+ */
+export type IncomingOutcome = { kind: "settled" } | { kind: "payer" | "total"; rest: number };
+
+export function incomingOutcome(balanceCents: number, owedCents: number, amountCents: number): IncomingOutcome {
+    const rest = balanceCents - amountCents;
+    if (isAtPeace(rest) || rest < 0) return { kind: "settled" };
+    return { kind: owedCents - amountCents === rest ? "payer" : "total", rest };
+}
+
 /** True when every member of the space is at peace (not only me). */
 export function everyoneAtPeace(balances: Record<string, number>): boolean {
     return Object.values(balances).every(isAtPeace);

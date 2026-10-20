@@ -86,9 +86,9 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
     // is not in the ledger): the receiver's confirm sheet and the payer's
     // "Tu deuda de X sigue pendiente" after a rejection.
     const needsDebt = canResolve || (rejected && iPay);
-    const owedCents = needsDebt
-        ? resolveMyDebts(await getGroupBalances(settlement.coupleId), settlement.fromUserId)[settlement.toUserId] ?? 0
-        : 0;
+    const balances: Record<string, number> = needsDebt ? await getGroupBalances(settlement.coupleId) : {};
+    const owedCents = needsDebt ? resolveMyDebts(balances, settlement.fromUserId)[settlement.toUserId] ?? 0 : 0;
+    const receiverBalance = balances[settlement.toUserId] ?? 0;
     const canSettleRejected = rejected && iPay && !archived && owedCents > 0;
 
     let explanation: string | null = null;
@@ -182,6 +182,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
                         amountCents={settlement.amount}
                         method={settlement.method}
                         owedCents={owedCents}
+                        balanceCents={receiverBalance}
                     />
                 </div>
             )}

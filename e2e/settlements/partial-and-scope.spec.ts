@@ -27,6 +27,28 @@ test.describe('Settlements - partial payments, explicit space, archived, edit', 
   test.afterEach(async () => { await Promise.all(contexts.splice(0).map((c) => c.close())); });
   test.afterAll(async () => { await db.end(); });
 
+  test('RV-01: a 409 closes the /settle sheet and reopening it shows the edited amount', async ({ request, newContext }) => {
+    const seed = await seedScenario(request, 'couple-with-debt');
+    const A = seed.userA as User; const B = seed.userB as User;
+    const ctxB = await as(newContext, B);
+    const created = await ctxB.request.post('/api/settle', { data: { toUserId: A.id, amount: 20, method: 'BIZUM' } });
+    const id = (await created.json()).settlement.id as string;
+
+    const page = await (await as(newContext, A)).newPage();
+    await page.goto('/settle');
+    await page.getByRole('button', { name: /^Sí, he recibido 20,00\s€ de User B/ }).click();
+    const sheet = page.getByTestId('confirm-settlement-sheet');
+    await expect(sheet).toContainText(/User B aún te deberá 30,00\s€/);
+    // The debtor lowers the payment while the creditor's sheet is open.
+    expect((await ctxB.request.patch(`/api/settle/${id}`, { data: { amount: 15 } })).status()).toBe(200);
+    await page.getByTestId('confirm-sheet-confirm').click();
+    await expect(sheet).toHaveCount(0);
+    await expect(page.getByTestId('settle-error')).toBeVisible();
+    await page.getByRole('button', { name: /^Sí, he recibido 15,00\s€ de User B/ }).click();
+    await expect(sheet).toContainText(/User B aún te deberá 35,00\s€/);
+    await expect(page.getByTestId('settle-error')).toHaveCount(0);
+  });
+
   test('S-03/S-11: confirming a partial payment keeps the remaining debt and the ticket explains it', async ({ request, newContext }) => {
     const seed = await seedScenario(request, 'couple-with-debt');
     const A = seed.userA as User; const B = seed.userB as User;

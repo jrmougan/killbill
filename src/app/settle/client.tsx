@@ -100,8 +100,10 @@ export function SettleClient({ space, me, isGuest, canArchive, memberCount, part
         return (await res.json()) as { settlement?: { id: string; status: string; amount: number }; merged?: boolean };
     }
 
-    // Every write goes through a review sheet: run() is only called from its CTA,
-    // shows failures inside the sheet and closes it on success.
+    // Every write goes through a review sheet: run() is only called from its CTA
+    // and closes it on success. A rule failure (409) means the sheet's amounts and
+    // cap are stale: close it and show the error over the refreshed ticket, so a
+    // retry reopens the sheet with fresh data. Other failures stay in the sheet.
     async function run(action: () => Promise<Done>) {
         setSubmitting(true);
         setError(null);
@@ -111,7 +113,10 @@ export function SettleClient({ space, me, isGuest, canArchive, memberCount, part
             router.refresh();
         } catch (e) {
             setError(e instanceof Error ? e.message : "Algo ha fallado. Inténtalo de nuevo.");
-            if (e instanceof StaleError) router.refresh();
+            if (e instanceof StaleError) {
+                setReview(null);
+                router.refresh();
+            }
         } finally {
             setSubmitting(false);
         }
@@ -200,6 +205,13 @@ export function SettleClient({ space, me, isGuest, canArchive, memberCount, part
         </EqHeader>
     );
 
+    // A 409 closed the sheet: the error stays over whatever the refresh shows.
+    const staleAlert = error && !review ? (
+        <p role="alert" data-testid="settle-error" className="w-full rounded-[14px] bg-[var(--negative-tint)] px-3.5 py-3 text-sm text-[color:var(--negative-ink)]">
+            {error}
+        </p>
+    ) : null;
+
     if (done?.kind === "pending") {
         return (
             <Screen>
@@ -208,12 +220,12 @@ export function SettleClient({ space, me, isGuest, canArchive, memberCount, part
                     testId="settle-pending"
                     icon={<Clock className="h-10 w-10" />}
                     tone="tint"
-                    title={`Avisado a ${done.name}`}
-                    sub={`Le hemos dicho que le has pagado ${formatCurrency(done.amount)} ${methodPhrase(done.method)}. La deuda quedará saldada cuando lo confirme.`}
+                    title={`Pago a ${done.name} · por confirmar`}
+                    sub={`Has registrado ${formatCurrency(done.amount)} ${methodPhrase(done.method)}. ${done.name} lo verá en EQUIL como pago por confirmar; la deuda quedará saldada cuando lo confirme.`}
                 />
                 <Footer>
-                    <EqCta onClick={() => router.push("/dashboard")}>Volver al inicio</EqCta>
-                    <EqCta variant="outline" onClick={() => askToConfirm(done)}>Pedirle que lo confirme</EqCta>
+                    <EqCta onClick={() => askToConfirm(done)}>Pedirle que lo confirme</EqCta>
+                    <EqCta variant="outline" onClick={() => router.push("/dashboard")}>Volver al inicio</EqCta>
                     {done.id && <TextLink href={`/settle/${done.id}`}>Ver el pago</TextLink>}
                 </Footer>
                 {toast && <EqToast>{toast}</EqToast>}
@@ -261,6 +273,7 @@ export function SettleClient({ space, me, isGuest, canArchive, memberCount, part
                     )}
                 </Centered>
                 <Footer>
+                    {staleAlert}
                     {readyToArchive && canArchive && (
                         <EqCta onClick={() => router.push(`/spaces/${space.id}/close`)} data-testid="settle-archive">Terminar y archivar</EqCta>
                     )}
@@ -427,6 +440,7 @@ export function SettleClient({ space, me, isGuest, canArchive, memberCount, part
             </div>
 
             <Footer>
+                {staleAlert}
                 {cta}
                 {canRemind && (
                     <button type="button" onClick={remind} className={TEXT_LINK}>
@@ -442,6 +456,7 @@ export function SettleClient({ space, me, isGuest, canArchive, memberCount, part
                     amountCents={review.incoming.amount}
                     method={review.incoming.method}
                     owedCents={review.t.amount}
+                    balanceCents={balance}
                     busy={submitting}
                     error={error}
                     onConfirm={() => confirmIncoming(review.incoming)}

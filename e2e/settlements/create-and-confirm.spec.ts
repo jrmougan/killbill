@@ -67,7 +67,7 @@ test.describe('Settlements - Create and Confirm', () => {
     expect(settleResponse.request().postDataJSON()).toMatchObject({ toUserId: userA.id, amount: 50, method: 'TRANSFER' });
 
     // Two-step confirmation: the debtor sees it as pending on the creditor.
-    await expect(pageB.getByTestId('settle-pending')).toContainText('Avisado a User A');
+    await expect(pageB.getByTestId('settle-pending')).toContainText('Pago a User A · por confirmar');
 
     // Navigate to expenses/list to verify settlement appears as PENDING with exact amount
     await pageB.goto('/expenses/list');
@@ -336,7 +336,7 @@ test.describe('Settlements - Create and Confirm', () => {
     const res = await post;
     expect(res.ok()).toBeTruthy();
     expect(res.request().postDataJSON()).toMatchObject({ toUserId: userA.id, amount: 33.33 });
-    await expect(pageB.getByTestId('settle-pending')).toContainText('Avisado a User A');
+    await expect(pageB.getByTestId('settle-pending')).toContainText('Pago a User A · por confirmar');
     await ctxB.close();
   });
 });

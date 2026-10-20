@@ -556,3 +556,15 @@
   `src/components/settle/settle-model.ts`, `src/lib/settlement-{rules,service}.ts`, `e2e/settlements/rules.api.spec.ts`.
 - Aprendizajes: el ciclo de vida real está en `ALLOWED_TRANSITIONS` de `src/lib/space-policy.ts` (ARCHIVED → []);
   los tests de `src/mcp` no afirman el texto de las descripciones, así que cambiarlas no rompe nada.
+
+## 2026-10-20 · RV-01 /settle: hoja tras 409, importe de la deuda al rechazar, sin prometer avisos
+- Corregido: un 409 de regla (`StaleError`) cierra la hoja de `/settle` y pinta el error fuera (`settle-error`, también en la pantalla "al día");
+  rechazo "La deuda de {owedCents} seguirá pendiente…" (sin cifra si es 0); sin avisos falsos: hoja "X lo verá en Pagos por confirmar la próxima vez que entre."
+  y éxito "Pago a X · por confirmar" con "Pedirle que lo confirme" como CTA principal; "Deuda saldada"/"ya no te deberá nada" solo si el saldo neto del receptor
+  llega a 0 (`incomingOutcome` en `settle-model.ts`; `PendingPaymentSheet` y `PendingSettlements` reciben `balanceCents`).
+- Pendiente / fuera de alcance: nada.
+- Ficheros: `src/app/settle/client.tsx`, `src/app/settle/[id]/page.tsx`, `src/app/dashboard/page.tsx`, `src/components/settle/{settle-review-sheet,settlement-actions,settle-model,settle-model.test}.ts(x)`,
+  `src/components/dashboard/pending-settlements.tsx`, `e2e/settlements/{partial-and-scope,create-and-confirm}.spec.ts`, `e2e/spaces/settle-up.spec.ts`,
+  `e2e/refresh/committed-mutations.spec.ts`, `scripts/ralph/findings/RV-01.md`.
+- Aprendizajes: el deudor puede editar su PENDING con `PATCH /api/settle/{id}` `{ amount }` (euros), útil para provocar 409 SETTLEMENT_CHANGED en e2e.
+  `owedCents` (resolveMyDebts) es la deuda por pareja del plan voraz, no el saldo: para "saldada" usa el saldo neto del receptor.

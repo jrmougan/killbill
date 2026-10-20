@@ -24,14 +24,17 @@ export function SettlementActions({
     amountCents,
     method,
     owedCents,
+    balanceCents,
 }: {
     id: string;
     fromName: string;
     myName: string;
     amountCents: number;
     method: string;
-    /** What the payer owes me now (cents, before this payment counts). */
+    /** What the payer owes me in the suggested pairing (cents, before this payment counts). */
     owedCents: number;
+    /** My net balance (cents, positive = I'm owed). */
+    balanceCents: number;
 }) {
     const router = useRouter();
     const { mutate, busy } = useApiMutation();
@@ -83,6 +86,7 @@ export function SettlementActions({
                     amountCents={amountCents}
                     method={method}
                     owedCents={owedCents}
+                    balanceCents={balanceCents}
                     busy={busy}
                     error={sheetError}
                     onConfirm={submit}

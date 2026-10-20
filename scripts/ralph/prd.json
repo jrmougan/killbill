@@ -1230,8 +1230,8 @@
         "src/app/settle/client.tsx",
         "src/components/settle/settle-review-sheet.tsx"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "409 cierra la hoja de /settle con el error fuera; rechazo con la deuda real; sin 'Avisaremos'/'Avisado a' (Pago a X · por confirmar); 'Deuda saldada' según el saldo neto (incomingOutcome). Nada pendiente."
     },
     {
       "id": "RV-02",

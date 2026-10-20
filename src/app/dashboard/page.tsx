@@ -287,7 +287,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         .sort((a, b) => b.date.getTime() - a.date.getTime() || b.id.localeCompare(a.id))
         .slice(0, 4);
 
-    // What each payer owes me now (same greedy pairing as /settle), for the sheet's consequence and toast.
+    // What each payer owes me now (same greedy pairing as /settle); with my net balance it
+    // words the sheet's consequence and toast ("Deuda saldada" only when it reaches 0).
     const activeBalances: Record<string, number> = Object.fromEntries((active?.members ?? []).map((m) => [m.id, m.balanceCents]));
     const pending = pendingToMe.map((s) => ({
         id: s.id,
@@ -387,7 +388,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 )}
 
                 {active && active.status !== "ARCHIVED" && (
-                    <PendingSettlements key={active.id} settlements={pending} settling={active.status === "SETTLING"} myName={user.name} />
+                    <PendingSettlements key={active.id} settlements={pending} settling={active.status === "SETTLING"} myName={user.name} balanceCents={active.balanceCents} />
                 )}
 
                 {active && invite && (
