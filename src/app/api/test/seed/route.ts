@@ -856,6 +856,24 @@ export async function POST(request: Request) {
         },
       });
 
+      // Organizar (CF-24): a custom Casa category with a budget this month (moving
+      // it to "Compras", which also has one, answers 409 BUDGET_CONFLICT) and a
+      // few common + personal tags.
+      const mascotas = await prisma.category.create({
+        data: {
+          key: 'mascotas', label: 'Mascotas', labelEn: 'Pets', emoji: '🐾',
+          icon: 'Gift', color: '', bgColor: '', hex: '#8b5cf6',
+          sortOrder: 100, isSystem: false, groupId: casa.id,
+        },
+      });
+      await prisma.budget.create({
+        data: { categoryId: mascotas.id, amount: 6000, periodStart, periodEnd, periodType: 'MONTH', coupleId: casa.id },
+      });
+      for (const [name, color] of [['Vacaciones', '#06b6d4'], ['Cumpleaños', '#ec4899'], ['Coche', '#f59e0b']] as const) {
+        await prisma.tag.create({ data: { name, color, coupleId: casa.id } });
+      }
+      await prisma.tag.create({ data: { name: 'Gimnasio', color: '#10b981', ownerId: alvaro.id } });
+
       // A personal expense of Álvaro: "Compartir con el grupo" previews
       // "Lucía pasará a deberte…" (CF-22 "hoja-compartir-gasto").
       const farmacia = await prisma.expense.create({

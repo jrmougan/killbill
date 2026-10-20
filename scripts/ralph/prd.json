@@ -1080,8 +1080,8 @@
         "src/app/categories/client.tsx",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Hoja danger para eliminar etiqueta (común/personal, Trash2 44 px, toast) y categoría (destino en el CTA, BUDGET_CONFLICT con 'Elegir otro destino' e 'Ir a Presupuestos'); filas de categorías a 44 px con menú ⋯. Pendiente: conteos de uso y mes del choque (API)."
     },
     {
       "id": "CF-25",

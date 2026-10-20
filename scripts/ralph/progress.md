@@ -494,3 +494,17 @@
 - Ficheros: `src/components/shopping/lists-hub.tsx`, `src/components/ui/eq.tsx`, `scripts/ralph/capture.spec.ts`, `e2e/shopping/ui.spec.ts`, `scripts/ralph/findings/CF-23.md`.
 - Aprendizajes: `clearChecked` devuelve ahora `string | null` (error) para pintarlo en la hoja; `finish` lo muestra como toast. `EqToast` admite `className` (twMerge
   sobreescribe `bottom-*`). El POST de items acepta `aisle: null` explícito (no autoasigna) pero no `checked`. `lists-prefilled`: Mercadona con Plátanos y Pollo tachados.
+
+## 2026-10-20 · CF-24 Etiquetas y categorías: hojas propias y choque de presupuesto resoluble
+- Corregido: `/tags` sin `confirm()`: papelera de 44 px → `CriticalActionSheet` danger (`tag-delete-sheet`) "¿Eliminar la etiqueta «X»?" con texto común/personal,
+  CTA "Eliminar etiqueta" y toast "Etiqueta «X» eliminada"; muestras de color a 44 px. `DeleteCategoryModal` es ahora la hoja danger (`category-delete-sheet`):
+  "¿Eliminar la categoría «X»?", "Los gastos, gastos recurrentes y presupuestos…", select "Mover a", CTA "Eliminar y mover a «destino»"; 409 `BUDGET_CONFLICT`
+  (por `json.code`) → `category-budget-conflict` con "Elegir otro destino" (foco en el select) e "Ir a Presupuestos" (`/month?view=budget[&scope=personal]`).
+  Filas de `/categories`: el nombre es el botón "Editar X", ⋯ "Más opciones de X" (Editar/Subir/Bajar/Duplicar/Eliminar), papelera "Eliminar X" y "Duplicar X" de 44 px.
+- Pendiente / fuera de alcance: conteos de uso y `periodStart` en el 409 (API); radios de `ScopeRadio` de 40 px.
+- Ficheros: `src/app/tags/client.tsx`, `src/app/categories/client.tsx`, `src/components/category/delete-category-modal{,.test}.tsx`,
+  `src/app/api/test/seed/route.ts`, `scripts/ralph/capture.spec.ts`, `e2e/features/organize.spec.ts`, `scripts/ralph/findings/CF-24.md`.
+- Aprendizajes: `ux-showcase` tiene ahora la categoría propia "Mascotas" en Casa con presupuesto del mes (moverla a "Compras" da BUDGET_CONFLICT) y
+  etiquetas Vacaciones/Cumpleaños/Coche (comunes) y Gimnasio (personal de Álvaro). La opción de Compras en el select es "🛍️ Compras".
+  Capturas nuevas `categorias`, `hoja-eliminar-categoria`, `etiquetas`, `hoja-eliminar-etiqueta`. e2e de Organizar: `e2e/features/organize.spec.ts`
+  y `financial-features.spec.ts` (busca el botón "Editar {categoría}"). No metas `<p>`/`<div>` dentro de un `<button>`: usa `<span className="block">`.

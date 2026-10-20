@@ -111,6 +111,26 @@ const SCREENS: Screen[] = [
       await page.waitForTimeout(600);
     },
   },
+  { id: 'categorias', scenario: 'ux-showcase', path: () => '/categories' },
+  // Moving "Mascotas" to "Compras" (both with a budget this month) → 409 BUDGET_CONFLICT (CF-24).
+  {
+    id: 'hoja-eliminar-categoria', scenario: 'ux-showcase', path: () => '/categories',
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Eliminar Mascotas', exact: true }).click();
+      await page.getByLabel('Mover a').selectOption({ label: '🛍️ Compras' });
+      await page.getByTestId('confirm-sheet-confirm').click();
+      await page.getByTestId('category-budget-conflict').waitFor();
+      await page.waitForTimeout(300);
+    },
+  },
+  { id: 'etiquetas', scenario: 'ux-showcase', path: () => '/tags' },
+  {
+    id: 'hoja-eliminar-etiqueta', scenario: 'ux-showcase', path: () => '/tags',
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Eliminar etiqueta Vacaciones', exact: true }).click();
+      await page.waitForTimeout(600);
+    },
+  },
   { id: 'espacios', scenario: 'ux-showcase', path: () => '/spaces', design: '3a-espacios' },
   { id: 'espacio-detalle', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}` },
   // Lisboa active: Casa (a full couple) can't invite, so this shows the "Invitar a…" card.

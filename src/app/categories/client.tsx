@@ -10,8 +10,10 @@ import {
     Copy,
     Loader2,
     Info,
+    MoreHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { EqCard, EqCta, EqHeader } from "@/components/ui/eq";
 import { CategoryBadge } from "@/components/category/category-badge";
 import { CategoryEditor } from "@/components/category/category-editor";
@@ -75,6 +77,8 @@ export function CategoriesClient({
 
     const [editing, setEditing] = useState<CategoryListItem | null | undefined>(undefined); // undefined = closed, null = create
     const [deleting, setDeleting] = useState<CategoryListItem | null>(null);
+    // Custom row whose "more" menu (reorder, duplicate) is open.
+    const [menuFor, setMenuFor] = useState<CategoryListItem | null>(null);
     const [reordering, setReordering] = useState(false);
     const [duplicating, setDuplicating] = useState<string | null>(null);
 
@@ -178,84 +182,57 @@ export function CategoriesClient({
                 ) : (
                     <EqCard className="px-4">
                         {categories.map((cat) => {
-                            const customIdx = cat.isSystem ? -1 : customList.findIndex((c) => c.id === cat.id);
-                            const canMoveUp = canManage && customIdx > 0;
-                            const canMoveDown = canManage && customIdx >= 0 && customIdx < customList.length - 1;
                             return (
                                 <div key={cat.id} className="py-3 flex items-center gap-3 border-b border-[color:var(--line-2)] last:border-b-0">
                                     <CategoryBadge meta={cat} variant="emoji" size={40} radius={12} />
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-[15px] font-semibold text-foreground line-clamp-2 break-words">{cat.label}</p>
-                                        <div className="flex items-center gap-2 mt-0.5">
-                                            <span
-                                                className="h-3 w-3 rounded-full shrink-0 border border-[color:var(--line)]"
-                                                style={{ backgroundColor: cat.hex }}
-                                                aria-hidden
-                                            />
-                                            {cat.isSystem ? (
-                                                <span className="text-xs text-muted-foreground">Sistema</span>
-                                            ) : (
-                                                <span className="text-[11px] text-muted-foreground/70 font-mono">{cat.hex}</span>
-                                            )}
+                                    {canManage && !cat.isSystem ? (
+                                        // Custom rows: the name opens the editor (44 px tall tap target).
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditing(cat)}
+                                            aria-label={`Editar ${cat.label}`}
+                                            className="min-w-0 flex-1 min-h-11 text-left rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                        >
+                                            <CategoryRowText cat={cat} />
+                                        </button>
+                                    ) : (
+                                        <div className="min-w-0 flex-1">
+                                            <CategoryRowText cat={cat} />
                                         </div>
-                                    </div>
+                                    )}
 
                                     {canManage && (
-                                        <div className="flex items-center gap-0.5 shrink-0">
-                                            {!cat.isSystem && (
-                                                <>
-                                                    <div className="flex flex-col">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => move(cat.id, -1)}
-                                                            disabled={!canMoveUp || reordering}
-                                                            aria-label={`Subir ${cat.label}`}
-                                                            className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-                                                        >
-                                                            <ChevronUp className="h-4 w-4" />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => move(cat.id, 1)}
-                                                            disabled={!canMoveDown || reordering}
-                                                            aria-label={`Bajar ${cat.label}`}
-                                                            className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-                                                        >
-                                                            <ChevronDown className="h-4 w-4" />
-                                                        </button>
-                                                    </div>
-                                                    <Button
-                                                        size="icon"
-                                                        variant="ghost"
-                                                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                                        onClick={() => setEditing(cat)}
-                                                        aria-label={`Editar ${cat.label}`}
-                                                    >
-                                                        <Pencil className="h-4 w-4" />
-                                                    </Button>
-                                                </>
-                                            )}
-                                            <Button
-                                                size="icon"
-                                                variant="ghost"
-                                                className="h-8 w-8 text-muted-foreground hover:text-foreground disabled:opacity-40"
-                                                onClick={() => duplicate(cat.id)}
-                                                disabled={duplicating !== null}
-                                                aria-label={`Duplicar ${cat.label}`}
-                                                title="Duplicar"
-                                            >
-                                                {duplicating === cat.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                                            </Button>
-                                            {!cat.isSystem && (
-                                                <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                                    onClick={() => setDeleting(cat)}
-                                                    aria-label={`Borrar ${cat.label}`}
+                                        <div className="flex items-center shrink-0 -mr-2">
+                                            {cat.isSystem ? (
+                                                <button
+                                                    type="button"
+                                                    className={rowIconCls}
+                                                    onClick={() => duplicate(cat.id)}
+                                                    disabled={duplicating !== null}
+                                                    aria-label={`Duplicar ${cat.label}`}
+                                                    title="Duplicar"
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
+                                                    {duplicating === cat.id ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Copy className="h-[18px] w-[18px]" />}
+                                                </button>
+                                            ) : (
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        className={rowIconCls}
+                                                        onClick={() => setMenuFor(cat)}
+                                                        aria-label={`Más opciones de ${cat.label}`}
+                                                    >
+                                                        <MoreHorizontal className="h-5 w-5" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={cn(rowIconCls, "hover:text-destructive")}
+                                                        onClick={() => setDeleting(cat)}
+                                                        aria-label={`Eliminar ${cat.label}`}
+                                                    >
+                                                        <Trash2 className="h-[18px] w-[18px]" />
+                                                    </button>
+                                                </>
                                             )}
                                         </div>
                                     )}
@@ -285,17 +262,90 @@ export function CategoriesClient({
                 </Sheet>
             )}
 
+            {menuFor && (() => {
+                const idx = customList.findIndex((c) => c.id === menuFor.id);
+                const run = (fn: () => void) => () => {
+                    setMenuFor(null);
+                    fn();
+                };
+                return (
+                    <Sheet title={menuFor.label} onClose={() => setMenuFor(null)}>
+                        <div className="bg-card rounded-2xl border border-[color:var(--line-2)] px-4">
+                            <MenuRow icon={Pencil} label="Editar" onClick={run(() => setEditing(menuFor))} />
+                            <MenuRow icon={ChevronUp} label="Subir" disabled={idx <= 0 || reordering} onClick={run(() => move(menuFor.id, -1))} />
+                            <MenuRow
+                                icon={ChevronDown}
+                                label="Bajar"
+                                disabled={idx < 0 || idx >= customList.length - 1 || reordering}
+                                onClick={run(() => move(menuFor.id, 1))}
+                            />
+                            <MenuRow icon={Copy} label="Duplicar" disabled={duplicating !== null} onClick={run(() => duplicate(menuFor.id))} />
+                            <MenuRow icon={Trash2} label="Eliminar" danger last onClick={run(() => setDeleting(menuFor))} />
+                        </div>
+                    </Sheet>
+                );
+            })()}
+
             {deleting && (
-                <Sheet label="Borrar categoría" onClose={() => setDeleting(null)}>
-                    <DeleteCategoryModal
-                        context={context}
-                        category={deleting}
-                        categories={categories}
-                        onDeleted={onDeleted}
-                        onCancel={() => setDeleting(null)}
-                    />
-                </Sheet>
+                <DeleteCategoryModal
+                    context={context}
+                    category={deleting}
+                    categories={categories}
+                    onDeleted={onDeleted}
+                    onCancel={() => setDeleting(null)}
+                />
             )}
         </div>
+    );
+}
+
+const rowIconCls =
+    "h-11 w-11 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors";
+
+function CategoryRowText({ cat }: { cat: CategoryListItem }) {
+    return (
+        <>
+            <span className="block text-[15px] font-semibold text-foreground line-clamp-2 break-words">{cat.label}</span>
+            <span className="flex items-center gap-2 mt-0.5">
+                <span
+                    className="h-3 w-3 rounded-full shrink-0 border border-[color:var(--line)]"
+                    style={{ backgroundColor: cat.hex }}
+                    aria-hidden
+                />
+                <span className="text-xs text-muted-foreground">{cat.isSystem ? "Sistema" : "Propia"}</span>
+            </span>
+        </>
+    );
+}
+
+function MenuRow({
+    icon: Icon,
+    label,
+    onClick,
+    danger,
+    disabled,
+    last,
+}: {
+    icon: typeof Pencil;
+    label: string;
+    onClick: () => void;
+    danger?: boolean;
+    disabled?: boolean;
+    last?: boolean;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            className={cn(
+                "w-full flex items-center gap-3 py-3.5 text-left text-[15px] disabled:opacity-40",
+                !last && "border-b border-[color:var(--line-2)]",
+                danger && "text-destructive",
+            )}
+        >
+            <Icon className={cn("h-[19px] w-[19px]", !danger && "text-muted-foreground")} />
+            {label}
+        </button>
     );
 }
