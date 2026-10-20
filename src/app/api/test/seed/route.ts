@@ -881,6 +881,15 @@ export async function POST(request: Request) {
           description: 'Farmacia', amount: 1240, categoryId: await resolveCategoryId('health'),
           paidById: alvaro.id, ownerId: alvaro.id, createdById: alvaro.id,
           visibility: 'PERSONAL', coupleId: null, date: daysAgo(4),
+          // A saved photo + lines: the edit form shows "Quitar foto" and the
+          // per-line trash with local Deshacer (CF-25 "editar-gasto-ticket").
+          receiptUrl: '/icon-192x192.png',
+          lineItems: {
+            create: [
+              { description: 'Ibuprofeno', quantity: 1, unitPrice: 390, lineTotal: 390, position: 0 },
+              { description: 'Crema solar', quantity: 1, unitPrice: 850, lineTotal: 850, position: 1 },
+            ],
+          },
         },
       });
 

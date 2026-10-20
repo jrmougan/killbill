@@ -89,6 +89,8 @@ export type FormState = {
     receiptFile: File | null;
     receiptPreview: string | null;
     storedReceiptUrl: string | null;
+    /** Saved receipt the user just removed (edit form): "Deshacer" brings it back until saving. */
+    discardedReceiptUrl: string | null;
     receiptItems: EditableReceiptItem[];
     // Submit
     saving: boolean;
@@ -143,6 +145,7 @@ export function initFormState(o: {
         receiptFile: null,
         receiptPreview: initial?.receiptUrl ?? null,
         storedReceiptUrl: initial?.receiptUrl ?? null,
+        discardedReceiptUrl: null,
         receiptItems: (initial?.receiptItems ?? []).map(withUid),
         saving: false,
         formError: null,
@@ -184,6 +187,7 @@ export type FormAction =
         category: string | null;
     }
     | { type: "receiptDiscarded" }
+    | { type: "receiptRestored" }
     | { type: "scanCancelled" }
     | { type: "formError"; error: string | null; openMore?: boolean }
     | { type: "saveStarted" }
@@ -274,7 +278,7 @@ export function formReducer(state: FormState, action: FormAction): FormState {
         case "scanHintShown":
             return { ...state, scanHint: true };
         case "fileChosen":
-            return { ...state, scanHint: false, receiptFile: action.file, receiptPreview: action.preview };
+            return { ...state, scanHint: false, receiptFile: action.file, receiptPreview: action.preview, discardedReceiptUrl: null };
         case "scanStarted":
             return { ...state, mode: "scan", ocrError: null };
         case "scanFailed":
@@ -289,7 +293,11 @@ export function formReducer(state: FormState, action: FormAction): FormState {
             return { ...next, scanned: true, mode: "form" };
         }
         case "receiptDiscarded":
-            return withoutReceipt(state);
+            // Only a saved photo is worth undoing; a freshly picked one can be picked again.
+            return { ...withoutReceipt(state), discardedReceiptUrl: state.receiptFile ? null : state.storedReceiptUrl };
+        case "receiptRestored":
+            if (!state.discardedReceiptUrl) return state;
+            return { ...state, storedReceiptUrl: state.discardedReceiptUrl, receiptPreview: state.discardedReceiptUrl, discardedReceiptUrl: null };
         case "scanCancelled":
             return withoutReceipt({ ...state, mode: "form" });
         case "formError":

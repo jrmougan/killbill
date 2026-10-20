@@ -508,3 +508,14 @@
   etiquetas Vacaciones/Cumpleaños/Coche (comunes) y Gimnasio (personal de Álvaro). La opción de Compras en el select es "🛍️ Compras".
   Capturas nuevas `categorias`, `hoja-eliminar-categoria`, `etiquetas`, `hoja-eliminar-etiqueta`. e2e de Organizar: `e2e/features/organize.spec.ts`
   y `financial-features.spec.ts` (busca el botón "Editar {categoría}"). No metas `<p>`/`<div>` dentro de un `<button>`: usa `<span className="block">`.
+
+## 2026-10-20 · CF-25 Desglose de ticket y foto: deshacer local y toques de 44 px
+- Corregido: borrar una línea deja `receipt-line-removed` ("«X» eliminada · el total baja a N €" / "Sin desglose: el importe se queda en N €") con
+  Deshacer que la reinserta en su posición (estado local del editor); papelera 44×44 separada del selector ½/Yo/{inicial}, que también pasa a 44×44;
+  "Quitar" → "Quitar foto" (`min-h-11`, `--negative-ink`) y, si la foto estaba guardada, `receipt-photo-removed` "La foto se borrará del gasto al guardar"
+  + Deshacer (acción `receiptRestored`, campo `discardedReceiptUrl`; elegir otra foto lo limpia). Test jsdom nuevo `receipt-items-editor.test.tsx`.
+- Pendiente / fuera de alcance: campos de cantidad/precio de 16 px; chips de etiqueta de 26 px.
+- Ficheros: `src/components/expense/add/{receipt-items-editor,receipt-items-editor.test,expense-more-options,expense-form-state,expense-form-state.test}.ts(x)`,
+  `src/app/api/test/seed/route.ts`, `scripts/ralph/capture.spec.ts`.
+- Aprendizajes: oxlint exige `<output>` en vez de `role="status"`. "Farmacia" (`personalExpenseId`) tiene ahora foto (`/icon-192x192.png`, de `public/`) y dos
+  líneas (Ibuprofeno 3,90 + Crema solar 8,50): captura nueva `editar-gasto-ticket`; `anadir-gasto-opciones` añade una línea vacía para medir la papelera.

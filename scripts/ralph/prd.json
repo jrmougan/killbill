@@ -1108,8 +1108,8 @@
         "src/components/expense/add/expense-more-options.tsx",
         "src/components/expense/add/use-receipt-scan.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Deshacer local al borrar línea (total que baja / \"Sin desglose\"), papelera y ½/Yo/L de 44 px, \"Quitar foto\" de 44 px y Deshacer de la foto guardada; pendiente: campos qty/precio de 16 px."
     },
     {
       "id": "CF-26",

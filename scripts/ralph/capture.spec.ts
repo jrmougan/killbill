@@ -50,6 +50,7 @@ const SCREENS: Screen[] = [
       await page.click('[data-testid="numpad-2"]');
       await page.click('[data-testid="expense-more"]');
       await page.waitForTimeout(600); // let the sheet finish sliding in
+      await page.getByRole('button', { name: 'Añadir producto' }).click(); // a line shows the 44 px trash
     },
   },
   { id: 'quedar-en-paz', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.coupleId}`, design: '2a-quedar-en-paz-ticket' },
@@ -87,6 +88,16 @@ const SCREENS: Screen[] = [
       await page.getByTestId('numpad-8').click();
       await page.getByTestId('numpad-0').click();
       await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: 'editar-gasto-ticket', scenario: 'ux-showcase', path: (d) => `/expense/${d.personalExpenseId}/edit`,
+    act: async (page) => {
+      await page.click('[data-testid="expense-more"]');
+      await page.waitForTimeout(600);
+      await page.getByRole('button', { name: 'Eliminar producto 2' }).click();
+      await page.getByRole('button', { name: 'Quitar foto' }).click();
+      await page.waitForTimeout(200);
     },
   },
   { id: 'mes-presupuestos', scenario: 'ux-showcase', path: () => '/month', design: '3a-mes-presupuestos' },

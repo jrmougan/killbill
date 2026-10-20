@@ -102,10 +102,20 @@ export function ExpenseMoreOptions({
                 />
             </OptionSection>
 
-            {receiptPreview && (
-                <OptionSection label="Ticket" aside={<button type="button" onClick={onDiscardReceipt} className="text-xs font-semibold text-destructive">Quitar</button>}>
+            {receiptPreview ? (
+                <OptionSection
+                    label="Ticket"
+                    aside={<button type="button" onClick={onDiscardReceipt} className="-my-2.5 flex min-h-11 items-center text-xs font-semibold text-[color:var(--negative-ink)]">Quitar foto</button>}
+                >
                     {/* oxlint-disable-next-line nextjs/no-img-element -- local object URL / uploaded receipt of unknown size */}
                     <img src={receiptPreview} alt="Ticket adjunto" decoding="async" className="max-h-60 w-full rounded-[10px] object-contain" />
+                </OptionSection>
+            ) : state.discardedReceiptUrl && (
+                <OptionSection label="Ticket">
+                    <output data-testid="receipt-photo-removed" className="-my-2.5 flex items-center gap-2 text-[13px]">
+                        <span className="min-w-0 flex-1 text-muted-foreground">La foto se borrará del gasto al guardar</span>
+                        <button type="button" onClick={() => dispatch({ type: "receiptRestored" })} className="flex min-h-11 shrink-0 items-center font-semibold text-primary">Deshacer</button>
+                    </output>
                 </OptionSection>
             )}
 
