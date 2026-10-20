@@ -260,7 +260,7 @@ export function SplitEditor({
                             onClick={() => setMode(key)}
                             aria-pressed={sel}
                             className={cn(
-                                "flex items-center gap-1.5 px-2 py-2.5 rounded-xl border text-[13px] font-semibold min-[360px]:gap-2 min-[360px]:px-3 min-[360px]:text-sm transition-all active:scale-[0.98]",
+                                "flex min-h-11 items-center gap-1.5 px-2 py-2.5 rounded-xl border text-[13px] font-semibold min-[360px]:gap-2 min-[360px]:px-3 min-[360px]:text-sm transition-all active:scale-[0.98]",
                                 sel
                                     ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)] text-foreground"
                                     : "bg-card border-[color:var(--line)] text-muted-foreground hover:bg-secondary",

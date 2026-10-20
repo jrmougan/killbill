@@ -105,7 +105,7 @@ export function DeleteCategoryModal({
             </div>
 
             {error && (
-                <div role="alert" className="rounded-xl bg-[var(--negative-tint)] border border-[color:var(--negative)]/30 px-3 py-2.5 text-sm text-destructive">
+                <div role="alert" className="rounded-xl bg-[var(--negative-tint)] border border-[color:var(--negative)]/30 px-3 py-2.5 text-sm text-[color:var(--negative-ink)]">
                     {error}
                 </div>
             )}

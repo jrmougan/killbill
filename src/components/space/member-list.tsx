@@ -190,7 +190,7 @@ export function MemberList({
                                 onClick={() => remove(editing)}
                                 disabled={busy || refreshing}
                                 data-testid="member-remove"
-                                className="min-h-12 rounded-[14px] bg-[var(--negative-tint)] px-4 py-3 text-destructive text-sm font-semibold break-words disabled:opacity-50"
+                                className="min-h-12 rounded-[14px] bg-[var(--negative-tint)] px-4 py-3 text-[color:var(--negative-ink)] text-sm font-semibold break-words disabled:opacity-50"
                             >
                                 Quitar a {editing.name} del espacio
                             </button>

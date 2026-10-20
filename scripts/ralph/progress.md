@@ -19,6 +19,7 @@
 - Estados vacíos: `EqEmpty` (`eq.tsx`) con `title`, `hint` y `action` + `href`/`onClick`.
 - Enlaces de texto en cabeceras: `-my-2.5 min-h-11 flex items-center` da 44 px sin cambiar la altura de la fila.
 - Texto rojo sobre `--negative-tint`: usa `--negative-ink` (#A04830); `--negative`/`text-destructive` ahí no llega a 4,5:1.
+- Grises de texto: `--ink-2`/`muted-foreground` y `--ink-3` ya pasan 4,5:1 sobre papel, blanco, `--track` y tintes; `--placeholder` y `--ink-4` nunca para texto.
 - Tipografía: Schibsted en todo (cifras incluidas); `font-mono` (DM Mono) solo en códigos/enlaces/tokens y la meta del ticket.
 - Emoji de espacio: `SPACE_TYPE_META` (`src/lib/space-ui.ts`) es la única fuente; categoría en filas = `meta.emoji` en el `icon` de `EqRow`.
 
@@ -179,3 +180,16 @@
   `globals.css`); para gráficos con la estética 2a usa la rampa `--accent-hex/--accent-soft/--accent-softer` por rango.
   DM Mono solo para códigos/enlaces/tokens y la meta del ticket. El `while pgrep -f capture` se encuentra a sí mismo:
   lanza `ux:capture` en primer plano.
+
+## 2026-10-20 · UX-14 Transversal · accesibilidad y tacto
+- Corregido: grises `--ink-2`/`--muted-foreground` (#666862) y `--ink-3` (#686A65) con ≥4,5:1 en papel, blanco, pista y
+  tintes; texto rojo sobre `--negative-tint` con `--negative-ink` (alertas, chip "Rechazado", "Expulsar", setup); 44 px en el
+  interruptor "Recurrente", los modos de reparto, el campo Fecha, "Volver a rápido" y el buscador de Gastos.
+- Pendiente / fuera de alcance: "Mostrar contraseña" (función nueva, choca con `getByLabel('Contraseña')`); input del importe
+  (lo cubre su `<label>`); placeholders a 3,4:1 (decorativos).
+- Ficheros: `src/app/globals.css`, `src/components/expense/{split-editor,add/expense-more-options,add/add-expense-client}.tsx`,
+  `src/app/expenses/list/client.tsx`, `src/components/settle/status-chip.tsx`, `src/components/space/member-list.tsx`,
+  `src/components/category/{category-editor,delete-category-modal}.tsx`, `src/app/setup/setup-form.tsx`.
+- Aprendizajes: comprueba el contraste también sobre `--track` (#E9EAE5) y los tintes, no solo sobre papel: es donde fallan los
+  grises. Interruptores: botón `h-11 w-11` transparente con la pista en un `<span>` (`group-focus-visible:ring-2`). Un input
+  dentro de una etiqueta con borde de `h-11` mide 42: dale `h-11 -my-px`.

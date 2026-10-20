@@ -254,8 +254,8 @@
         "Botones de solo icono con aria-label; encabezados y landmarks con sentido en *.aria.yml",
         "Sin desbordamiento horizontal ni errores de consola"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Grises --ink-2/--ink-3/muted a ≥4,5:1 también sobre pista y tintes, rojo sobre tinte con --negative-ink, 44 px en interruptor Recurrente, modos de reparto, Fecha, 'Volver a rápido' y buscador; pendiente: mostrar contraseña."
     }
   ]
 }

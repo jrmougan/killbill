@@ -9,7 +9,7 @@ export function SettlementStatusChip({ status, className }: { status: string; cl
             className={cn(
                 "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold",
                 status === "CONFIRMED" && "bg-[var(--positive-tint)] text-[color:var(--positive)]",
-                status === "REJECTED" && "bg-[var(--negative-tint)] text-[color:var(--negative)]",
+                status === "REJECTED" && "bg-[var(--negative-tint)] text-[color:var(--negative-ink)]",
                 status !== "CONFIRMED" && status !== "REJECTED" && "bg-[var(--track)] text-muted-foreground",
                 className
             )}

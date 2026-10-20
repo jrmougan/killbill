@@ -163,7 +163,7 @@ export function ExpensesListClient({
                         onChange={(e) => setQ(e.target.value)}
                         placeholder="Buscar gasto o importe"
                         aria-label="Buscar gasto o importe"
-                        className="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+                        className="-my-px h-11 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
                     />
                 </label>
                 <div className="eq-scroll -my-1 flex items-center gap-1.5 overflow-x-auto">
