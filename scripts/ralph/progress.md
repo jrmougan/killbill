@@ -616,3 +616,12 @@
   `scripts/ralph/capture.spec.ts`, `scripts/ralph/findings/RV-05.md`.
 - Aprendizajes: el texto de un toast aparece ~150 ms después de montarlo: en tests unitarios usa `findBy*` o avanza timers; en capturas espera ≥600 ms.
   `Sheet` acepta `describedBy`. Verde oscuro para texto sobre tintes: `--accent-hover` (#235F45).
+
+## 2026-10-20 · RV-06 Tests: settle-up cubierto y 409 de archivado en la hoja
+- Corregido: nuevo e2e de solo API en `settle-up.spec.ts` (OWNER deudor en ACTIVE → `suggested: [{toUserId, amount: 5000}]`, una fila PENDING,
+  repetición idempotente); en `lifecycle.spec.ts` la hoja de archivar abierta con datos desfasados recibe 409 `OPEN_BALANCES` y luego
+  `PENDING_SETTLEMENTS` y los pinta en `confirm-sheet-error` con el enlace «Saldar deudas»; tras confirmar, la misma hoja archiva.
+- Pendiente / fuera de alcance: nada.
+- Ficheros: `e2e/spaces/{settle-up,lifecycle}.spec.ts`, `scripts/ralph/findings/RV-06.md`.
+- Aprendizajes: no hay ruta de login por API: para otra sesión en un e2e usa `createAuthenticatedContext(newContext, user)` y su `ctx.request`.
+  Para forzar un 409 «desfasado» con una hoja abierta, cambia el estado por `page.request` (comparte cookies) sin recargar la página.

@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures/test.fixture';
 import { request as playwrightRequest, type Page } from '@playwright/test';
 import { seedScenario, resetDb } from '../fixtures/db.fixture';
-import { loginAs } from '../fixtures/auth.fixture';
+import { createAuthenticatedContext, loginAs } from '../fixtures/auth.fixture';
 
 /**
  * Space lifecycle from the UI (src/lib/space-policy.ts ALLOWED_TRANSITIONS):
@@ -186,10 +186,11 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await expect(page.getByText('Gasto tras reabrir')).toBeVisible();
   });
 
-  test('SETTLING → ARCHIVED: blocked while a payment is pending/debts are open, then archives; UI read-only', async ({ page }) => {
+  test('SETTLING → ARCHIVED: blocked while a payment is pending/debts are open, then archives; UI read-only', async ({ page, newContext }) => {
     // space-settling: B owes A 50 € and has a PENDING 50 € settlement.
     const data = await seedScenario(apiContext, 'space-settling');
     const userA = data.userA as Creds; // OWNER
+    const userB = data.userB as Creds; // MEMBER, debtor
     const spaceId = data.coupleId as string;
     const expenseId = data.expenseId as string;
     const settlementId = data.settlementId as string;
@@ -218,6 +219,52 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await page.reload();
     await page.getByTestId('space-action-archive').click();
     await expect(sheet.getByTestId('confirm-sheet-reason')).toHaveCount(0);
+    const confirm = sheet.getByTestId('confirm-sheet-confirm');
+    await expect(confirm).toBeEnabled();
+    const sheetError = sheet.getByTestId('confirm-sheet-error');
+    const settleLink = sheetError.getByRole('link', { name: /Saldar deudas/ });
+
+    // Stale page: with the sheet open, the space gets a new debt behind its back
+    // (reopen → A pays a 20 € shared expense → SETTLING again: B owes A 10 €).
+    // The server refuses with 409 OPEN_BALANCES and the sheet shows it with the settle link.
+    expect((await page.request.patch(`/api/spaces/${spaceId}`, { data: { status: 'ACTIVE' } })).ok()).toBeTruthy();
+    const debt = await postSharedExpense(page, '20.00', 'Gasto con la hoja abierta');
+    expect(debt.ok(), await debt.text()).toBeTruthy();
+    expect((await page.request.patch(`/api/spaces/${spaceId}`, { data: { status: 'SETTLING' } })).ok()).toBeTruthy();
+
+    const openBalances = spacePatch(page, spaceId);
+    await confirm.click();
+    const openBalancesRes = await openBalances;
+    expect(openBalancesRes.status()).toBe(409);
+    expect((await openBalancesRes.json()).code).toBe('OPEN_BALANCES');
+    await expect(sheet).toBeVisible();
+    await expect(sheetError).toContainText('Aún hay deudas sin saldar en este espacio. Saldadlas antes de archivarlo.');
+    await expect(settleLink).toHaveAttribute('href', `/settle?space=${spaceId}`);
+    await expect(header).toHaveText('Pareja · Cerrando cuentas');
+
+    // B registers the 10 € payment (PENDING) while A's sheet is still open → 409 PENDING_SETTLEMENTS.
+    const ctxB = await createAuthenticatedContext(newContext, userB);
+    try {
+      const paid = await ctxB.request.post('/api/settle', { data: { toUserId: userA.id, amount: 10, groupId: spaceId } });
+      expect(paid.ok(), await paid.text()).toBeTruthy();
+      const paidId = (await paid.json()).settlement.id as string;
+
+      const pending = spacePatch(page, spaceId);
+      await confirm.click();
+      const pendingRes = await pending;
+      expect(pendingRes.status()).toBe(409);
+      const pendingBody = await pendingRes.json();
+      expect(pendingBody).toMatchObject({ code: 'PENDING_SETTLEMENTS', settleUrl: `/settle?space=${spaceId}` });
+      await expect(sheetError).toContainText('Hay un pago pendiente de confirmar. Confírmalo o recházalo antes de archivar el espacio.');
+      await expect(settleLink).toHaveAttribute('href', `/settle?space=${spaceId}`);
+
+      // A confirms it → at peace again; the same open sheet now archives.
+      const confirmedB = await page.request.patch(`/api/settle/${paidId}/status`, { data: { status: 'CONFIRMED' } });
+      expect(confirmedB.ok(), await confirmedB.text()).toBeTruthy();
+    } finally {
+      await ctxB.close();
+    }
+
     const patchPromise = spacePatch(page, spaceId);
     await sheet.getByTestId('confirm-sheet-confirm').click();
     const patch = await patchPromise;

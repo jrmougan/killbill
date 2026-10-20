@@ -1364,8 +1364,8 @@
         "e2e/spaces/lifecycle.spec.ts",
         "e2e/spaces/settle-up.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "settle-up vuelve a tener un e2e de API (suggested 5000 + PENDING + idempotencia) y el archivado fuerza los 409 OPEN_BALANCES/PENDING_SETTLEMENTS con la hoja abierta (error + enlace); nada pendiente."
     }
   ],
   "goal2": "Acciones críticas claras y vocabulario 'Saldar deuda' (historias CF-*): plan en docs/ux/plan-acciones-criticas.md, generado por un workflow de auditoría de flujos."

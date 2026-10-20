@@ -11,7 +11,8 @@ import { createAuthenticatedContext } from '../fixtures/auth.fixture';
  *   SETTLING (OWNER/ADMIN): it never calls settle-up, so no PENDING payment is
  *   created on anyone's behalf. Debtors pay from /settle ("Ya le he pagado").
  * - POST /api/spaces/[id]/settle-up still exists (API only): ACTIVE → SETTLING plus
- *   PENDING settlements for the CALLER's debts; the third test pins it is idempotent.
+ *   PENDING settlements for the CALLER's debts; the third test pins that contract
+ *   (suggested + PENDING row) and the fourth that re-runs stay idempotent.
  * - /close step 2 lists every debt of the space (mine as "Debes a X") and the
  *   PENDING payments; CONFIRMED history is not listed.
  * - Pending settlements never post to the ledger; confirming one does (once).
@@ -214,6 +215,51 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await pageB.goto(`/settle?space=${spaceId}`);
     await expect(pageB.getByTestId('settle-archive-hint')).toHaveText('Avisa a quien gestiona el espacio para archivarlo.');
     await expect(pageB.getByTestId('settle-archive')).toHaveCount(0);
+
+    await ctxA.close();
+    await ctxB.close();
+  });
+
+  test('API settle-up in ACTIVE: SETTLING + one PENDING for the OWNER-debtor, idempotent on re-run', async ({ newContext }) => {
+    // B (MEMBER) pays a 100 € shared expense split 50/50 → A (OWNER) owes B 50 €.
+    const data = await seedScenario(apiContext, 'couple-no-expenses');
+    const userA = data.userA as Creds; // OWNER, debtor
+    const userB = data.userB as Creds; // MEMBER, creditor
+    const spaceId = data.coupleId as string;
+
+    const ctxA = await createAuthenticatedContext(newContext, userA);
+    const ctxB = await createAuthenticatedContext(newContext, userB);
+    const expense = await ctxB.request.post('/api/expenses', {
+      data: { description: 'Compra compartida', amount: '100.00', category: 'other', groupId: spaceId },
+    });
+    expect(expense.ok(), await expense.text()).toBeTruthy();
+
+    // First call: ACTIVE → SETTLING and the caller's debt as a PENDING suggestion.
+    const first = await ctxA.request.post(`/api/spaces/${spaceId}/settle-up`);
+    expect(first.status()).toBe(200);
+    expect(await first.json()).toEqual({ success: true, status: 'SETTLING', suggested: [{ toUserId: userB.id, amount: 5000 }] });
+
+    // Re-running creates nothing new.
+    const again = await ctxA.request.post(`/api/spaces/${spaceId}/settle-up`);
+    expect(again.status()).toBe(200);
+    expect(await again.json()).toEqual({ success: true, status: 'SETTLING', suggested: [] });
+
+    // Exactly one PENDING A → B of 50,00 € exists, and the space is SETTLING.
+    const pageA = await ctxA.newPage();
+    await pageA.goto(`/spaces/${spaceId}/close`);
+    const rows = pageA.getByTestId('close-settlement-row');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toHaveAttribute('data-status', 'PENDING');
+    await expect(rows.first()).toContainText('Pago a User B · por confirmar');
+    await expect(rows.first().getByTestId('close-amount')).toHaveText(FIFTY);
+    await expect(pageA.getByTestId('close-start-settling')).toHaveCount(0);
+
+    // The creditor gets it to confirm; PENDING does not move balances yet.
+    const pageB = await ctxB.newPage();
+    await pageB.goto('/dashboard');
+    await expect(pageB.getByText(/^Pagos por confirmar · 1$/)).toBeVisible();
+    await expect(pageB.getByTestId('pending-settlement').getByText(/^50,00\s€$/)).toBeVisible();
+    await expect(pageB.getByTestId('balance-amount')).toHaveText(PLUS_50);
 
     await ctxA.close();
     await ctxB.close();
