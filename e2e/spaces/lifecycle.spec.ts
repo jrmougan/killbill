@@ -115,7 +115,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     expect(expenseRes.status()).toBe(409);
     const blocked = await expenseRes.json();
     expect(blocked.code).toBe('SPACE_NOT_WRITABLE');
-    expect(blocked.error).toBe('Este espacio se está liquidando: no se pueden crear gastos nuevos');
+    expect(blocked.error).toBe('Estáis cerrando cuentas en este espacio: no se pueden crear gastos nuevos');
 
     // Existing expenses become read-only (no edit/delete).
     await page.goto(`/expense/${expenseId}`);

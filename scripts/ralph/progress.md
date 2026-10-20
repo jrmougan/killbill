@@ -242,3 +242,14 @@
   `e2e/spaces/lifecycle.spec.ts`, `e2e/features/month.spec.ts`, `e2e/shopping/lifecycle.spec.ts`, `scripts/ralph/capture.spec.ts`.
 - Aprendizajes: el ARCHIVED del detalle de gasto también lo afirma `e2e/spaces/lifecycle.spec.ts:236` (texto exacto). `space-settling`
   devuelve `expenseId`, así que sirve para capturar el detalle de un gasto bloqueado. `inicio-liquidando` y `listas` no muestran estos avisos.
+
+## 2026-10-20 · CF-05 Texto de tres mensajes de API de space-policy
+- CAMBIO DE TEXTO DE MENSAJES DE API pedido por el usuario (renombrado); `code`, `status` y forma sin cambios.
+- Corregido: `space-policy.ts:107` → "Estáis cerrando cuentas en este espacio: no se pueden crear gastos nuevos"; `:230` →
+  "Aún hay deudas sin saldar en este espacio. Saldadlas antes de archivarlo."; `:291` → "Esta persona aún tiene saldo pendiente
+  en el espacio. Saldad sus deudas antes de quitarla."; comentario `:192` "al día".
+- Pendiente / fuera de alcance: mensajes de `:135`, `:141`, `:222` y `:270` (necesitan visto bueno del usuario).
+- Ficheros: `src/lib/space-policy{,.closing.test}.ts`, `src/app/api/expenses/route.test.ts`, `e2e/spaces/lifecycle.spec.ts`.
+- Aprendizajes: estos mensajes solo los afirman `route.test.ts:302` (expenses), `space-policy.closing.test.ts:78` y
+  `lifecycle.spec.ts:118`; los tests de miembros/espacio buscan subcadenas (`/saldo pendiente/`, `/deudas/`): consérvalas.
+  Ninguna pantalla de captura muestra estos 409 sin interacción.

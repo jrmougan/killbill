@@ -75,7 +75,7 @@ describe("space-policy — closing, leaving, naming, trip dates", () => {
         it("409 HAS_BALANCE for a debtor or a creditor, with the balance", () => {
             expect(kickBlocker(-2500)).toMatchObject({ code: "HAS_BALANCE", status: 409, balanceCents: -2500 });
             expect(kickBlocker(2500)).toMatchObject({ code: "HAS_BALANCE", status: 409, balanceCents: 2500 });
-            expect(kickBlocker(2500)?.error).toMatch(/Quedad en paz/);
+            expect(kickBlocker(2500)?.error).toMatch(/Saldad sus deudas antes de quitarla/);
         });
     });
 

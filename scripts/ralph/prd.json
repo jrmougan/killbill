@@ -441,8 +441,8 @@
         "src/app/api/expenses/route.test.ts",
         "e2e/spaces/lifecycle.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Textos de space-policy.ts:107/230/291 (y comentario :192) con 'cerrando cuentas'/'Saldad'; code/status/forma intactos; tests y lifecycle.spec en verde. :135/:141/:222/:270 sin tocar (visto bueno)."
     },
     {
       "id": "CF-06",

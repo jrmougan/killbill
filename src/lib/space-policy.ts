@@ -104,7 +104,7 @@ export function assertSpaceWritable(status: SpaceStatus): void {
             "SPACE_NOT_WRITABLE",
             status === SpaceStatus.ARCHIVED
                 ? "Este espacio está archivado (solo lectura)"
-                : "Este espacio se está liquidando: no se pueden crear gastos nuevos",
+                : "Estáis cerrando cuentas en este espacio: no se pueden crear gastos nuevos",
             409,
         );
     }
@@ -189,7 +189,7 @@ export function assertNotArchived(status: SpaceStatus): void {
 // --- Balances & closing ------------------------------------------------------
 
 /**
- * A balance within ±1 cent is integer-split noise: /settle treats it as "en paz"
+ * A balance within ±1 cent is integer-split noise: /settle treats it as "al día"
  * (`isAtPeace`, `resolveMyDebts`) so nothing could ever settle it. Every rule
  * that blocks on an open balance uses the same tolerance.
  */
@@ -227,7 +227,7 @@ export function assertCanArchive(args: {
     if (Object.values(args.balances).some(hasOpenBalance)) {
         throw new SpacePolicyError(
             "OPEN_BALANCES",
-            "Aún hay deudas sin saldar en este espacio. Quedad en paz antes de archivarlo.",
+            "Aún hay deudas sin saldar en este espacio. Saldadlas antes de archivarlo.",
             409,
         );
     }
@@ -288,7 +288,7 @@ export function kickBlocker(balanceCents: number): Extract<LeaveBlock, { code: "
     return {
         code: "HAS_BALANCE",
         status: 409,
-        error: "Esta persona aún tiene saldo pendiente en el espacio. Quedad en paz antes de quitarla.",
+        error: "Esta persona aún tiene saldo pendiente en el espacio. Saldad sus deudas antes de quitarla.",
         balanceCents: Math.round(balanceCents),
     };
 }
