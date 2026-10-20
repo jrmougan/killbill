@@ -12,7 +12,16 @@ import { JoinLinkForm } from "./join-link-form";
 type Choice = "pareja" | "piso" | "viaje" | "solo";
 type ApiType = "COUPLE" | "GROUP" | "EPHEMERAL";
 
-type Option = { key: Choice; emoji: string; title: string; sub: string; type: ApiType | null; defaultName: string };
+type Option = {
+    key: Choice;
+    emoji: string;
+    title: string;
+    sub: string;
+    /** One line under the grid explaining what the selected mode is for. */
+    hint: string;
+    type: ApiType | null;
+    defaultName: string;
+};
 
 const NAME_MAX = 60;
 
@@ -27,12 +36,27 @@ const NAME_MAX = 60;
  */
 function optionsFor(ephemeralEnabled: boolean): Option[] {
     return [
-        { key: "pareja", emoji: SPACE_TYPE_META.COUPLE.emoji, title: "Mi pareja", sub: "2 personas", type: "COUPLE", defaultName: "Casa" },
-        { key: "piso", emoji: SPACE_TYPE_META.GROUP.emoji, title: "Mi piso", sub: "Compañeros", type: "GROUP", defaultName: "Piso" },
+        {
+            key: "pareja", emoji: SPACE_TYPE_META.COUPLE.emoji, title: "Mi pareja", sub: "2 personas", type: "COUPLE", defaultName: "Casa",
+            hint: "Para los gastos de casa entre dos. Sabréis siempre quién debe a quién.",
+        },
+        {
+            key: "piso", emoji: SPACE_TYPE_META.GROUP.emoji, title: "Mi piso", sub: "Compañeros", type: "GROUP", defaultName: "Piso",
+            hint: "Para compartir alquiler, facturas y compra con tus compañeros de piso.",
+        },
         ephemeralEnabled
-            ? { key: "viaje", emoji: SPACE_TYPE_META.EPHEMERAL.emoji, title: "Un viaje", sub: "Con fecha de fin", type: "EPHEMERAL", defaultName: "Viaje" }
-            : { key: "viaje", emoji: SPACE_TYPE_META.GROUP.emoji, title: "Con amigos", sub: "Viajes y planes", type: "GROUP", defaultName: "Amigos" },
-        { key: "solo", emoji: SPACE_TYPE_META.INDIVIDUAL.emoji, title: "Solo yo", sub: "Finanzas personales", type: null, defaultName: "" },
+            ? {
+                key: "viaje", emoji: SPACE_TYPE_META.EPHEMERAL.emoji, title: "Un viaje", sub: "Con fecha de fin", type: "EPHEMERAL", defaultName: "Viaje",
+                hint: "Para un viaje o un plan. Tus amigos pueden entrar sin crearse cuenta.",
+            }
+            : {
+                key: "viaje", emoji: SPACE_TYPE_META.GROUP.emoji, title: "Con amigos", sub: "Viajes y planes", type: "GROUP", defaultName: "Amigos",
+                hint: "Para un viaje o un plan con amigos. Al final, cada uno sabe cuánto pagar.",
+            },
+        {
+            key: "solo", emoji: SPACE_TYPE_META.INDIVIDUAL.emoji, title: "Solo yo", sub: "Finanzas personales", type: null, defaultName: "",
+            hint: "Apunta tus gastos sin compartirlos. Puedes crear un espacio con alguien más adelante.",
+        },
     ];
 }
 
@@ -108,7 +132,18 @@ export function CreateSpaceFlow({
             )}
 
             <div className={cn("px-6 flex flex-col gap-3.5", backHref ? "pt-5" : "pt-12")}>
-                <span className="text-[15px] font-extrabold tracking-[0.14em] text-primary">EQUIL</span>
+                <div className="flex items-center justify-between">
+                    <span className="text-[15px] font-extrabold tracking-[0.14em] text-primary">EQUIL</span>
+                    {/* First run: never a wall — skip straight to the personal Inicio. */}
+                    {mode === "onboard" && (
+                        <Link
+                            href="/dashboard"
+                            className="-my-2.5 -mr-2 min-h-11 px-2 flex items-center text-sm font-semibold text-muted-foreground"
+                        >
+                            Ahora no
+                        </Link>
+                    )}
+                </div>
                 <h1 className="text-[36px] font-bold tracking-[-0.03em] leading-[1.05] text-pretty">
                     ¿Con quién compartes gastos?
                 </h1>
@@ -128,6 +163,7 @@ export function CreateSpaceFlow({
                             key={o.key}
                             type="button"
                             aria-pressed={sel}
+                            aria-describedby={sel ? "space-type-hint" : undefined}
                             onClick={() => {
                                 setChoice(o.key);
                                 setError(null);
@@ -146,6 +182,9 @@ export function CreateSpaceFlow({
                     );
                 })}
             </fieldset>
+            <p id="space-type-hint" aria-live="polite" className="px-6 pt-3 text-[13px] text-muted-foreground leading-[1.45]">
+                {selected.hint}
+            </p>
 
             {selected.type && (
                 <div className="px-6 pt-5 flex flex-col gap-3 eq-in" key={selected.key}>

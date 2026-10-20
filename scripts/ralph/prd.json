@@ -185,8 +185,8 @@
         "Elegir modo (Pareja / Piso / Viaje / Solo yo) con una explicación breve de cada uno",
         "CTA principal claro y salida para saltar el onboarding"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Enlace \"Ahora no\" para saltar el onboarding y explicación breve del modo elegido bajo la rejilla; pendiente: \"Me han invitado\" bajo el pliegue a 760 px."
     },
     {
       "id": "UX-11",

@@ -231,6 +231,7 @@ test.describe('Spaces - Management', () => {
     await page.goto('/welcome');
     await expect(page.getByRole('heading', { name: '¿Con quién compartes gastos?' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Volver' })).toHaveAttribute('href', '/dashboard');
+    await expect(page.getByRole('link', { name: 'Ahora no' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Mi piso/ })).toContainText('🏢');
   });
 });

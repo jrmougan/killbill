@@ -124,3 +124,14 @@
 - Ficheros: `src/app/settings/{settings-client,page}.tsx`, `e2e/features/settings.spec.ts`.
 - Aprendizajes: salir de un espacio lo cubre `LeaveSpace` en `/spaces/[id]` (e2e `spaces/manage.spec.ts` "leaving") y unirse
   con enlace está en `/spaces`; el e2e de Ajustes ahora comprueba que no hay región "Espacios". e2e de Ajustes: `e2e/features/settings.spec.ts`.
+
+## 2026-10-20 · UX-10 Bienvenida
+- Corregido: "Ahora no" (44 px, arriba a la derecha, solo en el primer onboarding) para saltar a Inicio sin crear nada;
+  línea de ayuda bajo la rejilla que explica el modo elegido (Pareja/Piso/Viaje o Con amigos/Solo yo), con `aria-live`
+  y `aria-describedby` en la tarjeta pulsada.
+- Pendiente / fuera de alcance: campo "Nombre del espacio" (no está en el mockup, pero lo usa la API); "tengo un enlace"
+  en vez de "código" (producto); a 360×760 "Me han invitado" queda bajo el pliegue.
+- Ficheros: `src/components/space/create-space-flow.tsx`, `e2e/auth/register.spec.ts`, `e2e/spaces/manage.spec.ts`.
+- Aprendizajes: `/welcome` y `/spaces/new` comparten `CreateSpaceFlow` (`mode` `onboard`/`create`); lo propio del primer
+  arranque va condicionado a `mode === "onboard"`. La captura `bienvenida` tiene `EPHEMERAL_SPACES_ENABLED` activo ("Un viaje").
+  e2e de Bienvenida: `e2e/auth/{register,login}.spec.ts`, `e2e/couple/create-couple.spec.ts`, `e2e/spaces/manage.spec.ts`.
