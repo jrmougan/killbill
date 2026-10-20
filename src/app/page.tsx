@@ -24,7 +24,7 @@ export default async function Home() {
                 Gastos compartidos, en equilibrio.
             </h1>
             <p className="mt-3 text-[15px] text-muted-foreground leading-[1.45] text-pretty">
-                Apuntad lo que pagáis, repartidlo como queráis y quedad en paz con un toque.
+                Apuntad lo que pagáis, repartidlo como queráis y saldad las deudas con un toque.
             </p>
 
             <ul className="mt-8 rounded-[18px] border border-[color:var(--line-2)] bg-card px-4">

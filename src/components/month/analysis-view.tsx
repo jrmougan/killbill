@@ -136,14 +136,14 @@ function BalanceChart({ points }: { points: { label: string; balance: number }[]
     const last = points[points.length - 1];
     const tone = (v: number) => (v > 0 ? "var(--positive)" : v < 0 ? "var(--negative)" : "var(--ink-3)");
     const word = (v: number) =>
-        v > 0 ? `te deben ${formatCurrency(v)}` : v < 0 ? `debes ${formatCurrency(-v)}` : "en paz";
+        v > 0 ? `te deben ${formatCurrency(v)}` : v < 0 ? `debes ${formatCurrency(-v)}` : "al día";
 
     return (
         <figure aria-label="Evolución de tu saldo en el espacio" className="flex flex-col gap-2 m-0">
             <div className="flex flex-wrap items-baseline justify-between gap-x-2">
                 <span className="text-[13px] text-muted-foreground whitespace-nowrap">A fin de {last.label}</span>
                 <span data-testid="balance-now" className="text-[15px] font-bold whitespace-nowrap">
-                    {last.balance > 0 ? "Te deben " : last.balance < 0 ? "Debes " : "En paz"}
+                    {last.balance > 0 ? "Te deben " : last.balance < 0 ? "Debes " : "Al día"}
                     {last.balance !== 0 && formatCurrency(Math.abs(last.balance))}
                 </span>
             </div>

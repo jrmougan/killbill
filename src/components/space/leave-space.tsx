@@ -69,7 +69,7 @@ export function LeaveSpace({ spaceId, userId, spaceName }: { spaceId: string; us
                 {owes
                     ? `Todavía debes ${formatCurrency(Math.abs(block.balanceCents))} en ${spaceName}.`
                     : `Todavía te deben ${formatCurrency(block.balanceCents)} en ${spaceName}.`}{" "}
-                Lo mejor es quedar en paz antes de salir. Si sales igualmente, la deuda queda en el historial pero dejarás de verla.
+                Lo mejor es saldar la deuda antes de salir. Si sales igualmente, la deuda queda en el historial pero dejarás de verla.
             </>
         );
         confirmLabel = "Salir igualmente";

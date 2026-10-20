@@ -335,8 +335,8 @@
         "src/components/space/leave-space.tsx",
         "src/components/space/create-space-flow.tsx"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "'En paz' → 'Al día'/'Estáis al día' en home-format, filas de miembros y gráfico de Mes; landing, salir y crear espacio hablan de saldar deudas. Queda 'Solo cuando estéis en paz' de Gestión (historia de ciclo de vida) y /close + space-policy (CF-05/CF-16)."
     },
     {
       "id": "CF-03",

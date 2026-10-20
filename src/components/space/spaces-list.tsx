@@ -10,7 +10,7 @@ export type SpaceRowData = {
     emoji: string;
     name: string;
     sub: string;
-    /** "+12,00 €" / "−5,00 €" / "En paz" / "" */
+    /** "+12,00 €" / "−5,00 €" / "Al día" / "" */
     bal: string;
     tone: "positive" | "negative" | "neutral";
     /** `/spaces/[id]` management page (shared spaces only). */

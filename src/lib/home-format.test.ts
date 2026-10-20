@@ -26,7 +26,7 @@ describe("money copy", () => {
         expect(nb(absEuros(-1234))).toBe("12,34 €");
         expect(nb(rowBalance(1200))).toBe("+12,00 €");
         expect(nb(rowBalance(-500))).toBe("−5,00 €");
-        expect(rowBalance(0)).toBe("En paz");
+        expect(rowBalance(0)).toBe("Al día");
     });
 });
 
@@ -34,7 +34,7 @@ describe("balance wording", () => {
     it("names the other person in a pair", () => {
         expect(balanceWords(100, ["Lucía Pérez"])).toBe("Lucía te debe");
         expect(balanceWords(-100, ["Lucía"])).toBe("Le debes a Lucía");
-        expect(balanceWords(0, ["Lucía"])).toBe("Estáis en paz");
+        expect(balanceWords(0, ["Lucía"])).toBe("Estáis al día");
     });
     it("is generic in groups", () => {
         expect(balanceWords(100, ["A", "B"])).toBe("Te deben");

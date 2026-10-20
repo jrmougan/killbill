@@ -213,7 +213,7 @@ export function CreateSpaceFlow({
                                 className="h-12 rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 text-[15px] outline-none focus:border-primary"
                             />
                             <span id="trip-end-hint" className="text-xs text-muted-foreground">
-                                Los invitados sin cuenta podrán entrar hasta el final de ese día. El espacio no se cierra solo: lo cerráis cuando estéis en paz.
+                                Los invitados sin cuenta podrán entrar hasta el final de ese día. El espacio no se cierra solo: lo cerráis cuando hayáis saldado las deudas.
                             </span>
                         </label>
                     )}

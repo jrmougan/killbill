@@ -134,7 +134,7 @@ export function MemberList({
                                         !open && "text-muted-foreground",
                                     )}
                                 >
-                                    {!open ? "En paz" : `${cents > 0 ? "+" : "−"}${formatCurrency(Math.abs(cents))}`}
+                                    {!open ? "Al día" : `${cents > 0 ? "+" : "−"}${formatCurrency(Math.abs(cents))}`}
                                 </span>
                             )}
                             {canEdit(m) && (

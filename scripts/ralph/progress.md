@@ -207,3 +207,14 @@
 - Aprendizajes: para un subtexto que no entre en el nombre accesible, ponlo fuera del `<a>` y enlázalo con `aria-describedby`
   (`toHaveAccessibleDescription` en e2e). Blanco con opacidad sobre `--primary` baja de 4,5:1: subtextos de la tarjeta activa en
   blanco pleno. `getByRole(..., { name })` busca por subcadena: usa `exact: true` si el texto es corto.
+
+## 2026-10-20 · CF-02 Saldo cero "Al día" y barrido de "en paz"
+- Corregido: `rowBalance(0)` → "Al día" y `balanceWords(0)` → "Estáis al día" (+ test); "Al día" en `member-list` y
+  `member-balance-list`; gráfico de saldo de Mes ("Al día" en la cifra, "al día" en títulos y lectura accesible); landing
+  "…y saldad las deudas con un toque."; salir "Lo mejor es saldar la deuda antes de salir."; crear espacio "…cuando hayáis
+  saldado las deudas.".
+- Pendiente / fuera de alcance: "Solo cuando estéis en paz." / "solo liquidar." en Gestión (`actions-client.tsx`, historia de
+  ciclo de vida); "Quedad en paz" en `/close` y en `space-policy.ts` (CF-05/CF-16); comentarios de código sin tocar.
+- Ficheros: `src/lib/home-format{,.test}.ts`, `src/components/{ui/member-balance-list,space/member-list,space/spaces-list,month/analysis-view,space/leave-space,space/create-space-flow}.tsx`, `src/app/page.tsx`.
+- Aprendizajes: el ux-showcase no tiene ningún miembro con saldo cero, así que "Al día" no se ve en las capturas de espacio;
+  sí sale en `mes-analisis.aria.yml` (meses pasados). Ningún e2e afirmaba "En paz" (solo "Estáis al día" en `settle-peace`).

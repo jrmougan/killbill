@@ -41,7 +41,7 @@ export function MemberBalanceList({
                     const open = hasOpenBalance(m.balanceCents);
                     const cents = open ? m.balanceCents : 0;
                     const isMe = m.id === currentUserId;
-                    const words = !open ? "En paz" : cents > 0 ? (isMe ? "Te deben" : "Le deben") : isMe ? "Debes" : "Debe";
+                    const words = !open ? "Al día" : cents > 0 ? (isMe ? "Te deben" : "Le deben") : isMe ? "Debes" : "Debe";
                     const avatarText = (m.avatar ?? "").trim() && !isAvatarUrl(m.avatar) ? m.avatar : m.name.charAt(0).toUpperCase();
                     return (
                         <li
