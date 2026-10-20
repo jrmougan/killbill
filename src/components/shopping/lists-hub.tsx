@@ -336,16 +336,26 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
         [apiBase, router, showToast, restoreItem],
     );
 
-    /** Deletes the checked items; resolves to an error message, or null on success. */
-    const clearChecked = useCallback(async (): Promise<string | null> => {
-        if (!apiBase) return "Lista no disponible";
+    /**
+     * Deletes the checked items on screen (`ids`): one another member ticked after
+     * the last poll is not in them and survives. Resolves to an error message, or
+     * the number actually deleted (an item unticked meanwhile is kept).
+     */
+    const clearChecked = useCallback(async (ids: string[]): Promise<{ error: string } | { cleared: number }> => {
+        if (!apiBase) return { error: "Lista no disponible" };
         try {
-            const res = await fetch(`${apiBase}/clear-checked`, { method: "POST" });
-            if (!res.ok) return await errorOf(res, "No se pudieron borrar los tachados");
-            setItems((prev) => prev.filter((i) => !i.checked));
-            return null;
+            const res = await fetch(`${apiBase}/clear-checked`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ids }),
+            });
+            if (!res.ok) return { error: await errorOf(res, "No se pudieron borrar los tachados") };
+            const data = (await res.json().catch(() => null)) as { cleared?: unknown } | null;
+            const sent = new Set(ids);
+            setItems((prev) => prev.filter((i) => !(i.checked && sent.has(i.id))));
+            return { cleared: typeof data?.cleared === "number" ? data.cleared : ids.length };
         } catch {
-            return "No se pudieron borrar los tachados";
+            return { error: "No se pudieron borrar los tachados" };
         }
     }, [apiBase]);
 
@@ -358,10 +368,10 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
             return;
         }
         setFinishing(true);
-        const err = await clearChecked();
-        if (err) {
+        const res = await clearChecked(done.map((i) => i.id));
+        if ("error" in res) {
             setFinishing(false);
-            showToast(err);
+            showToast(res.error);
             return;
         }
         if (settling) {
@@ -638,14 +648,14 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
 
             {selected && apiBase && sheet?.kind === "clear" && (
                 <ClearCheckedSheet
-                    count={done.length}
+                    ids={done.map((i) => i.id)}
                     shared={!!selected.groupId}
                     onClear={clearChecked}
                     onClose={() => setSheet(null)}
                     onCleared={(n) => {
                         setSheet(null);
                         // No "Deshacer": re-creating them would not be the same rows.
-                        showToast(n === 1 ? "1 producto borrado" : `${n} productos borrados`);
+                        showToast(n === 0 ? "Ya no quedaban tachados" : n === 1 ? "1 producto borrado" : `${n} productos borrados`);
                         router.refresh();
                     }}
                 />
@@ -857,32 +867,37 @@ function RenameSheet({
 }
 
 function ClearCheckedSheet({
-    count,
+    ids,
     shared,
     onClear,
     onClose,
     onCleared,
 }: {
-    count: number;
+    /** The checked items on screen: exactly these are deleted, never more. */
+    ids: string[];
     shared: boolean;
-    onClear: () => Promise<string | null>;
+    onClear: (ids: string[]) => Promise<{ error: string } | { cleared: number }>;
     onClose: () => void;
+    /** The count the server actually deleted (≤ ids.length). */
     onCleared: (n: number) => void;
 }) {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Freeze what the sheet announces: a poll can change `ids` while it is open.
+    const [shown] = useState(ids);
+    const count = shown.length;
 
     const clear = async () => {
         if (busy) return;
         setBusy(true);
         setError(null);
-        const err = await onClear();
-        if (err) {
-            setError(err);
+        const res = await onClear(shown);
+        if ("error" in res) {
+            setError(res.error);
             setBusy(false);
             return;
         }
-        onCleared(count);
+        onCleared(res.cleared);
     };
 
     return (

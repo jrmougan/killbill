@@ -1278,8 +1278,8 @@
         "src/components/expense/promote-button.tsx",
         "src/components/shopping/lists-hub.tsx"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Compartir envía targetGroupId de la vista previa y es irreversible («No podrás volver a hacerlo privado; solo eliminarlo»); clear-checked acepta ids opcionales y el toast usa el número real borrado. Nada pendiente."
     },
     {
       "id": "RV-04",

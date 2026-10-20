@@ -12,12 +12,15 @@ import { useApiMutation } from "@/hooks/use-api-mutation";
  * POST /api/expenses/[id]/share endpoint (N-way, splits + ledger). Shown only for
  * a personal expense whose owner belongs to a group. The confirmation names the
  * expense and the space and spells out the balance effect of the default split
- * (`effect`, computed server-side with the same split the endpoint uses).
+ * (`effect`, computed server-side with the same split the endpoint uses). It
+ * posts the previewed `targetGroupId`, so switching the active space in another
+ * tab can't share it somewhere else. There is no way back to PERSONAL.
  */
 export function PromoteButton({
     expenseId,
     description,
     amount,
+    targetGroupId,
     spaceName,
     effect,
     itemized = false,
@@ -26,6 +29,8 @@ export function PromoteButton({
     description: string;
     /** Total in cents. */
     amount: number;
+    /** The space the preview was computed for. */
+    targetGroupId: string;
     spaceName: string;
     effect: string[];
     /** The receipt lines carry assignees: the split follows them, not halves. */
@@ -36,6 +41,7 @@ export function PromoteButton({
 
     const handlePromote = async () => {
         const res = await mutate(`/api/expenses/${expenseId}/share`, {
+            body: { targetGroupId },
             errorMessage: "No se pudo compartir el gasto",
             networkErrorMessage: "Error de conexión",
         });
@@ -48,6 +54,7 @@ export function PromoteButton({
             ? `Se reparte por productos, según el ticket, y cuenta en el saldo de ${spaceName}.`
             : `Se reparte a partes iguales entre los miembros de ${spaceName} y cuenta en el saldo.`,
         "Dejará de ser privado: lo verán todos.",
+        "No podrás volver a hacerlo privado; solo eliminarlo.",
     ];
 
     return (
@@ -70,6 +77,7 @@ export function PromoteButton({
                     facts={[{ label: "Importe", value: formatCurrency(amount), emphasis: true }]}
                     consequences={consequences}
                     confirmLabel={`Compartir con ${spaceName}`}
+                    reversible={false}
                     busy={loading || refreshing}
                     error={error}
                     onConfirm={handlePromote}

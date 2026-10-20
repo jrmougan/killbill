@@ -88,6 +88,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     .map((s) => [s.userId, s.amount]),
             );
             return {
+                targetGroupId: myGroupId,
                 spaceName: target?.name || "el grupo",
                 itemized: hasExclusiveReceiptLines(expense.lineItems),
                 effect: promoteEffectLines({ viewerId: userId, payerId: expense.paidById, members: targetMembers, shares }),

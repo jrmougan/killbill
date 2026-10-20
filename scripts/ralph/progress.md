@@ -580,3 +580,14 @@
   `src/components/{dashboard/pending-settlements,settle/settlement-actions,settle/settle-review-sheet}.tsx`, `scripts/ralph/findings/RV-02.md`.
 - Aprendizajes: `resolveMyDebts` es el plan voraz (propuesta), no la deuda: para topes usa `settlementCap` (`settlement-rules.ts`, puro) y para «sigue
   debiendo» `debtOf`. Todo recuento de «qué falta» al cerrar sale de `src/lib/close-plan.ts`. e2e de cierre: `e2e/spaces/{lifecycle,settle-up}.spec.ts`.
+
+## 2026-10-20 · RV-03 Compartir gasto irreversible y con el espacio mostrado; Borrar los tachados sin borrar de más
+- Corregido: `PromoteButton` recibe `targetGroupId` (el espacio de la vista previa) y lo envía en el POST de `/share`; hoja con `reversible={false}`
+  y "No podrás volver a hacerlo privado; solo eliminarlo.". `…/clear-checked` (espacio y personal) acepta `{ ids?: string[] }` (aditivo: sin cuerpo
+  igual que antes; `ids` mal formados → 400 `INVALID_IDS` "Productos no válidos") y borra solo esos si siguen tachados; `ClearCheckedSheet` congela los ids
+  que anuncia, `clearChecked(ids)` devuelve `{ cleared }` y el toast usa el número real ("Ya no quedaban tachados" si 0). "Terminar" envía también los ids.
+- Pendiente / fuera de alcance: nada.
+- Ficheros: `src/components/expense/promote-button.tsx`, `src/app/expense/[id]/page.tsx`, `src/components/shopping/lists-hub.tsx`, `src/lib/list-{crud,crud.test,schemas}.ts`,
+  `src/app/api/{spaces/[id],me}/lists/[listId]/clear-checked/route.ts`, `e2e/expenses/edit-delete.spec.ts`, `e2e/shopping/smoke.spec.ts`, `scripts/ralph/findings/RV-03.md`.
+- Aprendizajes: `e2e/shopping/smoke.spec.ts` (y `api/*`, `*.api.spec.ts`) solo corre en el proyecto `api`: `mise run e2e -- <spec> --project=api`
+  (con `--project=mobile-chrome` se ignora en silencio). Un cuerpo opcional en una ruta: `jsonObject({...}).nullish()` (cuerpo vacío → `undefined`).

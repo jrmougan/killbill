@@ -178,12 +178,18 @@ test.describe('Expenses - Edit and Delete', () => {
     await expect(pageA.getByText(/Gasto personal — privado/)).toBeVisible({ timeout: 10000 });
 
     await pageA.locator('[data-testid="expense-promote"]').click();
+    // One-way: the sheet says it can't go back to private.
+    const promoteSheet = pageA.getByTestId('expense-promote-sheet');
+    await expect(promoteSheet).toContainText('No podrás volver a hacerlo privado; solo eliminarlo.');
+    await expect(promoteSheet).toContainText('No se puede deshacer.');
     const sharePromise = pageA.waitForResponse(
       (res) => res.url().includes(`/api/expenses/${personalExpenseId}/share`) && res.request().method() === 'POST'
     );
     await pageA.locator('[data-testid="expense-promote-confirm"]').click();
     const shareResponse = await sharePromise;
     expect(shareResponse.ok()).toBeTruthy();
+    // It shares into the space the sheet showed, not whatever is active when it posts.
+    expect(shareResponse.request().postDataJSON()).toEqual({ targetGroupId: expect.any(String) });
 
     // The detail page re-renders as a shared expense with its split breakdown
     await expect(pageA.getByText('Reparto del gasto')).toBeVisible({ timeout: 10000 });

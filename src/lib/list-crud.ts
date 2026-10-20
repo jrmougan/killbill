@@ -319,14 +319,25 @@ export async function reorderItemsForScope(scope: ListWriteScope, listId: string
     return { reordered: orderedIds.length };
 }
 
+/** Upper bound of `ids` in clear-checked (a list never gets near it). */
+const MAX_CLEAR_IDS = 1000;
+
 /**
  * "Vaciar comprados": DELETE the checked items of a list to recycle the weekly
  * list without recreating it. A scoped deleteMany (list asserted in scope first)
  * — the owner-fixed decision is to DELETE the checked rows, not just uncheck them.
- * Idempotent: returns the count removed (0 when nothing was checked).
+ * With `ids` (the checked items the client showed) only those that are still
+ * checked go, so an item another member ticked after the last poll survives;
+ * without it, every checked item. Idempotent: returns the count removed (0 when
+ * nothing was checked).
  */
-export async function clearCheckedForScope(scope: ListWriteScope, listId: string) {
+export async function clearCheckedForScope(scope: ListWriteScope, listId: string, ids?: unknown) {
     await loadListInScope(scope, listId);
-    const res = await prisma.shoppingListItem.deleteMany({ where: { listId, checked: true } });
+    if (ids != null && (!Array.isArray(ids) || ids.length > MAX_CLEAR_IDS || ids.some((x) => typeof x !== "string"))) {
+        throw new ListError(400, "INVALID_IDS", "Productos no válidos");
+    }
+    const res = await prisma.shoppingListItem.deleteMany({
+        where: ids == null ? { listId, checked: true } : { listId, checked: true, id: { in: ids as string[] } },
+    });
     return { cleared: res.count };
 }
