@@ -49,7 +49,7 @@ test.describe('Mes — Análisis y Presupuestos', () => {
     const seed = await seedScenario(request, 'space-settling');
     await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password! });
     await page.goto('/month');
-    await expect(page.getByTestId('month-status-banner')).toContainText('Espacio en liquidación');
+    await expect(page.getByTestId('month-status-banner')).toContainText('Cerrando cuentas');
     await expect(page.getByRole('button', { name: /Añadir presupuesto/ })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Editar presupuesto/ })).toHaveCount(0);
   });

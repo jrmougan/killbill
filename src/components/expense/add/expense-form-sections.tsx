@@ -6,7 +6,7 @@ import { EqChip } from "@/components/ui/eq";
 import { PERSONAL_SPACE, spaceEmoji } from "@/components/expenses/space-meta";
 import type { AddMember, AddSpace, BlockedSpace } from "./expense-form-state";
 
-const STATUS_LABEL: Record<BlockedSpace["status"], string> = { SETTLING: "se está liquidando", ARCHIVED: "está archivado" };
+const STATUS_LABEL: Record<BlockedSpace["status"], string> = { SETTLING: "está cerrando cuentas", ARCHIVED: "está archivado" };
 
 /** Top bar: close + where the expense goes (+ the note about spaces that take no new expenses). */
 export function SpaceBar({

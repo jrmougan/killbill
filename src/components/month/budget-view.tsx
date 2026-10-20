@@ -17,7 +17,7 @@ const WARN_TEXT = "#8F5B00";
 const WARN_BAR = "#C98A2B";
 
 const NOT_WRITABLE =
-    "Este espacio está archivado o en liquidación: los presupuestos son de solo lectura.";
+    "Este espacio está archivado o cerrando cuentas: los presupuestos son de solo lectura.";
 
 /** Map an API failure to an actionable Spanish message. */
 async function responseError(res: Response, action: string): Promise<Error> {

@@ -136,7 +136,7 @@ export function CategoriesClient({
             ? role !== "OWNER" && role !== "ADMIN"
                 ? "Solo un administrador del espacio puede crear o editar las categorías comunes."
                 : spaceStatus !== "ACTIVE"
-                ? "El espacio está archivado o liquidándose: las categorías están bloqueadas."
+                ? "El espacio está archivado o cerrando cuentas: las categorías están bloqueadas."
                 : "No puedes gestionar las categorías de este espacio."
             : null;
 

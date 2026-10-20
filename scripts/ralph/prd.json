@@ -409,8 +409,8 @@
         "e2e/features/month.spec.ts",
         "e2e/shopping/lifecycle.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Avisos de SETTLING/ARCHIVED en detalle de gasto, Gastos, añadir gasto, Mes, presupuestos, categorías y toast de Listas sin 'liquid'; e2e actualizados. Pendiente: filas 'Liquidación' (CF-06) y 409 de space-policy (CF-05)."
     },
     {
       "id": "CF-05",

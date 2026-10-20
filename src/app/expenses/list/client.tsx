@@ -151,8 +151,8 @@ export function ExpensesListClient({
                 {readOnlyStatus && (
                     <p data-testid="space-readonly-note" className="rounded-[14px] bg-[var(--track)] px-3 py-2.5 text-center text-[13px] text-muted-foreground">
                         {readOnlyStatus === "ARCHIVED"
-                            ? "Este espacio está archivado — solo lectura."
-                            : "Este espacio se está liquidando: no admite gastos nuevos."}
+                            ? "Este espacio está archivado: solo lectura."
+                            : "Estáis cerrando cuentas: no se admiten gastos nuevos."}
                     </p>
                 )}
                 <label className="flex h-11 items-center gap-2 rounded-xl border border-[color:var(--line)] bg-card px-3 text-[color:var(--ink-3)] focus-within:border-foreground">

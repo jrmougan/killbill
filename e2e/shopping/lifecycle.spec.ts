@@ -33,7 +33,7 @@ test.describe('Shopping lists — lifecycle, quantities and duplicates', () => {
 
     // No new expenses while settling: "Terminar compra" just clears the cart.
     await page.getByRole('button', { name: 'Terminar compra' }).click();
-    const toast = page.getByText(/Carro vaciado\. El espacio se está liquidando/);
+    const toast = page.getByText(/Carro vaciado\. Estáis cerrando cuentas/);
     await expect(toast).toBeVisible();
     await expect(page).toHaveURL(`/lists/${groupListId}`);
     // The toast wraps inside the viewport (no horizontal overflow).

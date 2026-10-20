@@ -230,3 +230,15 @@
   `src/app/spaces/[id]/{actions-client,close/client}.tsx`, `e2e/spaces/{lifecycle,manage,settle-up}.spec.ts`, `scripts/ralph/capture.spec.ts`.
 - Aprendizajes: el escenario `space-settling` (User A/B, saldo ±50 € y un pago en efectivo pendiente) sirve para ver el banner,
   la Gestión de SETTLING y /close; su `coupleId` es el espacio. Los e2e afirman la cabecera con `toHaveText` exacto.
+
+## 2026-10-20 · CF-04 Avisos de solo lectura de SETTLING sin "liquidando"
+- Corregido: detalle de gasto ("Estáis cerrando cuentas: este gasto ya no se puede cambiar." / "Este espacio está archivado: solo
+  lectura."), Gastos ("Estáis cerrando cuentas: no se admiten gastos nuevos."), nota de añadir gasto ("está cerrando cuentas"),
+  banner de Mes "Cerrando cuentas", presupuestos y categorías "archivado o cerrando cuentas", toast de Listas; capturas nuevas
+  `gasto-cerrando`, `gastos-cerrando`, `mes-cerrando` (escenario `space-settling`).
+- Pendiente / fuera de alcance: subtítulo "Liquidación · Pendiente" en filas de pago (CF-06); 409 de `space-policy.ts:107` (CF-05).
+- Ficheros: `src/app/expense/[id]/page.tsx`, `src/app/expenses/list/client.tsx`, `src/components/expense/add/expense-form-sections.tsx`,
+  `src/components/month/{month-client,budget-view}.tsx`, `src/app/categories/client.tsx`, `src/components/shopping/lists-hub.tsx`,
+  `e2e/spaces/lifecycle.spec.ts`, `e2e/features/month.spec.ts`, `e2e/shopping/lifecycle.spec.ts`, `scripts/ralph/capture.spec.ts`.
+- Aprendizajes: el ARCHIVED del detalle de gasto también lo afirma `e2e/spaces/lifecycle.spec.ts:236` (texto exacto). `space-settling`
+  devuelve `expenseId`, así que sirve para capturar el detalle de un gasto bloqueado. `inicio-liquidando` y `listas` no muestran estos avisos.

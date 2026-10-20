@@ -45,7 +45,7 @@ function monthHref(view: MonthView, scope: MonthScope): string {
 
 const STATUS_BANNER: Record<string, { title: string; body: string }> = {
     SETTLING: {
-        title: "Espacio en liquidación",
+        title: "Cerrando cuentas",
         body: "Los presupuestos son de solo lectura hasta que se reabra el espacio.",
     },
     ARCHIVED: {

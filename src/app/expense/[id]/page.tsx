@@ -131,7 +131,9 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
                 {isReadOnly && (
                     <div className="rounded-[14px] bg-[var(--track)] px-3 py-2.5 text-center text-[13px] text-muted-foreground">
-                        Este espacio está {space?.status === "ARCHIVED" ? "archivado" : "liquidando"} — solo lectura.
+                        {space?.status === "ARCHIVED"
+                            ? "Este espacio está archivado: solo lectura."
+                            : "Estáis cerrando cuentas: este gasto ya no se puede cambiar."}
                     </div>
                 )}
 

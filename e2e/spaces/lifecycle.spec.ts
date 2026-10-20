@@ -119,7 +119,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
 
     // Existing expenses become read-only (no edit/delete).
     await page.goto(`/expense/${expenseId}`);
-    await expect(page.getByText('Este espacio está liquidando — solo lectura.')).toBeVisible();
+    await expect(page.getByText('Estáis cerrando cuentas: este gasto ya no se puede cambiar.')).toBeVisible();
     await expect(page.locator(`a[href="/expense/${expenseId}/edit"]`)).toHaveCount(0);
 
     // Nothing was recorded: the balance is still exactly +50,00 €.
@@ -233,7 +233,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
 
     // Expense detail: no edit/delete.
     await page.goto(`/expense/${expenseId}`);
-    await expect(page.getByText('Este espacio está archivado — solo lectura.')).toBeVisible();
+    await expect(page.getByText('Este espacio está archivado: solo lectura.')).toBeVisible();
     await expect(page.locator(`a[href="/expense/${expenseId}/edit"]`)).toHaveCount(0);
 
     // Close flow: neither "start settling" nor "archive" any more.

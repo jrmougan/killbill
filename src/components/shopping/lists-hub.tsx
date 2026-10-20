@@ -327,7 +327,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
         if (settling) {
             // No new expenses while settling: just close the shop run.
             setFinishing(false);
-            showToast("Carro vaciado. El espacio se está liquidando: apunta el gasto cuando se reabra.");
+            showToast("Carro vaciado. Estáis cerrando cuentas: apunta el gasto cuando se reabra el espacio.");
             router.refresh();
             return;
         }
