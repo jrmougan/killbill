@@ -156,9 +156,9 @@ test.describe('Settlements - Create and Confirm', () => {
     await expect(settlementCardB).toContainText(/50,00\s*€/);
     await expect(settlementCardB).toContainText('Confirmado');
 
-    // And /settle tells the debtor they are at peace.
+    // And /settle tells the debtor they are up to date.
     await pageB.goto('/settle');
-    await expect(pageB.getByTestId('settle-peace')).toContainText('Estáis en paz');
+    await expect(pageB.getByTestId('settle-peace')).toContainText('Estáis al día');
     await expect(pageB.getByTestId('settle-peace')).toContainText('No hay nada pendiente en Settlement Couple');
 
     await pageB.close();
@@ -213,7 +213,7 @@ test.describe('Settlements - Create and Confirm', () => {
     await pageA.goto('/settle');
     await expect(pageA.getByTestId('settle-ticket')).toContainText('User B te debe');
     await expect(pageA.getByTestId('settle-balance')).toHaveText(/50,00\s*€/);
-    await expect(pageA.getByRole('button', { name: 'Recordárselo a User B' })).toBeVisible();
+    await expect(pageA.getByRole('button', { name: 'Recordarle la deuda a User B' })).toBeVisible();
 
     await pageA.getByRole('radio', { name: 'Efectivo' }).check();
     const post = pageA.waitForResponse(
@@ -225,7 +225,7 @@ test.describe('Settlements - Create and Confirm', () => {
     expect((await res.json()).settlement.status).toBe('CONFIRMED');
 
     const peace = pageA.getByTestId('settle-peace');
-    await expect(peace).toContainText('Estáis en paz');
+    await expect(peace).toContainText('Deuda saldada');
     await expect(peace).toContainText('Pago registrado en efectivo');
 
     await pageA.goto('/dashboard');
@@ -235,7 +235,8 @@ test.describe('Settlements - Create and Confirm', () => {
     const ctxB = await createAuthenticatedContext(newContext, userB);
     const pageB = await ctxB.newPage();
     await pageB.goto('/settle');
-    await expect(pageB.getByTestId('settle-peace')).toContainText('Estáis en paz');
+    await expect(pageB.getByTestId('settle-peace')).toContainText('Estáis al día');
+    await expect(pageB.getByTestId('settle-peace')).not.toContainText('Deuda saldada');
     await ctxB.close();
   });
 
@@ -256,7 +257,7 @@ test.describe('Settlements - Create and Confirm', () => {
     await expect(pageA.getByTestId('settle-balance')).toHaveText(/66,66\s*€|66,67\s*€/);
     const transfers = pageA.getByTestId('settle-transfers').getByRole('radio');
     await expect(transfers).toHaveCount(2);
-    await expect(pageA.getByRole('button', { name: 'Recordárselo al grupo' })).toBeVisible();
+    await expect(pageA.getByRole('button', { name: 'Recordar la deuda al grupo' })).toBeVisible();
     await ctxA.close();
 
     // Debtor B: a single transfer to A.

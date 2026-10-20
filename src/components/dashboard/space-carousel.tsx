@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { Check, Clock } from "lucide-react";
+import { Clock, HandCoins } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useActivateSpace } from "@/components/space/use-activate-space";
 
@@ -26,8 +26,10 @@ export type SpaceCardData = {
      * couple still waiting for its second member.
      */
     signed: string | null;
-    /** "Quedar en paz" target (active, shared, open balance); null hides it. */
+    /** "Saldar deuda" target (active, shared, open balance); null hides it. */
     settleHref: string | null;
+    /** Direction under "Saldar deuda": "Pagas 7,50 €" / "Cobras 79,30 €". */
+    settleSub?: string | null;
     /** A payment I sent is waiting for confirmation (debtor side). */
     pendingNote?: string | null;
 };
@@ -130,13 +132,22 @@ export function SpaceCarousel({
                                         <span className="line-clamp-2">{c.pendingNote}</span>
                                     </Link>
                                 ) : c.settleHref ? (
-                                    <Link
-                                        href={c.settleHref}
-                                        className="-my-2 -ml-1 self-start min-h-11 px-1 flex items-center gap-1.5 text-[13px] font-semibold"
-                                    >
-                                        <Check className="h-[15px] w-[15px]" aria-hidden="true" />
-                                        Quedar en paz
-                                    </Link>
+                                    // The direction sits under the link (described-by, not part of its name).
+                                    <div className="-my-2 -ml-1 self-start flex flex-col">
+                                        <Link
+                                            href={c.settleHref}
+                                            aria-describedby={c.settleSub ? `settle-sub-${c.key}` : undefined}
+                                            className="min-h-11 px-1 flex items-center gap-1.5 text-[13px] font-semibold"
+                                        >
+                                            <HandCoins className="h-[15px] w-[15px] flex-none" aria-hidden="true" />
+                                            Saldar deuda
+                                        </Link>
+                                        {c.settleSub && (
+                                            <span id={`settle-sub-${c.key}`} className="-mt-2.5 pb-1 pl-[27px] text-xs font-medium">
+                                                {c.settleSub}
+                                            </span>
+                                        )}
+                                    </div>
                                 ) : null}
                             </div>
                         );

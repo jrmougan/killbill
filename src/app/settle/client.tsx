@@ -103,13 +103,13 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
     }
 
     const iPaid = () => run(async () => {
-        if (!t) throw new Error("No hay nada que pagar");
+        if (!t) throw new Error("No tienes deudas pendientes");
         const json = await post({ toUserId: t.userId, amount: t.amount / 100, method });
         return { kind: "pending", id: json.settlement?.id ?? null, name: nameOf(t.userId), amount: t.amount, method };
     });
 
     const theyPaid = () => run(async () => {
-        if (!t) throw new Error("No hay nada que cobrar");
+        if (!t) throw new Error("Nadie te debe nada");
         const json = await post({ fromUserId: t.userId, amount: t.amount / 100, method });
         const paid = json.settlement?.amount ?? t.amount;
         return { kind: "confirmed", method, remaining: balance - paid };
@@ -131,11 +131,11 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
         const amount = formatCurrency(Math.abs(balance));
         const url = `${window.location.origin}/settle?space=${encodeURIComponent(space.id)}`;
         const text = isCouple
-            ? `¡Hola, ${partnerName}! Para quedar en paz en ${space.name} me debes ${amount}. Lo tienes en EQUIL.`
-            : `Cuentas de ${space.name}: me quedan ${amount} por cobrar. Entrad en EQUIL para quedar en paz.`;
+            ? `¡Hola, ${partnerName}! En ${space.name} me debes ${amount}. Puedes saldarlo desde EQUIL.`
+            : `${space.name}: me quedan ${amount} por cobrar. Entrad en EQUIL para saldar vuestra parte.`;
         if (typeof navigator.share === "function") {
             try {
-                await navigator.share({ title: "Quedar en paz", text, url });
+                await navigator.share({ title: "Deuda pendiente en EQUIL", text, url });
                 return;
             } catch (e) {
                 if (e instanceof DOMException && e.name === "AbortError") return;
@@ -153,9 +153,8 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
     // ---- states -----------------------------------------------------------
 
     const header = (
-        <EqHeader back="/dashboard">
-            <h1 className="sr-only">Quedar en paz</h1>
-            <Link href={`/settle/history?space=${encodeURIComponent(space.id)}`} className="ml-auto -my-2.5 min-h-11 flex items-center text-sm font-semibold text-primary px-1">
+        <EqHeader back="/dashboard" title="Saldar deuda">
+            <Link href={`/settle/history?space=${encodeURIComponent(space.id)}`} className="-my-2.5 min-h-11 flex items-center text-sm font-semibold text-primary px-1">
                 Historial
             </Link>
         </EqHeader>
@@ -189,10 +188,17 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
         const stillOpen = registered && !isAtPeace(done.remaining);
         // In a group I can be at peace while others still owe each other.
         const onlyMe = !stillOpen && !isCouple && !everyoneSettled;
-        const title = stillOpen ? "Pago registrado" : onlyMe ? "Tú estás en paz" : "Estáis en paz";
+        // "Deuda saldada" only right after a payment that leaves the balance at 0;
+        // opening /settle with nothing owed is just "al día".
+        const rest = stillOpen ? formatCurrency(Math.abs(done.remaining)) : "";
+        const title = stillOpen
+            ? done.remaining > 0
+                ? `Pago registrado · aún te ${isCouple ? "debe" : "deben"} ${rest}`
+                : `Pago registrado · aún debes ${rest}`
+            : registered ? "Deuda saldada" : onlyMe ? "Ya estás al día" : "Estáis al día";
         let sub: string;
         if (stillOpen) {
-            sub = `Pago registrado ${methodPhrase(done.method)}. Aún te ${isCouple ? "debe" : "deben"} ${formatCurrency(done.remaining)}.`;
+            sub = `Pago registrado ${methodPhrase(done.method)}. Lo verás en Gastos.`;
         } else if (registered) {
             sub = `Pago registrado ${methodPhrase(done.method)}. Lo verás en Gastos.`;
         } else if (onlyMe) {
@@ -215,7 +221,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                     <EqCta onClick={() => router.push("/dashboard")}>Volver al inicio</EqCta>
                     {stillOpen && (
                         <button type="button" onClick={() => { setDone(null); setSelected(0); }} className="min-h-11 px-2 text-sm font-semibold text-primary inline-flex items-center">
-                            Seguir saldando
+                            Saldar el resto
                         </button>
                     )}
                 </Footer>
@@ -294,7 +300,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                     )}
                     {ticket.carry !== 0 && (
                         <TicketRow
-                            label="Saldo anterior"
+                            label="Pendiente de antes"
                             value={`${ticket.carry > 0 ? "+" : "−"}${formatCurrency(Math.abs(ticket.carry))}`}
                             muted
                             testId="settle-ticket-carry"
@@ -341,7 +347,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                 {cta}
                 {canRemind && (
                     <button type="button" onClick={remind} className="min-h-11 px-2 text-sm font-semibold text-primary inline-flex items-center">
-                        {isCouple ? `Recordárselo a ${partnerName}` : "Recordárselo al grupo"}
+                        {isCouple ? `Recordarle la deuda a ${partnerName}` : "Recordar la deuda al grupo"}
                     </button>
                 )}
             </Footer>
@@ -414,7 +420,7 @@ function TransferPicker({
     return (
         <div className="px-5">
         <fieldset className="flex flex-col gap-2" disabled={disabled} data-testid="settle-transfers">
-            <legend className="text-xs font-semibold text-muted-foreground mb-2">Pagos sugeridos</legend>
+            <legend className="text-xs font-semibold text-muted-foreground mb-2">¿Qué deuda quieres saldar?</legend>
             {transfers.map((tr, i) => {
                 const active = i === selected;
                 const who = nameOf(tr.userId);

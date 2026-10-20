@@ -42,16 +42,25 @@ test.describe('Settlements - partial payments, explicit space, archived, edit', 
     expect(res.request().postDataJSON()).toEqual({ status: 'CONFIRMED', expectedAmountCents: 2000 });
 
     const done = page.getByTestId('settle-peace');
-    await expect(done).toContainText('Pago registrado');
-    await expect(done).not.toContainText('Estáis en paz');
-    await expect(done).toContainText(/Aún te debe 30,00\s*€/);
-    await page.getByRole('button', { name: 'Seguir saldando' }).click();
+    await expect(done).toContainText(/Pago registrado · aún te debe 30,00\s*€/);
+    await expect(done).not.toContainText('Deuda saldada');
+    await page.getByRole('button', { name: 'Saldar el resto' }).click();
 
     // The ticket still lists the expense that explains the debt, plus the payment.
     await expect(page.getByTestId('settle-balance')).toHaveText(/30,00\s*€/);
     await expect(page.getByTestId('settle-ticket-meta')).toContainText('1 GASTO');
     await expect(page.getByTestId('settle-ticket-payments')).toContainText(/Pagos recibidos\s*−20,00\s*€/);
     await expect(page.getByTestId('settle-ticket-carry')).toHaveCount(0);
+  });
+
+  test('opening /settle with nothing owed says "al día", never "Deuda saldada"', async ({ request, newContext }) => {
+    const seed = await seedScenario(request, 'couple-no-expenses');
+    const page = await (await as(newContext, seed.userA as User)).newPage();
+    await page.goto('/settle');
+    await expect(page.getByRole('heading', { level: 1, name: 'Saldar deuda' })).toBeVisible();
+    const peace = page.getByTestId('settle-peace');
+    await expect(peace).toContainText('Estáis al día');
+    await expect(peace).not.toContainText('Deuda saldada');
   });
 
   test('S-05: /settle?space= shows that space even when another one is active', async ({ request, newContext }) => {
@@ -140,6 +149,6 @@ test.describe('Settlements - partial payments, explicit space, archived, edit', 
     const confirm = page.getByRole('button', { name: /^Confirmar pago de/ });
     await expect(confirm).toBeVisible();
     await confirm.click();
-    await expect(page.getByTestId('settle-peace')).toContainText('Estáis en paz');
+    await expect(page.getByTestId('settle-peace')).toContainText('Deuda saldada');
   });
 });

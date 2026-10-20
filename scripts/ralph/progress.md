@@ -193,3 +193,17 @@
 - Aprendizajes: comprueba el contraste también sobre `--track` (#E9EAE5) y los tintes, no solo sobre papel: es donde fallan los
   grises. Interruptores: botón `h-11 w-11` transparente con la pista en un `<span>` (`group-focus-visible:ring-2`). Un input
   dentro de una etiqueta con borde de `h-11` mide 42: dale `h-11 -my-px`.
+
+## 2026-10-20 · CF-01 Renombrar la acción a "Saldar deuda"
+- Corregido: h1 visible "Saldar deuda" en /settle (`EqHeader title`); CTA del carrusel "Saldar deuda" con `HandCoins`,
+  href `settleUrlFor(spaceId)` y "Pagas/Cobras X" debajo (fuera del enlace, `aria-describedby`); "Estáis al día"/"Ya estás al
+  día" al abrir sin deuda, "Deuda saldada" solo tras un pago que deja 0, "Pago registrado · aún te debe X" si queda resto;
+  "Saldar el resto", "Recordarle la deuda a X"/"Recordar la deuda al grupo" (texto y título compartidos nuevos), "Pendiente de
+  antes", "¿Qué deuda quieres saldar?"; README de diseño; e2e nuevo de saldo cero; captura `saldar-al-dia`.
+- Pendiente / fuera de alcance: CTA con persona e importe y "Ya le he pagado X a Y" (CF-09); nota de pago pendiente del deudor (CF-11).
+- Ficheros: `src/app/settle/{client,page}.tsx`, `src/components/dashboard/space-carousel.tsx`, `src/app/dashboard/page.tsx`,
+  `docs/design/README.md`, `e2e/dashboard/balance.spec.ts`, `e2e/settlements/{create-and-confirm,partial-and-scope}.spec.ts`,
+  `scripts/ralph/capture.spec.ts`.
+- Aprendizajes: para un subtexto que no entre en el nombre accesible, ponlo fuera del `<a>` y enlázalo con `aria-describedby`
+  (`toHaveAccessibleDescription` en e2e). Blanco con opacidad sobre `--primary` baja de 4,5:1: subtextos de la tarjeta activa en
+  blanco pleno. `getByRole(..., { name })` busca por subcadena: usa `exact: true` si el texto es corto.

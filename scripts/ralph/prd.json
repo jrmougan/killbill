@@ -297,8 +297,8 @@
         "e2e/settlements/create-and-confirm.spec.ts",
         "e2e/settlements/partial-and-scope.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "h1 visible 'Saldar deuda', CTA de Inicio con HandCoins + 'Pagas/Cobras X' y href al espacio, 'Estáis al día'/'Deuda saldada'/'Pago registrado · aún te debe X', recordatorio y etiquetas del glosario, README y e2e; nueva captura saldar-al-dia. Pendiente: CTA con persona e importe (CF-09)."
     },
     {
       "id": "CF-02",

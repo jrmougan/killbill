@@ -82,6 +82,7 @@ const SCREENS: Screen[] = [
   { id: 'historial-pagos', scenario: 'ux-showcase', path: () => '/settle/history' },
   { id: 'bienvenida', scenario: 'solo-user', path: () => '/welcome', design: '3a-bienvenida', keepWelcome: true },
   { id: 'inicio-vacio', scenario: 'couple-no-expenses', path: () => '/dashboard' },
+  { id: 'saldar-al-dia', scenario: 'couple-no-expenses', path: () => '/settle' },
   { id: 'gastos-vacio', scenario: 'couple-no-expenses', path: () => '/expenses/list' },
   { id: 'inicio-liquidando', scenario: 'space-settling', path: () => '/dashboard' },
   { id: 'inicio-archivado', scenario: 'space-archived', path: () => '/dashboard' },

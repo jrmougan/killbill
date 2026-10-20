@@ -14,9 +14,13 @@ The prototype contradicts some existing product rules. These are the resolutions
   the money still comes from OCR / manual entry.
 - **Invites**: no short codes. The "Invitar" card creates and shares a secure
   `/i/[token]` link (Web Share API / copy); "Unirme" accepts a pasted link.
-- **Settle**: two-step confirmation is kept. "Ya he pagado" creates a PENDING
-  settlement ("Pendiente de que X confirme"); "Ya me ha pagado" (creditor)
-  confirms immediately. "Recordárselo" uses the share sheet (no push infra).
+- **Settle** ("Saldar deuda"): two-step confirmation is kept. "Ya he pagado"
+  creates a PENDING settlement ("Pendiente de que X confirme"); "Ya me ha
+  pagado" (creditor) confirms immediately. Reminders use the share sheet (no
+  push infra): "Recordarle la deuda" is creditor-only, and the debtor of a
+  pending payment gets "Pedirle que lo confirme" instead. "Deuda saldada" is
+  shown only right after a confirmed payment that leaves the balance at 0;
+  opening /settle with nothing owed says "Estáis al día" / "Ya estás al día".
 - **Add expense**: the numpad quick flow (equal / only me / only them) is the
   default; "Más opciones" exposes custom splits, tags, date and recurrence.
 - **Spaces**: Pareja→COUPLE, Piso→GROUP, Viaje→EPHEMERAL (only when
@@ -31,6 +35,6 @@ The prototype contradicts some existing product rules. These are the resolutions
 ## Chosen direction
 
 `EQUIL Rediseño.dc.html` holds the canvas trimmed to the chosen path: **"Mezcla · base 1a +
-espacios de 1b + ticket de 1c"** (2a: Inicio, Añadir gasto, Quedar en paz) and the remaining
+espacios de 1b + ticket de 1c"** (2a: Inicio, Añadir gasto, Saldar deuda) and the remaining
 screens in that style (3a). The discarded directions (1a/1b/1c) and the old-app reference (0a)
 were removed. The Ralph UX loop in `scripts/ralph/` audits the app against it.

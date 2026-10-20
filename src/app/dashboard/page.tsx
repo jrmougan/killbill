@@ -167,7 +167,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 amount: absEuros(solo ? s.monthTotalCents : s.balanceCents),
                 tone: solo ? "neutral" : balanceTone(s.balanceCents),
                 signed: solo ? null : signedEuros(s.balanceCents),
-                settleHref: canSettle ? "/settle" : null,
+                settleHref: canSettle ? settleUrlFor(s.id) : null,
+                settleSub: canSettle ? `${s.balanceCents > 0 ? "Cobras" : "Pagas"} ${absEuros(s.balanceCents)}` : null,
                 // Debtor side of a two-step payment: say it is on its way (IE-27).
                 pendingNote:
                     isActive && pendingOutCents > 0 && s.status !== SpaceStatus.ARCHIVED

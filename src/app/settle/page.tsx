@@ -20,7 +20,7 @@ import { SettleClient } from "./client";
 export const dynamic = 'force-dynamic';
 
 /**
- * "Quedar en paz" — settle a space: `?space=<groupId>` when given (authorized
+ * "Saldar deuda" — settle a space: `?space=<groupId>` when given (authorized
  * against that space), else the active space.
  *
  * Money comes from the canonical sources only: my net balance and the suggested
