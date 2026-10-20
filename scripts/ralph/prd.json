@@ -1173,8 +1173,8 @@
         "src/app/admin/admin-invites.test.tsx",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Anular con hoja danger + toast 'Invitación anulada'; grupo 'Caducadas' sin copiar ni contar en Disponibles; cabecera de enlaces y 'Copiar enlace' visible; test jsdom y e2e nuevo e2e/features/admin.spec.ts. Sin pendientes."
     },
     {
       "id": "CF-28",

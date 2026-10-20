@@ -253,6 +253,15 @@ const SCREENS: Screen[] = [
       await page.waitForTimeout(600); // let the sheet finish sliding in
     },
   },
+  // Sergio (admin): Disponibles, Caducadas y Usadas (CF-27).
+  { id: 'admin', scenario: 'ux-showcase', path: () => '/admin', as: (d) => d.admin },
+  {
+    id: 'hoja-anular-invitacion', scenario: 'ux-showcase', path: () => '/admin', as: (d) => d.admin,
+    act: async (page) => {
+      await page.getByRole('button', { name: /^Anular invitación / }).first().click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
   { id: 'historial-pagos', scenario: 'ux-showcase', path: () => '/settle/history' },
   { id: 'historial-pagos-pendiente', scenario: 'ux-showcase', path: (d) => `/settle/history?space=${d.groupId}` },
   { id: 'bienvenida', scenario: 'solo-user', path: () => '/welcome', design: '3a-bienvenida', keepWelcome: true },

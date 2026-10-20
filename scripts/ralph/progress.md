@@ -532,3 +532,15 @@
   `e2e/features/settings.spec.ts`, `scripts/ralph/capture.spec.ts`, `scripts/ralph/findings/CF-26.md`.
 - Aprendizajes: `getByRole('button', { name: 'Cerrar' })` sin `exact` casa con cualquier "Cerrar sesión…": usa `exact: true`. `POST /api/mcp` con un token revocado
   da 401 (sirve para comprobar la revocación en e2e). `LogoutButton` solo se usa en Ajustes y ahora va envuelto en un `<div>` (su error no rompe los separadores de `Section`).
+
+## 2026-10-20 · CF-27 Admin: anular invitación con consecuencia y separar las caducadas
+- Corregido: "Eliminar" en línea → papelera "Anular invitación {code}" que abre `CriticalActionSheet` danger (`invite-void-sheet`) "¿Anular la invitación {code}?"
+  ("El enlace de registro que hayas enviado dejará de funcionar…"; para una caducada "Ya ha caducado…"), CTA "Anular invitación", error dentro de la hoja y toast
+  "Invitación anulada". Caducadas (`expiresAt < ahora`) en su grupo "Caducadas" ("Caducó el X"), sin copiar y fuera de Disponibles (contador incluido).
+  Cabecera "Enlaces para crear una cuenta en EQUIL. Cada enlace sirve una vez y caduca a los 7 días."; botón con texto "Copiar enlace"/"Copiado"; fechas sin año.
+- Pendiente / fuera de alcance: nada (la Server Action `deleteInviteAction` y sus mensajes no se tocan).
+- Ficheros: `src/app/admin/admin-invites{,.test}.tsx`, `e2e/features/admin.spec.ts` (nuevo), `src/app/api/test/seed/route.ts`, `scripts/ralph/capture.spec.ts`,
+  `scripts/ralph/findings/CF-27.md`.
+- Aprendizajes: `ux-showcase` devuelve ahora `admin` (Sergio, `isAdmin`) con 2 invitaciones libres, 1 caducada y 1 usada por Pablo (códigos aleatorios: busca por
+  `/^Anular invitación /`). Capturas `admin` y `hoja-anular-invitacion` (`as: (d) => d.admin`). No había e2e de la pantalla `/admin`: `e2e/features/admin.spec.ts`
+  usa el escenario `admin-with-invite` (invitación sin caducidad). En los tests jsdom de una página con Server Actions, `vi.mock('./actions')` + `await import()` evita cargar Prisma.

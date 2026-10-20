@@ -893,9 +893,24 @@ export async function POST(request: Request) {
         },
       });
 
+      // Sergio is the instance admin: /admin lists two available registration
+      // invites, one expired and one used by Pablo (CF-27 "admin").
+      await prisma.user.update({ where: { id: sergio.id }, data: { isAdmin: true } });
+      // Random like createInviteFor: the code is unique across seeds.
+      const inviteCode = () => randomBytes(4).toString('hex').toUpperCase();
+      await prisma.inviteCode.createMany({
+        data: [
+          { code: inviteCode(), createdById: sergio.id, createdAt: daysAgo(1), expiresAt: daysAgo(-6) },
+          { code: inviteCode(), createdById: sergio.id, createdAt: daysAgo(3), expiresAt: daysAgo(-4) },
+          { code: inviteCode(), createdById: sergio.id, createdAt: daysAgo(10), expiresAt: daysAgo(3) },
+          { code: inviteCode(), createdById: sergio.id, createdAt: daysAgo(20), expiresAt: daysAgo(13), usedById: pablo.id, usedAt: daysAgo(18) },
+        ],
+      });
+
       return NextResponse.json({
         userA: creds(alvaro, PASSWORD),
         userB: creds(lucia, PASSWORD),
+        admin: creds(sergio, PASSWORD),
         coupleId: casa.id,
         personalExpenseId: farmacia.id,
         groupId: lisboa.id,
