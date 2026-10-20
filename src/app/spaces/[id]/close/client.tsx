@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import { SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 import { daysUntil } from "@/lib/space-ui";
+import { setFlashToast } from "@/lib/flash-toast";
+import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
 
 type Debt = { userId: string; name: string; amountCents: number };
 type SettlementRow = { id: string; fromName: string; toName: string; amountCents: number; status: string };
@@ -17,8 +19,9 @@ type SettlementRow = { id: string; fromName: string; toName: string; amountCents
  * (POST /api/spaces/[id]/settle-up → SETTLING + suggested PENDING settlements),
  * the settlement checklist with progress, a link to settle THIS space
  * (`/settle?space=<id>`, not the active-space cookie) and the final "Archivar"
- * (PATCH → ARCHIVED). Archiving is refused by the API while balances are open or
- * payments are pending; the 409 message and its settle link are shown inline.
+ * (PATCH → ARCHIVED, reviewed in a danger `CriticalActionSheet`). When the page
+ * already knows the space can't be archived (`archiveBlockReason`) the sheet's
+ * CTA is disabled with the reason; a 409 from the API is painted in the sheet.
  */
 export function CloseSpaceClient({
     spaceId,
@@ -30,7 +33,7 @@ export function CloseSpaceClient({
     settlements,
     canManage,
     settleHref,
-    canArchive,
+    archiveBlockReason,
 }: {
     spaceId: string;
     spaceName: string;
@@ -42,13 +45,15 @@ export function CloseSpaceClient({
     settlements: SettlementRow[];
     canManage: boolean;
     settleHref: string;
-    /** Everyone at peace and nothing PENDING (the API re-checks). */
-    canArchive: boolean;
+    /** "Falta confirmar 1 pago" / "Falta saldar 2 deudas"; null when it can be archived (the API re-checks). */
+    archiveBlockReason: string | null;
 }) {
     const router = useRouter();
     const [refreshing, startTransition] = useTransition();
     const [busy, setBusy] = useState<string | null>(null);
     const [error, setError] = useState<{ message: string; href: string | null } | null>(null);
+    const [confirmingArchive, setConfirmingArchive] = useState(false);
+    const [archiveError, setArchiveError] = useState<{ message: string; href: string | null } | null>(null);
 
     const days = type === SpaceType.EPHEMERAL && status === SpaceStatus.ACTIVE ? daysUntil(expiresAt) : null;
     const countdownLabel =
@@ -81,9 +86,8 @@ export function CloseSpaceClient({
     };
 
     const archive = async () => {
-        if (!confirm("¿Archivar el espacio? Quedará en solo lectura como recuerdo y no se podrá reabrir.")) return;
         setBusy("archive");
-        setError(null);
+        setArchiveError(null);
         try {
             const res = await fetch(`/api/spaces/${spaceId}`, {
                 method: "PATCH",
@@ -92,18 +96,25 @@ export function CloseSpaceClient({
             });
             const data = await res.json().catch(() => null);
             if (res.ok) {
+                setFlashToast(`${spaceName} archivado. Lo encontrarás en Espacios.`);
+                setConfirmingArchive(false);
                 startTransition(() => {
                     router.push("/dashboard");
                     router.refresh();
                 });
             } else {
-                setError({ message: data?.error || "No se pudo archivar", href: data?.settleUrl ?? null });
+                setArchiveError({ message: data?.error || "No se pudo archivar", href: data?.settleUrl ?? null });
             }
         } catch {
-            setError({ message: "Sin conexión. Inténtalo de nuevo.", href: null });
+            setArchiveError({ message: "Sin conexión. Inténtalo de nuevo.", href: null });
         } finally {
             setBusy(null);
         }
+    };
+
+    const openArchive = () => {
+        setArchiveError(null);
+        setConfirmingArchive(true);
     };
 
     return (
@@ -233,14 +244,14 @@ export function CloseSpaceClient({
                             <button
                                 type="button"
                                 className="w-full h-14 rounded-[18px] bg-card border border-[color:var(--line)] text-base font-semibold text-destructive flex items-center justify-center gap-2 disabled:opacity-50"
-                                onClick={archive}
+                                onClick={openArchive}
                                 disabled={busy !== null || refreshing}
                                 data-testid="close-archive"
                             >
                                 {busy === "archive" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Archive className="h-4 w-4" aria-hidden="true" />}
                                 Archivar espacio
                             </button>
-                            {!canArchive && (
+                            {archiveBlockReason && (
                                 <p className="text-xs text-center text-muted-foreground -mt-1">
                                     Para archivar, nadie puede deber nada ni quedar pagos por confirmar.
                                 </p>
@@ -249,6 +260,27 @@ export function CloseSpaceClient({
                     )}
                 </div>
             </div>
+
+            {confirmingArchive && (
+                <CriticalActionSheet
+                    testId="archive-sheet"
+                    title={`¿Archivar ${spaceName}?`}
+                    tone="danger"
+                    consequences={[
+                        "Quedará solo para consultar: nadie podrá añadir gastos, saldar ni cambiar nada.",
+                        "Los gastos y los pagos se conservan.",
+                    ]}
+                    reversible={false}
+                    confirmLabel="Archivar para siempre"
+                    confirmDisabled={!!archiveBlockReason}
+                    disabledReason={archiveBlockReason}
+                    busy={busy === "archive"}
+                    error={archiveError?.message}
+                    errorHref={archiveError?.href}
+                    onConfirm={archive}
+                    onClose={() => setConfirmingArchive(false)}
+                />
+            )}
         </div>
     );
 }

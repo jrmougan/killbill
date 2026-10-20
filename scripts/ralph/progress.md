@@ -382,3 +382,13 @@
 - Aprendizajes: no exportes helpers de un módulo `"use client"` para usarlos en un server component (se vuelven referencias de cliente):
   déjalos en `page.tsx`. Capturas nuevas `hoja-cerrar-cuentas` y `cerrar-cuentas-toast` (confirma la hoja y espera a `space-action-reopen`).
   testids de hojas de Gestión: `settle-sheet`, `reopen-sheet`, `convert-sheet`, `archive-sheet`.
+
+## 2026-10-20 · CF-15 /close: archivar con la hoja danger en lugar de confirm()
+- Corregido: `close-archive` abre `archive-sheet` (`CriticalActionSheet` danger, mismo copy que Gestión, "Archivar para siempre"); CTA desactivado
+  con el motivo cuando no se puede archivar; el 409 se pinta en la hoja; al archivar, flash toast "{espacio} archivado. Lo encontrarás en
+  Espacios." + `router.push('/dashboard')`; capturas nuevas `cierre-activo` y `cierre-cerrando` (esta con la hoja abierta).
+- Pendiente / fuera de alcance: /close sigue ofreciendo archivar en ACTIVE y la pista genérica bajo el botón (CF-16).
+- Ficheros: `src/app/spaces/[id]/close/{client,page}.tsx`, `src/app/spaces/[id]/page.tsx`, `src/lib/space-ui.ts`, `scripts/ralph/capture.spec.ts`,
+  `e2e/refresh/committed-mutations.spec.ts`.
+- Aprendizajes: `archiveBlockReason(pendingPayments, openDebts)` vive ahora en `src/lib/space-ui.ts` (lo usan Gestión y /close); `close/page.tsx`
+  le pasa `archiveBlockReason` al cliente en vez de `canArchive`.

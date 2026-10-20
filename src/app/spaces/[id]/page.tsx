@@ -7,7 +7,7 @@ import { getGroupBalances } from "@/lib/ledger-read";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
 import { capFor, hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
 import { MembershipStatus, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
-import { spaceTypeMeta, spaceStatusMeta } from "@/lib/space-ui";
+import { archiveBlockReason, spaceTypeMeta, spaceStatusMeta } from "@/lib/space-ui";
 import { SpaceStatusBanner } from "@/components/space/space-status-banner";
 import { MemberList, type SpaceMember } from "@/components/space/member-list";
 import { InviteManager } from "@/components/space/invite-manager";
@@ -29,13 +29,6 @@ function noInviteReason(type: SpaceType, status: SpaceStatus, memberCount: numbe
             : "El espacio está completo.";
     }
     return "Ahora mismo no se pueden crear enlaces.";
-}
-
-/** "Falta confirmar 1 pago" / "Falta saldar 2 deudas": why the space can't be archived yet. */
-function archiveBlockReason(pendingPayments: number, openDebts: number): string | null {
-    if (pendingPayments > 0) return `Falta confirmar ${pendingPayments} ${pendingPayments === 1 ? "pago" : "pagos"}`;
-    if (openDebts > 0) return `Falta saldar ${openDebts} ${openDebts === 1 ? "deuda" : "deudas"}`;
-    return null;
 }
 
 /** Members can't mint links: tell them who can (instead of hiding invitations silently). */

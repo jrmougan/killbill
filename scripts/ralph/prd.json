@@ -795,8 +795,8 @@
         "e2e/refresh/committed-mutations.spec.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "/close archiva con la hoja danger archive-sheet (motivo y CTA desactivado vía archiveBlockReason compartido en space-ui.ts) y flash toast al llegar a Inicio; archivar en ACTIVE sigue visible hasta CF-16."
     },
     {
       "id": "CF-16",

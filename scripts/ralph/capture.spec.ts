@@ -105,6 +105,14 @@ const SCREENS: Screen[] = [
       await page.waitForTimeout(400);
     },
   },
+  { id: 'cierre-activo', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}/close` },
+  {
+    id: 'cierre-cerrando', scenario: 'space-settling', path: (d) => `/spaces/${d.coupleId}/close`,
+    act: async (page) => {
+      await page.getByTestId('close-archive').click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
   { id: 'espacio-detalle-grupo', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}` },
   { id: 'ajustes', scenario: 'ux-showcase', path: () => '/settings', design: '3a-ajustes' },
   { id: 'historial-pagos', scenario: 'ux-showcase', path: () => '/settle/history' },

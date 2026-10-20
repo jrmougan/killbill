@@ -5,7 +5,7 @@ import { MembershipStatus } from "@/generated/prisma/enums";
 import { getGroupMembers } from "@/lib/membership";
 import { getGroupBalances } from "@/lib/ledger-read";
 import { resolveMyDebts } from "@/lib/finance";
-import { spaceTypeMeta } from "@/lib/space-ui";
+import { archiveBlockReason, spaceTypeMeta } from "@/lib/space-ui";
 import { hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
 import { CloseSpaceClient } from "./client";
 
@@ -47,8 +47,9 @@ export default async function CloseSpacePage({ params }: { params: Promise<{ id:
     }));
 
     const canManage = myMembership.role === "OWNER" || myMembership.role === "ADMIN";
-    const canArchive =
-        !Object.values(balances).some(hasOpenBalance) && !settlements.some((s) => s.status === "PENDING");
+    const pendingPayments = settlements.filter((s) => s.status === "PENDING").length;
+    const openDebts = Object.values(balances).filter((c) => c < 0 && hasOpenBalance(c)).length;
+    const blockReason = archiveBlockReason(pendingPayments, openDebts);
 
     return (
         <CloseSpaceClient
@@ -61,7 +62,7 @@ export default async function CloseSpacePage({ params }: { params: Promise<{ id:
             settlements={settlementRows}
             canManage={canManage}
             settleHref={settleUrlFor(space.id)}
-            canArchive={canArchive}
+            archiveBlockReason={blockReason}
         />
     );
 }

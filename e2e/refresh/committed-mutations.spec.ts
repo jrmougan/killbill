@@ -106,8 +106,8 @@ test('archiving from close navigates to the fresh dashboard in the same document
   await loginAs(page, data.userA as { email: string; password: string });
   await page.goto(`/spaces/${data.coupleId}/close`);
   const assertSameDocument = await watchDocument(page);
-  page.once('dialog', dialog => dialog.accept());
   await page.getByTestId('close-archive').click();
+  await page.getByTestId('confirm-sheet-confirm').click();
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByTestId('space-status-banner')).toHaveAttribute('data-status', 'ARCHIVED');
   await assertSameDocument();

@@ -39,3 +39,10 @@ export function daysUntil(expiresAt: Date | string | null | undefined): number |
     const ms = d.getTime() - Date.now();
     return Math.ceil(ms / (1000 * 60 * 60 * 24));
 }
+
+/** "Falta confirmar 1 pago" / "Falta saldar 2 deudas": why the space can't be archived yet. */
+export function archiveBlockReason(pendingPayments: number, openDebts: number): string | null {
+    if (pendingPayments > 0) return `Falta confirmar ${pendingPayments} ${pendingPayments === 1 ? "pago" : "pagos"}`;
+    if (openDebts > 0) return `Falta saldar ${openDebts} ${openDebts === 1 ? "deuda" : "deudas"}`;
+    return null;
+}
