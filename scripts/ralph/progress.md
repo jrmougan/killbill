@@ -430,3 +430,16 @@
 - Aprendizajes: `SpaceMember.pairCents` = lo que quien mira salda con ese miembro en el plan simplificado (`resolveMyDebts` en los dos
   sentidos; + me debe, − le debo), calculado en `spaces/[id]/page.tsx`. `ux-showcase` tiene ahora a Sergio en Lisboa (saldo 0, 5 personas).
   `espacio-detalle-grupo` se captura con la hoja de Lucía abierta; `hoja-quitar-miembro` abre la de Sergio y pulsa `member-remove`.
+
+## 2026-10-20 · CF-19 Salir del espacio con la deuda visible antes
+- Corregido: `spaces/[id]/page.tsx` precarga mi saldo, acreedores (`resolveMyDebts`), mi último PENDING saliente, `lastOwner` y `lastPerson`;
+  `LeaveSpace` con `CriticalActionSheet`: con saldo "Antes de salir, salda tu deuda" + "Saldar deuda" (primario → settleUrl) y "Salir sin saldar"
+  (texto rojo) → segundo paso danger con casilla `leave-ack` antes de `?force=1`; PENDING propio con "Pedirle que lo confirme" (`leave-pending`);
+  LAST_OWNER → "Elegir persona propietaria" (cierra, scroll a `#members-title` y pulsa el primer `[data-owner-candidate]` de `MemberList`);
+  última persona avisada; flash toast "Has salido de {espacio}. Tu historial se conserva."; los 409 se siguen manejando (cambian la hoja).
+- Pendiente / fuera de alcance: campo `pendingCents` en el 409 (API); orden de miembros con `joinedAt` iguales.
+- Ficheros: `src/components/space/{leave-space,leave-space.test,member-list}.tsx`, `src/app/spaces/[id]/page.tsx`,
+  `scripts/ralph/capture.spec.ts`, `e2e/spaces/manage.spec.ts`, `scripts/ralph/findings/CF-19.md`.
+- Aprendizajes: el `title` de `CriticalActionSheet` va en el `Sheet`, fuera del `data-testid`: en e2e búscalo con
+  `getByRole('dialog' | 'alertdialog', { name })`. En jsdom el `<dialog>` cerrado oculta roles: usa `{ hidden: true }` o testids.
+  Capturas nuevas `hoja-salir-con-deuda` y `hoja-salir-sin-saldar` (ux-showcase, asUserB, Casa).

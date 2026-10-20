@@ -926,8 +926,8 @@
         "e2e/spaces/manage.spec.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Primera hoja con la deuda precargada, 'Saldar deuda' primario y 'Salir sin saldar' con casilla; LAST_OWNER abre el ··· del candidato; PENDING propio, última persona y flash toast. Pendiente: pendingCents en el 409 (API)."
     },
     {
       "id": "CF-20",

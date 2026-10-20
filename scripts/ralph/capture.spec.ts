@@ -133,6 +133,23 @@ const SCREENS: Screen[] = [
       await page.waitForTimeout(600);
     },
   },
+  // Lucía debe en Casa: la primera hoja de "Salir" ya enseña la deuda con "Saldar deuda".
+  {
+    id: 'hoja-salir-con-deuda', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}`, asUserB: true,
+    act: async (page) => {
+      await page.getByTestId('leave-space').click();
+      await page.waitForTimeout(600);
+    },
+  },
+  // Segundo paso: "Salir sin saldar" pide la casilla antes de llamar a la API.
+  {
+    id: 'hoja-salir-sin-saldar', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}`, asUserB: true,
+    act: async (page) => {
+      await page.getByTestId('leave-space').click();
+      await page.getByRole('button', { name: 'Salir sin saldar' }).click();
+      await page.waitForTimeout(600);
+    },
+  },
   { id: 'ajustes', scenario: 'ux-showcase', path: () => '/settings', design: '3a-ajustes' },
   { id: 'historial-pagos', scenario: 'ux-showcase', path: () => '/settle/history' },
   { id: 'historial-pagos-pendiente', scenario: 'ux-showcase', path: (d) => `/settle/history?space=${d.groupId}` },

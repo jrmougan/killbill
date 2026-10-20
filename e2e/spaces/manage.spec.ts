@@ -78,37 +78,40 @@ test.describe('Spaces - Management', () => {
     const userC = data.userC as Creds; // MEMBER, owes 33,33 €
     const spaceId = data.coupleId as string;
 
-    // C owes money: the sheet explains it and offers "Salir igualmente" (?force=1).
+    // C owes money: the FIRST sheet already shows it, "Saldar deuda" is the main action and
+    // "Salir sin saldar" needs the checkbox before the ?force=1 call.
     const ctxC = await createAuthenticatedContext(newContext, userC);
     const pageC = await ctxC.newPage();
     await pageC.goto(`/spaces/${spaceId}`);
-    await pageC.getByTestId('leave-space').click();
-    const first = pageC.waitForResponse((r) => r.url().includes(`/members/${userC.id}`) && r.request().method() === 'DELETE');
-    await pageC.getByTestId('leave-sheet').getByTestId('confirm-sheet-confirm').click();
-    const blocked = await first;
+    const blocked = await pageC.request.delete(`/api/spaces/${spaceId}/members/${userC.id}`);
     expect(blocked.status()).toBe(409);
     expect(await blocked.json()).toMatchObject({ code: 'HAS_BALANCE', balanceCents: -3333 });
+    await pageC.getByTestId('leave-space').click();
     const sheet = pageC.getByTestId('leave-sheet');
-    await expect(sheet).toContainText(/Todavía debes 33,33\s€/);
-    await expect(sheet.getByRole('link', { name: /Saldar deudas/ })).toHaveAttribute('href', `/settle?space=${spaceId}`);
+    await expect(pageC.getByRole('dialog', { name: 'Antes de salir, salda tu deuda' })).toBeVisible();
+    await expect(sheet).toContainText(/Debes 33,33\s€/);
+    await expect(sheet.getByTestId('confirm-sheet-confirm')).toHaveText('Saldar deuda');
+    await sheet.getByRole('button', { name: 'Salir sin saldar' }).click();
+    const confirm = sheet.getByTestId('confirm-sheet-confirm');
+    await expect(confirm).toBeDisabled();
+    await sheet.getByTestId('leave-ack').check();
     const forced = pageC.waitForResponse((r) => r.url().includes(`/members/${userC.id}?force=1`));
-    await sheet.getByRole('button', { name: 'Salir igualmente' }).click();
+    await confirm.click();
     expect((await forced).status()).toBe(200);
     await expect(pageC).toHaveURL(/\/dashboard/);
+    await expect(pageC.getByText('Has salido de')).toBeVisible();
 
-    // A is the only OWNER and B remains: LAST_OWNER, not overridable.
+    // A is the only OWNER and B remains: LAST_OWNER, not overridable; the sheet leads to Miembros.
     await loginAs(page, userA);
     await page.goto(`/spaces/${spaceId}`);
     await page.getByTestId('leave-space').click();
-    await page.getByTestId('leave-sheet').getByTestId('confirm-sheet-confirm').click();
     await expect(page.getByTestId('leave-sheet')).toContainText('Eres la única persona propietaria');
     const forcedOwner = await page.request.delete(`/api/spaces/${spaceId}/members/${userA.id}?force=1`);
     expect(forcedOwner.status()).toBe(409);
     expect((await forcedOwner.json()).code).toBe('LAST_OWNER');
-    await page.getByTestId('leave-sheet').getByRole('button', { name: 'Entendido' }).click();
+    await page.getByTestId('leave-sheet').getByRole('button', { name: 'Elegir persona propietaria' }).click();
 
-    // Make B owner from the member sheet → A may leave (A is owed money: force).
-    await page.getByRole('button', { name: 'Opciones de User B' }).click();
+    // "Elegir persona propietaria" opened B's member sheet → make B owner, then A may leave (A is owed money: force).
     const rolePatch = page.waitForResponse((r) => r.url().includes('/members/') && r.request().method() === 'PATCH');
     await page.getByRole('button', { name: /^Propietario/ }).click();
     await expect(page.getByTestId('owner-confirm')).toContainText('User B podrá cambiar roles');

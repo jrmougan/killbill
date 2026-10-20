@@ -65,7 +65,7 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
     if (!myMembership || myMembership.status !== MembershipStatus.ACTIVE) redirect("/spaces");
     if (myMembership.role === "GUEST") redirect("/dashboard");
 
-    const [roster, balances, pendingPayments] = await Promise.all([
+    const [roster, balances, pendingPayments, myPending] = await Promise.all([
         prisma.membership.findMany({
             where: { groupId: id, status: MembershipStatus.ACTIVE },
             include: { user: { select: { id: true, name: true, avatar: true, isGuest: true } } },
@@ -73,6 +73,11 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
         }),
         getGroupBalances(id),
         prisma.settlement.count({ where: { coupleId: id, status: "PENDING" } }),
+        prisma.settlement.findFirst({
+            where: { coupleId: id, status: "PENDING", fromUserId: userId },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, amount: true, method: true, toUser: { select: { name: true } } },
+        }),
     ]);
 
     // What I settle with each member in the simplified plan (the same matching
@@ -103,6 +108,12 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
     // Same rule as the archive guard of the API (it still answers 409 if this goes stale).
     const openDebts = Object.values(balances).filter((c) => c < 0 && hasOpenBalance(c)).length;
     const showArchive = canManage && space.status === SpaceStatus.SETTLING;
+    // "Salir": the first sheet already knows my debt, who sees it and whether I'm the last owner.
+    const nameOf = new Map(roster.map((m) => [m.user.id, m.user.name]));
+    const creditors = Object.entries(iOwe)
+        .filter(([uid, c]) => hasOpenBalance(c) && nameOf.has(uid))
+        .map(([uid]) => nameOf.get(uid) as string);
+    const ownerCount = roster.filter((m) => m.role === "OWNER").length;
 
     return (
         <div className="min-h-screen pb-28 eq-in">
@@ -193,7 +204,21 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                             blockReason={archiveBlockReason(pendingPayments, openDebts)}
                         />
                     )}
-                    <LeaveSpace spaceId={space.id} userId={userId} spaceName={displayName} />
+                    <LeaveSpace
+                        spaceId={space.id}
+                        userId={userId}
+                        spaceName={displayName}
+                        balanceCents={balances[userId] ?? 0}
+                        creditors={creditors}
+                        pendingPayment={
+                            myPending
+                                ? { id: myPending.id, toName: myPending.toUser.name, amountCents: myPending.amount, method: myPending.method }
+                                : null
+                        }
+                        lastOwner={myMembership.role === "OWNER" && ownerCount <= 1 && roster.length > 1}
+                        lastPerson={roster.length === 1}
+                        settleHref={settleHref}
+                    />
                 </section>
             </div>
         </div>

@@ -204,6 +204,7 @@ export function MemberList({
                                     type="button"
                                     onClick={() => openMember(m)}
                                     aria-label={`Opciones de ${m.name}`}
+                                    data-owner-candidate={(isOwner && m.role !== MembershipRole.GUEST && !m.isGuest) || undefined}
                                     className="h-11 w-11 -mr-2 flex-none rounded-xl flex items-center justify-center text-muted-foreground hover:bg-[var(--track)]"
                                 >
                                     <MoreHorizontal className="h-5 w-5" aria-hidden="true" />

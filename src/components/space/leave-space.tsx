@@ -4,25 +4,74 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
-import { ConfirmSheet } from "./confirm-sheet";
+import { setFlashToast } from "@/lib/flash-toast";
+import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
+import { AskToConfirmButton } from "@/components/settle/settlement-actions";
 
-type Block =
-    | { code: "LAST_OWNER"; error: string }
-    | { code: "HAS_BALANCE"; error: string; balanceCents: number; settleUrl?: string };
+/** My own PENDING payment in this space (not in the ledger until confirmed). */
+export type LeavePendingPayment = { id: string; toName: string; amountCents: number; method: string };
+
+/** Within ±1 cent the balance is closed (same tolerance as `hasOpenBalance`). */
+const isOpen = (cents: number) => Math.abs(cents) > 1;
+
+function joinNames(names: string[]): string {
+    return names.length <= 1 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`;
+}
 
 /**
- * "Salir del espacio" with the API contract of
- * DELETE /api/spaces/[id]/members/[me]:
- *  - 409 LAST_OWNER → explain that someone else must be made owner first;
- *  - 409 HAS_BALANCE → show the balance, link to settle, and offer "Salir
- *    igualmente" which repeats the call with `?force=1`.
+ * "Salir del espacio" (CF-19). The page precomputes my balance, who I owe,
+ * my own PENDING payment and whether I'm the last owner/person, so the FIRST
+ * sheet already tells the truth instead of waiting for a 409:
+ *  - last owner with others left → "Elegir persona propietaria" (opens the ···
+ *    of the first candidate in Miembros);
+ *  - open balance → "Saldar deuda" as the main action; "Salir sin saldar" is a
+ *    second step that needs an explicit checkbox before `?force=1`;
+ *  - settled → a danger sheet with what leaving means.
+ * The 409s of DELETE /api/spaces/[id]/members/[me] are still handled (the
+ * page data may be stale): they switch the sheet to the matching state.
  */
-export function LeaveSpace({ spaceId, userId, spaceName }: { spaceId: string; userId: string; spaceName: string }) {
+export function LeaveSpace({
+    spaceId,
+    userId,
+    spaceName,
+    balanceCents = 0,
+    creditors = [],
+    pendingPayment = null,
+    lastOwner = false,
+    lastPerson = false,
+    settleHref,
+}: {
+    spaceId: string;
+    userId: string;
+    spaceName: string;
+    /** My net balance in this space (cents, + I'm owed). */
+    balanceCents?: number;
+    /** Who I pay in the simplified plan (names), when I owe. */
+    creditors?: string[];
+    pendingPayment?: LeavePendingPayment | null;
+    /** I'm the only OWNER and other people remain (409 LAST_OWNER). */
+    lastOwner?: boolean;
+    /** Nobody else is left: leaving hides the space for everyone. */
+    lastPerson?: boolean;
+    settleHref?: string;
+}) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
+    const [step, setStep] = useState<"review" | "force">("review");
+    const [ack, setAck] = useState(false);
     const [busy, setBusy] = useState(false);
-    const [block, setBlock] = useState<Block | null>(null);
     const [error, setError] = useState<string | null>(null);
+    // What a 409 told us when the page data was stale.
+    const [serverOwner, setServerOwner] = useState(false);
+    const [serverBalance, setServerBalance] = useState<number | null>(null);
+    const [serverSettleUrl, setServerSettleUrl] = useState<string | null>(null);
+
+    const isLastOwner = lastOwner || serverOwner;
+    const balance = serverBalance ?? balanceCents;
+    const owes = isOpen(balance) && balance < 0;
+    const owed = isOpen(balance) && balance > 0;
+    const amount = formatCurrency(Math.abs(balance));
+    const settleUrl = serverSettleUrl ?? settleHref ?? `/settle?space=${encodeURIComponent(spaceId)}`;
 
     const leave = async (force: boolean) => {
         setBusy(true);
@@ -31,12 +80,20 @@ export function LeaveSpace({ spaceId, userId, spaceName }: { spaceId: string; us
             const res = await fetch(`/api/spaces/${spaceId}/members/${userId}${force ? "?force=1" : ""}`, { method: "DELETE" });
             const data = await res.json().catch(() => null);
             if (res.ok) {
+                setFlashToast(`Has salido de ${spaceName}. Tu historial se conserva.`);
                 router.push("/dashboard");
                 router.refresh();
                 return;
             }
-            if (res.status === 409 && (data?.code === "LAST_OWNER" || data?.code === "HAS_BALANCE")) {
-                setBlock(data as Block);
+            if (res.status === 409 && data?.code === "LAST_OWNER") {
+                setServerOwner(true);
+                setStep("review");
+                return;
+            }
+            if (res.status === 409 && data?.code === "HAS_BALANCE" && typeof data.balanceCents === "number") {
+                setServerBalance(data.balanceCents);
+                if (typeof data.settleUrl === "string") setServerSettleUrl(data.settleUrl);
+                setStep("review");
                 return;
             }
             setError(data?.error || "No se pudo salir del espacio");
@@ -47,63 +104,142 @@ export function LeaveSpace({ spaceId, userId, spaceName }: { spaceId: string; us
         }
     };
 
-    const close = () => {
-        setOpen(false);
-        setBlock(null);
+    const openSheet = () => {
+        setStep("review");
+        setAck(false);
         setError(null);
+        setOpen(true);
+    };
+    const close = () => setOpen(false);
+
+    /** Closes the sheet and opens the ··· of the first member who can be made owner. */
+    const pickOwner = () => {
+        setOpen(false);
+        setTimeout(() => {
+            document.getElementById("members-title")?.scrollIntoView({ block: "start", behavior: "smooth" });
+            document.querySelector<HTMLButtonElement>("[data-owner-candidate]")?.click();
+        }, 0);
     };
 
-    let body: React.ReactNode = <>Dejarás de ver {spaceName} en Inicio. Tu historial de gastos se conserva.</>;
-    let confirmLabel = "Salir del espacio";
-    let onConfirm: () => void = () => void leave(false);
-    let errorMsg: string | null = error;
-    let errorHref: string | null = null;
-    if (block?.code === "LAST_OWNER") {
-        body = <>Eres la única persona propietaria de {spaceName}. Antes de salir, haz propietaria a otra persona desde Miembros (botón ··· junto a su nombre).</>;
-        confirmLabel = "Entendido";
-        onConfirm = close;
-    } else if (block?.code === "HAS_BALANCE") {
-        const owes = block.balanceCents < 0;
-        body = (
-            <>
-                {owes
-                    ? `Todavía debes ${formatCurrency(Math.abs(block.balanceCents))} en ${spaceName}.`
-                    : `Todavía te deben ${formatCurrency(block.balanceCents)} en ${spaceName}.`}{" "}
-                Lo mejor es saldar la deuda antes de salir. Si sales igualmente, la deuda queda en el historial pero dejarás de verla.
-            </>
+    let sheet: React.ReactNode = null;
+    if (open && isLastOwner) {
+        sheet = (
+            <CriticalActionSheet
+                testId="leave-sheet"
+                title="Antes de salir"
+                consequences={[
+                    `Eres la única persona propietaria de ${spaceName}. Antes de salir, haz propietaria a otra persona.`,
+                ]}
+                confirmLabel="Elegir persona propietaria"
+                error={error}
+                onConfirm={pickOwner}
+                onClose={close}
+            />
         );
-        confirmLabel = "Salir igualmente";
-        onConfirm = () => void leave(true);
-        errorMsg = error ?? "Tienes saldo pendiente.";
-        errorHref = block.settleUrl ?? `/settle?space=${encodeURIComponent(spaceId)}`;
+    } else if (open && (owes || owed) && step === "review") {
+        const who = joinNames(creditors);
+        const consequence = owes
+            ? creditors.length > 1
+                ? `Debes ${amount} en ${spaceName}. Si sales sin saldarla, ${who} seguirán viendo tu deuda y no podrán saldarla en la app.`
+                : `Debes ${amount} en ${spaceName}. Si sales sin saldarla, ${who || "el resto"} seguirá viendo que le debes ${amount} y no podrá saldarlo en la app.`
+            : `Te deben ${amount} en ${spaceName}. Si sales ahora, dejarás de verlo y no podrás reclamarlo desde la app.`;
+        sheet = (
+            <CriticalActionSheet
+                testId="leave-sheet"
+                title={owes ? "Antes de salir, salda tu deuda" : "Antes de salir, saldad la deuda"}
+                consequences={[consequence]}
+                confirmLabel="Saldar deuda"
+                secondary={{ label: "Salir sin saldar", tone: "danger", onClick: () => { setAck(false); setError(null); setStep("force"); } }}
+                busy={busy}
+                error={error}
+                onConfirm={() => router.push(settleUrl)}
+                onClose={close}
+            >
+                {owes && pendingPayment && (
+                    <div className="flex flex-col gap-2" data-testid="leave-pending">
+                        <p>
+                            Ya marcaste un pago de {formatCurrency(pendingPayment.amountCents)} a {pendingPayment.toName}. Falta que lo confirme.
+                        </p>
+                        <AskToConfirmButton
+                            id={pendingPayment.id}
+                            toName={pendingPayment.toName}
+                            amountCents={pendingPayment.amountCents}
+                            method={pendingPayment.method}
+                            spaceName={spaceName}
+                        />
+                    </div>
+                )}
+            </CriticalActionSheet>
+        );
+    } else if (open && (owes || owed)) {
+        sheet = (
+            <CriticalActionSheet
+                testId="leave-sheet"
+                tone="danger"
+                title="¿Salir sin saldar?"
+                consequences={[
+                    owes
+                        ? `${joinNames(creditors) || "El resto"} seguirá${creditors.length > 1 ? "n" : ""} viendo tu deuda de ${amount}.`
+                        : `Dejarás de ver los ${amount} que te deben.`,
+                    `Dejarás de ver ${spaceName} en Inicio. Tu historial de gastos se conserva.`,
+                ]}
+                confirmLabel="Salir sin saldar"
+                confirmDisabled={!ack}
+                disabledReason="Marca la casilla para continuar."
+                secondary={{ label: "Volver", onClick: () => setStep("review") }}
+                busy={busy}
+                error={error}
+                onConfirm={() => {
+                    if (ack) void leave(true);
+                }}
+                onClose={close}
+            >
+                <label className="flex min-h-11 items-start gap-3 text-foreground">
+                    <input
+                        type="checkbox"
+                        checked={ack}
+                        onChange={(e) => setAck(e.target.checked)}
+                        disabled={busy}
+                        data-testid="leave-ack"
+                        className="mt-0.5 h-5 w-5 flex-none accent-[color:var(--destructive)]"
+                    />
+                    <span>Entiendo que la deuda de {amount} queda sin saldar</span>
+                </label>
+            </CriticalActionSheet>
+        );
+    } else if (open) {
+        sheet = (
+            <CriticalActionSheet
+                testId="leave-sheet"
+                tone="danger"
+                title={`¿Salir de ${spaceName}?`}
+                consequences={[
+                    lastPerson
+                        ? `Eres la última persona en ${spaceName}. Al salir, nadie podrá verlo.`
+                        : `Dejarás de ver ${spaceName} en Inicio. Para volver necesitarás un enlace nuevo.`,
+                    "Tu historial de gastos se conserva.",
+                ]}
+                confirmLabel="Salir del espacio"
+                busy={busy}
+                error={error}
+                onConfirm={() => void leave(false)}
+                onClose={close}
+            />
+        );
     }
 
     return (
         <>
             <button
                 type="button"
-                onClick={() => setOpen(true)}
+                onClick={openSheet}
                 data-testid="leave-space"
                 className="w-full min-h-14 rounded-[18px] bg-card border border-[color:var(--line-2)] px-4 flex items-center gap-3 text-[15px] font-semibold text-destructive"
             >
                 <LogOut className="h-5 w-5" aria-hidden="true" />
                 Salir del espacio
             </button>
-            {open && (
-                <ConfirmSheet
-                    testId="leave-sheet"
-                    title={block?.code === "LAST_OWNER" ? "Antes de salir" : "¿Salir del espacio?"}
-                    confirmLabel={confirmLabel}
-                    tone={block?.code === "LAST_OWNER" ? "primary" : "danger"}
-                    busy={busy}
-                    error={errorMsg}
-                    errorHref={errorHref}
-                    onConfirm={onConfirm}
-                    onClose={close}
-                >
-                    {body}
-                </ConfirmSheet>
-            )}
+            {sheet}
         </>
     );
 }
