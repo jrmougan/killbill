@@ -22,8 +22,8 @@ describe('LeaveSpace', () => {
         render(<LeaveSpace {...base} balanceCents={-3333} creditors={['Álvaro']} />);
         fireEvent.click(screen.getByTestId('leave-space'));
         const sheet = screen.getByTestId('leave-sheet');
-        expect(sheet).toHaveTextContent('Debes 33,33');
-        expect(sheet).toHaveTextContent('Álvaro seguirá viendo que le debes');
+        expect(sheet).toHaveTextContent('Tienes una deuda de 33,33');
+        expect(sheet).toHaveTextContent('dejará de aparecer a tu nombre y Álvaro no podrá saldarla');
         fireEvent.click(screen.getByRole('button', { name: 'Saldar deuda', hidden: true }));
         expect(pushMock).toHaveBeenCalledWith('/settle?space=s1');
         expect(fetchMock).not.toHaveBeenCalled();
@@ -59,7 +59,7 @@ describe('LeaveSpace', () => {
         render(<LeaveSpace {...base} />);
         fireEvent.click(screen.getByTestId('leave-space'));
         fireEvent.click(screen.getByTestId('confirm-sheet-confirm'));
-        await waitFor(() => expect(screen.getByTestId('leave-sheet')).toHaveTextContent('Debes 5,00'));
+        await waitFor(() => expect(screen.getByTestId('leave-sheet')).toHaveTextContent('Tienes una deuda de 5,00'));
         expect(fetchMock).toHaveBeenCalledWith('/api/spaces/s1/members/u1', { method: 'DELETE' });
     });
 });

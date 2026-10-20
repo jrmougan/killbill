@@ -138,15 +138,14 @@ export function LeaveSpace({
         );
     } else if (open && (owes || owed) && step === "review") {
         const who = joinNames(creditors);
+        // Balances only count ACTIVE members: once I leave, my debt is no longer shown under my name.
         const consequence = owes
-            ? creditors.length > 1
-                ? `Debes ${amount} en ${spaceName}. Si sales sin saldarla, ${who} seguirán viendo tu deuda y no podrán saldarla en la app.`
-                : `Debes ${amount} en ${spaceName}. Si sales sin saldarla, ${who || "el resto"} seguirá viendo que le debes ${amount} y no podrá saldarlo en la app.`
+            ? `Tienes una deuda de ${amount} en ${spaceName}. Si sales sin saldarla, dejará de aparecer a tu nombre y ${who || "el resto"} no podrá${creditors.length > 1 ? "n" : ""} saldarla en la app.`
             : `Te deben ${amount} en ${spaceName}. Si sales ahora, dejarás de verlo y no podrás reclamarlo desde la app.`;
         sheet = (
             <CriticalActionSheet
                 testId="leave-sheet"
-                title={owes ? "Antes de salir, salda tu deuda" : "Antes de salir, saldad la deuda"}
+                title={owes ? "Antes de salir, salda tu deuda" : "Antes de salir, cobra lo que te deben"}
                 consequences={[consequence]}
                 confirmLabel="Saldar deuda"
                 secondary={{ label: "Salir sin saldar", tone: "danger", onClick: () => { setAck(false); setError(null); setStep("force"); } }}
@@ -179,7 +178,9 @@ export function LeaveSpace({
                 title="¿Salir sin saldar?"
                 consequences={[
                     owes
-                        ? `${joinNames(creditors) || "El resto"} seguirá${creditors.length > 1 ? "n" : ""} viendo tu deuda de ${amount}.`
+                        ? creditors.length > 1
+                            ? `Tu deuda de ${amount} dejará de aparecer a tu nombre: ${joinNames(creditors)} verán que les deben dinero, pero no podrán cobrarlo en la app.`
+                            : `Tu deuda de ${amount} dejará de aparecer a tu nombre: ${joinNames(creditors) || "el resto"} verá que le deben ${amount}, pero no podrá cobrarlo en la app.`
                         : `Dejarás de ver los ${amount} que te deben.`,
                     `Dejarás de ver ${spaceName} en Inicio. Tu historial de gastos se conserva.`,
                 ]}

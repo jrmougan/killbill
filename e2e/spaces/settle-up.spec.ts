@@ -61,7 +61,7 @@ function settlementStatusPatch(page: Page) {
 async function confirmFromDashboard(page: Page, fromName: string) {
   await page.goto('/dashboard');
   await expect(page.getByText(/^Pagos por confirmar · 1$/)).toBeVisible();
-  await expect(page.getByText(`${fromName} dice que te ha pagado`)).toBeVisible();
+  await expect(page.getByTestId('pending-settlement').getByText(`${fromName} dice que te ha pagado`)).toBeVisible();
   await expect(page.getByTestId('pending-settlement').getByText(/^50,00\s€$/)).toBeVisible();
   await page.getByRole('button', { name: 'Lo he recibido', exact: true }).click();
   const patchPromise = settlementStatusPatch(page);
@@ -181,7 +181,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     const pendingCard = pageB.locator(`a[href="/settle/${settlementId}"]`);
     await expect(pendingCard).toBeVisible();
     await expect(pendingCard).toContainText('Pago de deuda');
-    await expect(pendingCard).toContainText('User B → User A');
+    await expect(pendingCard).toContainText('Pago a User A · por confirmar');
     await expect(pendingCard).toContainText('Pendiente');
     await expect(pendingCard).toContainText(/50,00\s€/);
     // Only the receiver gets the confirm section.

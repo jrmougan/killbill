@@ -83,7 +83,9 @@ export function DeleteCategoryModal({
             testId="category-delete-sheet"
             title={`¿Eliminar la categoría «${category.label}»?`}
             consequences={[
-                `Los gastos, gastos recurrentes y presupuestos de «${category.label}» pasarán a la categoría que elijas.`,
+                context.kind === "personal"
+                    ? `Los gastos, gastos recurrentes y presupuestos de «${category.label}» pasarán a la categoría que elijas.`
+                    : `Los gastos, gastos recurrentes y presupuestos de «${category.label}» pasarán a la categoría que elijas, para todo el espacio: también los de los demás.`,
             ]}
             reversible={false}
             confirmLabel={target ? `Eliminar y mover a «${target.label}»` : "Eliminar categoría"}

@@ -101,7 +101,7 @@ test.describe('Settlements - Create and Confirm', () => {
     await pageA.goto('/dashboard');
     const confirmSection = pageA.getByText(/Pagos por confirmar/);
     await expect(confirmSection).toBeVisible({ timeout: 10000 });
-    await expect(pageA.getByText('User B dice que te ha pagado')).toBeVisible();
+    await expect(pageA.getByTestId('pending-settlement').getByText('User B dice que te ha pagado')).toBeVisible();
     await expect(pageA.getByTestId('pending-settlement').getByText(/^50,00\s€$/)).toBeVisible();
 
     // ...and on /settle the creditor confirms the pending one instead of a new "Ya me ha pagado".
@@ -243,7 +243,7 @@ test.describe('Settlements - Create and Confirm', () => {
     await pageA.getByTestId('confirm-sheet-confirm').click();
     expect((await patch).ok()).toBeTruthy();
     await expect(pageA.getByText('User B te pagó')).toBeVisible();
-    await expect(pageA.getByText('Confirmaste que lo recibiste. Ya cuenta en el saldo.')).toBeVisible();
+    await expect(pageA.getByText('Confirmaste que lo recibiste. La deuda se ha reducido.')).toBeVisible();
     await expect(pageA.locator('[data-status="CONFIRMED"]')).toHaveText('Confirmado');
     await expect(pageA.getByRole('button', { name: /recibido/ })).toHaveCount(0);
 

@@ -70,14 +70,14 @@ export default async function SettlementHistoryPage({ searchParams }: { searchPa
                                 const pending = s.status === "PENDING";
                                 const confirmed = s.status === "CONFIRMED";
                                 const title = fromMe
-                                    ? confirmed ? `Pagaste a ${s.toUser.name}` : `Pago a ${s.toUser.name}`
+                                    ? confirmed ? `Pagaste a ${s.toUser.name}` : pending ? `Pago a ${s.toUser.name} · por confirmar` : `Pago a ${s.toUser.name}`
                                     : toMe
                                         ? pending ? `${s.fromUser.name} dice que te ha pagado` : confirmed ? `${s.fromUser.name} te pagó` : `Pago de ${s.fromUser.name}`
                                         : `${s.fromUser.name} → ${s.toUser.name}`;
                                 const detail = pending && toMe
                                     ? "Confírmalo cuando lo recibas"
                                     : pending && fromMe
-                                        ? `Esperando a ${s.toUser.name}`
+                                        ? `Falta que ${s.toUser.name} lo confirme`
                                         : `${methodName(s.method)} · ${dayFmt.format(s.date)}`;
                                 return (
                                     <div key={s.id} data-testid="settle-history-row" data-status={s.status}>
@@ -87,7 +87,7 @@ export default async function SettlementHistoryPage({ searchParams }: { searchPa
                                             icon={toMe ? <ArrowDownLeft className="h-[18px] w-[18px]" /> : <ArrowUpRight className="h-[18px] w-[18px]" />}
                                             title={title}
                                             sub={
-                                                // Wraps instead of truncating: the long chip would hide "Esperando a X".
+                                                // Wraps instead of truncating: the long chip would hide "Falta que X lo confirme".
                                                 <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 whitespace-normal">
                                                     <SettlementStatusChip status={s.status} side={fromMe ? "payer" : "receiver"} className="px-2 py-0 text-[11px] flex-none" />
                                                     <span>

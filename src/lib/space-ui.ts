@@ -42,7 +42,7 @@ export function daysUntil(expiresAt: Date | string | null | undefined): number |
 
 /** What "Empezar a cerrar cuentas" blocks (sheet in Gestión and /close). */
 export const SETTLING_CONSEQUENCES = [
-    "No se podrán añadir, editar ni borrar gastos.",
+    "No se podrán añadir, editar ni eliminar gastos.",
     "Los gastos recurrentes se pausan.",
     "No podrá entrar gente nueva.",
     "Sí podréis saldar deudas y usar las listas.",
@@ -51,7 +51,7 @@ export const SETTLING_CONSEQUENCES = [
 
 /** What "Reabrir espacio" gives back (sheet in Gestión and /close). */
 export const REOPEN_CONSEQUENCES = [
-    "Podréis volver a añadir, editar y borrar gastos.",
+    "Podréis volver a añadir, editar y eliminar gastos.",
     "Los pagos ya registrados se mantienen.",
 ];
 

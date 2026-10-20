@@ -377,7 +377,9 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
         if (settling) {
             // No new expenses while settling: just close the shop run.
             setFinishing(false);
-            showToast("Carro vaciado. Estáis cerrando cuentas: apunta el gasto cuando se reabra el espacio.");
+            const n = res.cleared;
+            const what = n === 0 ? "Ya no quedaban tachados" : n === 1 ? "1 producto quitado de la lista" : `${n} productos quitados de la lista`;
+            showToast(`${what}. Estáis cerrando cuentas: apunta el gasto cuando se reabra el espacio.`);
             router.refresh();
             return;
         }
@@ -955,10 +957,10 @@ function DeleteListSheet({
     const forWhom = shared ? " para todos los miembros del espacio" : "";
     const what =
         itemCount === 0
-            ? `Se borrará la lista${forWhom}.`
+            ? `Se eliminará la lista${forWhom}.`
             : itemCount === 1
-                ? `Se borrará su producto${forWhom}.`
-                : `Se borrarán sus ${itemCount} productos${forWhom}.`;
+                ? `Se eliminará su producto${forWhom}.`
+                : `Se eliminarán sus ${itemCount} productos${forWhom}.`;
 
     return (
         <CriticalActionSheet

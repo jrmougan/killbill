@@ -110,7 +110,7 @@ export function PendingSettlements({ settlements, settling = false, myName, bala
                             <p className="mt-1 text-[13px] font-semibold text-foreground">Confirma los pagos para cerrar las cuentas</p>
                         )}
                         <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-                            No cuentan en el saldo hasta que confirmes que los has recibido.
+                            Hasta que confirmes que los has recibido, la deuda sigue pendiente.
                         </p>
                     </div>
 

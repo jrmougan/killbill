@@ -12,7 +12,8 @@ import { formatCurrency } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 import { spaceTypeMeta } from "@/lib/space-ui";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
-import { getSettlementStatusLabel } from "@/lib/settlement-labels";
+import { getSettlementMethodLabel } from "@/lib/settlement-labels";
+import { settlementText } from "@/components/expenses/list-format";
 import { monthRange } from "@/lib/month-range";
 import { closeItemCount } from "@/lib/close-plan";
 import { debtOf } from "@/components/settle/settle-model";
@@ -260,16 +261,20 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             };
         }),
         ...recentSettlements.map((s) => {
-            const from = names[s.fromUserId] ?? "Alguien";
-            const to = names[s.toUserId] ?? "Alguien";
             const confirmed = s.status === "CONFIRMED";
             const rejected = s.status === "REJECTED";
             // A rejection is news when it happens, not when the payment was dated.
             const when = rejected ? s.updatedAt : s.date;
-            // Status first so a narrow row truncates the names, never the state.
-            const sub = rejected
-                ? `${to} no lo recibió · ${dayLabel(when, now)}`
-                : `${getSettlementStatusLabel(s.status)} · ${from} → ${to} · ${dayLabel(s.date, now)}`;
+            // Same wording as Gastos and the detail page (Glosario).
+            const text = settlementText({
+                meId: userId,
+                fromId: s.fromUserId,
+                toId: s.toUserId,
+                members: Object.entries(names).map(([id, name]) => ({ id, name })),
+                methodLabel: s.method ? getSettlementMethodLabel(s.method) : "",
+                status: s.status,
+            });
+            const sub = `${text.sub} · ${dayLabel(when, now)}`;
             return {
                 id: s.id,
                 date: when,
@@ -283,7 +288,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                             : rejected
                                 ? <X className="h-[18px] w-[18px] text-muted-foreground" aria-hidden="true" />
                                 : <Clock className="h-[18px] w-[18px] text-muted-foreground" aria-hidden="true" />}
-                        title="Pago de deuda"
+                        title={text.title}
                         sub={sub}
                         amount={formatCurrency(s.amount)}
                         amountClassName={confirmed ? "text-[color:var(--positive)]" : rejected ? "text-muted-foreground line-through" : "text-muted-foreground"}

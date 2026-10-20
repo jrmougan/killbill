@@ -89,7 +89,7 @@ test.describe('Spaces - Management', () => {
     await pageC.getByTestId('leave-space').click();
     const sheet = pageC.getByTestId('leave-sheet');
     await expect(pageC.getByRole('dialog', { name: 'Antes de salir, salda tu deuda' })).toBeVisible();
-    await expect(sheet).toContainText(/Debes 33,33\s€/);
+    await expect(sheet).toContainText(/Tienes una deuda de 33,33\s€/);
     await expect(sheet.getByTestId('confirm-sheet-confirm')).toHaveText('Saldar deuda');
     await sheet.getByRole('button', { name: 'Salir sin saldar' }).click();
     const confirm = sheet.getByTestId('confirm-sheet-confirm');
@@ -115,9 +115,9 @@ test.describe('Spaces - Management', () => {
     const rolePatch = page.waitForResponse((r) => r.url().includes('/members/') && r.request().method() === 'PATCH');
     await page.getByRole('button', { name: /^Propietario/ }).click();
     await expect(page.getByTestId('owner-confirm')).toContainText('User B podrá cambiar roles');
-    await page.getByRole('button', { name: 'Hacer propietaria a User B' }).click();
+    await page.getByRole('button', { name: 'Dar el rol de propietario a User B' }).click();
     expect((await rolePatch).status()).toBe(200);
-    await expect(page.getByText('User B ahora es propietario')).toBeVisible();
+    await expect(page.getByText('User B ya tiene el rol de propietario')).toBeVisible();
     const left = await page.request.delete(`/api/spaces/${spaceId}/members/${userA.id}?force=1`);
     expect(left.status()).toBe(200);
   });

@@ -591,3 +591,17 @@
   `src/app/api/{spaces/[id],me}/lists/[listId]/clear-checked/route.ts`, `e2e/expenses/edit-delete.spec.ts`, `e2e/shopping/smoke.spec.ts`, `scripts/ralph/findings/RV-03.md`.
 - Aprendizajes: `e2e/shopping/smoke.spec.ts` (y `api/*`, `*.api.spec.ts`) solo corre en el proyecto `api`: `mise run e2e -- <spec> --project=api`
   (con `--project=mobile-chrome` se ignora en silencio). Un cuerpo opcional en una ruta: `jsonObject({...}).nullish()` (cuerpo vacío → `undefined`).
+
+## 2026-10-20 · RV-04 Glosario: restos y concordancias tras la revisión
+- Corregido: "la deuda sigue pendiente" en Pagos por confirmar y "La deuda se ha reducido" en el detalle; Recientes de Inicio con
+  `settlementText` (mismo título/subtítulo que Gastos + día); hoja de miembro con el texto según quién debe y sin leísmo; Historial con
+  "Pago a X · por confirmar" / "Falta que X lo confirme"; "Dar el rol de propietario a X" / "X ya tiene el rol de propietario";
+  listas en SETTLING con "N productos quitados de la lista…"; "eliminar gastos" y "Se eliminará(n)…"; "Línea «X» eliminada";
+  salir con deuda dice que deja de aparecer a tu nombre (no que la sigan viendo); eliminar categoría de espacio avisa de que afecta a todos.
+- Pendiente / fuera de alcance: el mismo pago sale en "Pagos por confirmar" y en Recientes con el mismo título.
+- Ficheros: `src/app/dashboard/page.tsx`, `src/app/settle/{[id]/page.tsx,history/page.tsx}`, `src/components/{dashboard/pending-settlements,
+  space/member-list,space/leave-space,shopping/lists-hub,category/delete-category-modal,expense/add/receipt-items-editor}.tsx`,
+  `src/lib/space-ui.ts`, tests unitarios y e2e (`settlements/create-and-confirm`, `spaces/{settle-up,manage}`, `shopping/{lifecycle,ui}`).
+- Aprendizajes: al reutilizar el título de un pago en Recientes, `getByText('X dice que te ha pagado')` deja de ser único en Inicio:
+  acota con `getByTestId('pending-settlement')`. El escenario `space-settling` ya trae 2 productos tachados en la lista común (el
+  "Terminar compra" del e2e quita 3).

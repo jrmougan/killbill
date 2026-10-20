@@ -73,7 +73,7 @@ export function ReceiptItemsEditor({
         setRemoved({
             item: items[index],
             index,
-            label: name ? `«${name}» eliminada` : "Línea eliminada",
+            label: name ? `Línea «${name}» eliminada` : "Línea eliminada",
             // With no lines left the form keeps the last total (see `withItems`).
             totalCents: receiptLinesCents(next.length > 0 ? next : items),
             last: next.length === 0,

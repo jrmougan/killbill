@@ -129,7 +129,7 @@ export function MemberList({
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ role }),
-        }, `${m.name} ahora es ${ROLE_NOUN[role]}`);
+        }, `${m.name} ya tiene el rol de ${ROLE_NOUN[role]}`);
 
     const remove = (m: SpaceMember) =>
         call(`/api/spaces/${spaceId}/members/${m.id}`, { method: "DELETE" }, `${m.name} ya no está en ${spaceName}`);
@@ -335,7 +335,7 @@ function MemberSheetBody({
                                             disabled={busy}
                                             className={cn(linkCls, "bg-primary text-primary-foreground disabled:opacity-50")}
                                         >
-                                            Hacer propietaria a {member.name}
+                                            Dar el rol de propietario a {member.name}
                                         </button>
                                         <button type="button" onClick={onCancelOwner} disabled={busy} className={cn(linkCls, "text-muted-foreground")}>
                                             Cancelar
@@ -371,9 +371,12 @@ function MemberSheetBody({
                         {cents < 0 ? `${member.name} debe ${amount} en este espacio` : `A ${member.name} le deben ${amount}`}
                     </p>
                     <p className="text-[13px] text-muted-foreground leading-[1.45]">
-                        {cents < 0 || pair < 0
-                            ? "Para quitarle, primero hay que saldar su deuda."
-                            : "Cuando se salde su deuda podrás quitarle."}
+                        {/* Whose debt blocks it: mine with them, theirs, or they are owed by others. */}
+                        {pair < 0
+                            ? `Para quitar a ${member.name} del espacio, primero salda lo que le debes.`
+                            : cents < 0
+                                ? `Para quitar a ${member.name} del espacio, primero tiene que saldar su deuda.`
+                                : `Podrás quitar a ${member.name} del espacio cuando le paguen lo que le deben.`}
                     </p>
                     <div className="mt-1 flex flex-col gap-1.5">
                         {cents < 0 && (

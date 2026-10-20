@@ -1316,8 +1316,8 @@
         "src/components/space/member-list.tsx",
         "src/lib/space-ui.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Glosario aplicado en los 11 hallazgos (deuda pendiente, Recientes con settlementText, hoja de miembro por dirección, salir sin saldar veraz, categoría de espacio para todos, eliminar/quitar/línea); sin pendientes."
     },
     {
       "id": "RV-05",

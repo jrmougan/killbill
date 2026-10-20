@@ -164,7 +164,7 @@ test.describe('Shopping Lists - UI Happy Path', () => {
     await page.getByRole('button', { name: 'Opciones de Mercadona' }).click();
     await page.getByRole('button', { name: 'Eliminar lista' }).click();
     const deleteSheet = page.getByRole('alertdialog', { name: '¿Eliminar «Mercadona»?' });
-    await expect(deleteSheet).toContainText('Se borrarán sus 4 productos para todos los miembros del espacio. No afecta a ningún gasto.');
+    await expect(deleteSheet).toContainText('Se eliminarán sus 4 productos para todos los miembros del espacio. No afecta a ningún gasto.');
     await deleteSheet.getByRole('button', { name: 'Eliminar lista' }).click();
     await expect(page.getByText('Lista «Mercadona» eliminada')).toBeVisible({ timeout: 10000 });
     await expect(page.getByRole('button', { name: /^Mercadona, común/ })).toHaveCount(0);

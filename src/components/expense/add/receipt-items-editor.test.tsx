@@ -27,7 +27,7 @@ describe('ReceiptItemsEditor', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Eliminar producto 2' }));
         expect(descriptions()).toEqual(['Pan', 'Huevos']);
         expect(screen.getByTestId('total')).toHaveTextContent('3.50');
-        expect(screen.getByTestId('receipt-line-removed')).toHaveTextContent(/«Leche» eliminada · el total baja a 3,50\s€/);
+        expect(screen.getByTestId('receipt-line-removed')).toHaveTextContent(/Línea «Leche» eliminada · el total baja a 3,50\s€/);
 
         fireEvent.click(screen.getByRole('button', { name: 'Deshacer' }));
         expect(descriptions()).toEqual(['Pan', 'Leche', 'Huevos']);

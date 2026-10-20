@@ -98,7 +98,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
         explanation = `Falta que ${receiver} confirme que lo ha recibido.`;
         if (!archived) note = `Si te has equivocado, edítalo o pide a ${receiver} que lo rechace.`;
     } else if (isPending) explanation = `Falta que ${receiver} confirme que lo ha recibido.`;
-    else if (confirmed && iReceive) explanation = "Confirmaste que lo recibiste. Ya cuenta en el saldo.";
+    else if (confirmed && iReceive) explanation = "Confirmaste que lo recibiste. La deuda se ha reducido.";
     else if (confirmed) explanation = `${receiver} confirmó que lo recibió.`;
     else if (rejected && iPay) {
         explanation = `${receiver} indicó que no recibió este pago.`;

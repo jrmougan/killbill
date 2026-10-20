@@ -25,9 +25,16 @@ describe('DeleteCategoryModal', () => {
         render(<DeleteCategoryModal context={context} category={mascotas} categories={categories} onCancel={vi.fn()} />);
         expect(screen.getByRole('alertdialog', { hidden: true, name: '¿Eliminar la categoría «Mascotas»?' })).toBeTruthy();
         expect(screen.getByTestId('category-delete-sheet')).toHaveTextContent(
-            'Los gastos, gastos recurrentes y presupuestos de «Mascotas» pasarán a la categoría que elijas.',
+            'Los gastos, gastos recurrentes y presupuestos de «Mascotas» pasarán a la categoría que elijas, para todo el espacio: también los de los demás.',
         );
         expect(screen.getByTestId('confirm-sheet-confirm')).toHaveTextContent('Eliminar y mover a «Otros»');
+    });
+
+    it('in personal mode it does not mention the rest of the space', () => {
+        render(<DeleteCategoryModal context={{ kind: 'personal' }} category={mascotas} categories={categories} onCancel={vi.fn()} />);
+        const sheet = screen.getByTestId('category-delete-sheet');
+        expect(sheet).toHaveTextContent('pasarán a la categoría que elijas.');
+        expect(sheet).not.toHaveTextContent('los de los demás');
     });
 
     it('a 409 BUDGET_CONFLICT offers another target and "Ir a Presupuestos"', async () => {
