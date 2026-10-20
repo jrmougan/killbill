@@ -1048,8 +1048,8 @@
         "e2e/shopping/lifecycle.spec.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "'Borrar los tachados (N)' con hoja danger y toast sin Deshacer, línea de efecto sobre 'Terminar y apuntar gasto', eliminar lista con alcance/conteo y flash toast, producto con Deshacer; e2e nuevo en shopping/ui.spec.ts. Pendiente: restaurar tachados (API)."
     },
     {
       "id": "CF-24",

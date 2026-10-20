@@ -483,3 +483,14 @@
 - Aprendizajes: `CriticalActionSheet` acepta `confirmTestId` (por defecto `confirm-sheet-confirm`). `ux-showcase` tiene ahora un gasto personal de
   Álvaro ("Farmacia", 12,40 €, `personalExpenseId`). Capturas nuevas `hoja-compartir-gasto` y `editar-gasto-efecto` (numpad por testid `numpad-del`/`numpad-8`).
   El delta de mi saldo en el formulario = `balanceDelta(payerId, userId, split.shares, totalCents)` (`quick-split.ts`).
+
+## 2026-10-20 · CF-23 Listas: borrar los tachados con hoja, efecto de "Terminar y apuntar gasto", eliminar lista y producto
+- Corregido: menú "Borrar los tachados (N)" → `ClearCheckedSheet` (`CriticalActionSheet` danger, "¿Borrar N productos tachados?", "Se quitarán de la lista
+  para todo el espacio. Los pendientes no cambian.", CTA "Borrar N productos", toast "N productos borrados" sin Deshacer); línea `finish-effect` encima del CTA
+  ("Quita de la lista los N productos tachados" / "Tacha lo que cojas para terminar"); `DeleteListSheet` danger con conteo y alcance, CTA "Eliminar lista" y flash
+  toast "Lista «X» eliminada"; eliminar producto sin modal con toast "«X» eliminado" + Deshacer (POST con nombre, cantidad, unidad, nota y pasillo; PATCH checked si
+  estaba tachado). Toast de Listas pasa a `EqToast` (acepta `className` para subirlo sobre el CTA). Captura nueva `hoja-borrar-tachados`.
+- Pendiente / fuera de alcance: Deshacer de los tachados (restauración en la API). El toast en SETTLING sigue diciendo "Carro vaciado…" (lo afirma lifecycle.spec.ts:36).
+- Ficheros: `src/components/shopping/lists-hub.tsx`, `src/components/ui/eq.tsx`, `scripts/ralph/capture.spec.ts`, `e2e/shopping/ui.spec.ts`, `scripts/ralph/findings/CF-23.md`.
+- Aprendizajes: `clearChecked` devuelve ahora `string | null` (error) para pintarlo en la hoja; `finish` lo muestra como toast. `EqToast` admite `className` (twMerge
+  sobreescribe `bottom-*`). El POST de items acepta `aisle: null` explícito (no autoasigna) pero no `checked`. `lists-prefilled`: Mercadona con Plátanos y Pollo tachados.

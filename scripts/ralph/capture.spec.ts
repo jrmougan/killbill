@@ -103,6 +103,14 @@ const SCREENS: Screen[] = [
     act: async (page) => { await page.getByTestId('analysis-settle').evaluate((el) => el.scrollIntoView({ block: 'center' })); await page.waitForTimeout(200); },
   },
   { id: 'listas', scenario: 'ux-showcase', path: (d) => `/lists/${d.listId}`, design: '3a-listas-de-la-compra' },
+  {
+    id: 'hoja-borrar-tachados', scenario: 'ux-showcase', path: (d) => `/lists/${d.listId}`,
+    act: async (page) => {
+      await page.getByRole('button', { name: /^Opciones de / }).click();
+      await page.getByRole('button', { name: /^Borrar los tachados/ }).click();
+      await page.waitForTimeout(600);
+    },
+  },
   { id: 'espacios', scenario: 'ux-showcase', path: () => '/spaces', design: '3a-espacios' },
   { id: 'espacio-detalle', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}` },
   // Lisboa active: Casa (a full couple) can't invite, so this shows the "Invitar a…" card.

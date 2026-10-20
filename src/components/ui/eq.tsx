@@ -264,7 +264,7 @@ export function EqEmpty({
 export type EqToastAction = { label: string; onAction: () => void; href?: never } | { label: string; href: string; onAction?: never };
 
 /** Ephemeral bottom toast (dark pill above the nav). Render conditionally. */
-export function EqToast({ children, action }: { children: React.ReactNode; action?: EqToastAction | null }) {
+export function EqToast({ children, action, className }: { children: React.ReactNode; action?: EqToastAction | null; className?: string }) {
     // 44 px tap target that does not grow the pill (negative vertical margin).
     const actionCls = "-my-2.5 -mr-1.5 min-h-11 flex flex-none items-center px-1.5 font-semibold text-[color:var(--accent-tint)] underline-offset-2 hover:underline";
     return (
@@ -272,6 +272,7 @@ export function EqToast({ children, action }: { children: React.ReactNode; actio
             className={cn(
                 "eq-in fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 w-max max-w-[calc(100vw-2rem)] rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]",
                 action && "flex items-center gap-3",
+                className,
             )}
         >
             {action ? <span>{children}</span> : children}
