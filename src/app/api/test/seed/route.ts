@@ -554,6 +554,40 @@ export async function POST(request: Request) {
       });
     }
 
+    if (scenario === 'group-settling') {
+      // A 4-person trip in SETTLING for the /close checklist: Marta is owed by
+      // Lucía (who says she paid: PENDING) and by Pablo; Álvaro (OWNER) is at 0,
+      // so every debt he sees is between other members.
+      const [alvaro, lucia, marta, pablo] = await createUsers(hashedPassword, ['alvaro', 'lucia', 'marta', 'pablo']);
+      const names: [typeof alvaro, string][] = [[alvaro, 'Álvaro'], [lucia, 'Lucía'], [marta, 'Marta'], [pablo, 'Pablo']];
+      await Promise.all(names.map(([u, name]) => prisma.user.update({ where: { id: u.id }, data: { name, avatar: null } })));
+      const trip = [alvaro, lucia, marta, pablo];
+      const space = await createSpace('Lisboa', trip, { type: 'GROUP', status: 'SETTLING' });
+      const quarter = (amount: number) => trip.map((u) => ({ userId: u.id, amount: amount / 4 }));
+      await createSharedExpense({
+        groupId: space.id, description: 'Apartamento', amount: 12000, paidById: marta.id,
+        splits: quarter(12000), members: trip,
+      });
+      await createSharedExpense({
+        groupId: space.id, description: 'Cena en Alfama', amount: 4000, paidById: alvaro.id,
+        splits: quarter(4000), members: trip,
+      });
+      const settlement = await prisma.settlement.create({
+        data: {
+          coupleId: space.id, fromUserId: lucia.id, toUserId: marta.id,
+          amount: 4000, method: 'BIZUM', status: 'PENDING',
+        },
+      });
+
+      return NextResponse.json({
+        userA: creds(alvaro, PASSWORD),
+        userB: creds(lucia, PASSWORD),
+        userC: creds(marta, PASSWORD),
+        coupleId: space.id,
+        settlementId: settlement.id,
+      });
+    }
+
     if (scenario === 'space-archived') {
       const [userA, userB] = await createUsers(hashedPassword, ['userA', 'userB']);
       const members = [userA, userB];

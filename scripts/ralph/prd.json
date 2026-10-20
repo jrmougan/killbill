@@ -827,8 +827,8 @@
         "e2e/spaces/settle-up.spec.ts",
         "e2e/refresh/committed-mutations.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "/close es una checklist de 3 pasos (PATCH a SETTLING con settle-sheet, sin settle-up; todas las deudas del espacio con la acción de quien mira y 'Faltan N'; archivar solo en SETTLING con el motivo); escenario group-settling; e2e rehechos. Pendiente: el endpoint settle-up sigue creando PENDING (backend)."
     },
     {
       "id": "CF-17",

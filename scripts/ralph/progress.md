@@ -392,3 +392,17 @@
   `e2e/refresh/committed-mutations.spec.ts`.
 - Aprendizajes: `archiveBlockReason(pendingPayments, openDebts)` vive ahora en `src/lib/space-ui.ts` (lo usan Gestión y /close); `close/page.tsx`
   le pasa `archiveBlockReason` al cliente en vez de `canArchive`.
+
+## 2026-10-20 · CF-16 /close como checklist de 3 pasos y "Empezar a cerrar cuentas" sin pagos falsos
+- Corregido: `/close` = `<ol>` de 3 pasos (`close-step-{n}` con `data-done`, `aria-current="step"`): 1 "Cerrar cuentas" (PATCH SETTLING desde
+  `settle-sheet`, toast en sitio; "Reabrir" con `reopen-sheet`), 2 "Saldar deudas" con TODAS las deudas (PENDING + plan `resolveMyDebts` por
+  deudor menos lo cubierto por PENDING) y la acción de quien mira, contador `close-progress` "Faltan N"/"Al día", 3 "Archivar para siempre"
+  solo en SETTLING con el motivo (`close-archive-reason`). Sin historial CONFIRMED. `close/page.tsx` con `getSessionCtx`.
+- Pendiente / fuera de alcance: el endpoint settle-up sigue existiendo y creando PENDING (solo se deja de usar desde la UI).
+- Ficheros: `src/app/spaces/[id]/close/{client,page}.tsx`, `src/app/spaces/[id]/actions-client.tsx`, `src/lib/space-ui.ts`,
+  `src/app/api/test/seed/route.ts`, `scripts/ralph/capture.spec.ts`, `e2e/spaces/{settle-up,lifecycle}.spec.ts`, `e2e/refresh/committed-mutations.spec.ts`.
+- Aprendizajes: testids de /close: `close-debt-row` (mis deudas, "Debes a X"), `close-plan-row` (deudas ajenas o hacia mí), `close-settlement-row`
+  (PENDING, `data-status`), `close-amount` en todas. Las consecuencias de cerrar/reabrir viven en `SETTLING_CONSEQUENCES`/`REOPEN_CONSEQUENCES`
+  (`space-ui.ts`). Escenario nuevo `group-settling` (Lisboa de 4 en SETTLING, Álvaro OWNER al día, `userC` = Marta acreedora); capturas
+  `cierre-cerrando` (sin hoja), `cierre-cerrando-acreedora`, `cierre-al-dia` y `cierre-archivar` (la hoja de archivar). /close tiene ahora
+  varios encabezados con "Cerrar": en e2e usa `getByRole('heading', { level: 1, name: /Cerrar/ })`.

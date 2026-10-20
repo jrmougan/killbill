@@ -3,25 +3,42 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Archive, CircleDollarSign, AlertCircle, Hourglass, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Archive, DoorClosed, Hourglass, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import { SpaceStatus, SpaceType } from "@/generated/prisma/enums";
-import { daysUntil } from "@/lib/space-ui";
+import { daysUntil, REOPEN_CONSEQUENCES, SETTLING_CONSEQUENCES } from "@/lib/space-ui";
 import { setFlashToast } from "@/lib/flash-toast";
 import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
+import { EqToast, useEqToast } from "@/components/ui/eq";
 
-type Debt = { userId: string; name: string; amountCents: number };
-type SettlementRow = { id: string; fromName: string; toName: string; amountCents: number; status: string };
+/** One line of step 2: a PENDING payment or an open debt of the simplified plan. */
+export type CloseItem = {
+    kind: "pending" | "debt";
+    /** Settlement id (pending) or `${fromId}>${toId}` (debt). */
+    id: string;
+    fromId: string;
+    fromName: string;
+    toId: string;
+    toName: string;
+    amountCents: number;
+};
+
+type Pending = "settle" | "reopen" | "archive" | null;
+type ActionError = { message: string; href: string | null };
+
+const linkCls = "-my-2.5 min-h-11 inline-flex items-center text-[13px] font-semibold text-primary";
 
 /**
- * Guided close flow for a space: what the caller owes, "Empezar a cerrar cuentas"
- * (POST /api/spaces/[id]/settle-up → SETTLING + suggested PENDING settlements),
- * the settlement checklist with progress, a link to settle THIS space
- * (`/settle?space=<id>`, not the active-space cookie) and the final "Archivar"
- * (PATCH → ARCHIVED, reviewed in a danger `CriticalActionSheet`). When the page
- * already knows the space can't be archived (`archiveBlockReason`) the sheet's
- * CTA is disabled with the reason; a 409 from the API is painted in the sheet.
+ * Guided close of a space as a three-step checklist:
+ * 1. "Cerrar cuentas" — PATCH ACTIVE→SETTLING (only the status changes, so
+ *    no PENDING payment is created on anyone's behalf) or "Reabrir".
+ * 2. "Saldar deudas" — every debt of the space with the action that belongs to
+ *    the viewer: "Saldar deuda" (debtor), "Revisar pago" (receiver of a PENDING)
+ *    or who we are waiting for; "Faltan N".
+ * 3. "Archivar para siempre" — PATCH →ARCHIVED from a danger sheet, only while
+ *    SETTLING; `archiveBlockReason` disables its CTA and a 409 is painted in it.
+ * Every transition is reviewed in a `CriticalActionSheet`.
  */
 export function CloseSpaceClient({
     spaceId,
@@ -29,8 +46,8 @@ export function CloseSpaceClient({
     type,
     status,
     expiresAt,
-    myDebts,
-    settlements,
+    viewerId,
+    items,
     canManage,
     settleHref,
     archiveBlockReason,
@@ -41,8 +58,8 @@ export function CloseSpaceClient({
     status: SpaceStatus | string;
     /** ISO string; the EPHEMERAL trip end (caps guest access, never closes the space). */
     expiresAt?: string | null;
-    myDebts: Debt[];
-    settlements: SettlementRow[];
+    viewerId: string;
+    items: CloseItem[];
     canManage: boolean;
     settleHref: string;
     /** "Falta confirmar 1 pago" / "Falta saldar 2 deudas"; null when it can be archived (the API re-checks). */
@@ -50,10 +67,10 @@ export function CloseSpaceClient({
 }) {
     const router = useRouter();
     const [refreshing, startTransition] = useTransition();
-    const [busy, setBusy] = useState<string | null>(null);
-    const [error, setError] = useState<{ message: string; href: string | null } | null>(null);
-    const [confirmingArchive, setConfirmingArchive] = useState(false);
-    const [archiveError, setArchiveError] = useState<{ message: string; href: string | null } | null>(null);
+    const [busy, setBusy] = useState<Pending>(null);
+    const [confirming, setConfirming] = useState<Pending>(null);
+    const [error, setError] = useState<ActionError | null>(null);
+    const [toast, showToast] = useEqToast(3500);
 
     const days = type === SpaceType.EPHEMERAL && status === SpaceStatus.ACTIVE ? daysUntil(expiresAt) : null;
     const countdownLabel =
@@ -62,22 +79,27 @@ export function CloseSpaceClient({
         days <= 1 ? "El viaje termina hoy" :
         `Quedan ${days} días de viaje`;
 
-    const totalOwed = myDebts.reduce((acc, d) => acc + d.amountCents, 0);
-    const visible = settlements.filter((s) => s.status !== "REJECTED");
-    const confirmed = visible.filter((s) => s.status === "CONFIRMED").length;
-    const total = visible.length;
+    const archived = status === SpaceStatus.ARCHIVED;
+    const closed = status !== SpaceStatus.ACTIVE;
+    const iOwe = items.some((i) => i.fromId === viewerId);
+    const step = !closed ? 1 : items.length > 0 ? 2 : archived ? 4 : 3;
 
-    const startSettling = async () => {
-        setBusy("settle");
+    const patch = async (next: SpaceStatus, key: Exclude<Pending, null>, onDone: () => void) => {
+        setBusy(key);
         setError(null);
         try {
-            const res = await fetch(`/api/spaces/${spaceId}/settle-up`, { method: "POST" });
+            const res = await fetch(`/api/spaces/${spaceId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: next }),
+            });
             const data = await res.json().catch(() => null);
             if (res.ok) {
-                startTransition(() => router.refresh());
-            } else {
-                setError({ message: data?.error || "No se pudo empezar a cerrar cuentas", href: null });
+                setConfirming(null);
+                onDone();
+                return;
             }
+            setError({ message: data?.error || "No se pudo completar la acción", href: data?.settleUrl ?? null });
         } catch {
             setError({ message: "Sin conexión. Inténtalo de nuevo.", href: null });
         } finally {
@@ -85,37 +107,25 @@ export function CloseSpaceClient({
         }
     };
 
-    const archive = async () => {
-        setBusy("archive");
-        setArchiveError(null);
-        try {
-            const res = await fetch(`/api/spaces/${spaceId}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status: SpaceStatus.ARCHIVED }),
-            });
-            const data = await res.json().catch(() => null);
-            if (res.ok) {
-                setFlashToast(`${spaceName} archivado. Lo encontrarás en Espacios.`);
-                setConfirmingArchive(false);
-                startTransition(() => {
-                    router.push("/dashboard");
-                    router.refresh();
-                });
-            } else {
-                setArchiveError({ message: data?.error || "No se pudo archivar", href: data?.settleUrl ?? null });
-            }
-        } catch {
-            setArchiveError({ message: "Sin conexión. Inténtalo de nuevo.", href: null });
-        } finally {
-            setBusy(null);
-        }
+    const refreshWith = (msg: string) => {
+        showToast(msg);
+        startTransition(() => router.refresh());
     };
 
-    const openArchive = () => {
-        setArchiveError(null);
-        setConfirmingArchive(true);
+    const archive = () =>
+        patch(SpaceStatus.ARCHIVED, "archive", () => {
+            setFlashToast(`${spaceName} archivado. Lo encontrarás en Espacios.`);
+            startTransition(() => {
+                router.push("/dashboard");
+                router.refresh();
+            });
+        });
+
+    const open = (p: Pending) => {
+        setError(null);
+        setConfirming(p);
     };
+    const disabled = busy !== null || refreshing;
 
     return (
         <div className="min-h-screen pb-28 eq-in">
@@ -126,10 +136,10 @@ export function CloseSpaceClient({
             </header>
             <div className="px-5 pt-1 flex flex-col gap-1">
                 <h1 className="text-2xl font-bold tracking-[-0.02em] break-words">Cerrar {spaceName}</h1>
-                <p className="text-[15px] text-muted-foreground">Saldad las deudas y archivad el espacio como recuerdo.</p>
+                <p className="text-[15px] text-muted-foreground">Tres pasos: cerrar cuentas, saldar las deudas y archivar.</p>
             </div>
 
-            <div className="px-5 pt-5 flex flex-col gap-6">
+            <div className="px-5 pt-5 flex flex-col gap-4">
                 {countdownLabel && (
                     <div className="flex items-start gap-3 rounded-2xl bg-[var(--track)] px-4 py-3">
                         <Hourglass className="h-4 w-4 mt-0.5 text-primary shrink-0" aria-hidden="true" />
@@ -142,126 +152,135 @@ export function CloseSpaceClient({
                     </div>
                 )}
 
-                <section aria-labelledby="owe-title" className="flex flex-col gap-2">
-                    <h2 id="owe-title" className="text-xs font-semibold text-muted-foreground">Lo que debes</h2>
-                    {myDebts.length === 0 ? (
-                        <div data-testid="close-no-debts" className="rounded-[18px] bg-[var(--positive-tint)] px-4 py-4 text-center">
-                            <p className="text-[15px] font-semibold">Estás al día ✓</p>
-                            <p className="text-[13px] text-muted-foreground">No debes nada a nadie en este espacio.</p>
-                        </div>
-                    ) : (
-                        <div className="rounded-[18px] bg-card border border-[color:var(--line-2)] px-4 divide-y divide-[color:var(--line-2)]">
-                            {myDebts.map((d) => (
-                                <div key={d.userId} data-testid="close-debt-row" className="flex items-center justify-between py-3">
-                                    <span className="text-[15px]">Debes a {d.name}</span>
-                                    <span data-testid="close-amount" className="font-semibold tabular-nums text-[color:var(--negative)]">{formatCurrency(d.amountCents)}</span>
-                                </div>
-                            ))}
-                            {myDebts.length > 1 && (
-                                <div className="flex items-center justify-between py-3 text-[15px]">
-                                    <span className="text-muted-foreground">Total</span>
-                                    <span className="font-bold tabular-nums">{formatCurrency(totalOwed)}</span>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </section>
-
-                {total > 0 && (
-                    <section aria-labelledby="settlements-title" className="flex flex-col gap-2">
-                        <div className="flex items-center justify-between">
-                            <h2 id="settlements-title" className="text-xs font-semibold text-muted-foreground">Pagos del cierre</h2>
-                            <span data-testid="close-progress" className="text-xs text-muted-foreground">{confirmed}/{total} confirmadas</span>
-                        </div>
-                        <div className="rounded-[18px] bg-card border border-[color:var(--line-2)] px-4 divide-y divide-[color:var(--line-2)]">
-                            {visible.map((s) => (
-                                <div key={s.id} data-testid="close-settlement-row" data-status={s.status} className="flex items-center gap-3 py-3">
-                                    <span
-                                        className={cn(
-                                            "h-7 w-7 rounded-full flex items-center justify-center shrink-0",
-                                            s.status === "CONFIRMED" ? "bg-[var(--positive-tint)] text-[color:var(--positive)]" : "bg-[var(--track)] text-muted-foreground",
-                                        )}
-                                        aria-hidden="true"
-                                    >
-                                        {s.status === "CONFIRMED" ? <Check className="h-3.5 w-3.5" /> : <CircleDollarSign className="h-3.5 w-3.5" />}
-                                    </span>
-                                    <span className="flex-1 min-w-0">
-                                        <span className="block text-[15px] truncate">{s.fromName} → {s.toName}</span>
-                                        <span className="block text-[12.5px] text-muted-foreground">{s.status === "CONFIRMED" ? "Confirmado" : "Pendiente de confirmar"}</span>
-                                    </span>
-                                    <span data-testid="close-amount" className="text-[15px] font-semibold tabular-nums shrink-0">{formatCurrency(s.amountCents)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </section>
-                )}
-
-                {error && (
-                    <div role="alert" data-testid="close-error" className="rounded-[14px] bg-[var(--negative-tint)] px-3.5 py-3 text-sm">
-                        <p className="flex items-start gap-1.5">
-                            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-destructive" aria-hidden="true" /> {error.message}
-                        </p>
-                        {error.href && (
-                            <Link href={error.href} className="mt-1 inline-flex min-h-11 items-center font-semibold text-primary">
-                                Saldar deudas →
-                            </Link>
-                        )}
-                    </div>
-                )}
-
-                <div className="flex flex-col gap-3">
-                    {status !== SpaceStatus.ARCHIVED && (
-                        <Link
-                            href={settleHref}
-                            data-testid="close-go-settle"
-                            className={cn(
-                                "w-full h-14 rounded-[18px] text-base font-semibold flex items-center justify-center",
-                                status === SpaceStatus.SETTLING ? "bg-primary text-primary-foreground" : "bg-card border border-[color:var(--line)]",
-                            )}
-                        >
-                            Saldar deudas
-                        </Link>
-                    )}
-                    {canManage && status === SpaceStatus.ACTIVE && (
-                        <>
-                            <button
-                                type="button"
-                                className="w-full h-14 rounded-[18px] bg-primary text-primary-foreground text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                                onClick={startSettling}
-                                disabled={busy !== null || refreshing}
-                                data-testid="close-start-settling"
-                            >
-                                {busy === "settle" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
-                                Empezar a cerrar cuentas
-                            </button>
-                            <p className="text-xs text-center text-muted-foreground -mt-1">
-                                El espacio pasa a &quot;Cerrando cuentas&quot;: no se pueden crear gastos nuevos, solo saldar deudas.
-                            </p>
-                        </>
-                    )}
-                    {canManage && status !== SpaceStatus.ARCHIVED && (
-                        <>
-                            <button
-                                type="button"
-                                className="w-full h-14 rounded-[18px] bg-card border border-[color:var(--line)] text-base font-semibold text-destructive flex items-center justify-center gap-2 disabled:opacity-50"
-                                onClick={openArchive}
-                                disabled={busy !== null || refreshing}
-                                data-testid="close-archive"
-                            >
-                                {busy === "archive" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Archive className="h-4 w-4" aria-hidden="true" />}
-                                Archivar espacio
-                            </button>
-                            {archiveBlockReason && (
-                                <p className="text-xs text-center text-muted-foreground -mt-1">
-                                    Para archivar, nadie puede deber nada ni quedar pagos por confirmar.
+                <ol className="flex flex-col gap-3">
+                    <Step n={1} title="Cerrar cuentas" done={closed} current={step === 1}>
+                        {!closed ? (
+                            <>
+                                <p className="text-[13px] text-muted-foreground">
+                                    Al cerrarlas ya no se pueden añadir gastos; solo saldar deudas. Se puede reabrir.
                                 </p>
-                            )}
-                        </>
-                    )}
-                </div>
+                                {canManage ? (
+                                    <button
+                                        type="button"
+                                        className="mt-1 w-full h-12 rounded-[14px] bg-primary text-primary-foreground text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                                        onClick={() => open("settle")}
+                                        disabled={disabled}
+                                        data-testid="close-start-settling"
+                                    >
+                                        <DoorClosed className="h-4 w-4" aria-hidden="true" />
+                                        Empezar a cerrar cuentas
+                                    </button>
+                                ) : (
+                                    <p className="text-[13px] text-muted-foreground">Quien gestiona el espacio puede empezar a cerrarlas.</p>
+                                )}
+                            </>
+                        ) : (
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-[13px] text-muted-foreground">
+                                    {archived ? "Ya no se pueden añadir gastos." : "Ya no se pueden añadir gastos; solo saldar deudas."}
+                                </p>
+                                {canManage && !archived && (
+                                    <button
+                                        type="button"
+                                        className={cn(linkCls, "flex-none disabled:opacity-50")}
+                                        onClick={() => open("reopen")}
+                                        disabled={disabled}
+                                        data-testid="close-reopen"
+                                    >
+                                        Reabrir
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </Step>
+
+                    <Step
+                        n={2}
+                        title="Saldar deudas"
+                        done={items.length === 0}
+                        current={step === 2}
+                        aside={
+                            <span data-testid="close-progress" className="text-[13px] font-semibold text-muted-foreground tabular-nums">
+                                {items.length === 0 ? "Al día" : `Faltan ${items.length}`}
+                            </span>
+                        }
+                    >
+                        {!iOwe && (
+                            <p data-testid="close-no-debts" className="text-[13px] text-muted-foreground">
+                                {items.length === 0 ? "Estáis al día: nadie debe nada en este espacio." : "Tú no debes nada a nadie."}
+                            </p>
+                        )}
+                        {items.length > 0 && (
+                            <ul className="-mx-4 -mb-2 border-t border-[color:var(--line-2)] divide-y divide-[color:var(--line-2)]">
+                                {items.map((item) => (
+                                    <CloseRow key={item.id} item={item} viewerId={viewerId} settleHref={archived ? null : settleHref} />
+                                ))}
+                            </ul>
+                        )}
+                    </Step>
+
+                    <Step n={3} title="Archivar para siempre" done={archived} current={step === 3}>
+                        <p className="text-[13px] text-muted-foreground">
+                            {archived
+                                ? "Archivado: queda solo para consultar."
+                                : "Queda como recuerdo, solo para consultar. No se puede deshacer."}
+                        </p>
+                        {!archived && !closed && <p className="text-[13px] text-muted-foreground">Primero, cerrad las cuentas.</p>}
+                        {status === SpaceStatus.SETTLING && (canManage ? (
+                            <>
+                                <button
+                                    type="button"
+                                    className="mt-1 w-full h-12 rounded-[14px] bg-card border border-[color:var(--line)] text-[15px] font-semibold text-destructive flex items-center justify-center gap-2 disabled:opacity-50"
+                                    onClick={() => open("archive")}
+                                    disabled={disabled}
+                                    aria-describedby={archiveBlockReason ? "close-archive-reason" : undefined}
+                                    data-testid="close-archive"
+                                >
+                                    {busy === "archive" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Archive className="h-4 w-4" aria-hidden="true" />}
+                                    Archivar para siempre
+                                </button>
+                                {archiveBlockReason && (
+                                    <p id="close-archive-reason" data-testid="close-archive-reason" className="text-[13px] text-muted-foreground">
+                                        {archiveBlockReason}: hay que saldarlo todo antes de archivar.
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                            <p className="text-[13px] text-muted-foreground">Avisa a quien gestiona el espacio para archivarlo.</p>
+                        ))}
+                    </Step>
+                </ol>
             </div>
 
-            {confirmingArchive && (
+            {confirming === "settle" && (
+                <CriticalActionSheet
+                    testId="settle-sheet"
+                    title={`¿Cerrar las cuentas de ${spaceName}?`}
+                    consequences={SETTLING_CONSEQUENCES}
+                    confirmLabel="Empezar a cerrar cuentas"
+                    busy={busy === "settle"}
+                    error={error?.message}
+                    errorHref={error?.href}
+                    onConfirm={() =>
+                        patch(SpaceStatus.SETTLING, "settle", () => refreshWith("Estáis cerrando cuentas. Ahora saldad las deudas."))
+                    }
+                    onClose={() => setConfirming(null)}
+                />
+            )}
+            {confirming === "reopen" && (
+                <CriticalActionSheet
+                    testId="reopen-sheet"
+                    title={`¿Reabrir ${spaceName}?`}
+                    consequences={REOPEN_CONSEQUENCES}
+                    confirmLabel="Reabrir espacio"
+                    busy={busy === "reopen"}
+                    error={error?.message}
+                    errorHref={error?.href}
+                    onConfirm={() => patch(SpaceStatus.ACTIVE, "reopen", () => refreshWith("Espacio reabierto: ya podéis añadir gastos."))}
+                    onClose={() => setConfirming(null)}
+                />
+            )}
+            {confirming === "archive" && (
                 <CriticalActionSheet
                     testId="archive-sheet"
                     title={`¿Archivar ${spaceName}?`}
@@ -275,12 +294,115 @@ export function CloseSpaceClient({
                     confirmDisabled={!!archiveBlockReason}
                     disabledReason={archiveBlockReason}
                     busy={busy === "archive"}
-                    error={archiveError?.message}
-                    errorHref={archiveError?.href}
+                    error={error?.message}
+                    errorHref={error?.href}
                     onConfirm={archive}
-                    onClose={() => setConfirmingArchive(false)}
+                    onClose={() => setConfirming(null)}
                 />
             )}
+            {toast && <EqToast>{toast}</EqToast>}
         </div>
+    );
+}
+
+/** A numbered checklist card: green check when done, filled number when it is the current step. */
+function Step({
+    n,
+    title,
+    done,
+    current,
+    aside,
+    children,
+}: {
+    n: number;
+    title: string;
+    done: boolean;
+    current: boolean;
+    aside?: React.ReactNode;
+    children: React.ReactNode;
+}) {
+    return (
+        <li
+            data-testid={`close-step-${n}`}
+            data-done={done}
+            aria-current={current ? "step" : undefined}
+            className={cn(
+                "rounded-[18px] bg-card border px-4 py-3.5 flex flex-col gap-2",
+                current ? "border-[color:var(--line)]" : "border-[color:var(--line-2)]",
+            )}
+        >
+            <div className="flex items-center gap-3">
+                <span
+                    className={cn(
+                        "h-7 w-7 rounded-full flex items-center justify-center shrink-0 text-[13px] font-bold tabular-nums",
+                        done
+                            ? "bg-[var(--positive-tint)] text-[color:var(--positive)]"
+                            : current
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-[var(--track)] text-muted-foreground",
+                    )}
+                    aria-hidden="true"
+                >
+                    {done ? <Check className="h-3.5 w-3.5" /> : n}
+                </span>
+                <h2 className="flex-1 min-w-0 text-[15px] font-semibold">
+                    <span className="sr-only">Paso {n}: </span>
+                    {title}
+                    {done && <span className="sr-only"> (hecho)</span>}
+                </h2>
+                {aside}
+            </div>
+            {children}
+        </li>
+    );
+}
+
+/**
+ * One debt or PENDING payment, worded for the viewer, with the action that is
+ * theirs (or who we are waiting for). Mine keep `close-debt-row` ("Debes a X"),
+ * the rest of the plan is `close-plan-row`, PENDING ones `close-settlement-row`.
+ */
+function CloseRow({ item, viewerId, settleHref }: { item: CloseItem; viewerId: string; settleHref: string | null }) {
+    const fromMe = item.fromId === viewerId;
+    const toMe = item.toId === viewerId;
+
+    let title: string;
+    let next: React.ReactNode;
+    let testId: string;
+    if (item.kind === "pending") {
+        testId = "close-settlement-row";
+        title = fromMe ? `Pago a ${item.toName} · por confirmar` : toMe ? `${item.fromName} dice que te ha pagado` : `${item.fromName} dice que ha pagado a ${item.toName}`;
+        next = toMe ? (
+            <Link href={`/settle/${item.id}`} className={linkCls} data-testid="close-review-payment">
+                Revisar pago
+            </Link>
+        ) : (
+            `Falta que ${item.toName} lo confirme`
+        );
+    } else {
+        testId = fromMe ? "close-debt-row" : "close-plan-row";
+        title = fromMe ? `Debes a ${item.toName}` : toMe ? `${item.fromName} te debe` : `${item.fromName} debe a ${item.toName}`;
+        next = fromMe && settleHref ? (
+            <Link href={settleHref} className={linkCls} data-testid="close-settle-debt">
+                Saldar deuda
+            </Link>
+        ) : (
+            `Esperando a ${item.fromName}`
+        );
+    }
+
+    return (
+        <li data-testid={testId} data-status={item.kind === "pending" ? "PENDING" : "OPEN"} className="flex items-center gap-3 px-4 py-3">
+            <span className="flex-1 min-w-0">
+                <span className="block text-[15px] break-words">{title}</span>
+                <span className="block text-[12.5px] text-muted-foreground">{next}</span>
+            </span>
+            <span
+                data-testid="close-amount"
+                className={cn("text-[15px] font-semibold tabular-nums shrink-0", fromMe && item.kind === "debt" && "text-[color:var(--negative)]")}
+            >
+                {formatCurrency(item.amountCents)}
+            </span>
+        </li>
     );
 }

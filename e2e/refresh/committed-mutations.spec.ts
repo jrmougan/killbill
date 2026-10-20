@@ -47,7 +47,7 @@ test('lifecycle refreshes update the header and actions repeatedly in the same d
   }
 });
 
-test('starting settle-up refreshes the suggested payment checklist without reloading', async ({ page, newContext }) => {
+test('starting to close refreshes the checklist without reloading; the debtor\'s payment shows as PENDING', async ({ page, newContext }) => {
   const data = await seedScenario(page.request, 'couple-no-expenses');
   const creditorContext = await createAuthenticatedContext(newContext, data.userB as { email: string; password: string });
   const creditorPage = await creditorContext.newPage();
@@ -62,14 +62,29 @@ test('starting settle-up refreshes the suggested payment checklist without reloa
   await page.goto(`/spaces/${data.coupleId}/close`);
   await expect(page.getByTestId('close-debt-row')).toContainText('User B');
   const assertSameDocument = await watchDocument(page);
-  const mutation = page.waitForResponse(response => response.url().endsWith(`/api/spaces/${data.coupleId}/settle-up`) && response.request().method() === 'POST');
+  const mutation = page.waitForResponse(response => new URL(response.url()).pathname === `/api/spaces/${data.coupleId}` && response.request().method() === 'PATCH');
   await page.getByTestId('close-start-settling').click();
-  expect((await mutation).ok()).toBeTruthy();
+  await page.getByTestId('confirm-sheet-confirm').click();
+  const response = await mutation;
+  expect(response.ok()).toBeTruthy();
+  expect(response.request().postDataJSON()).toEqual({ status: 'SETTLING' });
   await expect(page.getByTestId('close-start-settling')).toHaveCount(0);
-  await expect(page.getByTestId('close-progress')).toHaveText('0/1 confirmadas');
+  await expect(page.getByTestId('close-step-1')).toHaveAttribute('data-done', 'true');
+  // Closing creates no payment: the debt is still open, nothing PENDING.
+  await expect(page.getByTestId('close-progress')).toHaveText('Faltan 1');
+  await expect(page.getByTestId('close-settlement-row')).toHaveCount(0);
+  await expect(page.getByTestId('close-debt-row')).toContainText('Debes a User B');
+  await assertSameDocument();
+
+  // The PENDING comes from the debtor on /settle.
+  await page.goto(`/settle?space=${data.coupleId}`);
+  await page.getByRole('button', { name: /^Ya le he pagado/ }).click();
+  await page.getByTestId('confirm-sheet-confirm').click();
+  await expect(page.getByTestId('settle-pending')).toContainText('Avisado a User B');
+  await page.goto(`/spaces/${data.coupleId}/close`);
+  await expect(page.getByTestId('close-progress')).toHaveText('Faltan 1');
   await expect(page.getByTestId('close-settlement-row')).toHaveAttribute('data-status', 'PENDING');
   await expect(page.getByTestId('close-settlement-row')).toContainText(/50,00\s€$/);
-  await assertSameDocument();
 });
 
 test('confirming a payment refreshes both the pending card and exact balance', async ({ page }) => {
@@ -106,6 +121,10 @@ test('archiving from close navigates to the fresh dashboard in the same document
   await loginAs(page, data.userA as { email: string; password: string });
   await page.goto(`/spaces/${data.coupleId}/close`);
   const assertSameDocument = await watchDocument(page);
+  // Archiving is only offered once the accounts are being closed.
+  await expect(page.getByTestId('close-archive')).toHaveCount(0);
+  await page.getByTestId('close-start-settling').click();
+  await page.getByTestId('confirm-sheet-confirm').click();
   await page.getByTestId('close-archive').click();
   await page.getByTestId('confirm-sheet-confirm').click();
   await expect(page).toHaveURL(/\/dashboard/);

@@ -40,6 +40,21 @@ export function daysUntil(expiresAt: Date | string | null | undefined): number |
     return Math.ceil(ms / (1000 * 60 * 60 * 24));
 }
 
+/** What "Empezar a cerrar cuentas" blocks (sheet in Gestión and /close). */
+export const SETTLING_CONSEQUENCES = [
+    "No se podrán añadir, editar ni borrar gastos.",
+    "Los gastos recurrentes se pausan.",
+    "No podrá entrar gente nueva.",
+    "Sí podréis saldar deudas y usar las listas.",
+    "Puedes reabrir el espacio cuando quieras.",
+];
+
+/** What "Reabrir espacio" gives back (sheet in Gestión and /close). */
+export const REOPEN_CONSEQUENCES = [
+    "Podréis volver a añadir, editar y borrar gastos.",
+    "Los pagos ya registrados se mantienen.",
+];
+
 /** "Falta confirmar 1 pago" / "Falta saldar 2 deudas": why the space can't be archived yet. */
 export function archiveBlockReason(pendingPayments: number, openDebts: number): string | null {
     if (pendingPayments > 0) return `Falta confirmar ${pendingPayments} ${pendingPayments === 1 ? "pago" : "pagos"}`;

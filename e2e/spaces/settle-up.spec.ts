@@ -6,13 +6,14 @@ import { createAuthenticatedContext } from '../fixtures/auth.fixture';
 /**
  * Close/settle-up flow with two browser contexts (payer + creditor).
  *
- * What the code does (src/app/api/spaces/[id]/settle-up/route.ts):
- * - Only OWNER/ADMIN may call it; it moves ACTIVE → SETTLING and creates PENDING
- *   settlements for the debts of the CALLER only (the caller as payer).
- * - In the seeded couples the OWNER (userA) is the CREDITOR, so settle-up by the
- *   owner creates no settlement: the MEMBER debtor pays from /settle instead.
- * - To exercise generated suggestions, the third test makes the OWNER the debtor.
- * - /spaces/[id]/close lists only what the caller owes ("Lo que debes").
+ * What the code does:
+ * - /spaces/[id]/close "Empezar a cerrar cuentas" only PATCHes the space to
+ *   SETTLING (OWNER/ADMIN): it never calls settle-up, so no PENDING payment is
+ *   created on anyone's behalf. Debtors pay from /settle ("Ya le he pagado").
+ * - POST /api/spaces/[id]/settle-up still exists (API only): ACTIVE → SETTLING plus
+ *   PENDING settlements for the CALLER's debts; the third test pins it is idempotent.
+ * - /close step 2 lists every debt of the space (mine as "Debes a X") and the
+ *   PENDING payments; CONFIRMED history is not listed.
  * - Pending settlements never post to the ledger; confirming one does (once).
  */
 
@@ -24,21 +25,30 @@ const PLUS_50 = /^\+50,00\s€$/;
 const MINUS_50 = /^-50,00\s€$/;
 const FIFTY = /^50,00\s€$/;
 
-async function startSettleUp(page: Page, spaceId: string) {
-  const url = `/api/spaces/${spaceId}/settle-up`;
-  let body: unknown;
-  // Preserve the real API response before the successful action reloads the page.
-  await page.route(`**${url}`, async (route) => {
-    const response = await route.fetch();
-    body = await response.json();
-    await route.fulfill({ response });
-  }, { times: 1 });
+/** "Empezar a cerrar cuentas" on /close: review sheet → PATCH /api/spaces/[id] {status:'SETTLING'}. */
+async function startSettling(page: Page, spaceId: string) {
+  const url = `/api/spaces/${spaceId}`;
   const responsePromise = page.waitForResponse(
-    (res) => res.url().endsWith(url) && res.request().method() === 'POST',
+    (res) => new URL(res.url()).pathname === url && res.request().method() === 'PATCH',
   );
   await page.getByTestId('close-start-settling').click();
+  await expect(page.getByTestId('settle-sheet')).toBeVisible();
+  await page.getByTestId('confirm-sheet-confirm').click();
   const response = await responsePromise;
-  return { status: response.status(), body };
+  expect(response.request().postDataJSON()).toEqual({ status: 'SETTLING' });
+  return { status: response.status() };
+}
+
+/** Debtor registers the payment from /settle ("Ya le he pagado" + review sheet) → PENDING. */
+async function payFromSettle(page: Page, spaceId: string, toName: string) {
+  await page.goto(`/settle?space=${spaceId}`);
+  const settlePromise = page.waitForResponse(
+    (res) => new URL(res.url()).pathname === '/api/settle' && res.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: /^Ya le he pagado/ }).click();
+  await page.getByTestId('confirm-sheet-confirm').click();
+  expect((await settlePromise).ok()).toBeTruthy();
+  await expect(page.getByTestId('settle-pending')).toContainText(`Avisado a ${toName}`);
 }
 
 function settlementStatusPatch(page: Page) {
@@ -101,13 +111,15 @@ test.describe('Spaces - Settle-up (close flow)', () => {
 
     // Creditor/OWNER: owes nothing, starts the settle-up.
     await pageA.goto(`/spaces/${spaceId}/close`);
-    await expect(pageA.getByTestId('close-no-debts')).toContainText('Estás al día');
+    await expect(pageA.getByTestId('close-no-debts')).toContainText('Tú no debes nada');
     await expect(pageA.getByTestId('close-settlement-row')).toHaveCount(0);
+    // Step 2 lists every debt of the space, worded for the viewer.
+    await expect(pageA.getByTestId('close-plan-row')).toContainText('User B te debe');
+    await expect(pageA.getByTestId('close-plan-row')).toContainText('Esperando a User B');
+    await expect(pageA.getByTestId('close-progress')).toHaveText('Faltan 1');
 
-    const settleUp = await startSettleUp(pageA, spaceId);
-    expect(settleUp.status).toBe(200);
-    // The caller is the creditor → nothing to suggest for them.
-    expect(settleUp.body).toEqual({ success: true, status: 'SETTLING', suggested: [] });
+    const settling = await startSettling(pageA, spaceId);
+    expect(settling.status).toBe(200);
 
     // SETTLING: the start button is gone, archive remains.
     await expect(pageA.getByTestId('close-start-settling')).toHaveCount(0);
@@ -135,9 +147,12 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     const rows = pageA.getByTestId('close-settlement-row');
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toHaveAttribute('data-status', 'PENDING');
-    await expect(rows.first()).toContainText('User B → User A');
+    await expect(rows.first()).toContainText('User B dice que te ha pagado');
+    await expect(rows.first().getByRole('link', { name: 'Revisar pago' })).toHaveAttribute('href', /^\/settle\/[^/]+$/);
     await expect(rows.first().getByTestId('close-amount')).toHaveText(FIFTY);
-    await expect(pageA.getByTestId('close-progress')).toHaveText('0/1 confirmadas');
+    // The PENDING covers the planned debt: it is not listed twice.
+    await expect(pageA.getByTestId('close-plan-row')).toHaveCount(0);
+    await expect(pageA.getByTestId('close-progress')).toHaveText('Faltan 1');
 
     // PENDING does not move balances.
     await pageA.goto('/dashboard');
@@ -185,11 +200,11 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await expect(settledRow).toContainText('Confirmado');
     await expect(settledRow).not.toContainText('Pendiente');
 
-    // Close checklist: 1/1 confirmed.
+    // Close checklist: nothing left (CONFIRMED history is not listed).
     await pageA.goto(`/spaces/${spaceId}/close`);
-    await expect(pageA.getByTestId('close-progress')).toHaveText('1/1 confirmadas');
-    await expect(pageA.getByTestId('close-settlement-row')).toHaveAttribute('data-status', 'CONFIRMED');
-    await expect(pageA.getByTestId('close-no-debts')).toBeVisible();
+    await expect(pageA.getByTestId('close-progress')).toHaveText('Al día');
+    await expect(pageA.getByTestId('close-settlement-row')).toHaveCount(0);
+    await expect(pageA.getByTestId('close-no-debts')).toContainText('Estáis al día');
 
     // SETTLING with every balance at zero: only the OWNER is offered to archive.
     await pageA.goto(`/settle?space=${spaceId}`);
@@ -205,8 +220,8 @@ test.describe('Spaces - Settle-up (close flow)', () => {
   });
 
   test('repeating settle-up or confirming twice neither duplicates settlements nor re-counts money', async ({ newContext }) => {
-    // Make the OWNER the debtor so settle-up generates a suggestion: B (MEMBER)
-    // pays a 100 € shared expense split 50/50 → A owes B 50 €.
+    // Make the OWNER the debtor (the one settle-up would create a suggestion
+    // for): B (MEMBER) pays a 100 € shared expense split 50/50 → A owes B 50 €.
     const data = await seedScenario(apiContext, 'couple-no-expenses');
     const userA = data.userA as Creds; // OWNER, debtor
     const userB = data.userB as Creds; // MEMBER, creditor
@@ -228,25 +243,35 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await expect(pageB).toHaveURL(/\/dashboard/);
     await expect(pageB.getByTestId('balance-amount')).toHaveText(PLUS_50);
 
-    // Owner-debtor sees the computed debt and starts the settle-up from the UI.
+    // Owner-debtor sees the computed debt and starts closing from the UI: a plain
+    // PATCH to SETTLING that creates no PENDING payment on their behalf.
     await pageA.goto(`/spaces/${spaceId}/close`);
     const debtRow = pageA.getByTestId('close-debt-row');
     await expect(debtRow).toContainText('Debes a User B');
     await expect(debtRow.getByTestId('close-amount')).toHaveText(FIFTY);
 
-    const settleUp = await startSettleUp(pageA, spaceId);
-    expect(settleUp.status).toBe(200);
-    expect(settleUp.body).toEqual({
-      success: true,
-      status: 'SETTLING',
-      suggested: [{ toUserId: userB.id, amount: 5000 }],
-    });
-
+    const settling = await startSettling(pageA, spaceId);
+    expect(settling.status).toBe(200);
+    await expect(pageA.getByTestId('close-start-settling')).toHaveCount(0);
     const rows = pageA.getByTestId('close-settlement-row');
+    await expect(rows).toHaveCount(0);
+    await expect(debtRow).toContainText('Debes a User B');
+
+    // The creditor has nothing to confirm yet.
+    await pageB.goto('/dashboard');
+    await expect(pageB.getByTestId('balance-amount')).toHaveText(PLUS_50);
+    await expect(pageB.getByText(/Pagos por confirmar/)).toHaveCount(0);
+
+    // The debtor registers the payment from /settle → one PENDING A → B.
+    await payFromSettle(pageA, spaceId, 'User B');
+    await pageA.goto(`/spaces/${spaceId}/close`);
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toHaveAttribute('data-status', 'PENDING');
-    await expect(rows.first()).toContainText('User A → User B');
+    await expect(rows.first()).toContainText('Pago a User B · por confirmar');
+    await expect(rows.first()).toContainText('Falta que User B lo confirme');
     await expect(rows.first().getByTestId('close-amount')).toHaveText(FIFTY);
+    await expect(debtRow).toHaveCount(0);
+    await expect(pageA.getByTestId('close-progress')).toHaveText('Faltan 1');
 
     // Re-running settle-up (twice) is idempotent: no new PENDING row.
     for (let i = 0; i < 2; i++) {
@@ -256,7 +281,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     }
     await pageA.reload();
     await expect(rows).toHaveCount(1);
-    await expect(pageA.getByTestId('close-progress')).toHaveText('0/1 confirmadas');
+    await expect(pageA.getByTestId('close-progress')).toHaveText('Faltan 1');
 
     // Payer's dashboard: pending card, balance still −50,00 € (PENDING never posts).
     await pageA.goto('/dashboard');
@@ -288,10 +313,9 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await pageA.goto('/dashboard');
     await expect(pageA.getByTestId('balance-amount')).toHaveText(ZERO);
     await pageA.goto(`/spaces/${spaceId}/close`);
-    await expect(rows).toHaveCount(1);
-    await expect(rows.first()).toHaveAttribute('data-status', 'CONFIRMED');
-    await expect(pageA.getByTestId('close-progress')).toHaveText('1/1 confirmadas');
-    await expect(pageA.getByTestId('close-no-debts')).toBeVisible();
+    await expect(rows).toHaveCount(0);
+    await expect(pageA.getByTestId('close-progress')).toHaveText('Al día');
+    await expect(pageA.getByTestId('close-no-debts')).toContainText('Estáis al día');
 
     await ctxA.close();
     await ctxB.close();

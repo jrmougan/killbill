@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { SpaceType, SpaceStatus } from "@/generated/prisma/enums";
 import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
 import { EqToast, useEqToast } from "@/components/ui/eq";
+import { REOPEN_CONSEQUENCES, SETTLING_CONSEQUENCES } from "@/lib/space-ui";
 
 type Pending = "settle" | "reopen" | "convert" | "archive" | null;
 type ActionError = { message: string; href: string | null };
@@ -130,13 +131,7 @@ export function SpaceActions({
                 <CriticalActionSheet
                     testId="settle-sheet"
                     title={`¿Cerrar las cuentas de ${spaceName}?`}
-                    consequences={[
-                        "No se podrán añadir, editar ni borrar gastos.",
-                        "Los gastos recurrentes se pausan.",
-                        "No podrá entrar gente nueva.",
-                        "Sí podréis saldar deudas y usar las listas.",
-                        "Puedes reabrir el espacio cuando quieras.",
-                    ]}
+                    consequences={SETTLING_CONSEQUENCES}
                     confirmLabel="Empezar a cerrar cuentas"
                     busy={busy === "settle"}
                     error={error?.message}
@@ -156,10 +151,7 @@ export function SpaceActions({
                 <CriticalActionSheet
                     testId="reopen-sheet"
                     title={`¿Reabrir ${spaceName}?`}
-                    consequences={[
-                        "Podréis volver a añadir, editar y borrar gastos.",
-                        "Los pagos ya registrados se mantienen.",
-                    ]}
+                    consequences={REOPEN_CONSEQUENCES}
                     confirmLabel="Reabrir espacio"
                     busy={busy === "reopen"}
                     error={error?.message}

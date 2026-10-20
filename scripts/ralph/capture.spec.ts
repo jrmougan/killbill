@@ -17,7 +17,7 @@ import { resetDb, seedScenario, type SeedResult } from '../../e2e/fixtures/db.fi
 
 type Screen = {
   id: string;
-  scenario: 'ux-showcase' | 'couple-no-expenses' | 'solo-user' | 'space-settling' | 'space-archived';
+  scenario: 'ux-showcase' | 'couple-no-expenses' | 'solo-user' | 'space-settling' | 'space-archived' | 'group-settling';
   path: (d: SeedResult) => string;
   design?: string;
   /** Lands on /welcome instead of skipping it like the e2e loginAs helper. */
@@ -106,8 +106,11 @@ const SCREENS: Screen[] = [
     },
   },
   { id: 'cierre-activo', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}/close` },
+  { id: 'cierre-cerrando', scenario: 'group-settling', path: (d) => `/spaces/${d.coupleId}/close` },
+  { id: 'cierre-cerrando-acreedora', scenario: 'group-settling', path: (d) => `/spaces/${d.coupleId}/close`, as: (d) => d.userC },
+  { id: 'cierre-al-dia', scenario: 'couple-no-expenses', path: (d) => `/spaces/${d.coupleId}/close` },
   {
-    id: 'cierre-cerrando', scenario: 'space-settling', path: (d) => `/spaces/${d.coupleId}/close`,
+    id: 'cierre-archivar', scenario: 'space-settling', path: (d) => `/spaces/${d.coupleId}/close`,
     act: async (page) => {
       await page.getByTestId('close-archive').click();
       await page.waitForTimeout(600); // let the sheet finish sliding in

@@ -244,7 +244,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
 
     // Close flow: neither "start settling" nor "archive" any more.
     await page.goto(`/spaces/${spaceId}/close`);
-    await expect(page.getByRole('heading', { name: /Cerrar/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /Cerrar/ })).toBeVisible();
     await expect(page.getByTestId('close-start-settling')).toHaveCount(0);
     await expect(page.getByTestId('close-archive')).toHaveCount(0);
 
@@ -284,7 +284,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
 
     // Close flow is readable but without manage actions.
     await page.goto(`/spaces/${spaceId}/close`);
-    await expect(page.getByRole('heading', { name: /Cerrar/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /Cerrar/ })).toBeVisible();
     await expect(page.getByTestId('close-start-settling')).toHaveCount(0);
     await expect(page.getByTestId('close-archive')).toHaveCount(0);
 
