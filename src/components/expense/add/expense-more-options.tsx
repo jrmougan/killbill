@@ -242,7 +242,7 @@ function TagsSection({
                     </div>
                 </div>
             ) : (
-                <button type="button" onClick={() => onDraft({ open: true })} className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary">
+                <button type="button" onClick={() => onDraft({ open: true })} className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-[13px] font-semibold text-primary">
                     <Plus className="h-4 w-4" /> Nueva etiqueta
                 </button>
             )) : (

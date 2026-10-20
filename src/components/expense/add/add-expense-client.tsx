@@ -290,7 +290,7 @@ export function ExpenseForm({
                                 type="button"
                                 onClick={openMore}
                                 data-testid="expense-more"
-                                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground"
+                                className="inline-flex min-h-11 items-center gap-1.5 px-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground"
                             >
                                 <SlidersHorizontal className="h-3.5 w-3.5" /> Más opciones
                                 {hasAdvanced && <span className="h-1.5 w-1.5 rounded-full bg-primary"><span className="sr-only">(con cambios)</span></span>}

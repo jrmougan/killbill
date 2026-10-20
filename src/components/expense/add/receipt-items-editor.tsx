@@ -135,7 +135,7 @@ export function ReceiptItemsEditor({
                     <div className="flex justify-between font-semibold text-muted-foreground"><span>{partnerName}</span><span className="tabular-nums">{formatEuros(partnerAmount)}</span></div>
                 </div>
             )}
-            <button type="button" onClick={add} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary">
+            <button type="button" onClick={add} className="-mb-2 inline-flex min-h-11 items-center gap-1.5 text-[13px] font-semibold text-primary">
                 <Plus className="h-4 w-4" /> Añadir producto
             </button>
         </div>

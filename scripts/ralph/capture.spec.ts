@@ -22,11 +22,28 @@ type Screen = {
   design?: string;
   /** Lands on /welcome instead of skipping it like the e2e loginAs helper. */
   keepWelcome?: boolean;
+  /** Interaction run before the screenshots (e.g. type an amount, open a sheet). */
+  act?: (page: Page) => Promise<void>;
 };
 
 const SCREENS: Screen[] = [
   { id: 'inicio', scenario: 'ux-showcase', path: () => '/dashboard', design: '2a-inicio' },
   { id: 'anadir-gasto', scenario: 'ux-showcase', path: () => '/expenses/new', design: '2a-anadir-gasto' },
+  {
+    id: 'anadir-gasto-relleno', scenario: 'ux-showcase', path: () => '/expenses/new', design: '2a-anadir-gasto',
+    act: async (page) => {
+      for (const k of ['2', '4', 'comma', '5', '0']) await page.click(`[data-testid="numpad-${k}"]`);
+      await page.fill('[data-testid="expense-description"]', 'Farmacia');
+    },
+  },
+  {
+    id: 'anadir-gasto-opciones', scenario: 'ux-showcase', path: () => '/expenses/new',
+    act: async (page) => {
+      await page.click('[data-testid="numpad-2"]');
+      await page.click('[data-testid="expense-more"]');
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
   { id: 'quedar-en-paz', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.coupleId}`, design: '2a-quedar-en-paz-ticket' },
   { id: 'gastos', scenario: 'ux-showcase', path: () => '/expenses/list', design: '3a-gastos' },
   { id: 'gasto-detalle', scenario: 'ux-showcase', path: (d) => `/expense/${d.expenseId}` },
@@ -94,6 +111,7 @@ for (const screen of SCREENS.filter((s) => !only?.length || only.includes(s.id))
     await page.waitForLoadState('networkidle');
     // The Next dev-tools badge sits on top of the tab bar; it is not part of the UI.
     await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
+    if (screen.act) await screen.act(page);
     await page.evaluate(() => document.fonts.ready);
 
     await page.screenshot({ path: `${OUT}/${screen.id}.png` });

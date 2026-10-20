@@ -39,8 +39,8 @@
         "Guardar deshabilitado o con error claro si falta el importe; teclado numérico adecuado en móvil",
         "Nada queda tapado por el teclado o la barra inferior a 360×760"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Zonas táctiles de 44px (Cerrar, chips de espacio/categoría, Más opciones, enlaces de la hoja), € alineado, copy \"A medias\" y contraste; pendiente DM Mono (UX-13) y Volver/interruptor compartidos (UX-14)."
     },
     {
       "id": "UX-03",

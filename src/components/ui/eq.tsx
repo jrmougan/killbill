@@ -72,22 +72,32 @@ export function EqHeader({
 export function EqChip({
     selected,
     tone = "ink",
+    touch = false,
     className,
+    children,
     ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { selected?: boolean; tone?: "ink" | "accent" | "add" }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    selected?: boolean;
+    tone?: "ink" | "accent" | "add";
+    /** Pads the button to a 44px-tall touch target around the same-looking pill. */
+    touch?: boolean;
+}) {
+    const pill = cn(
+        "flex-none whitespace-nowrap rounded-full px-3 py-[7px] text-[13px] font-semibold border transition-colors",
+        tone === "add" && "border-dashed border-[color:var(--line-strong)] hover:bg-card",
+        tone === "ink" && (selected ? "bg-foreground text-white border-foreground" : "bg-card text-foreground border-[color:var(--line)]"),
+        tone === "accent" && (selected ? "bg-primary text-white border-primary" : "bg-card text-foreground border-[color:var(--line)]"),
+        className
+    );
     return (
         <button
             type="button"
             aria-pressed={tone === "add" ? undefined : !!selected}
-            className={cn(
-                "flex-none whitespace-nowrap rounded-full px-3 py-[7px] text-[13px] font-semibold border transition-colors",
-                tone === "add" && "border-dashed border-[color:var(--line-strong)] hover:bg-card",
-                tone === "ink" && (selected ? "bg-foreground text-white border-foreground" : "bg-card text-foreground border-[color:var(--line)]"),
-                tone === "accent" && (selected ? "bg-primary text-white border-primary" : "bg-card text-foreground border-[color:var(--line)]"),
-                className
-            )}
+            className={touch ? "group flex-none min-w-0 min-h-11 flex items-center outline-none" : pill}
             {...props}
-        />
+        >
+            {touch ? <span className={cn(pill, "block group-focus-visible:ring-2 group-focus-visible:ring-ring")}>{children}</span> : children}
+        </button>
     );
 }
 

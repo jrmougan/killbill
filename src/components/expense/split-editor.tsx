@@ -229,7 +229,7 @@ export function SplitEditor({
     totalCents: number;
     value: SplitValue;
     onChange: (v: SplitValue) => void;
-    /** COUPLE spaces highlight the "Mitad y mitad" preset. */
+    /** COUPLE spaces label the equal preset "A medias" (as the quick split). */
     isCouple?: boolean;
     className?: string;
 }) {
@@ -268,7 +268,7 @@ export function SplitEditor({
                         >
                             <Icon className="h-4 w-4 shrink-0 text-primary" />
                             <span className="min-w-0 text-left leading-tight">
-                                {highlight && key === "equal" ? "Mitad y mitad" : label}
+                                {highlight && key === "equal" ? "A medias" : label}
                             </span>
                         </button>
                     );
@@ -286,7 +286,7 @@ export function SplitEditor({
                             </span>
                         </div>
                     ))}
-                    <p className="text-[11px] text-muted-foreground/70 pt-1">
+                    <p className="text-[11px] text-muted-foreground pt-1">
                         Entre {members.length} {members.length === 1 ? "persona" : "personas"}.
                     </p>
                 </div>
