@@ -168,8 +168,8 @@
         "Solo perfil, herramientas y cuenta (grupos e invitaciones viven en Espacios)",
         "Filas con zona táctil ≥44px y jerarquía clara; acciones destructivas diferenciadas"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fuera la sección Espacios (salir/unirse viven en Espacios); Editar a 44 px; export personal sin cortes. Pendiente: fila Contraseña (sin API) y estado \"sin conectar\" de Hermes."
     },
     {
       "id": "UX-10",

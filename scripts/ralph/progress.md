@@ -115,3 +115,12 @@
 - Aprendizajes: `Screen.activeGroup` fija la cookie `active_group` de la captura (por defecto `coupleId`); la tarjeta
   "Invitar a…" de `/spaces` solo sale para OWNER/ADMIN de un espacio con plazas (Casa está completa): en `ux-showcase`
   Álvaro es ADMIN de Lisboa. e2e de Espacios: `e2e/spaces/{manage,lifecycle,settle-up}.spec.ts`.
+
+## 2026-10-20 · UX-09 Ajustes
+- Corregido: Ajustes ya no repite "Espacios" (lista con "Salir", "Nuevo espacio", "Unirme con un enlace"): solo perfil,
+  Organizar, Conexiones y Cuenta; "Editar" del perfil a 44 px; "Exportar mis gastos (CSV)" ya no se corta.
+- Pendiente / fuera de alcance: fila "Contraseña" del mockup (no hay API de cambio de contraseña); "Acceso MCP · sin conectar"
+  (no se guardan los tokens emitidos); "Cerrar sesión en todos los dispositivos" en dos líneas.
+- Ficheros: `src/app/settings/{settings-client,page}.tsx`, `e2e/features/settings.spec.ts`.
+- Aprendizajes: salir de un espacio lo cubre `LeaveSpace` en `/spaces/[id]` (e2e `spaces/manage.spec.ts` "leaving") y unirse
+  con enlace está en `/spaces`; el e2e de Ajustes ahora comprueba que no hay región "Espacios". e2e de Ajustes: `e2e/features/settings.spec.ts`.

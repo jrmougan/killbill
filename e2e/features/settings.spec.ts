@@ -38,39 +38,18 @@ test.describe('Ajustes', () => {
     await expect(tokenSheet).toHaveCount(0);
   });
 
-  test('Salir: confirm, then explain LAST_OWNER and HAS_BALANCE (with "Salir igualmente" → force)', async ({ page, request }) => {
+  test('only profile, tools and account: spaces (leave/join) live in Espacios', async ({ page, request }) => {
     const seed = await seedScenario(request, 'group-of-3');
-    const userC = seed.userC as { email: string; password: string; id: string };
-    await loginAs(page, userC);
+    await loginAs(page, seed.userC as { email: string; password: string });
     await page.goto('/settings');
 
-    // Contract from the spaces API (mocked here so the UI is tested independently).
-    const calls: string[] = [];
-    await page.route('**/api/spaces/*/members/*', async (route) => {
-      const url = route.request().url();
-      calls.push(url);
-      if (calls.length === 1) return route.fulfill({ status: 409, json: { code: 'LAST_OWNER', error: 'x' } });
-      if (!url.includes('force=1')) return route.fulfill({ status: 409, json: { code: 'HAS_BALANCE', balanceCents: -3333, error: 'x' } });
-      return route.fulfill({ status: 200, json: { success: true } });
-    });
-
-    await page.getByRole('button', { name: 'Salir de Group of 3' }).click();
-    const sheet = page.getByRole('dialog', { name: '¿Salir de Group of 3?' });
-    await expect(sheet).toContainText('Dejarás de ver');
-    expect(calls).toHaveLength(0);
-    await sheet.getByRole('button', { name: 'Salir', exact: true }).click();
-    await expect(sheet).toContainText('única persona propietaria');
-    await expect(sheet.getByRole('button', { name: 'Ir al espacio' })).toBeVisible();
-    await sheet.getByRole('button', { name: 'Cerrar', exact: true }).first().click();
-
-    await page.getByRole('button', { name: 'Salir de Group of 3' }).click();
-    await sheet.getByRole('button', { name: 'Salir', exact: true }).click();
-    await expect(sheet.getByTestId('leave-balance')).toContainText(/Aún debes\s*33,33\s*€/);
-    await expect(sheet.getByRole('button', { name: 'Ir a saldar' })).toBeVisible();
-    await sheet.getByRole('button', { name: 'Salir igualmente' }).click();
-    await expect(sheet).toHaveCount(0);
-    await expect(page.getByText('Has salido de Group of 3')).toBeVisible();
-    expect(calls.at(-1)).toContain(`/members/${userC.id}?force=1`);
+    await expect(page.getByRole('button', { name: 'Editar perfil' })).toBeVisible();
+    for (const name of ['Organizar', 'Conexiones', 'Cuenta']) {
+      await expect(page.getByRole('region', { name })).toBeVisible();
+    }
+    await expect(page.getByRole('region', { name: 'Espacios' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Salir de / })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Unirme con un enlace' })).toHaveCount(0);
   });
 
   test('personal mode is kept by the back arrow and Presupuestos; personal CSV export works without a space', async ({ page, request }) => {

@@ -8,7 +8,7 @@ import { isPersonalParam } from "./personal-scope";
 
 export const metadata: Metadata = {
     title: "Ajustes · EQUIL - Finanzas Compartidas",
-    description: "Configura tu perfil y tu grupo en EQUIL.",
+    description: "Configura tu perfil, tus herramientas y tu cuenta en EQUIL.",
 };
 
 export default async function SettingsPage({

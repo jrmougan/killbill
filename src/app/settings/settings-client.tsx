@@ -11,11 +11,8 @@ import {
     Download,
     FileUp,
     LayoutGrid,
-    Layers,
-    LogIn,
     MonitorSmartphone,
     PieChart,
-    Plus,
     ShieldAlert,
     ShieldCheck,
     Tag,
@@ -24,10 +21,8 @@ import { EqCta, EqHeader, EqLabel, useEqToast, EqToast } from "@/components/ui/e
 import { LogoutButton } from "@/components/auth/logout-button";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
 import { Sheet, SheetField } from "@/components/ui/sheet";
-import { formatCurrency } from "@/lib/currency";
 import { usePersonalMode } from "./personal-mode";
 import { withPersonal } from "./personal-scope";
-import { spaceTypeMeta, spaceStatusMeta } from "@/lib/space-ui";
 import { cn } from "@/lib/utils";
 
 interface UserData {
@@ -130,8 +125,7 @@ function LinkRow({
 export function SettingsClient({ user, groups, personalParam = false }: SettingsClientProps) {
     const router = useRouter();
     const [toast, showToast] = useEqToast(2600);
-    const [sheet, setSheet] = useState<"profile" | "join" | "mcp-confirm" | "mcp" | "revoke" | null>(null);
-    const [leaving, setLeaving] = useState<GroupData | null>(null);
+    const [sheet, setSheet] = useState<"profile" | "mcp-confirm" | "mcp" | "revoke" | null>(null);
     // Personal mode: without a space everything is personal anyway.
     const personal = usePersonalMode(personalParam) || groups.length === 0;
 
@@ -223,7 +217,7 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
                     <button
                         type="button"
                         onClick={() => setSheet("profile")}
-                        className="text-sm font-semibold text-primary px-1 py-2"
+                        className="-my-1 min-h-11 flex-none flex items-center px-1 text-sm font-semibold text-primary"
                         aria-label="Editar perfil"
                     >
                         Editar
@@ -246,53 +240,10 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
                     <LinkRow
                         href="/api/export?scope=personal"
                         icon={Download}
-                        label={groups.length > 0 ? "Exportar gastos personales (CSV)" : "Exportar gastos (CSV)"}
-                        sub={groups.length > 0 ? "Solo los tuyos" : undefined}
+                        label={groups.length > 0 ? "Exportar mis gastos (CSV)" : "Exportar gastos (CSV)"}
+                        sub={groups.length > 0 ? "Solo los personales" : undefined}
                         download
                     />
-                </Section>
-
-                <Section label="Espacios">
-                    <LinkRow href="/spaces" icon={Layers} label="Mis espacios" />
-                    {groups.map((g) => {
-                        const t = spaceTypeMeta(g.type);
-                        const st = spaceStatusMeta(g.status);
-                        const sub = [
-                            t.label,
-                            `${g.memberCount} ${g.memberCount === 1 ? "miembro" : "miembros"}`,
-                            g.isActive ? "en uso" : null,
-                            st.tone !== "active" ? st.label.toLowerCase() : null,
-                        ]
-                            .filter(Boolean)
-                            .join(" · ");
-                        return (
-                            <div key={g.id} className="flex items-center gap-3">
-                                <Link href={`/spaces/${g.id}`} className={cn(rowCls, "flex-1 min-w-0")} aria-label={`Gestionar ${g.name}`}>
-                                    <span className="h-[19px] w-[19px] flex-none flex items-center justify-center text-base" aria-hidden>
-                                        {t.emoji}
-                                    </span>
-                                    <span className="flex-1 min-w-0">
-                                        <span className="block text-[15px] truncate">{g.name}</span>
-                                        <span className="block text-xs text-muted-foreground truncate">{sub}</span>
-                                    </span>
-                                </Link>
-                                <button
-                                    type="button"
-                                    onClick={() => setLeaving(g)}
-                                    className="flex-none min-h-[44px] px-1 text-[13px] font-semibold text-destructive"
-                                    aria-label={`Salir de ${g.name}`}
-                                >
-                                    Salir
-                                </button>
-                            </div>
-                        );
-                    })}
-                    <LinkRow href="/spaces/new" icon={Plus} label="Nuevo espacio" />
-                    <button type="button" onClick={() => setSheet("join")} className={rowCls}>
-                        <LogIn className="h-[19px] w-[19px] flex-none text-muted-foreground" />
-                        <span className="flex-1 text-[15px]">Unirme con un enlace</span>
-                        <ChevronRight className="h-[17px] w-[17px] flex-none text-[color:var(--ink-4)]" />
-                    </button>
                 </Section>
 
                 <Section label="Conexiones">
@@ -342,8 +293,6 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
                     }}
                 />
             )}
-
-            {sheet === "join" && <JoinSheet onClose={() => setSheet(null)} />}
 
             {sheet === "revoke" && <RevokeSessionsSheet onClose={() => setSheet(null)} />}
 
@@ -424,144 +373,8 @@ export function SettingsClient({ user, groups, personalParam = false }: Settings
                 </Sheet>
             )}
 
-            {leaving && (
-                <LeaveSheet
-                    group={leaving}
-                    userId={user.id}
-                    onClose={() => setLeaving(null)}
-                    onLeft={() => {
-                        const name = leaving.name;
-                        setLeaving(null);
-                        showToast(`Has salido de ${name}`);
-                        router.refresh();
-                    }}
-                />
-            )}
-
             {toast && <EqToast>{toast}</EqToast>}
         </div>
-    );
-}
-
-type LeaveState =
-    | { step: "confirm" }
-    | { step: "last-owner" }
-    | { step: "balance"; balanceCents: number }
-    | { step: "error"; message: string };
-
-/**
- * "Salir" of a space: explicit confirmation, then the API contract
- * `DELETE /api/spaces/[id]/members/[me]`:
- *   409 LAST_OWNER  → hand ownership over or delete the space first;
- *   409 HAS_BALANCE → show the balance, offer "Ir a saldar" or "Salir igualmente"
- *                     (retries with `?force=1`).
- */
-function LeaveSheet({
-    group,
-    userId,
-    onClose,
-    onLeft,
-}: {
-    group: GroupData;
-    userId: string;
-    onClose: () => void;
-    onLeft: () => void;
-}) {
-    const router = useRouter();
-    const [state, setState] = useState<LeaveState>({ step: "confirm" });
-    const [busy, setBusy] = useState(false);
-
-    const leave = async (force: boolean) => {
-        if (busy) return;
-        setBusy(true);
-        try {
-            const url = `/api/spaces/${encodeURIComponent(group.id)}/members/${encodeURIComponent(userId)}${force ? "?force=1" : ""}`;
-            const res = await fetch(url, { method: "DELETE" });
-            if (res.ok) {
-                onLeft();
-                return;
-            }
-            const data = await res.json().catch(() => null);
-            if (res.status === 409 && data?.code === "LAST_OWNER") setState({ step: "last-owner" });
-            else if (res.status === 409 && data?.code === "HAS_BALANCE") {
-                setState({ step: "balance", balanceCents: Number(data.balanceCents) || 0 });
-            } else {
-                setState({
-                    step: "error",
-                    message: typeof data?.error === "string" && res.status < 500 ? data.error : "No se pudo salir del espacio. Inténtalo de nuevo.",
-                });
-            }
-        } catch {
-            setState({ step: "error", message: "Error de conexión. Comprueba tu red e inténtalo de nuevo." });
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    const two = (a: React.ReactNode, b: React.ReactNode) => <div className="flex gap-2.5 pt-1">{a}{b}</div>;
-    const btn = "flex-1 h-12 rounded-2xl text-[15px]";
-
-    return (
-        <Sheet title={`¿Salir de ${group.name}?`} onClose={onClose}>
-            <div className="flex flex-col gap-3" data-testid={`leave-step-${state.step}`}>
-                {state.step === "confirm" && (
-                    <>
-                        <p className="text-sm text-muted-foreground">
-                            Dejarás de ver sus gastos, listas y saldos. Tu historial se conserva para los demás miembros. Para
-                            volver necesitarás una nueva invitación.
-                        </p>
-                        {two(
-                            <EqCta variant="outline" className={btn} onClick={onClose}>Cancelar</EqCta>,
-                            <EqCta className={cn(btn, "bg-destructive")} onClick={() => leave(false)} disabled={busy}>
-                                Salir
-                            </EqCta>,
-                        )}
-                    </>
-                )}
-                {state.step === "last-owner" && (
-                    <>
-                        <p className="text-sm">
-                            Eres la única persona propietaria de <strong>{group.name}</strong>. Antes de salir, pasa la propiedad
-                            a otro miembro o elimina el espacio desde su ficha.
-                        </p>
-                        {two(
-                            <EqCta variant="outline" className={btn} onClick={onClose}>Cerrar</EqCta>,
-                            <EqCta className={btn} onClick={() => router.push(`/spaces/${group.id}`)}>Ir al espacio</EqCta>,
-                        )}
-                    </>
-                )}
-                {state.step === "balance" && (
-                    <>
-                        <p className="text-sm" data-testid="leave-balance">
-                            {state.balanceCents > 0
-                                ? <>Aún te deben <strong>{formatCurrency(state.balanceCents)}</strong> en {group.name}.</>
-                                : <>Aún debes <strong>{formatCurrency(Math.abs(state.balanceCents))}</strong> en {group.name}.</>}{" "}
-                            Lo mejor es saldarlo antes de salir; si sales igualmente, la deuda queda registrada en el espacio.
-                        </p>
-                        <EqCta className="h-12 rounded-2xl text-[15px]" onClick={() => router.push(`/settle?space=${encodeURIComponent(group.id)}`)}>
-                            Ir a saldar
-                        </EqCta>
-                        <EqCta
-                            variant="outline"
-                            className="h-12 rounded-2xl text-[15px] text-destructive"
-                            onClick={() => leave(true)}
-                            disabled={busy}
-                        >
-                            Salir igualmente
-                        </EqCta>
-                    </>
-                )}
-                {state.step === "error" && (
-                    <>
-                        <p role="alert" className="text-sm text-destructive">{state.message}</p>
-                        {two(
-                            <EqCta variant="outline" className={btn} onClick={onClose}>Cerrar</EqCta>,
-                            <EqCta className={btn} onClick={() => leave(false)} disabled={busy}>Reintentar</EqCta>,
-                        )}
-                    </>
-                )}
-            </div>
-        </Sheet>
     );
 }
 
@@ -625,43 +438,6 @@ function ProfileSheet({ user, onClose, onSaved }: { user: UserData; onClose: () 
                 {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
                 <EqCta onClick={save} disabled={saving || !name.trim() || (name === user.name && avatar === user.avatar)}>
                     Guardar
-                </EqCta>
-            </div>
-        </Sheet>
-    );
-}
-
-/**
- * Join via an invite link: routes to the public consent screen `/i/[token]`
- * (never a silent join). Accepts a pasted `/i/…` link or a raw token/code.
- */
-function JoinSheet({ onClose }: { onClose: () => void }) {
-    const router = useRouter();
-    const [value, setValue] = useState("");
-    const go = () => {
-        const raw = value.trim();
-        if (!raw) return;
-        const match = raw.match(/\/i\/([^/?#\s]+)/);
-        const token = match ? decodeURIComponent(match[1]) : raw;
-        router.push(`/i/${encodeURIComponent(token)}`);
-    };
-    return (
-        <Sheet title="Unirme a un espacio" onClose={onClose}>
-            <div className="flex flex-col gap-3">
-                <SheetField
-                    label="Enlace de invitación"
-                    value={value}
-                    onChange={(e) => setValue(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter") go();
-                    }}
-                    placeholder="https://…/i/…"
-                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- the sheet was just opened to paste this link
-                    autoFocus
-                />
-                <p className="pl-1 text-xs text-muted-foreground">Verás el espacio y confirmarás antes de unirte.</p>
-                <EqCta onClick={go} disabled={!value.trim()}>
-                    Continuar
                 </EqCta>
             </div>
         </Sheet>
