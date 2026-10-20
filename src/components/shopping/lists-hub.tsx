@@ -3,7 +3,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, MoreHorizontal, Pencil, Receipt, Trash2, ListX, X } from "lucide-react";
-import { EqChip, EqCta, EqHeader, EqLabel, useEqToast } from "@/components/ui/eq";
+import { EqChip, EqCta, EqHeader, EqLabel, EqToast, useEqToast } from "@/components/ui/eq";
+import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
+import { setFlashToast } from "@/lib/flash-toast";
 import { cn } from "@/lib/utils";
 import { AISLES, getAisle } from "@/lib/aisles";
 import type { HubList, HubSelected } from "@/app/lists/load";
@@ -54,6 +56,11 @@ function groupByAisle(items: ShoppingItem[]): { key: string | null; items: Shopp
         });
 }
 
+/** "1 producto" / "3 productos". */
+function productsLabel(n: number): string {
+    return n === 1 ? "1 producto" : `${n} productos`;
+}
+
 async function errorOf(res: Response, fallback: string): Promise<string> {
     const data = await res.json().catch(() => ({}));
     return typeof data?.error === "string" ? data.error : fallback;
@@ -64,6 +71,7 @@ type SheetState =
     | { kind: "menu" }
     | { kind: "rename" }
     | { kind: "delete" }
+    | { kind: "clear" }
     | { kind: "item"; id: string }
     | null;
 
@@ -79,7 +87,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
     const [sheet, setSheet] = useState<SheetState>(null);
     const [finishing, setFinishing] = useState(false);
     const [dup, setDup] = useState<{ name: string; item: ShoppingItem } | null>(null);
-    const [toast, showToast] = useEqToast(3200);
+    const [toast, showToast, toastAction] = useEqToast(3200);
     // Lists are planning, not spending: they stay editable while the space is
     // SETTLING. Only an ARCHIVED space makes its Común lists read-only.
     const archived = !!selected?.groupId && groupStatus === "ARCHIVED";
@@ -278,6 +286,39 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
         [apiBase, router],
     );
 
+    // "Deshacer" after deleting a product: the result is identical, so it is
+    // re-created with the same name, quantity, unit, note and aisle (and
+    // ticked again if it was in the cart).
+    const restoreItem = useCallback(
+        async (item: ShoppingItem) => {
+            if (!apiBase) return;
+            try {
+                const res = await fetch(`${apiBase}/items`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: item.name, quantity: item.quantity, unit: item.unit, note: item.note, aisle: item.aisle }),
+                });
+                if (!res.ok) {
+                    showToast(await errorOf(res, "No se pudo recuperar el producto"));
+                    return;
+                }
+                const { item: created } = await res.json();
+                if (item.checked) {
+                    await fetch(`${apiBase}/items/${created.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ checked: true }),
+                    }).catch(() => undefined);
+                }
+                setItems((prev) => [...prev, { ...item, id: created.id }]);
+                router.refresh();
+            } catch {
+                showToast("No se pudo recuperar el producto");
+            }
+        },
+        [apiBase, router, showToast],
+    );
+
     const handleDeleteItem = useCallback(
         async (item: ShoppingItem): Promise<string | null> => {
             if (!apiBase) return "Lista no disponible";
@@ -286,29 +327,37 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                 if (!res.ok) return await errorOf(res, "No se pudo eliminar el producto");
                 setItems((prev) => prev.filter((i) => i.id !== item.id));
                 router.refresh();
+                showToast(`«${item.name}» eliminado`, { label: "Deshacer", onAction: () => void restoreItem(item) });
                 return null;
             } catch {
                 return "No se pudo eliminar el producto";
             }
         },
-        [apiBase, router],
+        [apiBase, router, showToast, restoreItem],
     );
 
-    const clearChecked = useCallback(async (): Promise<boolean> => {
-        if (!apiBase) return false;
+    /**
+     * Deletes the checked items on screen (`ids`): one another member ticked after
+     * the last poll is not in them and survives. Resolves to an error message, or
+     * the number actually deleted (an item unticked meanwhile is kept).
+     */
+    const clearChecked = useCallback(async (ids: string[]): Promise<{ error: string } | { cleared: number }> => {
+        if (!apiBase) return { error: "Lista no disponible" };
         try {
-            const res = await fetch(`${apiBase}/clear-checked`, { method: "POST" });
-            if (!res.ok) {
-                showToast(await errorOf(res, "No se pudo vaciar el carro"));
-                return false;
-            }
-            setItems((prev) => prev.filter((i) => !i.checked));
-            return true;
+            const res = await fetch(`${apiBase}/clear-checked`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ids }),
+            });
+            if (!res.ok) return { error: await errorOf(res, "No se pudieron borrar los tachados") };
+            const data = (await res.json().catch(() => null)) as { cleared?: unknown } | null;
+            const sent = new Set(ids);
+            setItems((prev) => prev.filter((i) => !(i.checked && sent.has(i.id))));
+            return { cleared: typeof data?.cleared === "number" ? data.cleared : ids.length };
         } catch {
-            showToast("No se pudo vaciar el carro");
-            return false;
+            return { error: "No se pudieron borrar los tachados" };
         }
-    }, [apiBase, showToast]);
+    }, [apiBase]);
 
     // Shortcut WITHOUT link: clear the cart, then open the add-expense form
     // prefilled (concept = list name, groceries category, this list's space).
@@ -319,15 +368,18 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
             return;
         }
         setFinishing(true);
-        const ok = await clearChecked();
-        if (!ok) {
+        const res = await clearChecked(done.map((i) => i.id));
+        if ("error" in res) {
             setFinishing(false);
+            showToast(res.error);
             return;
         }
         if (settling) {
             // No new expenses while settling: just close the shop run.
             setFinishing(false);
-            showToast("Carro vaciado. El espacio se está liquidando: apunta el gasto cuando se reabra.");
+            const n = res.cleared;
+            const what = n === 0 ? "Ya no quedaban tachados" : n === 1 ? "1 producto quitado de la lista" : `${n} productos quitados de la lista`;
+            showToast(`${what}. Estáis cerrando cuentas: apunta el gasto cuando se reabra el espacio.`);
             router.refresh();
             return;
         }
@@ -346,6 +398,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
         <EqChip
             key={l.id}
             selected={l.id === selected?.id}
+            touch
             onClick={() => openList(l.id)}
             aria-label={`${l.name}, ${scopeLabel}, ${chipCount(l)} pendientes`}
             // Capped width: a long name truncates but the pending count stays visible.
@@ -357,7 +410,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
     );
 
     return (
-        <div className="flex flex-col min-h-screen pb-[calc(170px+env(safe-area-inset-bottom))]">
+        <div className="flex flex-col min-h-screen pb-[calc(190px+env(safe-area-inset-bottom))]">
             <div className="pt-[max(12px,env(safe-area-inset-top))] flex flex-col gap-3">
                 <EqHeader title="Listas">
                     {selected && !archived && (
@@ -365,13 +418,13 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                             type="button"
                             onClick={() => setSheet({ kind: "menu" })}
                             aria-label={`Opciones de ${selected.name}`}
-                            className="h-9 w-9 -mr-1.5 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
+                            className="h-11 w-11 -my-1 -mr-2.5 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground"
                         >
                             <MoreHorizontal className="h-[22px] w-[22px]" />
                         </button>
                     )}
                 </EqHeader>
-                <div ref={chipsRef} className="eq-scroll flex items-center gap-1.5 overflow-x-auto px-5">
+                <div ref={chipsRef} className="eq-scroll -my-1 flex items-center gap-1.5 overflow-x-auto px-5">
                     {groupLists.map((l) => chip(l, "común"))}
                     {groupId && personalLists.length > 0 && (
                         <span className="flex-none flex items-center gap-1.5 pl-1 pr-0.5 text-[11.5px] font-semibold text-[color:var(--ink-3)]">
@@ -380,7 +433,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                         </span>
                     )}
                     {personalLists.map((l) => chip(l, "personal"))}
-                    <EqChip tone="add" onClick={() => setSheet({ kind: "new" })}>
+                    <EqChip tone="add" touch onClick={() => setSheet({ kind: "new" })}>
                         + Nueva
                     </EqChip>
                 </div>
@@ -416,15 +469,16 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                                     type="button"
                                     aria-label="Descartar"
                                     onClick={() => setDup(null)}
-                                    className="-mr-1.5 -mt-1 h-9 w-9 flex-none flex items-center justify-center text-muted-foreground"
+                                    className="-mr-3 -mt-2.5 -mb-1.5 h-11 w-11 flex-none flex items-center justify-center text-muted-foreground"
                                 >
                                     <X className="h-4 w-4" />
                                 </button>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="-my-1 flex gap-2">
                                 <EqChip
                                     tone="accent"
                                     selected
+                                    touch
                                     onClick={async () => {
                                         const d = dup;
                                         setDup(null);
@@ -440,6 +494,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                                     Sumar 1
                                 </EqChip>
                                 <EqChip
+                                    touch
                                     onClick={async () => {
                                         const d = dup;
                                         setDup(null);
@@ -522,12 +577,21 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
             )}
 
             {selected && !archived && (
-                <div className="fixed inset-x-0 z-30 sm:max-w-md sm:mx-auto bottom-[calc(74px+env(safe-area-inset-bottom))] px-5 pt-2.5 pb-3 bg-gradient-to-t from-background via-background to-transparent">
+                <div className="fixed inset-x-0 z-30 sm:max-w-md sm:mx-auto bottom-[calc(74px+env(safe-area-inset-bottom))] px-5 pt-3 pb-3 bg-gradient-to-t from-background via-background to-transparent">
+                    {/* The effect of the shortcut, said before tapping it (it deletes the checked items). */}
+                    <p id="finish-effect" data-testid="finish-effect" className="pb-1.5 text-center text-[12.5px] text-muted-foreground">
+                        {done.length === 0
+                            ? "Tacha lo que cojas para terminar"
+                            : done.length === 1
+                                ? "Quita de la lista el producto tachado"
+                                : `Quita de la lista los ${done.length} productos tachados`}
+                    </p>
                     <EqCta
                         variant="ink"
                         onClick={finish}
                         // Dimmed but still actionable: with nothing checked it nudges via toast.
                         aria-busy={finishing}
+                        aria-describedby="finish-effect"
                         className={cn("h-[50px] rounded-2xl text-[15px]", (done.length === 0 || finishing) && "opacity-35")}
                     >
                         <Receipt className="h-[18px] w-[18px]" />
@@ -537,11 +601,9 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
             )}
 
             {toast && (
-                <output
-                    className="eq-in fixed left-1/2 bottom-[calc(160px+env(safe-area-inset-bottom))] -translate-x-1/2 z-50 w-max max-w-[calc(100vw-32px)] sm:max-w-sm text-center text-balance rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]"
-                >
+                <EqToast action={toastAction} className="bottom-[calc(180px+env(safe-area-inset-bottom))] sm:max-w-sm text-center text-balance">
                     {toast}
-                </output>
+                </EqToast>
             )}
 
             {sheet?.kind === "new" && (
@@ -562,16 +624,9 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                         <MenuRow icon={Pencil} label="Renombrar lista" onClick={() => setSheet({ kind: "rename" })} />
                         <MenuRow
                             icon={ListX}
-                            label={`Vaciar el carro${done.length ? ` (${done.length})` : ""}`}
+                            label={`Borrar los tachados${done.length ? ` (${done.length})` : ""}`}
                             disabled={done.length === 0}
-                            onClick={async () => {
-                                // Close first so an error toast is not hidden under the modal.
-                                setSheet(null);
-                                if (await clearChecked()) {
-                                    showToast("Carro vaciado");
-                                    router.refresh();
-                                }
-                            }}
+                            onClick={() => setSheet({ kind: "clear" })}
                         />
                         <MenuRow icon={Trash2} label="Eliminar lista" danger last onClick={() => setSheet({ kind: "delete" })} />
                     </div>
@@ -593,13 +648,31 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
                 />
             )}
 
+            {selected && apiBase && sheet?.kind === "clear" && (
+                <ClearCheckedSheet
+                    ids={done.map((i) => i.id)}
+                    shared={!!selected.groupId}
+                    onClear={clearChecked}
+                    onClose={() => setSheet(null)}
+                    onCleared={(n) => {
+                        setSheet(null);
+                        // No "Deshacer": re-creating them would not be the same rows.
+                        showToast(n === 0 ? "Ya no quedaban tachados" : n === 1 ? "1 producto borrado" : `${n} productos borrados`);
+                        router.refresh();
+                    }}
+                />
+            )}
+
             {selected && apiBase && sheet?.kind === "delete" && (
                 <DeleteListSheet
                     apiBase={apiBase}
                     name={selected.name}
+                    itemCount={items.length}
+                    shared={!!selected.groupId}
                     onClose={() => setSheet(null)}
                     onDeleted={() => {
                         setSheet(null);
+                        setFlashToast(`Lista «${selected.name}» eliminada`);
                         router.push("/lists");
                         router.refresh();
                     }}
@@ -795,14 +868,68 @@ function RenameSheet({
     );
 }
 
+function ClearCheckedSheet({
+    ids,
+    shared,
+    onClear,
+    onClose,
+    onCleared,
+}: {
+    /** The checked items on screen: exactly these are deleted, never more. */
+    ids: string[];
+    shared: boolean;
+    onClear: (ids: string[]) => Promise<{ error: string } | { cleared: number }>;
+    onClose: () => void;
+    /** The count the server actually deleted (≤ ids.length). */
+    onCleared: (n: number) => void;
+}) {
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    // Freeze what the sheet announces: a poll can change `ids` while it is open.
+    const [shown] = useState(ids);
+    const count = shown.length;
+
+    const clear = async () => {
+        if (busy) return;
+        setBusy(true);
+        setError(null);
+        const res = await onClear(shown);
+        if ("error" in res) {
+            setError(res.error);
+            setBusy(false);
+            return;
+        }
+        onCleared(res.cleared);
+    };
+
+    return (
+        <CriticalActionSheet
+            testId="clear-checked-sheet"
+            tone="danger"
+            title={count === 1 ? "¿Borrar 1 producto tachado?" : `¿Borrar ${count} productos tachados?`}
+            consequences={[`${count === 1 ? "Se quitará" : "Se quitarán"} de la lista${shared ? " para todo el espacio" : ""}. Los pendientes no cambian.`]}
+            reversible={false}
+            confirmLabel={`Borrar ${productsLabel(count)}`}
+            busy={busy}
+            error={error}
+            onConfirm={clear}
+            onClose={onClose}
+        />
+    );
+}
+
 function DeleteListSheet({
     apiBase,
     name,
+    itemCount,
+    shared,
     onClose,
     onDeleted,
 }: {
     apiBase: string;
     name: string;
+    itemCount: number;
+    shared: boolean;
     onClose: () => void;
     onDeleted: () => void;
 }) {
@@ -827,19 +954,27 @@ function DeleteListSheet({
         }
     };
 
+    const forWhom = shared ? " para todos los miembros del espacio" : "";
+    const what =
+        itemCount === 0
+            ? `Se eliminará la lista${forWhom}.`
+            : itemCount === 1
+                ? `Se eliminará su producto${forWhom}.`
+                : `Se eliminarán sus ${itemCount} productos${forWhom}.`;
+
     return (
-        <Sheet title={`¿Eliminar «${name}»?`} onClose={onClose}>
-            <p className="text-sm text-muted-foreground mb-4">Se borrará la lista con todos sus productos. No afecta a ningún gasto.</p>
-            {error && <p className="text-sm text-destructive mb-3">{error}</p>}
-            <div className="flex gap-2.5">
-                <EqCta variant="outline" className="flex-1 h-12 rounded-2xl text-[15px]" onClick={onClose}>
-                    Cancelar
-                </EqCta>
-                <EqCta className="flex-1 h-12 rounded-2xl text-[15px] bg-destructive" onClick={remove} disabled={busy}>
-                    Eliminar
-                </EqCta>
-            </div>
-        </Sheet>
+        <CriticalActionSheet
+            testId="delete-list-sheet"
+            tone="danger"
+            title={`¿Eliminar «${name}»?`}
+            consequences={[`${what} No afecta a ningún gasto.`]}
+            reversible={false}
+            confirmLabel="Eliminar lista"
+            busy={busy}
+            error={error}
+            onConfirm={remove}
+            onClose={onClose}
+        />
     );
 }
 

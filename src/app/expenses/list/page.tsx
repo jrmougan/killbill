@@ -65,7 +65,7 @@ export default async function ExpensesListPage({ searchParams }: { searchParams:
         ...rawSettlements.map((s): ListItem => ({
             id: s.id,
             type: "SETTLEMENT",
-            description: "Liquidación",
+            description: "Pago de deuda",
             amountCents: s.amount,
             date: s.date.toISOString(),
             category: "settlement",

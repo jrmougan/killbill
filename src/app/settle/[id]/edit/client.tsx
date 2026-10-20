@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { EqCta, EqHeader } from "@/components/ui/eq";
 import { MethodPicker } from "@/components/settle/method-picker";
 import type { SettleMethod } from "@/components/settle/settle-model";
-import { parseEuroInput } from "@/lib/currency";
-import { MAX_SETTLEMENT_CENTS } from "@/lib/settlement-rules";
+import { settleAmountText, validateSettleAmount } from "@/components/settle/settle-amount";
+import { formatCurrency } from "@/lib/currency";
 
 interface EditSettleClientProps {
     settlementId: string;
@@ -14,27 +14,19 @@ interface EditSettleClientProps {
     initialCents: number;
     initialMethod: SettleMethod;
     toName: string;
+    /** What I owe `toName` now (cents): the cap. Undefined when nothing is owed any more. */
+    maxCents?: number;
 }
 
-/** Strict es-ES amount → cents, or an error message for the field. */
-function validate(text: string): { cents: number | null; error: string | null } {
-    if (!text.trim()) return { cents: null, error: "Escribe un importe" };
-    const cents = parseEuroInput(text);
-    if (cents === null) return { cents: null, error: "Importe no válido. Usa, por ejemplo, 12,50" };
-    if (cents < 1) return { cents: null, error: "El importe debe ser de al menos 0,01 €" };
-    if (cents > MAX_SETTLEMENT_CENTS) return { cents: null, error: "El importe no puede superar 1.000.000 €" };
-    return { cents, error: null };
-}
-
-export function EditSettleClient({ settlementId, initialCents, initialMethod, toName }: EditSettleClientProps) {
+export function EditSettleClient({ settlementId, initialCents, initialMethod, toName, maxCents }: EditSettleClientProps) {
     const router = useRouter();
-    const [amount, setAmount] = useState<string>((initialCents / 100).toFixed(2).replace(".", ","));
+    const [amount, setAmount] = useState<string>(settleAmountText(initialCents));
     const [method, setMethod] = useState<SettleMethod>(initialMethod);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const [touched, setTouched] = useState(false);
-    const check = validate(amount);
+    const check = validateSettleAmount(amount, maxCents);
     const valid = check.cents !== null;
     const fieldError = touched ? check.error : null;
 
@@ -63,7 +55,7 @@ export function EditSettleClient({ settlementId, initialCents, initialMethod, to
     };
 
     return (
-        <main className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">
+        <div className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">
             <EqHeader back={`/settle/${settlementId}`} close title="Editar pago" />
 
             <div className="flex-1 flex flex-col gap-8 px-5 pt-8">
@@ -80,16 +72,18 @@ export function EditSettleClient({ settlementId, initialCents, initialMethod, to
                             onChange={(e) => { setAmount(e.target.value); setTouched(true); }}
                             onBlur={() => setTouched(true)}
                             aria-invalid={!!fieldError}
-                            aria-describedby={fieldError ? "settle-amount-error" : undefined}
+                            aria-describedby={fieldError ? "settle-amount-error" : maxCents !== undefined ? "settle-amount-max" : undefined}
                             className="w-[200px] bg-transparent text-center text-[44px] font-bold tracking-[-0.03em] tabular-nums outline-none border-b border-[color:var(--line)] focus:border-primary transition-colors"
                             placeholder="0,00"
                         />
                         <span className="text-[28px] font-bold text-muted-foreground">€</span>
                     </div>
-                    {fieldError && (
+                    {fieldError ? (
                         <p id="settle-amount-error" role="alert" className="text-[13px] text-destructive" data-testid="settle-amount-error">{fieldError}</p>
+                    ) : maxCents !== undefined && (
+                        <p id="settle-amount-max" className="text-[13px] text-muted-foreground">máx. {formatCurrency(maxCents)}</p>
                     )}
-                    <p className="text-[13px] text-muted-foreground">Seguirá pendiente hasta que {toName} lo confirme.</p>
+                    <p className="text-[13px] text-muted-foreground" data-testid="settle-edit-notice">{toName} tendrá que confirmar el nuevo importe.</p>
                 </div>
 
                 <MethodPicker value={method} onChange={setMethod} label="Método" />
@@ -101,6 +95,6 @@ export function EditSettleClient({ settlementId, initialCents, initialMethod, to
                     Guardar cambios
                 </EqCta>
             </div>
-        </main>
+        </div>
     );
 }

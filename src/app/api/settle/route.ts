@@ -9,7 +9,7 @@ const bad = (error: string, code = 'INVALID_INPUT') => badRequest(error, code);
 /**
  * Record a settlement in a space.
  *
- * Two directions (EQUIL "Quedar en paz", see docs/design/README.md → Settle):
+ * Two directions (EQUIL "Saldar deuda", see docs/design/README.md → Settle):
  *
  * - **Paid** (default, `{ toUserId }`): the caller says "Ya he pagado". The
  *   settlement is created PENDING (caller → toUserId) and only enters the balance

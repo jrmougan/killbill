@@ -24,7 +24,7 @@ export function AddItemInput({ disabled, onAdd }: AddItemInputProps) {
     };
 
     return (
-        <div className="h-12 flex-none rounded-[14px] bg-card border border-[color:var(--line)] flex items-center gap-2.5 pl-3.5 pr-1.5 focus-within:border-[color:var(--accent-border)]">
+        <div className="h-12 flex-none rounded-[14px] bg-card border border-[color:var(--line)] flex items-center gap-2.5 pl-3.5 pr-0.5 focus-within:border-[color:var(--accent-border)]">
             <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -35,16 +35,18 @@ export function AddItemInput({ disabled, onAdd }: AddItemInputProps) {
                 aria-label="Añadir producto"
                 disabled={disabled}
                 enterKeyHint="done"
-                className="flex-1 min-w-0 bg-transparent text-[15px] outline-none"
+                className="flex-1 min-w-0 self-stretch bg-transparent text-[15px] outline-none"
             />
             <button
                 type="button"
                 onClick={submit}
                 disabled={disabled || submitting}
                 aria-label="Añadir"
-                className="h-9 w-9 flex-none rounded-[10px] bg-primary text-primary-foreground flex items-center justify-center transition-transform active:scale-95 disabled:opacity-50"
+                className="group h-11 w-11 flex-none flex items-center justify-center outline-none disabled:opacity-50"
             >
-                {submitting ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Plus className="h-[18px] w-[18px]" />}
+                <span className="h-9 w-9 rounded-[10px] bg-primary text-primary-foreground flex items-center justify-center transition-transform group-active:scale-95 group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2">
+                    {submitting ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Plus className="h-[18px] w-[18px]" />}
+                </span>
             </button>
         </div>
     );

@@ -42,7 +42,7 @@ interface ShoppingItemRowProps {
 }
 
 /**
- * One list row: a 22px rounded checkbox (idempotent toggle) and the item text,
+ * One list row: a 22px rounded checkbox (44px touch target) (idempotent toggle) and the item text,
  * which opens the edit sheet. Checked rows render faint and struck through.
  */
 export function ShoppingItemRow({ item, divider, onToggle, onEdit, readOnly }: ShoppingItemRowProps) {
@@ -55,7 +55,7 @@ export function ShoppingItemRow({ item, divider, onToggle, onEdit, readOnly }: S
                 item.checked && "text-[color:var(--ink-3)]"
             )}
         >
-            <label className={cn("relative flex-none pr-3 flex items-center cursor-pointer", item.checked ? "py-[9px]" : "py-[13px]")}>
+            <label className={cn("relative flex-none -ml-2.5 pl-2.5 pr-3 min-h-11 flex items-center cursor-pointer", !item.checked && "py-[13px]")}>
                 <input
                     type="checkbox"
                     checked={item.checked}
@@ -79,11 +79,11 @@ export function ShoppingItemRow({ item, divider, onToggle, onEdit, readOnly }: S
                 onClick={onEdit}
                 disabled={readOnly}
                 aria-label={`Editar ${item.name}`}
-                className={cn("flex-1 min-w-0 text-left", item.checked ? "py-[9px]" : "py-[13px]")}
+                className={cn("flex-1 min-w-0 min-h-11 text-left", item.checked ? "py-1" : "py-[13px]")}
             >
                 <span className={cn("block truncate text-[15px]", item.checked && "line-through")}>{item.name}</span>
                 {meta && (
-                    <span className={cn("block truncate text-xs", item.checked ? "text-[color:var(--ink-4)]" : "text-muted-foreground")}>
+                    <span className={cn("block truncate text-xs", item.checked ? "text-[color:var(--ink-3)]" : "text-muted-foreground")}>
                         {meta}
                     </span>
                 )}

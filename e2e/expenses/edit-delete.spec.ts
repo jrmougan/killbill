@@ -79,8 +79,9 @@ test.describe('Expenses - Edit and Delete', () => {
 
     // The confirmation is an accessible modal: focus on Cancelar, Escape closes it (G-23).
     await pageA.locator('[data-testid="expense-delete"]').click();
-    const dialog = pageA.getByRole('alertdialog', { name: '¿Eliminar gasto?' });
+    const dialog = pageA.getByRole('alertdialog', { name: /^¿Eliminar/ });
     await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Test Expense');
     await expect(dialog.getByRole('button', { name: 'Cancelar' })).toBeFocused();
     await pageA.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
@@ -89,14 +90,15 @@ test.describe('Expenses - Edit and Delete', () => {
     const deletePromise = pageA.waitForResponse(
       (res) => res.url().includes(`/api/expenses/${expenseId}`) && res.request().method() === 'DELETE'
     );
-    await pageA.locator('[data-testid="expense-delete-confirm"]').click();
+    await dialog.getByRole('button', { name: 'Eliminar gasto' }).click();
     const deleteResponse = await deletePromise;
     expect(deleteResponse.ok()).toBeTruthy();
 
     // Back to the list it came from (shared scope), without the expense (G-24)
     await expect(pageA).toHaveURL(/\/expenses\/list$/, { timeout: 10000 });
-    await expect(pageA.getByText('Test Expense')).not.toBeVisible({ timeout: 10000 });
+    await expect(pageA.getByText('Test Expense', { exact: true })).not.toBeVisible({ timeout: 10000 });
     await expect(pageA.getByText('Todavía no hay gastos.')).toBeVisible();
+    await expect(pageA.getByText('Gasto «Test Expense» eliminado · saldo actualizado')).toBeVisible();
 
     // The balance is back to zero
     await pageA.goto('/dashboard');
@@ -142,7 +144,7 @@ test.describe('Expenses - Edit and Delete', () => {
 
     // Detail page now attributes the payment to userB
     await expect(pageA).toHaveURL(new RegExp(`/expense/${expenseId}$`), { timeout: 10000 });
-    await expect(pageA.getByText(/Pagado por/)).toBeVisible({ timeout: 10000 });
+    await expect(pageA.getByText('Pagó User B', { exact: true })).toBeVisible({ timeout: 10000 });
     await expect(pageA.getByText('User B', { exact: true }).first()).toBeVisible();
 
     // Balances inverted: userA owes 50€
@@ -176,12 +178,18 @@ test.describe('Expenses - Edit and Delete', () => {
     await expect(pageA.getByText(/Gasto personal — privado/)).toBeVisible({ timeout: 10000 });
 
     await pageA.locator('[data-testid="expense-promote"]').click();
+    // One-way: the sheet says it can't go back to private.
+    const promoteSheet = pageA.getByTestId('expense-promote-sheet');
+    await expect(promoteSheet).toContainText('No podrás volver a hacerlo privado; solo eliminarlo.');
+    await expect(promoteSheet).toContainText('No se puede deshacer.');
     const sharePromise = pageA.waitForResponse(
       (res) => res.url().includes(`/api/expenses/${personalExpenseId}/share`) && res.request().method() === 'POST'
     );
     await pageA.locator('[data-testid="expense-promote-confirm"]').click();
     const shareResponse = await sharePromise;
     expect(shareResponse.ok()).toBeTruthy();
+    // It shares into the space the sheet showed, not whatever is active when it posts.
+    expect(shareResponse.request().postDataJSON()).toEqual({ targetGroupId: expect.any(String) });
 
     // The detail page re-renders as a shared expense with its split breakdown
     await expect(pageA.getByText('Reparto del gasto')).toBeVisible({ timeout: 10000 });

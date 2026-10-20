@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, Loader2, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { daysUntil } from "@/lib/space-ui";
+import { dayLabel } from "@/lib/home-format";
 import { EqToast, useEqToast } from "@/components/ui/eq";
 import { Sheet } from "@/components/ui/sheet";
+import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
 import {
     fetchInvites,
     forgetInvite,
@@ -20,7 +22,7 @@ import {
  * expirable `/i/<token>` links (GroupInvite: the DB keeps hash + prefix). The
  * plaintext is shown right after creation and remembered for this tab
  * (`invite-session.ts`); afterwards links are listed by prefix with their
- * uses/expiry and can be revoked.
+ * creation day, uses and expiry, and can be deactivated (danger sheet first).
  *
  * `kind` decides what the space accepts: MEMBER links for an ACTIVE COUPLE/GROUP
  * with room, GUEST links for an ACTIVE EPHEMERAL trip (flag on). `kind = null`
@@ -37,9 +39,15 @@ function inviteUrl(token: string): string {
     return `${window.location.origin}/i/${token}`;
 }
 
+/** "Creado hoy" / "Creado ayer" / "Creado el 3 oct". */
+function createdLabel(createdAt: string): string {
+    const day = dayLabel(createdAt);
+    return day === "Hoy" || day === "Ayer" ? `Creado ${day.toLowerCase()}` : `Creado el ${day}`;
+}
+
 /** Human status for a listed invite (never the token itself). */
 function inviteStatus(inv: InviteRow): { label: string; live: boolean } {
-    if (inv.revokedAt) return { label: "Revocado", live: false };
+    if (inv.revokedAt) return { label: "Desactivado", live: false };
     const days = daysUntil(inv.expiresAt);
     if (days !== null && days <= 0 && new Date(inv.expiresAt).getTime() <= Date.now()) return { label: "Caducado", live: false };
     if (inv.usedCount >= inv.maxUses) return { label: "Agotado", live: false };
@@ -53,6 +61,7 @@ export function InviteManager({
     kind,
     maxUsesCap,
     reason,
+    reasonAction,
 }: {
     spaceId: string;
     /** Link kind this space accepts now, or null when it can't take anyone. */
@@ -61,6 +70,8 @@ export function InviteManager({
     maxUsesCap: number;
     /** Why no link can be created (shown when `kind` is null). */
     reason?: string;
+    /** Way out rendered under `reason` (e.g. "Convertir en grupo"); a stable slot so its toast survives the refresh. */
+    reasonAction?: React.ReactNode;
 }) {
     const [invites, setInvites] = useState<InviteRow[] | null>(null);
     const [current, setCurrent] = useState<{ inviteId: string; url: string } | null>(null);
@@ -70,6 +81,9 @@ export function InviteManager({
     const [creating, setCreating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    const [revoking, setRevoking] = useState<InviteRow | null>(null);
+    const [revokeBusy, setRevokeBusy] = useState(false);
+    const [revokeError, setRevokeError] = useState<string | null>(null);
     const [toast, showToast] = useEqToast();
 
     const load = useCallback(async () => {
@@ -135,14 +149,19 @@ export function InviteManager({
         }
     };
 
+    const askRevoke = (inv: InviteRow) => {
+        setRevokeError(null);
+        setRevoking(inv);
+    };
+
     const revoke = async (inv: InviteRow) => {
-        if (!confirm(`El enlace ${inv.tokenPrefix}… dejará de funcionar de inmediato. ¿Revocarlo?`)) return;
-        setError(null);
+        setRevokeBusy(true);
+        setRevokeError(null);
         try {
             const res = await fetch(`/api/spaces/${spaceId}/invites?inviteId=${encodeURIComponent(inv.id)}`, { method: "DELETE" });
             if (!res.ok) {
                 const data = await res.json().catch(() => null);
-                setError(data?.error || "No se pudo revocar el enlace");
+                setRevokeError(data?.error || "No se pudo desactivar el enlace");
                 return;
             }
             setInvites((prev) => (prev ?? []).map((i) => (i.id === inv.id ? { ...i, revokedAt: new Date().toISOString() } : i)));
@@ -150,8 +169,12 @@ export function InviteManager({
                 setCurrent(null);
                 if (kind) forgetInvite(spaceId, kind);
             }
+            setRevoking(null);
+            showToast("Enlace desactivado");
         } catch {
-            setError("Sin conexión. Inténtalo de nuevo.");
+            setRevokeError("Sin conexión. Inténtalo de nuevo.");
+        } finally {
+            setRevokeBusy(false);
         }
     };
 
@@ -193,11 +216,12 @@ export function InviteManager({
                     {kind === "GUEST" ? "Crear enlace para invitados" : "Crear enlace de invitación"}
                 </button>
             ) : (
-                reason && <p className="text-[13px] text-muted-foreground px-1">{reason}</p>
+                reason && <p data-testid="invite-reason" className="text-[13px] text-muted-foreground">{reason}</p>
             )}
+            {reasonAction}
 
             {invites === null ? (
-                <p className="text-xs text-muted-foreground px-1">Cargando enlaces…</p>
+                <p className="text-xs text-muted-foreground">Cargando enlaces…</p>
             ) : invites.length > 0 ? (
                 <ul className="flex flex-col divide-y divide-[color:var(--line-2)] rounded-[18px] bg-card border border-[color:var(--line-2)] px-4">
                     {invites.slice(0, 8).map((inv) => {
@@ -206,15 +230,15 @@ export function InviteManager({
                             <li key={inv.id} className="flex items-center gap-3 py-2 min-h-14" data-testid="invite-row" data-live={st.live ? "true" : "false"}>
                                 <span className="flex-1 min-w-0">
                                     <span className="block font-mono text-[13px]">{inv.tokenPrefix}…</span>
-                                    <span className={cn("block text-[12.5px] truncate", st.live ? "text-muted-foreground" : "text-muted-foreground line-through")}>
-                                        {inv.kind === "GUEST" ? "Invitados · " : ""}{st.label}
+                                    <span className={cn("block text-[12.5px]", st.live ? "text-muted-foreground" : "text-muted-foreground line-through")}>
+                                        {inv.kind === "GUEST" ? "Invitados · " : ""}{createdLabel(inv.createdAt)} · {st.label}
                                     </span>
                                 </span>
                                 {st.live && (
                                     <button
                                         type="button"
-                                        onClick={() => revoke(inv)}
-                                        aria-label={`Revocar enlace ${inv.tokenPrefix}`}
+                                        onClick={() => askRevoke(inv)}
+                                        aria-label={`Desactivar enlace ${inv.tokenPrefix}`}
                                         className="h-11 w-11 -mr-2 flex-none rounded-xl text-destructive flex items-center justify-center hover:bg-[var(--negative-tint)]"
                                     >
                                         <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -226,9 +250,9 @@ export function InviteManager({
                 </ul>
             ) : null}
             {live.length > 1 && (
-                <p className="text-xs text-muted-foreground px-1">Hay {live.length} enlaces activos. Revoca los que ya no uses.</p>
+                <p className="text-xs text-muted-foreground">Hay {live.length} enlaces activos. Desactiva los que ya no uses.</p>
             )}
-            {error && !sheetOpen && <p role="alert" className="text-xs text-destructive px-1">{error}</p>}
+            {error && !sheetOpen && <p role="alert" className="text-xs text-destructive">{error}</p>}
 
             {sheetOpen && kind && (
                 <Sheet title={kind === "GUEST" ? "Enlace para invitados" : "Nuevo enlace"} onClose={() => setSheetOpen(false)}>
@@ -290,6 +314,24 @@ export function InviteManager({
                         </button>
                     </div>
                 </Sheet>
+            )}
+            {revoking && (
+                <CriticalActionSheet
+                    testId="revoke-sheet"
+                    tone="danger"
+                    title="¿Desactivar este enlace?"
+                    facts={[
+                        { label: "Enlace", value: <span className="font-mono">{revoking.tokenPrefix}…</span> },
+                        { label: "Estado", value: `${createdLabel(revoking.createdAt)} · ${inviteStatus(revoking).label}` },
+                    ]}
+                    consequences={["Quien lo tenga ya no podrá unirse.", "Las personas que ya entraron siguen en el espacio."]}
+                    reversible={false}
+                    confirmLabel="Desactivar enlace"
+                    busy={revokeBusy}
+                    error={revokeError}
+                    onConfirm={() => revoke(revoking)}
+                    onClose={() => setRevoking(null)}
+                />
             )}
             {toast && <EqToast>{toast}</EqToast>}
         </div>

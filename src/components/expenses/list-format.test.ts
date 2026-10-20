@@ -45,11 +45,29 @@ describe("expenseSubtitle", () => {
 });
 
 describe("settlementText", () => {
-    it("words the direction from my point of view", () => {
+    it("words a confirmed payment as done", () => {
         expect(settlementText({ meId: "me", fromId: "lu", toId: "me", members: [me, lu], methodLabel: "Efectivo", status: "CONFIRMED" }))
-            .toEqual({ title: "Lucía te pagó", sub: "Liquidación · Efectivo · Confirmado" });
+            .toEqual({ title: "Lucía te pagó", sub: "Pago de deuda · Confirmado · Efectivo" });
+        expect(settlementText({ meId: "me", fromId: "me", toId: "lu", members: [me, lu], methodLabel: "Bizum", status: "CONFIRMED" }))
+            .toEqual({ title: "Pagaste a Lucía", sub: "Pago de deuda · Confirmado · Bizum" });
+        expect(settlementText({ meId: "me", fromId: "lu", toId: "da", members: [me, lu, da], methodLabel: "", status: "CONFIRMED" }))
+            .toEqual({ title: "Lucía pagó a Dani", sub: "Pago de deuda · Confirmado" });
+    });
+
+    it("words a pending payment in the present, still to be confirmed", () => {
         expect(settlementText({ meId: "me", fromId: "me", toId: "lu", members: [me, lu], methodLabel: "", status: "PENDING" }))
-            .toEqual({ title: "Pagaste a Lucía", sub: "Liquidación · Pendiente" });
+            .toEqual({ title: "Pago a Lucía · por confirmar", sub: "Pago de deuda · Pendiente" });
+        expect(settlementText({ meId: "me", fromId: "lu", toId: "me", members: [me, lu], methodLabel: "Bizum", status: "PENDING" }))
+            .toEqual({ title: "Lucía dice que te ha pagado", sub: "Pago de deuda · Pendiente · Bizum" });
+        expect(settlementText({ meId: "me", fromId: "lu", toId: "da", members: [me, lu, da], methodLabel: "", status: "PENDING" }).title)
+            .toBe("Pago de Lucía a Dani · por confirmar");
+    });
+
+    it("never words a rejected payment as paid", () => {
+        expect(settlementText({ meId: "me", fromId: "lu", toId: "me", members: [me, lu], methodLabel: "Efectivo", status: "REJECTED" }))
+            .toEqual({ title: "Pago de Lucía · rechazado", sub: "Pago de deuda · Rechazado · Efectivo" });
+        expect(settlementText({ meId: "me", fromId: "me", toId: "lu", members: [me, lu], methodLabel: "Bizum", status: "REJECTED" }))
+            .toEqual({ title: "Pago a Lucía · no recibido", sub: "Pago de deuda · Rechazado · Bizum" });
     });
 });
 

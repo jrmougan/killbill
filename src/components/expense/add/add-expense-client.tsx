@@ -22,6 +22,8 @@ import { ExpenseMoreOptions } from "./expense-more-options";
 import { useAmountKeyboard } from "./use-amount-keyboard";
 import { useReceiptScan } from "./use-receipt-scan";
 import { useSaveExpense } from "./use-save-expense";
+import { balanceDelta } from "./quick-split";
+import { editEffectLine } from "../share-effect";
 
 export type { AddMember, AddSpace, BlockedSpace, ExpenseFormInitial, FormTag } from "./expense-form-state";
 
@@ -169,6 +171,20 @@ export function ExpenseForm({
     const split = deriveSplit({ state, members, userId, isShared, partnerId: partner?.id ?? null, totalCents });
     const { itemized, linesCents, linesMismatch } = split;
 
+    // Edit of a shared expense (CF-22): how much my balance moves against the
+    // saved version, shown under "Guardar cambios" (only for a valid split).
+    const editEffect = initial && isShared && split.preview
+        ? editEffectLine({
+            beforeCents: balanceDelta(
+                initial.paidById, userId,
+                Object.fromEntries(initial.splits.map((s) => [s.userId, s.amount])),
+                initial.amountCents,
+            ),
+            afterCents: balanceDelta(payerId, userId, split.shares, totalCents),
+            partnerName: partner?.name ?? null,
+        })
+        : null;
+
     // A stale error disappears as soon as the user changes what caused it (G-13).
     useEffect(() => {
         dispatch({ type: "formError", error: null });
@@ -290,7 +306,7 @@ export function ExpenseForm({
                                 type="button"
                                 onClick={openMore}
                                 data-testid="expense-more"
-                                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground hover:text-foreground"
+                                className="inline-flex min-h-11 items-center gap-1.5 px-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground"
                             >
                                 <SlidersHorizontal className="h-3.5 w-3.5" /> Más opciones
                                 {hasAdvanced && <span className="h-1.5 w-1.5 rounded-full bg-primary"><span className="sr-only">(con cambios)</span></span>}
@@ -300,7 +316,7 @@ export function ExpenseForm({
                             )}
                         </div>
                         {shownError && (
-                            <div role="alert" className="flex w-full items-center gap-2 rounded-[14px] bg-[var(--negative-tint)] px-3 py-2.5 text-[13px] text-destructive">
+                            <div role="alert" className="flex w-full items-center gap-2 rounded-[14px] bg-[var(--negative-tint)] px-3 py-2.5 text-[13px] text-[color:var(--negative-ink)]">
                                 <AlertCircle className="h-4 w-4 flex-none" />
                                 <span className="flex-1">{shownError}</span>
                                 {!formError && !amountError && receiptFile && (
@@ -316,26 +332,33 @@ export function ExpenseForm({
                         <Numpad onKey={pressKey} />
                     </div>
 
-                    <div className="flex gap-2.5 px-5 pt-3 pb-[30px] [@media(max-height:640px)]:pt-2 [@media(max-height:640px)]:pb-4">
-                        <button
-                            type="button"
-                            onClick={openScanner}
-                            aria-label="Escanear recibo"
-                            className={cn(
-                                "h-14 w-14 flex-none rounded-[18px] border bg-card flex items-center justify-center transition-colors",
-                                state.scanHint ? "border-primary text-primary ring-4 ring-[var(--accent-tint)]" : "border-[color:var(--line)]",
-                            )}
-                        >
-                            <ScanLine className="h-6 w-6" />
-                        </button>
-                        <EqCta
-                            data-testid="expense-submit"
-                            className="flex-1"
-                            disabled={totalCents <= 0 || state.saving || !category}
-                            onClick={save}
-                        >
-                            {state.saving ? "Guardando…" : isEdit ? "Guardar cambios" : "Guardar"}
-                        </EqCta>
+                    <div className="flex flex-col gap-2 px-5 pt-3 pb-[30px] [@media(max-height:640px)]:pt-2 [@media(max-height:640px)]:pb-4">
+                        <div className="flex gap-2.5">
+                            <button
+                                type="button"
+                                onClick={openScanner}
+                                aria-label="Escanear recibo"
+                                className={cn(
+                                    "h-14 w-14 flex-none rounded-[18px] border bg-card flex items-center justify-center transition-colors",
+                                    state.scanHint ? "border-primary text-primary ring-4 ring-[var(--accent-tint)]" : "border-[color:var(--line)]",
+                                )}
+                            >
+                                <ScanLine className="h-6 w-6" />
+                            </button>
+                            <EqCta
+                                data-testid="expense-submit"
+                                className="flex-1"
+                                disabled={totalCents <= 0 || state.saving || !category}
+                                onClick={save}
+                            >
+                                {state.saving ? "Guardando…" : isEdit ? "Guardar cambios" : "Guardar"}
+                            </EqCta>
+                        </div>
+                        {isEdit && (
+                            <p aria-live="polite" data-testid="expense-edit-effect" className="text-center text-[12.5px] leading-[1.4] text-muted-foreground empty:hidden">
+                                {editEffect}
+                            </p>
+                        )}
                     </div>
                 </>
             )}

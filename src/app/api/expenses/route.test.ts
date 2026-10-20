@@ -299,7 +299,7 @@ describe('POST /api/expenses', () => {
         });
 
         it.each([
-            ['SETTLING', 'Este espacio se está liquidando: no se pueden crear gastos nuevos'],
+            ['SETTLING', 'Estáis cerrando cuentas en este espacio: no se pueden crear gastos nuevos'],
             ['ARCHIVED', 'Este espacio está archivado (solo lectura)'],
         ])('409 SPACE_NOT_WRITABLE when the space became %s before the lock (status re-read under it)', async (status, error) => {
             // requireSpaceAccess saw ACTIVE; the space was closed concurrently.

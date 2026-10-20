@@ -23,7 +23,7 @@ export type SpaceStatusMeta = { label: string; tone: "active" | "settling" | "ar
 
 export const SPACE_STATUS_META: Record<SpaceStatus, SpaceStatusMeta> = {
     [SpaceStatus.ACTIVE]: { label: "Activo", tone: "active" },
-    [SpaceStatus.SETTLING]: { label: "Liquidando", tone: "settling" },
+    [SpaceStatus.SETTLING]: { label: "Cerrando cuentas", tone: "settling" },
     [SpaceStatus.ARCHIVED]: { label: "Archivado", tone: "archived" },
 };
 
@@ -38,4 +38,26 @@ export function daysUntil(expiresAt: Date | string | null | undefined): number |
     if (Number.isNaN(d.getTime())) return null;
     const ms = d.getTime() - Date.now();
     return Math.ceil(ms / (1000 * 60 * 60 * 24));
+}
+
+/** What "Empezar a cerrar cuentas" blocks (sheet in Gestión and /close). */
+export const SETTLING_CONSEQUENCES = [
+    "No se podrán añadir, editar ni eliminar gastos.",
+    "Los gastos recurrentes se pausan.",
+    "No podrá entrar gente nueva.",
+    "Sí podréis saldar deudas y usar las listas.",
+    "Puedes reabrir el espacio cuando quieras.",
+];
+
+/** What "Reabrir espacio" gives back (sheet in Gestión and /close). */
+export const REOPEN_CONSEQUENCES = [
+    "Podréis volver a añadir, editar y eliminar gastos.",
+    "Los pagos ya registrados se mantienen.",
+];
+
+/** "Falta confirmar 1 pago" / "Falta saldar 2 deudas": why the space can't be archived yet. */
+export function archiveBlockReason(pendingPayments: number, openDebts: number): string | null {
+    if (pendingPayments > 0) return `Falta confirmar ${pendingPayments} ${pendingPayments === 1 ? "pago" : "pagos"}`;
+    if (openDebts > 0) return `Falta saldar ${openDebts} ${openDebts === 1 ? "deuda" : "deudas"}`;
+    return null;
 }

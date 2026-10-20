@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Search } from "lucide-react";
+import { Check, Clock, Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { EqChip, EqHeader, EqRow, EqSegmented } from "@/components/ui/eq";
+import { EqChip, EqEmpty, EqHeader, EqRow, EqSegmented } from "@/components/ui/eq";
 import type { CategoryBadgeMeta } from "@/components/category/category-badge";
 import { formatCurrency } from "@/lib/currency";
 import { getSettlementMethodLabel } from "@/lib/settlement-labels";
@@ -89,7 +89,8 @@ export function ExpensesListClient({
             if (payer === "other" && e.paidBy === userId) return false;
             if (advanced.categories.length > 0 && (isSettle || !advanced.categories.includes(e.category))) return false;
             if (since && new Date(e.date) < since) return false;
-            const text = isSettle ? `liquidación ${e.description}` : e.description;
+            // "liquidación" stays as a search alias of the old name.
+            const text = isSettle ? `pago deuda saldar liquidación ${e.description}` : e.description;
             return matchesSearch({ text, amountCents: e.amountCents }, q);
         });
     }, [items, q, payer, advanced, userId]);
@@ -129,6 +130,11 @@ export function ExpensesListClient({
 
     const filterCount = activeFilterCount(advanced);
     const anyFilter = q.trim() !== "" || payer !== "all" || filterCount > 0;
+    const clearFilters = () => {
+        setQ("");
+        setPayer("all");
+        setAdvanced(EMPTY_FILTERS);
+    };
 
     return (
         <div className="eq-in flex flex-col w-full pt-3 pb-28">
@@ -146,24 +152,24 @@ export function ExpensesListClient({
                 {readOnlyStatus && (
                     <p data-testid="space-readonly-note" className="rounded-[14px] bg-[var(--track)] px-3 py-2.5 text-center text-[13px] text-muted-foreground">
                         {readOnlyStatus === "ARCHIVED"
-                            ? "Este espacio está archivado — solo lectura."
-                            : "Este espacio se está liquidando: no admite gastos nuevos."}
+                            ? "Este espacio está archivado: solo lectura."
+                            : "Estáis cerrando cuentas: no se admiten gastos nuevos."}
                     </p>
                 )}
-                <label className="flex h-[42px] items-center gap-2 rounded-xl border border-[color:var(--line)] bg-card px-3 text-[color:var(--ink-3)]">
+                <label className="flex h-11 items-center gap-2 rounded-xl border border-[color:var(--line)] bg-card px-3 text-[color:var(--ink-3)] focus-within:border-foreground">
                     <Search className="h-[17px] w-[17px] flex-none" aria-hidden />
                     <input
                         type="search"
                         value={q}
                         onChange={(e) => setQ(e.target.value)}
-                        placeholder="Buscar gasto"
-                        aria-label="Buscar gasto"
-                        className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
+                        placeholder="Buscar gasto o importe"
+                        aria-label="Buscar gasto o importe"
+                        className="-my-px h-11 min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none"
                     />
                 </label>
-                <div className="eq-scroll flex items-center gap-1.5 overflow-x-auto">
+                <div className="eq-scroll -my-1 flex items-center gap-1.5 overflow-x-auto">
                     {shared && payerChips.map((c) => (
-                        <EqChip key={c.value} selected={payer === c.value} onClick={() => setPayer(c.value)}>
+                        <EqChip key={c.value} touch selected={payer === c.value} onClick={() => setPayer(c.value)}>
                             {c.label}
                         </EqChip>
                     ))}
@@ -174,9 +180,29 @@ export function ExpensesListClient({
 
             <div className="px-5 pt-3">
                 {groups.length === 0 ? (
-                    <p className="py-10 text-center text-sm text-muted-foreground">
-                        {anyFilter || items.length > 0 ? "No hay gastos que coincidan." : "Todavía no hay gastos."}
-                    </p>
+                    anyFilter || items.length > 0 ? (
+                        <EqEmpty
+                            testId="expenses-empty"
+                            title="No hay gastos que coincidan."
+                            hint="Prueba con otra búsqueda o quita los filtros."
+                            action={anyFilter ? "Quitar filtros" : undefined}
+                            onClick={clearFilters}
+                        />
+                    ) : readOnlyStatus ? (
+                        <EqEmpty testId="expenses-empty" title="Todavía no hay gastos." hint="Este espacio ya no admite gastos nuevos." />
+                    ) : (
+                        <EqEmpty
+                            testId="expenses-empty"
+                            title="Todavía no hay gastos."
+                            hint={
+                                personal
+                                    ? "Apunta lo que gastas solo tú y aquí verás el historial."
+                                    : "Cada gasto que apuntéis aparecerá aquí, con quién pagó y cómo se reparte."
+                            }
+                            action="Añadir el primer gasto"
+                            href={personal ? "/expenses/new?space=personal" : "/expenses/new"}
+                        />
+                    )
                 ) : (
                     groups.map((g) => (
                         <section key={g.key} aria-label={g.label} className="flex flex-col">
@@ -194,16 +220,24 @@ export function ExpensesListClient({
                                         methodLabel: e.method ? getSettlementMethodLabel(e.method) : "",
                                         status: e.status,
                                     });
+                                    // Only a confirmed payment gets the green "paid" look: a pending one
+                                    // is grey with a clock, a rejected one never moved money (struck through).
+                                    const rejected = e.status === "REJECTED";
+                                    const pending = e.status === "PENDING";
                                     return (
                                         <EqRow
                                             key={e.id}
                                             href={`/settle/${e.id}`}
-                                            icon={<Check className="h-5 w-5" />}
-                                            iconTint
+                                            icon={rejected
+                                                ? <X className="h-5 w-5 text-muted-foreground" aria-hidden />
+                                                : pending
+                                                    ? <Clock className="h-5 w-5 text-muted-foreground" aria-hidden />
+                                                    : <Check className="h-5 w-5" aria-hidden />}
+                                            iconTint={!rejected && !pending}
                                             title={t.title}
                                             sub={t.sub}
                                             amount={formatCurrency(e.amountCents)}
-                                            amountClassName="text-primary"
+                                            amountClassName={rejected ? "text-muted-foreground line-through" : pending ? "text-muted-foreground" : "text-primary"}
                                         />
                                     );
                                 }

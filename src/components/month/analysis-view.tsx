@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { HandCoins } from "lucide-react";
 import { EqCard, EqLabel } from "@/components/ui/eq";
 import { formatCurrency } from "@/lib/currency";
 import { cn } from "@/lib/utils";
@@ -29,6 +31,11 @@ function Kpi({
     );
 }
 
+/** Whole euros for the bar labels ("271 €"): the exact amount is in the header and the caption. */
+function formatCompact(cents: number) {
+    return `${Math.round(cents / 100).toLocaleString("es-ES")} €`;
+}
+
 /** 6-month bars: total (light) with "tu parte" nested inside (shared scope). */
 function MonthBars({ months }: { months: MonthAnalysis["months"] }) {
     const shared = months.some((m) => m.myShare !== null);
@@ -47,21 +54,35 @@ function MonthBars({ months }: { months: MonthAnalysis["months"] }) {
                     </span>
                 </div>
             )}
-            <div className="h-[120px] flex items-end gap-2.5">
+            <div className="h-[140px] flex items-end gap-2.5" aria-hidden>
                 {months.map((m, i) => {
                     const isCurrent = i === months.length - 1;
                     const isPrev = i === months.length - 2;
-                    const h = Math.max(3, (m.total / max) * 100);
+                    // Leave room above the tallest bar for its amount label.
+                    const h = Math.max(3, (m.total / max) * 82);
                     return (
                         <div
                             key={`${m.label}-${i}`}
                             title={describe(m)}
-                            className="flex-1 h-full flex items-end"
+                            className="relative flex-1 min-w-0 h-full flex flex-col items-center justify-end gap-1"
                         >
+                            {(isCurrent || isPrev) && (
+                                <span
+                                    data-testid={isCurrent ? "bar-current" : "bar-prev"}
+                                    className={cn(
+                                        "whitespace-nowrap text-[11px] leading-none tabular-nums",
+                                        isCurrent ? "font-bold text-foreground" : "text-muted-foreground",
+                                    )}
+                                >
+                                    {formatCompact(m.total)}
+                                </span>
+                            )}
                             <div
                                 className="relative w-full rounded-t-[6px] rounded-b-[2px] overflow-hidden transition-[height] duration-300"
                                 style={{
                                     height: `${h}%`,
+                                    // Older months step back so the month-vs-previous comparison reads first.
+                                    opacity: shared && !isCurrent && !isPrev ? 0.5 : 1,
                                     background: shared
                                         ? "var(--accent-softer)"
                                         : isCurrent
@@ -85,7 +106,7 @@ function MonthBars({ months }: { months: MonthAnalysis["months"] }) {
                     );
                 })}
             </div>
-            <div className="flex gap-2.5 text-[11px] text-center">
+            <div className="flex gap-2.5 text-[11px] text-center" aria-hidden>
                 {months.map((m, i) => (
                     <span
                         key={`${m.label}-${i}`}
@@ -104,7 +125,7 @@ function MonthBars({ months }: { months: MonthAnalysis["months"] }) {
 }
 
 /** Caller's balance at each month end: one line around a zero baseline. */
-function BalanceChart({ points }: { points: { label: string; balance: number }[] }) {
+function BalanceChart({ points, settleHref }: { points: { label: string; balance: number }[]; settleHref: string | null }) {
     const W = 300;
     const H = 110;
     const PAD = 10;
@@ -117,17 +138,27 @@ function BalanceChart({ points }: { points: { label: string; balance: number }[]
     const last = points[points.length - 1];
     const tone = (v: number) => (v > 0 ? "var(--positive)" : v < 0 ? "var(--negative)" : "var(--ink-3)");
     const word = (v: number) =>
-        v > 0 ? `te deben ${formatCurrency(v)}` : v < 0 ? `debes ${formatCurrency(-v)}` : "en paz";
+        v > 0 ? `te deben ${formatCurrency(v)}` : v < 0 ? `debes ${formatCurrency(-v)}` : "al día";
 
     return (
         <figure aria-label="Evolución de tu saldo en el espacio" className="flex flex-col gap-2 m-0">
             <div className="flex flex-wrap items-baseline justify-between gap-x-2">
                 <span className="text-[13px] text-muted-foreground whitespace-nowrap">A fin de {last.label}</span>
                 <span data-testid="balance-now" className="text-[15px] font-bold whitespace-nowrap">
-                    {last.balance > 0 ? "Te deben " : last.balance < 0 ? "Debes " : "En paz"}
+                    {last.balance > 0 ? "Te deben " : last.balance < 0 ? "Debes " : "Al día"}
                     {last.balance !== 0 && formatCurrency(Math.abs(last.balance))}
                 </span>
             </div>
+            {settleHref && last.balance !== 0 && (
+                <Link
+                    href={settleHref}
+                    data-testid="analysis-settle"
+                    className="-my-2.5 -ml-1 self-start min-h-11 px-1 flex items-center gap-1.5 text-[13px] font-semibold text-primary"
+                >
+                    <HandCoins className="h-[15px] w-[15px] flex-none" aria-hidden="true" />
+                    Saldar deuda
+                </Link>
+            )}
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[110px] overflow-visible" role="presentation">
                 <line
                     x1={PAD}
@@ -156,9 +187,14 @@ function BalanceChart({ points }: { points: { label: string; balance: number }[]
                     </g>
                 ))}
             </svg>
-            <div className="flex justify-between text-[11px] text-muted-foreground px-[3%]" aria-hidden>
+            {/* Labels centred under each point (same x as the SVG, in % of its width). */}
+            <div className="relative h-4 text-[11px] text-muted-foreground" aria-hidden>
                 {points.map((p, i) => (
-                    <span key={`${p.label}-${i}`} className={cn(i === points.length - 1 && "text-foreground font-semibold")}>
+                    <span
+                        key={`${p.label}-${i}`}
+                        className={cn("absolute -translate-x-1/2 whitespace-nowrap", i === points.length - 1 && "text-foreground font-semibold")}
+                        style={{ left: `${(x(i) / W) * 100}%` }}
+                    >
                         {p.label}
                     </span>
                 ))}
@@ -174,10 +210,13 @@ export function AnalysisView({
     analysis,
     categories,
     prevMonthShort,
+    settleHref = null,
 }: {
     analysis: MonthAnalysis;
     categories: MonthCategory[];
     prevMonthShort: string;
+    /** "Saldar deuda" target next to the current balance (shared, writable space); null hides it. */
+    settleHref?: string | null;
 }) {
     const { months, byCategory, myShare, topExpenses, topItems, comparison, kpis, balance } = analysis;
     const total = months[months.length - 1]?.total ?? 0;
@@ -236,7 +275,7 @@ export function AnalysisView({
                 <section aria-labelledby="month-balance" className="flex flex-col gap-1">
                     <EqLabel id="month-balance" className="pb-1">Evolución de tu saldo</EqLabel>
                     <EqCard className="p-4">
-                        <BalanceChart points={balance!} />
+                        <BalanceChart points={balance!} settleHref={settleHref} />
                     </EqCard>
                 </section>
             )}

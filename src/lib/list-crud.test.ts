@@ -286,6 +286,29 @@ describe("clearCheckedForScope — vaciar comprados", () => {
         expect(res).toEqual({ cleared: 0 });
     });
 
+    it("with ids deletes only those still checked (not one ticked after the last poll)", async () => {
+        mList.findUnique.mockResolvedValue(groupList);
+        mItem.deleteMany.mockResolvedValue({ count: 2 });
+        const res = await clearCheckedForScope(GROUP, "l1", ["i1", "i2", "i3"]);
+        expect(res).toEqual({ cleared: 2 });
+        expect(mItem.deleteMany).toHaveBeenCalledWith({ where: { listId: "l1", checked: true, id: { in: ["i1", "i2", "i3"] } } });
+    });
+
+    it("treats ids: null like no ids (every checked item)", async () => {
+        mList.findUnique.mockResolvedValue(groupList);
+        mItem.deleteMany.mockResolvedValue({ count: 1 });
+        await clearCheckedForScope(GROUP, "l1", null);
+        expect(mItem.deleteMany).toHaveBeenCalledWith({ where: { listId: "l1", checked: true } });
+    });
+
+    it.each([["not an array", "i1"], ["a non-string id", ["i1", 2]]])("400 INVALID_IDS for %s (no delete)", async (_, ids) => {
+        mList.findUnique.mockResolvedValue(groupList);
+        const err = await expectError(() => clearCheckedForScope(GROUP, "l1", ids));
+        expect(err.status).toBe(400);
+        expect(err.code).toBe("INVALID_IDS");
+        expect(mItem.deleteMany).not.toHaveBeenCalled();
+    });
+
     it("403s when the list belongs to another scope (no delete)", async () => {
         mList.findUnique.mockResolvedValue({ ...groupList, groupId: "other" });
         const err = await expectError(() => clearCheckedForScope(GROUP, "l1"));

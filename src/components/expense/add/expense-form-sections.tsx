@@ -6,7 +6,7 @@ import { EqChip } from "@/components/ui/eq";
 import { PERSONAL_SPACE, spaceEmoji } from "@/components/expenses/space-meta";
 import type { AddMember, AddSpace, BlockedSpace } from "./expense-form-state";
 
-const STATUS_LABEL: Record<BlockedSpace["status"], string> = { SETTLING: "se está liquidando", ARCHIVED: "está archivado" };
+const STATUS_LABEL: Record<BlockedSpace["status"], string> = { SETTLING: "está cerrando cuentas", ARCHIVED: "está archivado" };
 
 /** Top bar: close + where the expense goes (+ the note about spaces that take no new expenses). */
 export function SpaceBar({
@@ -31,8 +31,8 @@ export function SpaceBar({
     const spaceChips = isEdit ? spaces.filter((s) => s.id === spaceId) : spaces;
     return (
         <>
-            <div className="flex items-center gap-2.5 px-5 pt-3 pb-1">
-                <button type="button" onClick={onClose} aria-label="Cerrar" data-testid="expense-close" className="h-6 w-6 flex-none">
+            <div className="flex items-center gap-2.5 px-5 pt-2 pb-0.5">
+                <button type="button" onClick={onClose} aria-label="Cerrar" data-testid="expense-close" className="-mx-2.5 flex h-11 w-11 flex-none items-center justify-center rounded-full">
                     <X className="h-6 w-6" />
                 </button>
                 <h1 className={isEdit ? "flex-none text-[17px] font-bold tracking-[-0.01em]" : "sr-only"}>
@@ -46,6 +46,7 @@ export function SpaceBar({
                             selected={s.id === spaceId}
                             onClick={() => onChange(s.id)}
                             disabled={isEdit}
+                            touch
                             className="max-w-full py-1.5"
                             data-testid={`space-chip-${s.id}`}
                         >
@@ -53,7 +54,7 @@ export function SpaceBar({
                         </EqChip>
                     ))}
                     {allowPersonal && (!isEdit || isPersonal) && (
-                        <EqChip tone="accent" selected={isPersonal} onClick={() => onChange(PERSONAL_SPACE)} disabled={isEdit} className="py-1.5" data-testid="space-chip-personal">
+                        <EqChip tone="accent" selected={isPersonal} onClick={() => onChange(PERSONAL_SPACE)} disabled={isEdit} touch className="py-1.5" data-testid="space-chip-personal">
                             {spaceEmoji(null)} Personal
                         </EqChip>
                     )}
@@ -75,7 +76,7 @@ export function SpaceBar({
 /** The big amount input (typed / pasted; the numpad writes into the same value). */
 export function AmountField({ amount, invalid, onType }: { amount: string; invalid: boolean; onType: (raw: string) => void }) {
     return (
-        <label className="flex max-w-full items-baseline justify-center text-[clamp(38px,13vw,56px)] font-bold leading-none tracking-[-0.03em] [@media(max-height:640px)]:text-[40px]">
+        <label className="flex max-w-full items-center justify-center text-[clamp(38px,13vw,56px)] font-bold leading-none tracking-[-0.03em] [@media(max-height:640px)]:text-[40px]">
             <span className="sr-only">Importe en euros</span>
             {/* Auto-width input: an invisible twin sizes the grid cell, and
                 the input itself takes no intrinsic width so short
@@ -127,12 +128,16 @@ export function CategoryChips({
                         aria-pressed={on}
                         data-testid={`category-chip-${c.key}`}
                         onClick={() => onPick(c.key)}
-                        className={cn(
-                            "flex-none whitespace-nowrap rounded-[10px] border px-[11px] py-[7px] transition-colors",
-                            on ? "bg-[var(--accent-tint)] text-primary border-primary" : "bg-card border-[color:var(--line)]",
-                        )}
+                        className="group flex min-h-11 flex-none items-center outline-none"
                     >
-                        {c.emoji} {c.label}
+                        <span
+                            className={cn(
+                                "whitespace-nowrap rounded-[10px] border px-[11px] py-[7px] transition-colors group-focus-visible:ring-2 group-focus-visible:ring-ring",
+                                on ? "bg-[var(--accent-tint)] text-primary border-primary" : "bg-card border-[color:var(--line)]",
+                            )}
+                        >
+                            {c.emoji} {c.label}
+                        </span>
                     </button>
                 );
             })}

@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures/test.fixture';
 import { request as playwrightRequest, type Page } from '@playwright/test';
 import { seedScenario, resetDb } from '../fixtures/db.fixture';
-import { loginAs } from '../fixtures/auth.fixture';
+import { createAuthenticatedContext, loginAs } from '../fixtures/auth.fixture';
 
 /**
  * Space lifecycle from the UI (src/lib/space-policy.ts ALLOWED_TRANSITIONS):
@@ -81,15 +81,30 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     const header = page.getByTestId('space-header-status');
     await expect(header).toHaveText('Pareja · Activo');
     await expect(page.getByTestId('space-action-reopen')).toHaveCount(0);
+    // Archiving is not offered while ACTIVE (close accounts first).
+    await expect(page.getByTestId('space-action-archive')).toHaveCount(0);
 
-    const patchPromise = spacePatch(page, spaceId);
+    // The button only opens the review sheet: nothing is written until it is confirmed.
+    let patched = false;
+    page.on('request', (r) => {
+      if (r.method() === 'PATCH' && r.url().endsWith(`/api/spaces/${spaceId}`)) patched = true;
+    });
     await page.getByTestId('space-action-settle').click();
+    const settleSheet = page.getByTestId('settle-sheet');
+    await expect(settleSheet).toBeVisible();
+    await expect(page.getByRole('dialog', { name: /¿Cerrar las cuentas de/ })).toBeVisible();
+    expect(patched).toBe(false);
+    const patchPromise = spacePatch(page, spaceId);
+    await settleSheet.getByTestId('confirm-sheet-confirm').click();
     const patch = await patchPromise;
     expect(patch.status()).toBe(200);
     expect(JSON.parse(patch.request().postData() ?? '{}')).toEqual({ status: 'SETTLING' });
 
-    // The page reloads with the committed lifecycle status.
-    await expect(header).toHaveText('Pareja · Liquidando');
+    // The page refreshes in place with the committed lifecycle status and points to /close.
+    await expect(header).toHaveText('Pareja · Cerrando cuentas');
+    await expect(page).toHaveURL(new RegExp(`/spaces/${spaceId}$`));
+    await expect(page.getByText('Estáis cerrando cuentas. Ahora saldad las deudas.')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Ver qué falta' })).toHaveAttribute('href', `/spaces/${spaceId}/close`);
     await expect(header).toHaveAttribute('data-status', 'SETTLING');
     await expect(page.getByTestId('space-action-settle')).toHaveCount(0);
     await expect(page.getByTestId('space-action-reopen')).toBeVisible();
@@ -101,13 +116,15 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await expect(page.getByTestId('space-status-banner')).toHaveAttribute('data-status', 'SETTLING');
     await expect(page.getByTestId('space-status-settle-link')).toHaveAttribute('href', `/settle?space=${spaceId}`);
 
-    // Dashboard: SETTLING banner with the OWNER close CTA; the balance is untouched.
+    // Dashboard: SETTLING banner with the progress and ONE CTA — the owner is still owed,
+    // so it is "Saldar deudas" (not the close flow); the balance is untouched.
     await page.goto('/dashboard');
     const banner = page.getByTestId('space-status-banner');
     await expect(banner).toHaveAttribute('data-status', 'SETTLING');
-    await expect(banner).toContainText('Cerrando cuentas');
-    await expect(banner).toContainText('No se pueden crear gastos nuevos; solo liquidar.');
-    await expect(page.getByTestId('space-status-close-link')).toHaveAttribute('href', `/spaces/${spaceId}/close`);
+    await expect(page.getByTestId('space-status-progress')).toHaveText('Cerrando cuentas · falta 1 deuda');
+    await expect(banner).toContainText('No se pueden añadir ni editar gastos; sí saldar deudas.');
+    await expect(banner.getByRole('link', { name: 'Saldar deudas →' })).toHaveAttribute('href', `/settle?space=${spaceId}`);
+    await expect(page.getByTestId('space-status-close-link')).toHaveCount(0);
     await expect(page.getByTestId('balance-amount')).toHaveText(PLUS_50);
 
     // Adding a shared expense is blocked: the API answers 409 with the reason.
@@ -115,11 +132,11 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     expect(expenseRes.status()).toBe(409);
     const blocked = await expenseRes.json();
     expect(blocked.code).toBe('SPACE_NOT_WRITABLE');
-    expect(blocked.error).toBe('Este espacio se está liquidando: no se pueden crear gastos nuevos');
+    expect(blocked.error).toBe('Estáis cerrando cuentas en este espacio: no se pueden crear gastos nuevos');
 
     // Existing expenses become read-only (no edit/delete).
     await page.goto(`/expense/${expenseId}`);
-    await expect(page.getByText('Este espacio está liquidando — solo lectura.')).toBeVisible();
+    await expect(page.getByText('Estáis cerrando cuentas: este gasto ya no se puede cambiar.')).toBeVisible();
     await expect(page.locator(`a[href="/expense/${expenseId}/edit"]`)).toHaveCount(0);
 
     // Nothing was recorded: the balance is still exactly +50,00 €.
@@ -137,10 +154,13 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await page.goto(`/spaces/${spaceId}`);
 
     const header = page.getByTestId('space-header-status');
-    await expect(header).toHaveText('Pareja · Liquidando');
+    await expect(header).toHaveText('Pareja · Cerrando cuentas');
 
-    const patchPromise = spacePatch(page, spaceId);
     await page.getByTestId('space-action-reopen').click();
+    const reopenSheet = page.getByTestId('reopen-sheet');
+    await expect(reopenSheet).toBeVisible();
+    const patchPromise = spacePatch(page, spaceId);
+    await reopenSheet.getByTestId('confirm-sheet-confirm').click();
     const patch = await patchPromise;
     expect(patch.status()).toBe(200);
     expect(JSON.parse(patch.request().postData() ?? '{}')).toEqual({ status: 'ACTIVE' });
@@ -166,10 +186,11 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await expect(page.getByText('Gasto tras reabrir')).toBeVisible();
   });
 
-  test('SETTLING → ARCHIVED: blocked while a payment is pending/debts are open, then archives; UI read-only', async ({ page }) => {
+  test('SETTLING → ARCHIVED: blocked while a payment is pending/debts are open, then archives; UI read-only', async ({ page, newContext }) => {
     // space-settling: B owes A 50 € and has a PENDING 50 € settlement.
     const data = await seedScenario(apiContext, 'space-settling');
     const userA = data.userA as Creds; // OWNER
+    const userB = data.userB as Creds; // MEMBER, debtor
     const spaceId = data.coupleId as string;
     const expenseId = data.expenseId as string;
     const settlementId = data.settlementId as string;
@@ -178,41 +199,75 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await page.goto(`/spaces/${spaceId}`);
 
     const header = page.getByTestId('space-header-status');
-    await expect(header).toHaveText('Pareja · Liquidando');
+    await expect(header).toHaveText('Pareja · Cerrando cuentas');
 
-    // Archiving asks for confirmation in a sheet; with a PENDING payment the API refuses (409).
+    // The archive sheet always opens; with a PENDING payment it explains why and the CTA is disabled.
     await page.getByTestId('space-action-archive').click();
     const sheet = page.getByTestId('archive-sheet');
     await expect(sheet).toBeVisible();
-    let patchPromise = spacePatch(page, spaceId);
-    await sheet.getByTestId('confirm-sheet-confirm').click();
-    let patch = await patchPromise;
-    expect(patch.status()).toBe(409);
-    const blocked = await patch.json();
-    expect(blocked.code).toBe('PENDING_SETTLEMENTS');
-    expect(blocked.settleUrl).toBe(`/settle?space=${spaceId}`);
-    await expect(sheet.getByTestId('confirm-sheet-error')).toContainText('pago pendiente de confirmar');
-    await expect(sheet.getByRole('link', { name: /Ir a liquidar/ })).toHaveAttribute('href', `/settle?space=${spaceId}`);
-    await expect(header).toHaveText('Pareja · Liquidando');
+    await expect(page.getByRole('alertdialog', { name: /¿Archivar/ })).toBeVisible();
+    await expect(sheet.getByTestId('confirm-sheet-confirm')).toBeDisabled();
+    await expect(sheet.getByTestId('confirm-sheet-reason')).toHaveText('Falta confirmar 1 pago');
+    await expect(sheet.getByRole('link', { name: 'Ver qué falta' })).toHaveAttribute('href', `/spaces/${spaceId}/close`);
+    await sheet.getByTestId('confirm-sheet-cancel').click();
+    await expect(header).toHaveText('Pareja · Cerrando cuentas');
 
-    // Rejecting the payment leaves the 50 € debt open → still 409, now OPEN_BALANCES.
-    const reject = await page.request.patch(`/api/settle/${settlementId}/status`, { data: { status: 'REJECTED' } });
-    expect(reject.ok()).toBeTruthy();
-    const stillOpen = await page.request.patch(`/api/spaces/${spaceId}`, { data: { status: 'ARCHIVED' } });
-    expect(stillOpen.status()).toBe(409);
-    expect((await stillOpen.json()).code).toBe('OPEN_BALANCES');
-
-    // The creditor records the payment ("Ya me ha pagado") → everyone at peace.
-    const received = await page.request.post('/api/settle', {
-      data: { groupId: spaceId, fromUserId: (data.userB as Creds).id, amount: 50, method: 'CASH' },
-    });
-    expect(received.ok(), await received.text()).toBeTruthy();
+    // The creditor confirms the payment → everyone at peace.
+    const confirmed = await page.request.patch(`/api/settle/${settlementId}/status`, { data: { status: 'CONFIRMED' } });
+    expect(confirmed.ok(), await confirmed.text()).toBeTruthy();
 
     await page.reload();
     await page.getByTestId('space-action-archive').click();
-    patchPromise = spacePatch(page, spaceId);
-    await page.getByTestId('archive-sheet').getByTestId('confirm-sheet-confirm').click();
-    patch = await patchPromise;
+    await expect(sheet.getByTestId('confirm-sheet-reason')).toHaveCount(0);
+    const confirm = sheet.getByTestId('confirm-sheet-confirm');
+    await expect(confirm).toBeEnabled();
+    const sheetError = sheet.getByTestId('confirm-sheet-error');
+    const settleLink = sheetError.getByRole('link', { name: /Saldar deudas/ });
+
+    // Stale page: with the sheet open, the space gets a new debt behind its back
+    // (reopen → A pays a 20 € shared expense → SETTLING again: B owes A 10 €).
+    // The server refuses with 409 OPEN_BALANCES and the sheet shows it with the settle link.
+    expect((await page.request.patch(`/api/spaces/${spaceId}`, { data: { status: 'ACTIVE' } })).ok()).toBeTruthy();
+    const debt = await postSharedExpense(page, '20.00', 'Gasto con la hoja abierta');
+    expect(debt.ok(), await debt.text()).toBeTruthy();
+    expect((await page.request.patch(`/api/spaces/${spaceId}`, { data: { status: 'SETTLING' } })).ok()).toBeTruthy();
+
+    const openBalances = spacePatch(page, spaceId);
+    await confirm.click();
+    const openBalancesRes = await openBalances;
+    expect(openBalancesRes.status()).toBe(409);
+    expect((await openBalancesRes.json()).code).toBe('OPEN_BALANCES');
+    await expect(sheet).toBeVisible();
+    await expect(sheetError).toContainText('Aún hay deudas sin saldar en este espacio. Saldadlas antes de archivarlo.');
+    await expect(settleLink).toHaveAttribute('href', `/settle?space=${spaceId}`);
+    await expect(header).toHaveText('Pareja · Cerrando cuentas');
+
+    // B registers the 10 € payment (PENDING) while A's sheet is still open → 409 PENDING_SETTLEMENTS.
+    const ctxB = await createAuthenticatedContext(newContext, userB);
+    try {
+      const paid = await ctxB.request.post('/api/settle', { data: { toUserId: userA.id, amount: 10, groupId: spaceId } });
+      expect(paid.ok(), await paid.text()).toBeTruthy();
+      const paidId = (await paid.json()).settlement.id as string;
+
+      const pending = spacePatch(page, spaceId);
+      await confirm.click();
+      const pendingRes = await pending;
+      expect(pendingRes.status()).toBe(409);
+      const pendingBody = await pendingRes.json();
+      expect(pendingBody).toMatchObject({ code: 'PENDING_SETTLEMENTS', settleUrl: `/settle?space=${spaceId}` });
+      await expect(sheetError).toContainText('Hay un pago pendiente de confirmar. Confírmalo o recházalo antes de archivar el espacio.');
+      await expect(settleLink).toHaveAttribute('href', `/settle?space=${spaceId}`);
+
+      // A confirms it → at peace again; the same open sheet now archives.
+      const confirmedB = await page.request.patch(`/api/settle/${paidId}/status`, { data: { status: 'CONFIRMED' } });
+      expect(confirmedB.ok(), await confirmedB.text()).toBeTruthy();
+    } finally {
+      await ctxB.close();
+    }
+
+    const patchPromise = spacePatch(page, spaceId);
+    await sheet.getByTestId('confirm-sheet-confirm').click();
+    const patch = await patchPromise;
     expect(patch.status()).toBe(200);
     expect(JSON.parse(patch.request().postData() ?? '{}')).toEqual({ status: 'ARCHIVED' });
 
@@ -228,17 +283,17 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     const banner = page.getByTestId('space-status-banner');
     await expect(banner).toHaveAttribute('data-status', 'ARCHIVED');
     await expect(banner).toContainText('Espacio archivado');
-    await expect(banner).toContainText('Solo lectura — un recuerdo de lo compartido.');
+    await expect(banner).toContainText('Solo lectura: puedes consultar lo compartido, pero no añadir ni cambiar nada.');
     await expect(page.getByTestId('space-status-close-link')).toHaveCount(0);
 
     // Expense detail: no edit/delete.
     await page.goto(`/expense/${expenseId}`);
-    await expect(page.getByText('Este espacio está archivado — solo lectura.')).toBeVisible();
+    await expect(page.getByText('Este espacio está archivado: solo lectura.')).toBeVisible();
     await expect(page.locator(`a[href="/expense/${expenseId}/edit"]`)).toHaveCount(0);
 
     // Close flow: neither "start settling" nor "archive" any more.
     await page.goto(`/spaces/${spaceId}/close`);
-    await expect(page.getByRole('heading', { name: /Cerrar/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /Cerrar/ })).toBeVisible();
     await expect(page.getByTestId('close-start-settling')).toHaveCount(0);
     await expect(page.getByTestId('close-archive')).toHaveCount(0);
 
@@ -261,7 +316,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await loginAs(page, userB);
     await page.goto(`/spaces/${spaceId}`);
 
-    await expect(page.getByTestId('space-header-status')).toHaveText('Pareja · Liquidando');
+    await expect(page.getByTestId('space-header-status')).toHaveText('Pareja · Cerrando cuentas');
     await expect(page.getByTestId('space-status-banner')).toHaveAttribute('data-status', 'SETTLING');
     // The whole "Gestión" section (SpaceActions) is gated on canManage.
     await expect(page.getByRole('heading', { name: 'Gestión' })).toHaveCount(0);
@@ -278,7 +333,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
 
     // Close flow is readable but without manage actions.
     await page.goto(`/spaces/${spaceId}/close`);
-    await expect(page.getByRole('heading', { name: /Cerrar/ })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: /Cerrar/ })).toBeVisible();
     await expect(page.getByTestId('close-start-settling')).toHaveCount(0);
     await expect(page.getByTestId('close-archive')).toHaveCount(0);
 
@@ -286,6 +341,6 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     const archive = await page.request.patch(`/api/spaces/${spaceId}`, { data: { status: 'ARCHIVED' } });
     expect(archive.status()).toBe(403);
     await page.goto(`/spaces/${spaceId}`);
-    await expect(page.getByTestId('space-header-status')).toHaveText('Pareja · Liquidando');
+    await expect(page.getByTestId('space-header-status')).toHaveText('Pareja · Cerrando cuentas');
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { X } from "lucide-react";
 
 /**
@@ -10,18 +10,25 @@ import { X } from "lucide-react";
  * your own heading inside. `dismissible={false}` ignores backdrop taps and
  * Escape and hides the X — for content that must be acknowledged explicitly
  * (e.g. a secret shown once); the content then provides its own close action.
+ * `role="alertdialog"` marks a destructive confirmation (see CriticalActionSheet);
+ * `describedBy` (space-separated ids) is what a screen reader reads after the title.
+ * On unmount focus returns to the element that opened the sheet.
  */
 export function Sheet({
     title,
     label,
     onClose,
     dismissible = true,
+    role = "dialog",
+    describedBy,
     children,
 }: {
     title?: string;
     label?: string;
     onClose: () => void;
     dismissible?: boolean;
+    role?: "dialog" | "alertdialog";
+    describedBy?: string;
     children: React.ReactNode;
 }) {
     const titleId = useId();
@@ -31,15 +38,38 @@ export function Sheet({
         onCloseRef.current = onClose;
     }, [onClose]);
 
-    useEffect(() => {
+    // Layout effect: its cleanup runs while the <dialog> is still in the DOM
+    // (a passive cleanup runs after removal, when focus has already fallen to
+    // <body> and the UA no longer restores it).
+    useLayoutEffect(() => {
         const dialog = ref.current;
         if (!dialog) return;
+        const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         if (!dialog.open) {
             if (typeof dialog.showModal === "function") dialog.showModal();
             else dialog.setAttribute("open", "");
         }
         return () => {
-            if (dialog.open) dialog.close();
+            if (dialog.open) {
+                if (typeof dialog.close === "function") dialog.close();
+                else dialog.removeAttribute("open");
+            }
+            trigger?.focus({ preventScroll: true });
+            // The same commit may remove the trigger (deleted row): once it
+            // settles, land on the page heading instead of <body>.
+            requestAnimationFrame(() => {
+                if (dialog.isConnected && dialog.open) return; // remounted (StrictMode)
+                const active = document.activeElement;
+                if (active && active !== document.body) return;
+                if (trigger?.isConnected) {
+                    trigger.focus({ preventScroll: true });
+                    return;
+                }
+                const heading = document.querySelector<HTMLElement>("main h1");
+                if (!heading) return;
+                if (!heading.hasAttribute("tabindex")) heading.setAttribute("tabindex", "-1");
+                heading.focus({ preventScroll: true });
+            });
         };
     }, []);
 
@@ -49,8 +79,11 @@ export function Sheet({
         // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions
         <dialog
             ref={ref}
+            role={role === "alertdialog" ? "alertdialog" : undefined}
+            aria-modal="true"
             aria-labelledby={title ? titleId : undefined}
             aria-label={title ? undefined : label}
+            aria-describedby={describedBy || undefined}
             onCancel={(e) => {
                 // Escape: let React own the unmount instead of the UA closing it.
                 e.preventDefault();
@@ -77,7 +110,7 @@ export function Sheet({
                             type="button"
                             onClick={() => onCloseRef.current()}
                             aria-label="Cerrar"
-                            className="h-8 w-8 -mr-1 flex items-center justify-center text-muted-foreground"
+                            className="h-11 w-11 -my-1.5 -mr-3 flex items-center justify-center text-muted-foreground"
                         >
                             <X className="h-5 w-5" />
                         </button>

@@ -11,7 +11,7 @@ import { methodName } from "@/components/settle/settle-model";
 
 export const dynamic = 'force-dynamic';
 
-const dayFmt = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short", year: "numeric" });
+const dayFmt = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short" });
 const monthFmt = new Intl.DateTimeFormat("es-ES", { timeZone: "Europe/Madrid", month: "long", year: "numeric" });
 
 /**
@@ -46,8 +46,8 @@ export default async function SettlementHistoryPage({ searchParams }: { searchPa
     }
 
     return (
-        <main className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)] pb-10">
-            <EqHeader back={`/settle?space=${encodeURIComponent(groupId)}`} title="Pagos" meta={spaceName} />
+        <div className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)] pb-10">
+            <EqHeader back={`/settle?space=${encodeURIComponent(groupId)}`} title="Historial de pagos" meta={spaceName} />
 
             {settlements.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center gap-3 px-8 text-center" data-testid="settle-history-empty">
@@ -65,12 +65,20 @@ export default async function SettlementHistoryPage({ searchParams }: { searchPa
                             {g.items.map((s) => {
                                 const toMe = s.toUserId === userId;
                                 const fromMe = s.fromUserId === userId;
+                                // Only a CONFIRMED payment is worded as done: a pending one is a
+                                // claim and a rejected one did not happen (the chip says which).
+                                const pending = s.status === "PENDING";
+                                const confirmed = s.status === "CONFIRMED";
                                 const title = fromMe
-                                    ? `Pagaste a ${s.toUser.name}`
+                                    ? confirmed ? `Pagaste a ${s.toUser.name}` : pending ? `Pago a ${s.toUser.name} · por confirmar` : `Pago a ${s.toUser.name}`
                                     : toMe
-                                        ? `${s.fromUser.name} te pagó`
+                                        ? pending ? `${s.fromUser.name} dice que te ha pagado` : confirmed ? `${s.fromUser.name} te pagó` : `Pago de ${s.fromUser.name}`
                                         : `${s.fromUser.name} → ${s.toUser.name}`;
-                                const awaitingMe = toMe && s.status === "PENDING";
+                                const detail = pending && toMe
+                                    ? "Confírmalo cuando lo recibas"
+                                    : pending && fromMe
+                                        ? `Falta que ${s.toUser.name} lo confirme`
+                                        : `${methodName(s.method)} · ${dayFmt.format(s.date)}`;
                                 return (
                                     <div key={s.id} data-testid="settle-history-row" data-status={s.status}>
                                         <EqRow
@@ -79,10 +87,11 @@ export default async function SettlementHistoryPage({ searchParams }: { searchPa
                                             icon={toMe ? <ArrowDownLeft className="h-[18px] w-[18px]" /> : <ArrowUpRight className="h-[18px] w-[18px]" />}
                                             title={title}
                                             sub={
-                                                <span className="flex items-center gap-2">
-                                                    <SettlementStatusChip status={s.status} className="px-2 py-0 text-[11px]" />
-                                                    <span className="truncate">
-                                                        {awaitingMe ? "Te toca confirmarlo" : `${methodName(s.method)} · ${dayFmt.format(s.date)}`}
+                                                // Wraps instead of truncating: the long chip would hide "Falta que X lo confirme".
+                                                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 whitespace-normal">
+                                                    <SettlementStatusChip status={s.status} side={fromMe ? "payer" : "receiver"} className="px-2 py-0 text-[11px] flex-none" />
+                                                    <span>
+                                                        {detail}
                                                     </span>
                                                 </span>
                                             }
@@ -96,6 +105,6 @@ export default async function SettlementHistoryPage({ searchParams }: { searchPa
                     ))}
                 </div>
             )}
-        </main>
+        </div>
     );
 }

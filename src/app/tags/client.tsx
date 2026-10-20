@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Plus, Check } from "lucide-react";
-import { EqCard, EqCta, EqHeader, EqLabel } from "@/components/ui/eq";
+import { Trash2, Plus, Check } from "lucide-react";
+import { EqCard, EqCta, EqHeader, EqLabel, EqToast, useEqToast } from "@/components/ui/eq";
+import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
 import { ScopeRadio } from "@/components/category/scope-radio";
 import { usePersonalMode } from "@/app/settings/personal-mode";
 import { withPersonal } from "@/app/settings/personal-scope";
@@ -60,8 +61,12 @@ export function TagsClient({ initialTags, hasGroup, personalParam = false }: Tag
         if (personalMode) setNewPersonal(true);
     }, [personalMode]);
     const [saving, setSaving] = useState(false);
-    const [deleting, setDeleting] = useState<string | null>(null);
+    // Tag awaiting confirmation in the delete sheet, and its request state.
+    const [pendingDelete, setPendingDelete] = useState<Tag | null>(null);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [toast, showToast] = useEqToast(3200);
 
     const handleCreate = async () => {
         if (saving || !newName.trim()) return;
@@ -103,22 +108,30 @@ export function TagsClient({ initialTags, hasGroup, personalParam = false }: Tag
         }
     };
 
-    const handleDelete = async (tag: Tag) => {
-        if (!confirm(`¿Eliminar etiqueta '${tag.name}'? Se eliminará de todos los gastos.`)) return;
-        setDeleting(tag.id);
-        setError(null);
+    const askDelete = (tag: Tag) => {
+        setDeleteError(null);
+        setPendingDelete(tag);
+    };
+
+    const handleDelete = async () => {
+        const tag = pendingDelete;
+        if (!tag || deleting) return;
+        setDeleting(true);
+        setDeleteError(null);
         try {
             const res = await fetch(`/api/tags/${tag.id}`, { method: "DELETE" });
             if (res.ok) {
                 setTags((prev) => prev.filter((t) => t.id !== tag.id));
+                setPendingDelete(null);
+                showToast(`Etiqueta «${tag.name}» eliminada`);
                 router.refresh();
             } else {
-                setError("No se pudo eliminar la etiqueta. Inténtalo de nuevo.");
+                setDeleteError("No se pudo eliminar la etiqueta. Inténtalo de nuevo.");
             }
         } catch {
-            setError("No se pudo eliminar la etiqueta. Inténtalo de nuevo.");
+            setDeleteError("No se pudo eliminar la etiqueta. Comprueba tu conexión e inténtalo de nuevo.");
         } finally {
-            setDeleting(null);
+            setDeleting(false);
         }
     };
 
@@ -156,21 +169,26 @@ export function TagsClient({ initialTags, hasGroup, personalParam = false }: Tag
 
                     <div className="space-y-2">
                         <EqLabel>Color</EqLabel>
-                        <div className="flex gap-2 flex-wrap">
+                        <div className="-mx-1.5 flex flex-wrap">
                             {PRESET_COLORS.map((color) => (
+                                // 44 px tap target around the 32 px swatch.
                                 <button
                                     key={color}
                                     type="button"
                                     onClick={() => setNewColor(color)}
-                                    className="h-8 w-8 rounded-full border-2 transition-all flex items-center justify-center"
-                                    style={{
-                                        backgroundColor: color,
-                                        borderColor: newColor === color ? "var(--ink)" : "transparent",
-                                    }}
+                                    className="group h-11 w-11 flex items-center justify-center rounded-full focus-visible:outline-none"
                                     aria-label={COLOR_NAMES[color] ?? color}
                                     aria-pressed={newColor === color}
                                 >
-                                    {newColor === color && <Check className="h-4 w-4 text-white drop-shadow" />}
+                                    <span
+                                        className="h-8 w-8 rounded-full border-2 transition-all flex items-center justify-center group-focus-visible:ring-2 group-focus-visible:ring-ring"
+                                        style={{
+                                            backgroundColor: color,
+                                            borderColor: newColor === color ? "var(--ink)" : "transparent",
+                                        }}
+                                    >
+                                        {newColor === color && <Check className="h-4 w-4 text-white drop-shadow" />}
+                                    </span>
                                 </button>
                             ))}
                         </div>
@@ -215,13 +233,12 @@ export function TagsClient({ initialTags, hasGroup, personalParam = false }: Tag
                                     )}
                                     <button
                                         type="button"
-                                        onClick={() => handleDelete(tag)}
-                                        disabled={deleting === tag.id}
-                                        // 44×44 hit area around a 14px glyph (negative margins keep the chip compact).
-                                        className="-my-3 -mr-3 h-11 w-11 flex-none flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                                        onClick={() => askDelete(tag)}
+                                        // 44×44 hit area around a 15px glyph (negative margins keep the chip compact).
+                                        className="-my-3 -mr-3 h-11 w-11 flex-none flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive transition-colors"
                                         aria-label={`Eliminar etiqueta ${tag.name}`}
                                     >
-                                        <X className="h-3.5 w-3.5" />
+                                        <Trash2 className="h-[15px] w-[15px]" />
                                     </button>
                                 </div>
                             ))}
@@ -229,6 +246,26 @@ export function TagsClient({ initialTags, hasGroup, personalParam = false }: Tag
                     </section>
                 )}
             </div>
+
+            {pendingDelete && (
+                <CriticalActionSheet
+                    tone="danger"
+                    testId="tag-delete-sheet"
+                    title={`¿Eliminar la etiqueta «${pendingDelete.name}»?`}
+                    consequences={[
+                        pendingDelete.personal
+                            ? "Se quitará de todos tus gastos personales. Los gastos no se borran."
+                            : "Se quitará de todos los gastos del espacio, también de los de los demás. Los gastos no se borran.",
+                    ]}
+                    reversible={false}
+                    confirmLabel="Eliminar etiqueta"
+                    busy={deleting}
+                    error={deleteError}
+                    onConfirm={handleDelete}
+                    onClose={() => setPendingDelete(null)}
+                />
+            )}
+            {toast && <EqToast className="bottom-[calc(24px+env(safe-area-inset-bottom))]">{toast}</EqToast>}
         </div>
     );
 }

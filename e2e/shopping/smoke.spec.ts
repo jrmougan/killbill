@@ -44,6 +44,25 @@ test('lista de grupo: crear, añadir, auto-pasillo, marcar idempotente, vaciar c
   res = await api.get(`/api/spaces/${groupId}/lists/${list.id}/items`);
   const after = await res.json();
   expect(after.items.length, 'la lista queda vacía de comprados').toBe(0);
+
+  // con `ids` (los tachados que mostraba la hoja) solo borra esos: uno tachado
+  // después por otro miembro sobrevive, y `cleared` da el número real
+  const ids: string[] = [];
+  for (const name of ['Huevos', 'Arroz']) {
+    const r = await api.post(`/api/spaces/${groupId}/lists/${list.id}/items`, { data: { name } });
+    const { item } = await r.json();
+    await api.patch(`/api/spaces/${groupId}/lists/${list.id}/items/${item.id}`, { data: { checked: true } });
+    ids.push(item.id);
+  }
+  res = await api.post(`/api/spaces/${groupId}/lists/${list.id}/clear-checked`, { data: { ids: [ids[0]] } });
+  expect(res.status(), 'vaciar solo los mostrados').toBe(200);
+  expect((await res.json()).cleared, 'borra solo el id enviado').toBe(1);
+  res = await api.get(`/api/spaces/${groupId}/lists/${list.id}/items`);
+  expect((await res.json()).items.map((i: { id: string }) => i.id), 'el tachado no mostrado sigue').toEqual([ids[1]]);
+
+  res = await api.post(`/api/spaces/${groupId}/lists/${list.id}/clear-checked`, { data: { ids: 'x' } });
+  expect(res.status(), 'ids no válidos').toBe(400);
+  expect((await res.json()).code).toBe('INVALID_IDS');
 });
 
 test('lista personal se crea vía /api/me/lists', async ({ page, context, request }) => {

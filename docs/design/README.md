@@ -14,9 +14,28 @@ The prototype contradicts some existing product rules. These are the resolutions
   the money still comes from OCR / manual entry.
 - **Invites**: no short codes. The "Invitar" card creates and shares a secure
   `/i/[token]` link (Web Share API / copy); "Unirme" accepts a pasted link.
-- **Settle**: two-step confirmation is kept. "Ya he pagado" creates a PENDING
-  settlement ("Pendiente de que X confirme"); "Ya me ha pagado" (creditor)
-  confirms immediately. "Recordárselo" uses the share sheet (no push infra).
+- **Settle** ("Saldar deuda"): two-step confirmation is kept. A headline says
+  who owes whom ("Lucía te debe 79,30 €" / "Le debes 79,30 € a Álvaro"; in a
+  group "Debes 7,50 € en total" + "Le pagas 7,50 € a Marta"), and the CTAs carry
+  the person and the amount of the chosen transfer. "Ya le he pagado {importe}
+  a {nombre}" creates a PENDING settlement ("Falta que X confirme que lo ha recibido");
+  "{nombre} ya me ha pagado {importe}" (creditor) confirms immediately, and an
+  incoming pending one is confirmed with "Sí, he recibido {importe} de {nombre}".
+  No tap on /settle writes by itself: every CTA opens a review sheet (debtor:
+  "Antes de marcarlo como pagado" + "EQUIL no envía dinero…"; creditor: "¿Has
+  recibido {importe} de {nombre}?", no undo), with the amount editable for a
+  partial payment up to the transfer ("máx. {importe}"). Reminders use the share sheet (no
+  push infra): "Recordarle la deuda" is creditor-only, and the debtor of a
+  pending payment gets "Pedirle que lo confirme" instead. "Deuda saldada" is
+  shown only right after a confirmed payment that leaves the balance at 0;
+  opening /settle with nothing owed says "Estáis al día" / "Ya estás al día".
+  The payment detail (/settle/[id]) speaks in the present while PENDING ("Pago
+  a X · por confirmar" / "X dice que te ha pagado", chip "Pendiente de
+  confirmar") and in the past only once CONFIRMED; a REJECTED payment reads "No
+  recibido" to the payer (with "Saldar deuda") and "Rechazado" to the
+  receiver. Confirm/reject there open the same review sheets as Inicio, and
+  editing a pending payment shows "máx. {deuda}" and "X tendrá que confirmar
+  el nuevo importe". The list of all payments is "Historial de pagos".
 - **Add expense**: the numpad quick flow (equal / only me / only them) is the
   default; "Más opciones" exposes custom splits, tags, date and recurrence.
 - **Spaces**: Pareja→COUPLE, Piso→GROUP, Viaje→EPHEMERAL (only when
@@ -24,6 +43,14 @@ The prototype contradicts some existing product rules. These are the resolutions
 - **Budgets**: tapping an unbudgeted category asks for the amount (the
   prototype's fixed 100 € is a demo shortcut).
 - **MCP (Hermes Agent)**: "Conectar" issues a token (copy once); there is no
-  "Desconectar" because MCP JWTs cannot be revoked yet.
+  per-token "Desconectar": every MCP token is revoked together with the sessions
+  by "Cerrar sesión en todos los dispositivos" (bumps `User.tokenVersion`).
 - **Shopping aisles** are kept (grouping/ordering) even though the prototype
   shows a flat list.
+
+## Chosen direction
+
+`EQUIL Rediseño.dc.html` holds the canvas trimmed to the chosen path: **"Mezcla · base 1a +
+espacios de 1b + ticket de 1c"** (2a: Inicio, Añadir gasto, Saldar deuda) and the remaining
+screens in that style (3a). The discarded directions (1a/1b/1c) and the old-app reference (0a)
+were removed. The Ralph UX loop in `scripts/ralph/` audits the app against it.

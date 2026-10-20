@@ -5,7 +5,7 @@ import { resetDb, seedScenario } from '../fixtures/db.fixture';
 import { createAuthenticatedContext } from '../fixtures/auth.fixture';
 
 /**
- * API rules of "Quedar en paz" (QA saldar.md S-01, S-02, S-04, S-06, S-07,
+ * API rules of "Saldar deuda" (QA saldar.md S-01, S-02, S-04, S-06, S-07,
  * S-10, S-12, S-19). Every money-moving call runs under a per-space lock with
  * conditional updates, so these races must end in exactly one ledger posting
  * and never in a flipped debt.

@@ -67,7 +67,7 @@ export function ExpenseMoreOptions({
                     min={MIN_EXPENSE_DATE}
                     max={maxDate}
                     onChange={(e) => dispatch({ type: "dateChanged", date: e.target.value || today })}
-                    className="w-full bg-transparent text-[15px] font-medium outline-none"
+                    className="-my-2.5 h-11 w-full bg-transparent text-[15px] font-medium outline-none"
                 />
             </OptionSection>
 
@@ -75,7 +75,7 @@ export function ExpenseMoreOptions({
                 <OptionSection
                     label="Reparto personalizado"
                     aside={splitChoice === "custom" && (
-                        <button type="button" onClick={() => dispatch({ type: "splitChoiceChanged", choice: "equal" })} className="text-xs font-semibold text-primary">Volver a rápido</button>
+                        <button type="button" onClick={() => dispatch({ type: "splitChoiceChanged", choice: "equal" })} className="-my-2.5 flex min-h-11 items-center text-xs font-semibold text-primary">Volver a rápido</button>
                     )}
                 >
                     <SplitEditor
@@ -102,10 +102,20 @@ export function ExpenseMoreOptions({
                 />
             </OptionSection>
 
-            {receiptPreview && (
-                <OptionSection label="Ticket" aside={<button type="button" onClick={onDiscardReceipt} className="text-xs font-semibold text-destructive">Quitar</button>}>
+            {receiptPreview ? (
+                <OptionSection
+                    label="Ticket"
+                    aside={<button type="button" onClick={onDiscardReceipt} className="-my-2.5 flex min-h-11 items-center text-xs font-semibold text-[color:var(--negative-ink)]">Quitar foto</button>}
+                >
                     {/* oxlint-disable-next-line nextjs/no-img-element -- local object URL / uploaded receipt of unknown size */}
                     <img src={receiptPreview} alt="Ticket adjunto" decoding="async" className="max-h-60 w-full rounded-[10px] object-contain" />
+                </OptionSection>
+            ) : state.discardedReceiptUrl && (
+                <OptionSection label="Ticket">
+                    <output data-testid="receipt-photo-removed" className="-my-2.5 flex items-center gap-2 text-[13px]">
+                        <span className="min-w-0 flex-1 text-muted-foreground">La foto se borrará del gasto al guardar</span>
+                        <button type="button" onClick={() => dispatch({ type: "receiptRestored" })} className="flex min-h-11 shrink-0 items-center font-semibold text-primary">Deshacer</button>
+                    </output>
                 </OptionSection>
             )}
 
@@ -129,9 +139,11 @@ export function ExpenseMoreOptions({
                         aria-checked={isRecurring}
                         aria-label="¿Es un gasto recurrente?"
                         onClick={() => dispatch({ type: "recurringToggled" })}
-                        className={cn("relative h-6 w-11 rounded-full transition-colors", isRecurring ? "bg-primary" : "bg-[var(--track)]")}
+                        className="group -my-2.5 flex h-11 w-11 items-center outline-none"
                     >
-                        <span className={cn("absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-card shadow transition-transform", isRecurring && "translate-x-5")} />
+                        <span className={cn("relative h-6 w-11 rounded-full transition-colors group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2", isRecurring ? "bg-primary" : "bg-[var(--track)]")}>
+                            <span className={cn("absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-card shadow transition-transform", isRecurring && "translate-x-5")} />
+                        </span>
                     </button>
                 }
             >
@@ -242,7 +254,7 @@ function TagsSection({
                     </div>
                 </div>
             ) : (
-                <button type="button" onClick={() => onDraft({ open: true })} className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-primary">
+                <button type="button" onClick={() => onDraft({ open: true })} className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-[13px] font-semibold text-primary">
                     <Plus className="h-4 w-4" /> Nueva etiqueta
                 </button>
             )) : (

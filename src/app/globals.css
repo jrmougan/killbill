@@ -66,7 +66,7 @@
   --secondary-foreground: 90 4% 11%;
 
   --muted: 75 7% 91%;
-  --muted-foreground: 90 3% 42%;   /* #6E706B */
+  --muted-foreground: 80 3% 39.6%;  /* #666862 (≥4.5:1 on paper, track and tints) */
 
   --accent: 154 45% 34%;
   --accent-foreground: 0 0% 100%;
@@ -94,8 +94,8 @@
   --track: #E9EAE5;                          /* segmented control track */
 
   --ink: #1B1C1A;      /* primary text */
-  --ink-2: #6E706B;    /* muted labels */
-  --ink-3: #737570;    /* faint meta text (≥4.3:1 on paper, 4.6:1 on white) */
+  --ink-2: #666862;    /* muted labels (≥4.5:1 on paper, track and tints) */
+  --ink-3: #686A65;    /* faint meta text (≥5:1 on paper, 4.5:1 on track) */
   --placeholder: #8A8C85; /* input placeholders / decorative only — never body text */
   --ink-4: #C9CBC4;    /* disabled, chevrons, checkbox borders */
   --body-ink: #3A3B38; /* body copy */
@@ -108,6 +108,7 @@
   --negative: #B4553A;   /* I owe / over budget / logout */
   --positive-tint: #EEF4F0;
   --negative-tint: rgba(180, 85, 58, 0.1);
+  --negative-ink: #A04830; /* red text on --negative-tint (≥4.5:1; --negative is ~4:1 there) */
 
   /* Category accent colours (match the category catalog) */
   --cat-food: #D9713C;

@@ -4,17 +4,19 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getGroupBalances } from "@/lib/ledger-read";
+import { resolveMyDebts } from "@/lib/finance";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
-import { capFor, settleUrlFor } from "@/lib/space-policy";
+import { capFor, hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
 import { MembershipStatus, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
-import { spaceTypeMeta, spaceStatusMeta } from "@/lib/space-ui";
+import { closeItemCount, openDebtCount } from "@/lib/close-plan";
+import { archiveBlockReason, spaceTypeMeta, spaceStatusMeta } from "@/lib/space-ui";
 import { SpaceStatusBanner } from "@/components/space/space-status-banner";
 import { MemberList, type SpaceMember } from "@/components/space/member-list";
 import { InviteManager } from "@/components/space/invite-manager";
 import { inviteConfigFor } from "@/components/space/invite-eligibility";
 import { RenameSpace } from "@/components/space/rename-space";
 import { LeaveSpace } from "@/components/space/leave-space";
-import { SpaceActions } from "./actions-client";
+import { ArchiveSpaceAction, ConvertToGroupInline, SpaceActions } from "./actions-client";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,20 @@ function noInviteReason(type: SpaceType, status: SpaceStatus, memberCount: numbe
             : "El espacio está completo.";
     }
     return "Ahora mismo no se pueden crear enlaces.";
+}
+
+/** Members can't mint links: tell them who can (instead of hiding invitations silently). */
+function memberInviteHint(members: SpaceMember[], fullCouple: boolean): string {
+    const owner = members.find((m) => m.role === "OWNER");
+    const who = owner ? owner.name.trim().split(/\s+/)[0] : null;
+    if (fullCouple) {
+        return who
+            ? `La pareja está completa. Solo ${who} puede convertirla en grupo para invitar a más personas.`
+            : "La pareja está completa. Solo quien administra el espacio puede convertirla en grupo.";
+    }
+    return who
+        ? `Solo quien administra el espacio puede invitar. Pídele un enlace a ${who}.`
+        : "Solo quien administra el espacio puede invitar.";
 }
 
 /**
@@ -55,15 +71,28 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
     if (!myMembership || myMembership.status !== MembershipStatus.ACTIVE) redirect("/spaces");
     if (myMembership.role === "GUEST") redirect("/dashboard");
 
-    const [roster, balances] = await Promise.all([
+    const [roster, balances, pending, myPending] = await Promise.all([
         prisma.membership.findMany({
             where: { groupId: id, status: MembershipStatus.ACTIVE },
             include: { user: { select: { id: true, name: true, avatar: true, isGuest: true } } },
             orderBy: [{ joinedAt: "asc" }, { userId: "asc" }],
         }),
         getGroupBalances(id),
+        prisma.settlement.findMany({
+            where: { coupleId: id, status: "PENDING" },
+            select: { fromUserId: true, toUserId: true, amount: true },
+        }),
+        prisma.settlement.findFirst({
+            where: { coupleId: id, status: "PENDING", fromUserId: userId },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, amount: true, method: true, toUser: { select: { name: true } } },
+        }),
     ]);
 
+    // What I settle with each member in the simplified plan (the same matching
+    // /settle and /close use): they owe me (+) or I owe them (−).
+    const iOwe = resolveMyDebts(balances, userId);
+    const pairWith = (uid: string) => (resolveMyDebts(balances, uid)[userId] ?? 0) - (iOwe[uid] ?? 0);
     const members: SpaceMember[] = roster.map((m) => ({
         id: m.user.id,
         name: m.user.name,
@@ -71,6 +100,7 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
         role: m.role,
         isGuest: m.user.isGuest,
         balanceCents: balances[m.user.id] ?? 0,
+        pairCents: m.user.id === userId ? 0 : pairWith(m.user.id),
     }));
 
     const typeMeta = spaceTypeMeta(space.type);
@@ -83,7 +113,18 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
         { type: space.type, status: space.status, role: myMembership.role, memberCount: members.length },
         ephemeralOn,
     );
+    const fullCouple = space.type === SpaceType.COUPLE && space.status === SpaceStatus.ACTIVE && members.length >= capFor(space.type);
     const settleHref = settleUrlFor(space.id);
+    // Same rule as the archive guard of the API (it still answers 409 if this goes stale).
+    // Archive: same predicate as the API guard; banner: the same "Faltan N" as /close.
+    const openDebts = openDebtCount(balances);
+    const showArchive = canManage && space.status === SpaceStatus.SETTLING;
+    // "Salir": the first sheet already knows my debt, who sees it and whether I'm the last owner.
+    const nameOf = new Map(roster.map((m) => [m.user.id, m.user.name]));
+    const creditors = Object.entries(iOwe)
+        .filter(([uid, c]) => hasOpenBalance(c) && nameOf.has(uid))
+        .map(([uid]) => nameOf.get(uid) as string);
+    const ownerCount = roster.filter((m) => m.role === "OWNER").length;
 
     return (
         <div className="min-h-screen pb-28 eq-in">
@@ -117,12 +158,15 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                     expiresAt={space.expiresAt}
                     canManage={canManage}
                     settleHref={settleHref}
+                    openDebts={closeItemCount(balances, pending)}
+                    myBalanceOpen={hasOpenBalance(balances[userId] ?? 0)}
                 />
 
                 <section aria-labelledby="members-title" className="flex flex-col gap-2">
                     <h2 id="members-title" className="text-xs font-semibold text-muted-foreground">Miembros ({members.length})</h2>
                     <MemberList
                         spaceId={space.id}
+                        spaceName={displayName}
                         members={members}
                         currentUserId={userId}
                         myRole={myMembership.role}
@@ -130,7 +174,7 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                     />
                 </section>
 
-                {canManage && (
+                {canManage ? (
                     <section aria-labelledby="invites-title" className="flex flex-col gap-2">
                         <h2 id="invites-title" className="text-xs font-semibold text-muted-foreground">Invitaciones</h2>
                         <InviteManager
@@ -138,18 +182,60 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                             kind={invite?.kind ?? null}
                             maxUsesCap={invite?.maxUses ?? 1}
                             reason={noInviteReason(space.type, space.status, members.length, ephemeralOn)}
+                            reasonAction={
+                                space.status === SpaceStatus.ACTIVE && (
+                                    <ConvertToGroupInline spaceId={space.id} spaceName={displayName} visible={fullCouple} />
+                                )
+                            }
                         />
                     </section>
+                ) : (
+                    !archived && (
+                        <section aria-labelledby="invites-title" className="flex flex-col gap-2">
+                            <h2 id="invites-title" className="text-xs font-semibold text-muted-foreground">Invitaciones</h2>
+                            <p className="text-[13px] text-muted-foreground">{memberInviteHint(members, fullCouple)}</p>
+                        </section>
+                    )
                 )}
 
                 {canManage && !archived && (
                     <section aria-labelledby="manage-title" className="flex flex-col gap-2">
                         <h2 id="manage-title" className="text-xs font-semibold text-muted-foreground">Gestión</h2>
-                        <SpaceActions spaceId={space.id} type={space.type} status={space.status} settleHref={settleHref} />
+                        <SpaceActions
+                            spaceId={space.id}
+                            spaceName={displayName}
+                            type={space.type}
+                            status={space.status}
+                            settleHref={settleHref}
+                        />
                     </section>
                 )}
 
-                <LeaveSpace spaceId={space.id} userId={userId} spaceName={displayName} />
+                <section aria-labelledby="danger-title" className="mt-4 flex flex-col gap-2">
+                    <h2 id="danger-title" className="text-xs font-semibold text-muted-foreground">Zona de peligro</h2>
+                    {showArchive && (
+                        <ArchiveSpaceAction
+                            spaceId={space.id}
+                            spaceName={displayName}
+                            blockReason={archiveBlockReason(pending.length, openDebts)}
+                        />
+                    )}
+                    <LeaveSpace
+                        spaceId={space.id}
+                        userId={userId}
+                        spaceName={displayName}
+                        balanceCents={balances[userId] ?? 0}
+                        creditors={creditors}
+                        pendingPayment={
+                            myPending
+                                ? { id: myPending.id, toName: myPending.toUser.name, amountCents: myPending.amount, method: myPending.method }
+                                : null
+                        }
+                        lastOwner={myMembership.role === "OWNER" && ownerCount <= 1 && roster.length > 1}
+                        lastPerson={roster.length === 1}
+                        settleHref={settleHref}
+                    />
+                </section>
             </div>
         </div>
     );

@@ -24,6 +24,9 @@ export function EqLabel({ className, ...props }: React.HTMLAttributes<HTMLSpanEl
     return <span className={cn("text-xs font-semibold text-muted-foreground", className)} {...props} />;
 }
 
+// 44×44 touch area around the 24px icon; the negative margin keeps the layout of a 24px box.
+const BACK_CLASS = "-m-2.5 h-11 w-11 flex-none flex items-center justify-center";
+
 /**
  * Screen header. `back` renders an arrow (href or onClick) before the title;
  * `meta` is the right-aligned context (usually the active space "🏠 Casa").
@@ -47,11 +50,11 @@ export function EqHeader({
 }) {
     const Icon = close ? X : ArrowLeft;
     const backEl = back ? (
-        <Link href={back} aria-label={close ? "Cerrar" : "Volver"} className="h-6 w-6 flex-none">
+        <Link href={back} aria-label={close ? "Cerrar" : "Volver"} className={BACK_CLASS}>
             <Icon className="h-6 w-6" />
         </Link>
     ) : onBack ? (
-        <button type="button" onClick={onBack} aria-label={close ? "Cerrar" : "Volver"} className="h-6 w-6 flex-none">
+        <button type="button" onClick={onBack} aria-label={close ? "Cerrar" : "Volver"} className={BACK_CLASS}>
             <Icon className="h-6 w-6" />
         </button>
     ) : null;
@@ -72,22 +75,32 @@ export function EqHeader({
 export function EqChip({
     selected,
     tone = "ink",
+    touch = false,
     className,
+    children,
     ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { selected?: boolean; tone?: "ink" | "accent" | "add" }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    selected?: boolean;
+    tone?: "ink" | "accent" | "add";
+    /** Pads the button to a 44px-tall touch target around the same-looking pill. */
+    touch?: boolean;
+}) {
+    const pill = cn(
+        "flex-none whitespace-nowrap rounded-full px-3 py-[7px] text-[13px] font-semibold border transition-colors",
+        tone === "add" && "border-dashed border-[color:var(--line-strong)] hover:bg-card",
+        tone === "ink" && (selected ? "bg-foreground text-white border-foreground" : "bg-card text-foreground border-[color:var(--line)]"),
+        tone === "accent" && (selected ? "bg-primary text-white border-primary" : "bg-card text-foreground border-[color:var(--line)]"),
+        className
+    );
     return (
         <button
             type="button"
             aria-pressed={tone === "add" ? undefined : !!selected}
-            className={cn(
-                "flex-none whitespace-nowrap rounded-full px-3 py-[7px] text-[13px] font-semibold border transition-colors",
-                tone === "add" && "border-dashed border-[color:var(--line-strong)] hover:bg-card",
-                tone === "ink" && (selected ? "bg-foreground text-white border-foreground" : "bg-card text-foreground border-[color:var(--line)]"),
-                tone === "accent" && (selected ? "bg-primary text-white border-primary" : "bg-card text-foreground border-[color:var(--line)]"),
-                className
-            )}
+            className={touch ? "group flex-none min-w-0 min-h-11 flex items-center outline-none" : pill}
             {...props}
-        />
+        >
+            {touch ? <span className={cn("block", pill, "group-focus-visible:ring-2 group-focus-visible:ring-ring")}>{children}</span> : children}
+        </button>
     );
 }
 
@@ -135,7 +148,7 @@ export function EqSegmented<T extends string>({
                         tabIndex={active ? 0 : -1}
                         onClick={() => onChange(o.value)}
                         className={cn(
-                            "flex-1 rounded-[10px] py-2 text-center transition-colors",
+                            "flex-1 min-h-11 rounded-[10px] py-2 text-center transition-colors",
                             active ? "bg-card text-foreground" : "text-muted-foreground"
                         )}
                     >
@@ -213,26 +226,105 @@ export function EqRow({
     return <div className={cls}>{inner}</div>;
 }
 
-/** Ephemeral bottom toast (dark pill above the nav). Render conditionally. */
-export function EqToast({ children }: { children: React.ReactNode }) {
+/**
+ * Empty state: what is missing, what to do, and (optionally) the action as a
+ * 44px pill — a link (`href`) or a button (`onClick`). Without an action it is
+ * just the explanation (e.g. a read-only space).
+ */
+export function EqEmpty({
+    title,
+    hint,
+    action,
+    href,
+    onClick,
+    testId,
+}: {
+    title: string;
+    hint?: React.ReactNode;
+    action?: string;
+    href?: string;
+    onClick?: () => void;
+    testId?: string;
+}) {
+    const cls =
+        "mt-3 min-h-11 inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-tint)] border border-[color:var(--accent-border)] px-4 text-sm font-semibold text-primary active:scale-[0.97] transition-transform";
+    return (
+        <div data-testid={testId} className="flex flex-col items-center gap-1 py-8 text-center">
+            <p className="text-[15px] font-semibold text-foreground">{title}</p>
+            {hint && <p className="max-w-[30ch] text-[13px] leading-snug text-muted-foreground">{hint}</p>}
+            {action && href && <Link href={href} className={cls}>{action}</Link>}
+            {action && !href && onClick && (
+                <button type="button" onClick={onClick} className={cls}>{action}</button>
+            )}
+        </div>
+    );
+}
+
+/** Optional toast button: a callback ("Deshacer") or a link ("Ver qué falta"). */
+export type EqToastAction = { label: string; onAction: () => void; href?: never } | { label: string; href: string; onAction?: never };
+
+/** Time the empty live region gets to be registered before its text arrives. */
+const TOAST_ANNOUNCE_DELAY_MS = 150;
+
+/**
+ * Ephemeral bottom toast (dark pill above the nav). Render conditionally.
+ * The `<output>` live region mounts empty and is filled a moment later:
+ * screen readers ignore a live region that enters the tree already filled.
+ */
+export function EqToast({ children, action, className }: { children: React.ReactNode; action?: EqToastAction | null; className?: string }) {
+    const [ready, setReady] = React.useState(false);
+    React.useEffect(() => {
+        const t = setTimeout(() => setReady(true), TOAST_ANNOUNCE_DELAY_MS);
+        return () => clearTimeout(t);
+    }, []);
+    // 44 px tap target that does not grow the pill (negative vertical margin).
+    const actionCls = "-my-2.5 -mr-1.5 min-h-11 flex flex-none items-center px-1.5 font-semibold text-[color:var(--accent-tint)] underline-offset-2 hover:underline";
     return (
         <output
-            className="eq-in fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 whitespace-nowrap rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]"
+            className={cn(
+                "fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 w-max max-w-[calc(100vw-2rem)] rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]",
+                ready ? "eq-in" : "opacity-0",
+                action && "flex items-center gap-3",
+                className,
+            )}
         >
-            {children}
+            {ready && (
+                <>
+                    {action ? <span>{children}</span> : children}
+                    {action?.href && (
+                        <Link href={action.href} className={actionCls}>
+                            {action.label}
+                        </Link>
+                    )}
+                    {action?.onAction && (
+                        <button type="button" onClick={action.onAction} className={actionCls}>
+                            {action.label}
+                        </button>
+                    )}
+                </>
+            )}
         </output>
     );
 }
 
-/** Hook: `const [toast, show] = useEqToast()` → `{toast && <EqToast>{toast}</EqToast>}`. */
-export function useEqToast(ms = 2000): [string | null, (m: string) => void] {
-    const [msg, setMsg] = React.useState<string | null>(null);
+/**
+ * Hook: `const [toast, show, action] = useEqToast()` →
+ * `{toast && <EqToast action={action}>{toast}</EqToast>}`. `show(m, action)`
+ * keeps a toast with an action on screen for at least 5 s so it can be reached;
+ * tapping a callback action dismisses it.
+ */
+export function useEqToast(ms = 2000): [string | null, (m: string, action?: EqToastAction) => void, EqToastAction | null] {
+    const [state, setState] = React.useState<{ msg: string; action: EqToastAction | null } | null>(null);
     const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-    const show = React.useCallback((m: string) => {
+    const show = React.useCallback((m: string, action?: EqToastAction) => {
         if (timer.current) clearTimeout(timer.current);
-        setMsg(m);
-        timer.current = setTimeout(() => setMsg(null), ms);
+        // Tapping a callback action also dismisses the toast.
+        const wrapped: EqToastAction | null = action?.onAction
+            ? { label: action.label, onAction: () => { if (timer.current) clearTimeout(timer.current); setState(null); action.onAction(); } }
+            : action ?? null;
+        setState({ msg: m, action: wrapped });
+        timer.current = setTimeout(() => setState(null), action ? Math.max(ms, 5000) : ms);
     }, [ms]);
-    return [msg, show];
+    return [state?.msg ?? null, show, state?.action ?? null];
 }

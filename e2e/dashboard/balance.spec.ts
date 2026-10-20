@@ -60,8 +60,8 @@ test.describe('Dashboard - Balance', () => {
     await loginAs(page, userA!);
     await expect(page).toHaveURL(/\/dashboard/);
 
-    // UserA is the receiver of the pending settlement - should see "Confirmar Pagos"
-    const confirmSection = page.getByText(/Confirmar Pagos/i);
+    // UserA is the receiver of the pending settlement - should see "Pagos por confirmar"
+    const confirmSection = page.getByText(/Pagos por confirmar/);
     await expect(confirmSection).toBeVisible({ timeout: 10000 });
   });
 
@@ -71,12 +71,14 @@ test.describe('Dashboard - Balance', () => {
     await loginAs(page, data.userA!);
     await expect(page).toHaveURL(/\/dashboard/);
 
-    // Active couple card: "User te debe 50,00 €" + the settle shortcut.
+    // Active couple card: "User te debe 50,00 €" + the settle shortcut with its direction.
     const active = page.getByTestId('space-card-active');
     await expect(active).toContainText('Debt Couple');
     await expect(active).toContainText('User te debe');
     await expect(active).toContainText(/50,00\s€/);
-    await expect(active.getByRole('link', { name: 'Quedar en paz' })).toHaveAttribute('href', '/settle');
+    const settle = active.getByRole('link', { name: 'Saldar deuda', exact: true });
+    await expect(settle).toHaveAttribute('href', `/settle?space=${data.coupleId}`);
+    await expect(settle).toHaveAccessibleDescription(/^Cobras 50,00\s€$/);
     await expect(page.getByTestId('month-summary')).toContainText('en Debt Couple');
 
     // Carousel → personal context.

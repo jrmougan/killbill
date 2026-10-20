@@ -9,7 +9,7 @@ import {
 } from './settlement-rules';
 
 /**
- * Race-safe settlement mutations ("Quedar en paz").
+ * Race-safe settlement mutations ("Saldar deuda").
  *
  * Every mutation of a space's settlements runs inside `withSpaceLock`: one DB
  * transaction that first takes a row lock on the space (`SELECT … FOR UPDATE`

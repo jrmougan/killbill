@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Share } from "lucide-react";
 import { EqToast, useEqToast } from "@/components/ui/eq";
+import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
 import { cn } from "@/lib/utils";
 import { fetchInvites, forgetInvite, isInviteLive, recallInvite, rememberInvite } from "./invite-session";
 
@@ -15,7 +16,9 @@ const LINK_DAYS = 7;
  * shows it in DM Mono and hands it to the share sheet (clipboard fallback +
  * toast). The link is remembered for this tab (`invite-session.ts`): later taps —
  * even after a reload — share the SAME link while it is still live, so a couple
- * never ends up with several valid links. "Generar nuevo" mints a fresh one.
+ * never ends up with several valid links. "Generar nuevo" asks first (the link
+ * already sent stops working), deactivates the old one and only then mints a
+ * fresh one — if the DELETE fails nothing new is created.
  *
  * `kind` is GUEST for EPHEMERAL spaces (only rendered when the ephemeral flag is
  * on) and MEMBER otherwise.
@@ -37,7 +40,9 @@ export function SpaceInviteCard({
     const [url, setUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [toast, showToast] = useEqToast();
+    const [regenOpen, setRegenOpen] = useState(false);
+    const [regenError, setRegenError] = useState<string | null>(null);
+    const [toast, showToast, toastAction] = useEqToast();
 
     // Restore the link minted earlier in this tab, if the server says it is live.
     useEffect(() => {
@@ -107,17 +112,27 @@ export function SpaceInviteCard({
         if (link) await share(link);
     };
 
-    // A fresh link replaces the old one: revoke it so only one stays valid.
+    // A fresh link replaces the old one: deactivate it first so only one stays
+    // valid. A 404 means it was already revoked (e.g. from the space page).
     const onRegenerate = async () => {
+        setRegenError(null);
         const previous = recallInvite(spaceId, kind);
-        forgetInvite(spaceId, kind);
         if (previous) {
-            await fetch(`/api/spaces/${spaceId}/invites?inviteId=${encodeURIComponent(previous.inviteId)}`, {
+            setLoading(true);
+            const res = await fetch(`/api/spaces/${spaceId}/invites?inviteId=${encodeURIComponent(previous.inviteId)}`, {
                 method: "DELETE",
             }).catch(() => null);
+            setLoading(false);
+            if (!res || (!res.ok && res.status !== 404)) {
+                setRegenError("No se pudo desactivar el enlace anterior. Inténtalo de nuevo.");
+                return;
+            }
         }
+        forgetInvite(spaceId, kind);
         setUrl(null);
-        await mint();
+        const link = await mint();
+        setRegenOpen(false);
+        if (link) showToast("Enlace nuevo listo. El anterior ya no funciona.", { label: "Enviar", onAction: () => void share(link) });
     };
 
     const hint = maxUses === 1 ? `Un solo uso · caduca en ${LINK_DAYS} días` : `Hasta ${maxUses} personas · caduca en ${LINK_DAYS} días`;
@@ -133,11 +148,11 @@ export function SpaceInviteCard({
                 <span
                     data-testid="invite-link"
                     className={cn(
-                        "flex-1 min-w-0 h-11 rounded-xl bg-card flex items-center px-3 font-mono text-[13px] truncate select-all",
-                        !url && "text-muted-foreground",
+                        "flex-1 min-w-0 h-11 rounded-xl bg-card flex items-center px-3 text-[13px] truncate",
+                        url ? "font-mono select-all" : "text-muted-foreground",
                     )}
                 >
-                    <span className="truncate">{url ? url.replace(/^https?:\/\//, "") : "Enlace seguro · se crea al enviar"}</span>
+                    <span className="truncate">{url ? url.replace(/^https?:\/\//, "") : "Se crea un enlace seguro"}</span>
                 </span>
                 <button
                     type="button"
@@ -156,7 +171,10 @@ export function SpaceInviteCard({
                 {url && (
                     <button
                         type="button"
-                        onClick={onRegenerate}
+                        onClick={() => {
+                            setRegenError(null);
+                            setRegenOpen(true);
+                        }}
                         disabled={loading}
                         className="-my-3 min-h-11 px-1 flex-none text-xs font-semibold text-primary disabled:opacity-60"
                     >
@@ -164,7 +182,22 @@ export function SpaceInviteCard({
                     </button>
                 )}
             </div>
-            {toast && <EqToast>{toast}</EqToast>}
+            {regenOpen && (
+                <CriticalActionSheet
+                    testId="regenerate-sheet"
+                    title="¿Crear un enlace nuevo?"
+                    consequences={[
+                        "El enlace que ya enviaste dejará de funcionar: quien no haya entrado necesitará el nuevo.",
+                        "Las personas que ya entraron siguen en el espacio.",
+                    ]}
+                    confirmLabel="Crear enlace nuevo"
+                    busy={loading}
+                    error={regenError}
+                    onConfirm={onRegenerate}
+                    onClose={() => setRegenOpen(false)}
+                />
+            )}
+            {toast && <EqToast action={toastAction}>{toast}</EqToast>}
         </section>
     );
 }

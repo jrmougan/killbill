@@ -33,44 +33,62 @@ test.describe('Ajustes', () => {
     await expect(tokenSheet).toBeVisible();
     await page.mouse.click(5, 5);
     await expect(tokenSheet).toBeVisible();
-    await expect(tokenSheet.getByRole('button', { name: 'Cerrar' })).toHaveCount(0);
+    await expect(tokenSheet.getByRole('button', { name: 'Cerrar', exact: true })).toHaveCount(0);
+    await expect(tokenSheet).toContainText('Generar otro no desactiva este');
+    // Not copied yet: closing asks first ("Volver" keeps the token on screen).
     await tokenSheet.getByRole('button', { name: 'He guardado el token' }).click();
+    await tokenSheet.getByRole('button', { name: 'Volver' }).click();
+    await expect(tokenSheet.getByTestId('mcp-close-unsaved')).toHaveCount(0);
+    await tokenSheet.getByRole('button', { name: 'He guardado el token' }).click();
+    await tokenSheet.getByRole('button', { name: 'Cerrar sin copiar' }).click();
     await expect(tokenSheet).toHaveCount(0);
   });
 
-  test('Salir: confirm, then explain LAST_OWNER and HAS_BALANCE (with "Salir igualmente" → force)', async ({ page, request }) => {
-    const seed = await seedScenario(request, 'group-of-3');
-    const userC = seed.userC as { email: string; password: string; id: string };
-    await loginAs(page, userC);
+  test('cerrar sesión en todos los dispositivos: hoja danger, vuelve al login con aviso y el token MCP deja de valer', async ({ page, request }) => {
+    const seed = await seedScenario(request, 'couple-with-debt');
+    await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password! });
+    const issued = await page.request.post('/api/me/mcp-token');
+    expect(issued.ok()).toBe(true);
+    const { token } = await issued.json();
     await page.goto('/settings');
 
-    // Contract from the spaces API (mocked here so the UI is tested independently).
-    const calls: string[] = [];
-    await page.route('**/api/spaces/*/members/*', async (route) => {
-      const url = route.request().url();
-      calls.push(url);
-      if (calls.length === 1) return route.fulfill({ status: 409, json: { code: 'LAST_OWNER', error: 'x' } });
-      if (!url.includes('force=1')) return route.fulfill({ status: 409, json: { code: 'HAS_BALANCE', balanceCents: -3333, error: 'x' } });
-      return route.fulfill({ status: 200, json: { success: true } });
+    const account = page.getByRole('region', { name: 'Cuenta' });
+    await account.getByRole('button', { name: /^Cerrar sesión en todos los dispositivos/ }).click();
+    const sheet = page.getByRole('alertdialog', { name: '¿Cerrar sesión en todos los dispositivos?' });
+    await expect(sheet).toContainText('Hermes Agent');
+    await expect(sheet.getByTestId('confirm-sheet-confirm')).toHaveText('Cerrar todas las sesiones');
+    await sheet.getByTestId('confirm-sheet-confirm').click();
+
+    await expect(page).toHaveURL(/\/login\?signedOut=all/);
+    await expect(page.getByRole('status')).toContainText('todos tus dispositivos');
+    const mcp = await request.post('/api/mcp', {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json, text/event-stream' },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
     });
+    expect(mcp.status()).toBe(401);
+  });
 
-    await page.getByRole('button', { name: 'Salir de Group of 3' }).click();
-    const sheet = page.getByRole('dialog', { name: '¿Salir de Group of 3?' });
-    await expect(sheet).toContainText('Dejarás de ver');
-    expect(calls).toHaveLength(0);
-    await sheet.getByRole('button', { name: 'Salir', exact: true }).click();
-    await expect(sheet).toContainText('única persona propietaria');
-    await expect(sheet.getByRole('button', { name: 'Ir al espacio' })).toBeVisible();
-    await sheet.getByRole('button', { name: 'Cerrar', exact: true }).first().click();
+  test('cerrar sesión lleva al login con aviso', async ({ page, request }) => {
+    const seed = await seedScenario(request, 'couple-with-debt');
+    await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password! });
+    await page.goto('/settings');
+    await page.getByRole('region', { name: 'Cuenta' }).getByRole('button', { name: 'Cerrar sesión', exact: true }).click();
+    await expect(page).toHaveURL(/\/login\?signedOut=1/);
+    await expect(page.getByRole('status')).toHaveText('Has cerrado la sesión.');
+  });
 
-    await page.getByRole('button', { name: 'Salir de Group of 3' }).click();
-    await sheet.getByRole('button', { name: 'Salir', exact: true }).click();
-    await expect(sheet.getByTestId('leave-balance')).toContainText(/Aún debes\s*33,33\s*€/);
-    await expect(sheet.getByRole('button', { name: 'Ir a saldar' })).toBeVisible();
-    await sheet.getByRole('button', { name: 'Salir igualmente' }).click();
-    await expect(sheet).toHaveCount(0);
-    await expect(page.getByText('Has salido de Group of 3')).toBeVisible();
-    expect(calls.at(-1)).toContain(`/members/${userC.id}?force=1`);
+  test('only profile, tools and account: spaces (leave/join) live in Espacios', async ({ page, request }) => {
+    const seed = await seedScenario(request, 'group-of-3');
+    await loginAs(page, seed.userC as { email: string; password: string });
+    await page.goto('/settings');
+
+    await expect(page.getByRole('button', { name: 'Editar perfil' })).toBeVisible();
+    for (const name of ['Organizar', 'Conexiones', 'Cuenta']) {
+      await expect(page.getByRole('region', { name })).toBeVisible();
+    }
+    await expect(page.getByRole('region', { name: 'Espacios' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Salir de / })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Unirme con un enlace' })).toHaveCount(0);
   });
 
   test('personal mode is kept by the back arrow and Presupuestos; personal CSV export works without a space', async ({ page, request }) => {

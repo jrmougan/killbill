@@ -25,29 +25,29 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
     // Rate limit by client IP: 10 attempts / 5 minutes.
     const ip = getClientIp(await headers());
     if (!rateLimit(`login:${ip}`, 10, 5 * 60 * 1000).allowed) {
-        return { error: 'Demasiados intentos. Inténtalo de nuevo más tarde.' };
+        return { error: 'Demasiados intentos. Inténtalo de nuevo en unos minutos.', email };
     }
 
     if (!email || !password) {
-        return { error: 'Email y contraseña obligatorios' };
+        return { error: 'Escribe tu email y tu contraseña.', email };
     }
 
     // Per-account limit as well (10 attempts / 15 minutes per email): a password
     // guess spread across many IPs still hits the same bucket.
     if (!rateLimit(`login-account:${email.toLowerCase()}`, 10, 15 * 60 * 1000).allowed) {
-        return { error: 'Demasiados intentos. Inténtalo de nuevo más tarde.' };
+        return { error: 'Demasiados intentos. Inténtalo de nuevo en unos minutos.', email };
     }
 
     let firstRun = false;
     try {
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user || !user.password) {
-            return { error: 'Credenciales incorrectas' };
+            return { error: 'El email o la contraseña no son correctos.', email };
         }
 
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
-            return { error: 'Credenciales incorrectas' };
+            return { error: 'El email o la contraseña no son correctos.', email };
         }
 
         // SECURITY (Fase 2): login NEVER auto-joins a group. The old `?code=`
@@ -82,7 +82,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
         }
     } catch (error) {
         console.error('Login Error:', error);
-        return { error: 'Algo salió mal. Inténtalo de nuevo.' };
+        return { error: 'No hemos podido entrar. Inténtalo de nuevo.', email };
     }
 
     // redirect() throws NEXT_REDIRECT and must live OUTSIDE the try/catch so it

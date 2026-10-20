@@ -33,6 +33,13 @@ export type ItemPatchBody = z.output<typeof ItemPatchBody>;
 export const OrderBody = jsonObject({ order: field });
 export type OrderBody = z.output<typeof OrderBody>;
 
+/**
+ * POST [listId]/clear-checked: optional `{ ids?: string[] }` = the checked items
+ * the client showed (checked by list-crud). An empty body clears every checked item.
+ */
+export const ClearCheckedBody = jsonObject({ ids: field }).nullish();
+export type ClearCheckedBody = z.output<typeof ClearCheckedBody>;
+
 /** Dynamic segments of the space list routes. */
 export const spaceListParams = z.object({ id: id(), listId: id() });
 export const spaceItemParams = spaceListParams.extend({ itemId: id() });

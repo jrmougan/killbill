@@ -148,7 +148,7 @@ export function CategoryEditor({ context, existing, onSaved, onCancel }: Categor
             </div>
 
             {error && (
-                <div role="alert" className="flex items-center gap-2 rounded-xl bg-[var(--negative-tint)] border border-[color:var(--negative)]/30 px-3 py-2.5 text-sm text-destructive">
+                <div role="alert" className="flex items-center gap-2 rounded-xl bg-[var(--negative-tint)] border border-[color:var(--negative)]/30 px-3 py-2.5 text-sm text-[color:var(--negative-ink)]">
                     <AlertCircle className="h-4 w-4 flex-shrink-0" />
                     <span>{error}</span>
                 </div>

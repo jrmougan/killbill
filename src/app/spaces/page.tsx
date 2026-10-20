@@ -10,6 +10,7 @@ import { ArrowLeft } from "lucide-react";
 import { APP_TZ, balanceTone, firstName, rowBalance } from "@/lib/home-format";
 import { monthRange } from "@/lib/month-range";
 import { EqLabel } from "@/components/ui/eq";
+import { FlashToast } from "@/components/ui/flash-toast";
 import { SpacesList, type SpaceRowData } from "@/components/space/spaces-list";
 import { SpaceActionTiles } from "@/components/space/space-action-tiles";
 import { SpaceInviteCard } from "@/components/space/space-invite-card";
@@ -126,6 +127,7 @@ export default async function SpacesPage({
                     </section>
                 )}
             </div>
+            <FlashToast />
         </div>
     );
 }

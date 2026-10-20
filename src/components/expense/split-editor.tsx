@@ -229,7 +229,7 @@ export function SplitEditor({
     totalCents: number;
     value: SplitValue;
     onChange: (v: SplitValue) => void;
-    /** COUPLE spaces highlight the "Mitad y mitad" preset. */
+    /** COUPLE spaces label the equal preset "A medias" (as the quick split). */
     isCouple?: boolean;
     className?: string;
 }) {
@@ -260,7 +260,7 @@ export function SplitEditor({
                             onClick={() => setMode(key)}
                             aria-pressed={sel}
                             className={cn(
-                                "flex items-center gap-1.5 px-2 py-2.5 rounded-xl border text-[13px] font-semibold min-[360px]:gap-2 min-[360px]:px-3 min-[360px]:text-sm transition-all active:scale-[0.98]",
+                                "flex min-h-11 items-center gap-1.5 px-2 py-2.5 rounded-xl border text-[13px] font-semibold min-[360px]:gap-2 min-[360px]:px-3 min-[360px]:text-sm transition-all active:scale-[0.98]",
                                 sel
                                     ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)] text-foreground"
                                     : "bg-card border-[color:var(--line)] text-muted-foreground hover:bg-secondary",
@@ -268,7 +268,7 @@ export function SplitEditor({
                         >
                             <Icon className="h-4 w-4 shrink-0 text-primary" />
                             <span className="min-w-0 text-left leading-tight">
-                                {highlight && key === "equal" ? "Mitad y mitad" : label}
+                                {highlight && key === "equal" ? "A medias" : label}
                             </span>
                         </button>
                     );
@@ -281,12 +281,12 @@ export function SplitEditor({
                     {members.map((m) => (
                         <div key={m.id} className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground truncate">{nameOf(m)}</span>
-                            <span className="font-mono font-semibold text-foreground">
+                            <span className="font-semibold text-foreground">
                                 {formatEuros((result.shares[m.id] ?? 0) / 100)}
                             </span>
                         </div>
                     ))}
-                    <p className="text-[11px] text-muted-foreground/70 pt-1">
+                    <p className="text-[11px] text-muted-foreground pt-1">
                         Entre {members.length} {members.length === 1 ? "persona" : "personas"}.
                     </p>
                 </div>
@@ -355,7 +355,7 @@ export function SplitEditor({
                                     className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-[color:var(--accent-border)]"
                                 />
                                 <span className="text-sm text-muted-foreground">%</span>
-                                <span className="min-w-16 whitespace-nowrap text-right text-xs font-mono text-muted-foreground">
+                                <span className="min-w-16 whitespace-nowrap text-right text-xs text-muted-foreground">
                                     {formatEuros((result.shares[m.id] ?? 0) / 100)}
                                 </span>
                             </div>

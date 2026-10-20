@@ -27,10 +27,10 @@ export function absEuros(cents: number): string {
     return formatCurrency(Math.abs(normalizeCents(cents)));
 }
 
-/** Espacios row balance: "+12,00 €" / "−5,00 €" (typographic minus) / "En paz". */
+/** Espacios row balance: "+12,00 €" / "−5,00 €" (typographic minus) / "Al día". */
 export function rowBalance(cents: number): string {
     const c = normalizeCents(cents);
-    if (c === 0) return "En paz";
+    if (c === 0) return "Al día";
     return `${c > 0 ? "+" : "−"}${formatCurrency(Math.abs(c))}`;
 }
 
@@ -55,7 +55,7 @@ export function balanceWords(cents: number, others: string[]): string {
     const one = others.length === 1 ? firstName(others[0]) : null;
     if (c > 0) return one ? `${one} te debe` : "Te deben";
     if (c < 0) return one ? `Le debes a ${one}` : "Debes";
-    return "Estáis en paz";
+    return "Estáis al día";
 }
 
 /** Card subtitle: "Solo tú" / "con Lucía" / "4 personas". */

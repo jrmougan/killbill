@@ -4,7 +4,7 @@ import { SpaceType } from "@/generated/prisma/enums";
 
 /**
  * Which space the /settle screens show: the explicit `?space=<groupId>` (e.g.
- * "Ir a liquidar deudas" from a space's close page) when present, else the
+ * "Saldar deudas" from a space's close page) when present, else the
  * active-group cookie. Always authorized against that space via
  * requireSpaceAccess (DB membership; guests caged to their space). Returns null
  * when there is nothing to settle there (no space, no access, personal mode).

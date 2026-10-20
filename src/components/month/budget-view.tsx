@@ -17,7 +17,7 @@ const WARN_TEXT = "#8F5B00";
 const WARN_BAR = "#C98A2B";
 
 const NOT_WRITABLE =
-    "Este espacio está archivado o en liquidación: los presupuestos son de solo lectura.";
+    "Este espacio está archivado o cerrando cuentas: los presupuestos son de solo lectura.";
 
 /** Map an API failure to an actionable Spanish message. */
 async function responseError(res: Response, action: string): Promise<Error> {
@@ -253,7 +253,7 @@ export function BudgetView({
                                                             ? "var(--negative)"
                                                             : state === "warn"
                                                                 ? WARN_BAR
-                                                                : cat.hex || "var(--positive)",
+                                                                : "var(--positive)",
                                                     }}
                                                 />
                                             </span>
@@ -301,11 +301,12 @@ export function BudgetView({
             {!readOnly && unbudgeted.length > 0 && (
                 <section aria-labelledby="month-unbudgeted" className="flex flex-col gap-2">
                     <EqLabel id="month-unbudgeted">Sin presupuesto · toca para añadir</EqLabel>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-x-1.5">
                         {unbudgeted.map((c) => (
                             <EqChip
                                 key={c.key}
                                 tone="add"
+                                touch
                                 aria-label={`Añadir presupuesto de ${c.label}`}
                                 onClick={() => open(c)}
                                 className="inline-flex items-center gap-1"

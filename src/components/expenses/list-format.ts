@@ -5,6 +5,7 @@
  */
 
 import { parseEuroInput } from "@/lib/currency";
+import { getSettlementStatusLabel } from "@/lib/settlement-labels";
 
 const TZ = "Europe/Madrid";
 
@@ -121,13 +122,27 @@ export function settlementText({
     status?: string | null;
 }): { title: string; sub: string } {
     const nameOf = (id: string | undefined) => members.find((m) => m.id === id)?.name ?? "otra persona";
-    const title = fromId === meId
-        ? `Pagaste a ${nameOf(toId)}`
-        : toId === meId
-            ? `${nameOf(fromId)} te pagó`
-            : `${nameOf(fromId)} pagó a ${nameOf(toId)}`;
-    const statusLabel = status === "PENDING" ? "Pendiente" : status === "CONFIRMED" ? "Confirmado" : status === "REJECTED" ? "Rechazado" : null;
-    const sub = [`Liquidación${methodLabel ? ` · ${methodLabel}` : ""}`, statusLabel]
+    const from = nameOf(fromId);
+    const to = nameOf(toId);
+    // Only a CONFIRMED payment is worded as done ("Lucía te pagó"): a pending one
+    // is still a claim and a rejected one never happened.
+    let title: string;
+    if (fromId === meId) {
+        title = status === "PENDING" ? `Pago a ${to} · por confirmar`
+            : status === "REJECTED" ? `Pago a ${to} · no recibido`
+                : `Pagaste a ${to}`;
+    } else if (toId === meId) {
+        title = status === "PENDING" ? `${from} dice que te ha pagado`
+            : status === "REJECTED" ? `Pago de ${from} · rechazado`
+                : `${from} te pagó`;
+    } else {
+        title = status === "PENDING" ? `Pago de ${from} a ${to} · por confirmar`
+            : status === "REJECTED" ? `Pago de ${from} a ${to} · rechazado`
+                : `${from} pagó a ${to}`;
+    }
+    const statusLabel = status ? getSettlementStatusLabel(status) : null;
+    // Status before the method so a narrow row truncates the method, not the state.
+    const sub = ["Pago de deuda", statusLabel, methodLabel || null]
         .filter(Boolean)
         .join(" · ");
     return { title, sub };

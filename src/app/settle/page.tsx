@@ -7,6 +7,7 @@ import { calculateSplitAmounts } from "@/lib/splits";
 import { spaceTypeMeta } from "@/lib/space-ui";
 import { resolveSettleSpace } from "@/lib/settlement-space";
 import {
+    debtOf,
     buildTicket,
     everyoneAtPeace,
     myTransfers,
@@ -20,7 +21,7 @@ import { SettleClient } from "./client";
 export const dynamic = 'force-dynamic';
 
 /**
- * "Quedar en paz" — settle a space: `?space=<groupId>` when given (authorized
+ * "Saldar deuda" — settle a space: `?space=<groupId>` when given (authorized
  * against that space), else the active space.
  *
  * Money comes from the canonical sources only: my net balance and the suggested
@@ -127,6 +128,7 @@ export default async function SettlePage({ searchParams }: { searchParams: Promi
             }}
             me={userId}
             isGuest={isGuest}
+            canArchive={!isGuest && !auth.isGuest && (auth.role === "OWNER" || auth.role === "ADMIN")}
             memberCount={n}
             partnerId={n === 2 ? members.find((m) => m.id !== userId)?.id ?? null : null}
             names={Object.fromEntries(nameOf)}
@@ -136,6 +138,7 @@ export default async function SettlePage({ searchParams }: { searchParams: Promi
             meta={meta}
             transfers={myTransfers(balances, userId)}
             pending={settlements}
+            debts={Object.fromEntries(Object.keys(balances).map((id) => [id, debtOf(balances, id)]))}
         />
     );
 }

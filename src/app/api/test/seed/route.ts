@@ -554,6 +554,40 @@ export async function POST(request: Request) {
       });
     }
 
+    if (scenario === 'group-settling') {
+      // A 4-person trip in SETTLING for the /close checklist: Marta is owed by
+      // Lucía (who says she paid: PENDING) and by Pablo; Álvaro (OWNER) is at 0,
+      // so every debt he sees is between other members.
+      const [alvaro, lucia, marta, pablo] = await createUsers(hashedPassword, ['alvaro', 'lucia', 'marta', 'pablo']);
+      const names: [typeof alvaro, string][] = [[alvaro, 'Álvaro'], [lucia, 'Lucía'], [marta, 'Marta'], [pablo, 'Pablo']];
+      await Promise.all(names.map(([u, name]) => prisma.user.update({ where: { id: u.id }, data: { name, avatar: null } })));
+      const trip = [alvaro, lucia, marta, pablo];
+      const space = await createSpace('Lisboa', trip, { type: 'GROUP', status: 'SETTLING' });
+      const quarter = (amount: number) => trip.map((u) => ({ userId: u.id, amount: amount / 4 }));
+      await createSharedExpense({
+        groupId: space.id, description: 'Apartamento', amount: 12000, paidById: marta.id,
+        splits: quarter(12000), members: trip,
+      });
+      await createSharedExpense({
+        groupId: space.id, description: 'Cena en Alfama', amount: 4000, paidById: alvaro.id,
+        splits: quarter(4000), members: trip,
+      });
+      const settlement = await prisma.settlement.create({
+        data: {
+          coupleId: space.id, fromUserId: lucia.id, toUserId: marta.id,
+          amount: 4000, method: 'BIZUM', status: 'PENDING',
+        },
+      });
+
+      return NextResponse.json({
+        userA: creds(alvaro, PASSWORD),
+        userB: creds(lucia, PASSWORD),
+        userC: creds(marta, PASSWORD),
+        coupleId: space.id,
+        settlementId: settlement.id,
+      });
+    }
+
     if (scenario === 'space-archived') {
       const [userA, userB] = await createUsers(hashedPassword, ['userA', 'userB']);
       const members = [userA, userB];
@@ -582,6 +616,15 @@ export async function POST(request: Request) {
         });
         await postSettlementLedger(tx, s);
         return s;
+      });
+
+      // A payment left PENDING before archiving (legacy data): Inicio says it
+      // can no longer be resolved (CF-13). Not in the ledger, balance stays 0.
+      await prisma.settlement.create({
+        data: {
+          coupleId: space.id, fromUserId: userA.id, toUserId: userB.id,
+          amount: 1000, method: 'CASH', status: 'PENDING', date: new Date(now - 35 * DAY_MS),
+        },
       });
 
       await prisma.couple.update({
@@ -682,6 +725,201 @@ export async function POST(request: Request) {
         groupListId: groupList.id,
         groupItemIds: groupList.items.map((i) => i.id),
         personalListId: personalList.id,
+      });
+    }
+
+    if (scenario === 'ux-showcase') {
+      // Realistic data mirroring the EQUIL mockups (docs/design) for the Ralph UX
+      // loop's screenshots (scripts/ralph): a couple "Casa" where Lucía owes Álvaro,
+      // a 4-person trip "Lisboa" where Álvaro owes, budgets and a shared list.
+      const [alvaro, lucia, marta, pablo, sergio] = await createUsers(hashedPassword, ['alvaro', 'lucia', 'marta', 'pablo', 'sergio']);
+      const names: [typeof alvaro, string][] = [[alvaro, 'Álvaro'], [lucia, 'Lucía'], [marta, 'Marta'], [pablo, 'Pablo'], [sergio, 'Sergio']];
+      // No emoji avatar: the mockups show the initial ("Á").
+      await Promise.all(names.map(([u, name]) => prisma.user.update({ where: { id: u.id }, data: { name, avatar: null } })));
+
+      const couple = [alvaro, lucia];
+      const casa = await createSpace('Casa', couple, { type: 'COUPLE' });
+      const now = new Date();
+      const daysAgo = (n: number) => new Date(now.getTime() - n * DAY_MS);
+      const half = (amount: number, first: string, second: string) => [
+        { userId: first, amount: Math.ceil(amount / 2) },
+        { userId: second, amount: Math.floor(amount / 2) },
+      ];
+      // Last month's account, already settled (history: a confirmed Bizum and a
+      // rejected cash payment). Backdated createdAt/updatedAt so /settle's ticket
+      // period (since the balance was last 0) starts before this month's expenses.
+      const seguro = await createSharedExpense({
+        groupId: casa.id, description: 'Seguro hogar', amount: 12000, paidById: alvaro.id,
+        splits: half(12000, alvaro.id, lucia.id), members: couple,
+        categoryId: await resolveCategoryId('utilities'), date: daysAgo(40),
+      });
+      await prisma.expense.update({ where: { id: seguro.id }, data: { createdAt: daysAgo(40) } });
+      await prisma.settlement.create({
+        data: {
+          coupleId: casa.id, fromUserId: lucia.id, toUserId: alvaro.id, amount: 2000,
+          method: 'CASH', status: 'REJECTED', date: daysAgo(36), createdAt: daysAgo(36), updatedAt: daysAgo(36),
+        },
+      });
+      await prisma.$transaction(async (tx) => {
+        const s = await tx.settlement.create({
+          data: {
+            coupleId: casa.id, fromUserId: lucia.id, toUserId: alvaro.id, amount: 6000,
+            method: 'BIZUM', status: 'CONFIRMED', date: daysAgo(35), createdAt: daysAgo(35), updatedAt: daysAgo(35),
+          },
+        });
+        await postSettlementLedger(tx, s);
+      });
+      // This week Lucía said she paid 15 € in cash and Álvaro said he never got it:
+      // her Inicio lists it under Recientes as "Álvaro no lo recibió" (CF-06).
+      const rejectedPayment = await prisma.settlement.create({
+        data: {
+          coupleId: casa.id, fromUserId: lucia.id, toUserId: alvaro.id, amount: 1500,
+          method: 'CASH', status: 'REJECTED', date: daysAgo(2), createdAt: daysAgo(2), updatedAt: daysAgo(1),
+        },
+      });
+      const casaExpenses: [string, number, typeof alvaro, string, number][] = [
+        ['Mercadona', 6420, alvaro, 'shopping', 0],
+        ['Cena sushi', 3800, lucia, 'food', 0],
+        ['Luz octubre', 5830, alvaro, 'utilities', 2],
+        ['Cine', 1800, lucia, 'entertainment', 3],
+        ['Lidl', 4210, alvaro, 'shopping', 5],
+        ['Gasolina', 5000, alvaro, 'transport', 8],
+      ];
+      const casaIds: string[] = [];
+      for (const [description, amount, payer, key, ago] of casaExpenses) {
+        const { id } = await createSharedExpense({
+          groupId: casa.id, description, amount, paidById: payer.id,
+          splits: half(amount, alvaro.id, lucia.id), members: couple,
+          categoryId: await resolveCategoryId(key), date: daysAgo(ago),
+        });
+        casaIds.push(id);
+      }
+
+      const trip = [alvaro, lucia, marta, pablo];
+      // Sergio joined the trip but shares no expense (balance 0): the member that
+      // can be removed straight away (CF-18 "hoja-quitar-miembro").
+      const lisboa = await createSpace('Lisboa', [marta, alvaro, lucia, pablo, sergio], { type: 'GROUP' });
+      // Álvaro co-administers the trip, so Espacios shows him the "Invitar a Lisboa" card.
+      await prisma.membership.update({
+        where: { groupId_userId: { groupId: lisboa.id, userId: alvaro.id } },
+        data: { role: 'ADMIN' },
+      });
+      await createSharedExpense({
+        groupId: lisboa.id, description: 'Pastéis de nata', amount: 3000, paidById: marta.id,
+        splits: trip.map((u) => ({ userId: u.id, amount: 750 })), members: trip,
+        categoryId: await resolveCategoryId('food'), date: daysAgo(1),
+      });
+      // Álvaro already paid his share to Marta; she has not confirmed it yet.
+      const pendingPayment = await prisma.settlement.create({
+        data: {
+          coupleId: lisboa.id, fromUserId: alvaro.id, toUserId: marta.id, amount: 750,
+          method: 'BIZUM', status: 'PENDING', date: now,
+        },
+      });
+
+      const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      // One budget per state: ok (Compras), near the limit (Comida 38/45 €) and over (Ocio 18/15 €).
+      for (const [key, amount] of [['shopping', 30000], ['food', 4500], ['entertainment', 1500]] as const) {
+        const categoryId = await resolveCategoryId(key);
+        if (!categoryId) throw new Error(`System category "${key}" is not seeded`);
+        await prisma.budget.create({
+          data: { categoryId, amount, periodStart, periodEnd, periodType: 'MONTH', coupleId: casa.id },
+        });
+      }
+
+      const list = await prisma.shoppingList.create({
+        data: {
+          name: 'Mercadona', groupId: casa.id, createdById: alvaro.id,
+          items: {
+            create: [
+              { name: 'Leche', quantity: 6, unit: 'L', aisle: 'lacteos', sortOrder: 0 },
+              { name: 'Tomates', quantity: 1, unit: 'kg', aisle: 'fruta_verdura', sortOrder: 1 },
+              { name: 'Pan', quantity: 2, unit: 'ud', aisle: 'panaderia', sortOrder: 2,
+                checked: true, checkedById: lucia.id, checkedAt: now },
+              { name: 'Yogures', quantity: 8, unit: 'ud', aisle: 'lacteos', sortOrder: 3 },
+              { name: 'Detergente', aisle: 'drogueria', sortOrder: 4 },
+            ],
+          },
+        },
+      });
+      // Personal list so the chips show "Común first, then Personal".
+      await prisma.shoppingList.create({
+        data: {
+          name: 'Farmacia', ownerId: alvaro.id, createdById: alvaro.id,
+          items: {
+            create: [
+              { name: 'Ibuprofeno', quantity: 1, unit: 'caja', sortOrder: 0 },
+              { name: 'Crema solar', sortOrder: 1 },
+            ],
+          },
+        },
+      });
+
+      // Organizar (CF-24): a custom Casa category with a budget this month (moving
+      // it to "Compras", which also has one, answers 409 BUDGET_CONFLICT) and a
+      // few common + personal tags.
+      const mascotas = await prisma.category.create({
+        data: {
+          key: 'mascotas', label: 'Mascotas', labelEn: 'Pets', emoji: '🐾',
+          icon: 'Gift', color: '', bgColor: '', hex: '#8b5cf6',
+          sortOrder: 100, isSystem: false, groupId: casa.id,
+        },
+      });
+      await prisma.budget.create({
+        data: { categoryId: mascotas.id, amount: 6000, periodStart, periodEnd, periodType: 'MONTH', coupleId: casa.id },
+      });
+      for (const [name, color] of [['Vacaciones', '#06b6d4'], ['Cumpleaños', '#ec4899'], ['Coche', '#f59e0b']] as const) {
+        await prisma.tag.create({ data: { name, color, coupleId: casa.id } });
+      }
+      await prisma.tag.create({ data: { name: 'Gimnasio', color: '#10b981', ownerId: alvaro.id } });
+
+      // A personal expense of Álvaro: "Compartir con el grupo" previews
+      // "Lucía pasará a deberte…" (CF-22 "hoja-compartir-gasto").
+      const farmacia = await prisma.expense.create({
+        data: {
+          description: 'Farmacia', amount: 1240, categoryId: await resolveCategoryId('health'),
+          paidById: alvaro.id, ownerId: alvaro.id, createdById: alvaro.id,
+          visibility: 'PERSONAL', coupleId: null, date: daysAgo(4),
+          // A saved photo + lines: the edit form shows "Quitar foto" and the
+          // per-line trash with local Deshacer (CF-25 "editar-gasto-ticket").
+          receiptUrl: '/icon-192x192.png',
+          lineItems: {
+            create: [
+              { description: 'Ibuprofeno', quantity: 1, unitPrice: 390, lineTotal: 390, position: 0 },
+              { description: 'Crema solar', quantity: 1, unitPrice: 850, lineTotal: 850, position: 1 },
+            ],
+          },
+        },
+      });
+
+      // Sergio is the instance admin: /admin lists two available registration
+      // invites, one expired and one used by Pablo (CF-27 "admin").
+      await prisma.user.update({ where: { id: sergio.id }, data: { isAdmin: true } });
+      // Random like createInviteFor: the code is unique across seeds.
+      const inviteCode = () => randomBytes(4).toString('hex').toUpperCase();
+      await prisma.inviteCode.createMany({
+        data: [
+          { code: inviteCode(), createdById: sergio.id, createdAt: daysAgo(1), expiresAt: daysAgo(-6) },
+          { code: inviteCode(), createdById: sergio.id, createdAt: daysAgo(3), expiresAt: daysAgo(-4) },
+          { code: inviteCode(), createdById: sergio.id, createdAt: daysAgo(10), expiresAt: daysAgo(3) },
+          { code: inviteCode(), createdById: sergio.id, createdAt: daysAgo(20), expiresAt: daysAgo(13), usedById: pablo.id, usedAt: daysAgo(18) },
+        ],
+      });
+
+      return NextResponse.json({
+        userA: creds(alvaro, PASSWORD),
+        userB: creds(lucia, PASSWORD),
+        admin: creds(sergio, PASSWORD),
+        coupleId: casa.id,
+        personalExpenseId: farmacia.id,
+        groupId: lisboa.id,
+        expenseId: casaIds[0],
+        listId: list.id,
+        settlementId: pendingPayment.id,
+        // Marta receives settlementId (the creditor's view of the detail).
+        userC: creds(marta, PASSWORD),
+        rejectedSettlementId: rejectedPayment.id,
       });
     }
 

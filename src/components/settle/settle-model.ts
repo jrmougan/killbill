@@ -1,4 +1,4 @@
-// Pure, DB-free helpers for the "Quedar en paz" (/settle) screen. Everything is
+// Pure, DB-free helpers for the "Saldar deuda" (/settle) screen. Everything is
 // in integer CENTS. No new money math: the balance and the pairwise transfers
 // come from the canonical ledger balances + finance.resolveMyDebts; the ticket
 // only SUMS what it displays and reconciles the rest into one honest row.
@@ -11,11 +11,11 @@ export type SettleMethod = "BIZUM" | "TRANSFER" | "CASH";
 
 export const SETTLE_METHODS: { value: SettleMethod; label: string; phrase: string }[] = [
     { value: "BIZUM", label: "Bizum", phrase: "por Bizum" },
-    { value: "TRANSFER", label: "Transfer.", phrase: "por transferencia" },
+    { value: "TRANSFER", label: "Transferencia", phrase: "por transferencia" },
     { value: "CASH", label: "Efectivo", phrase: "en efectivo" },
 ];
 
-/** Full method name for detail/history views ("Transferencia", not "Transfer."). */
+/** Full method name for detail/history views. */
 export function methodName(method: string): string {
     return getSettlementMethodLabel(method);
 }
@@ -27,6 +27,31 @@ export function methodPhrase(method: string): string {
 /** Same threshold as Inicio/Espacios (home-format.normalizeCents): 1 cent is a debt. */
 export function isAtPeace(balanceCents: number): boolean {
     return normalizeCents(balanceCents) === 0;
+}
+
+/**
+ * What a member really owes in the space (cents): minus their net balance.
+ * Not the greedy pairing of resolveMyDebts — in a group the API lets a debtor
+ * pay any creditor up to settlementCap, so a payer the plan pairs with someone
+ * else still owes this much after a rejection (RV-02).
+ */
+export function debtOf(balances: Record<string, number>, userId: string): number {
+    return Math.max(0, -(balances[userId] ?? 0));
+}
+
+/**
+ * What is left after I (the receiver) confirm a payment of `amountCents`.
+ * "Deuda saldada" only when MY net balance reaches 0 (glossary). `owedCents`
+ * is the payer's real debt (`debtOf`, before this payment counts). `payer` =
+ * what the payer still owes is exactly what I'm still owed (always in a
+ * couple), so it can be named; otherwise only my total left is stated.
+ */
+export type IncomingOutcome = { kind: "settled" } | { kind: "payer" | "total"; rest: number };
+
+export function incomingOutcome(balanceCents: number, owedCents: number, amountCents: number): IncomingOutcome {
+    const rest = balanceCents - amountCents;
+    if (isAtPeace(rest) || rest < 0) return { kind: "settled" };
+    return { kind: owedCents - amountCents === rest ? "payer" : "total", rest };
 }
 
 /** True when every member of the space is at peace (not only me). */

@@ -48,6 +48,9 @@ test.describe('Auth - Register', () => {
     // A brand-new account without a space gets the optional onboarding (IE-09).
     await expect(page).toHaveURL(/\/welcome/, { timeout: 10000 });
     await expect(page.getByRole('heading', { name: '¿Con quién compartes gastos?' })).toBeVisible();
+    // Never a wall: "Ahora no" skips straight to Inicio.
+    await page.getByRole('link', { name: 'Ahora no' }).click();
+    await expect(page).toHaveURL(/\/dashboard/);
   });
 
   test('a legacy 6-hex space code is not a registration invitation (no short codes)', async ({ page }) => {

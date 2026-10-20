@@ -192,6 +192,18 @@ describe("formReducer — receipt / OCR", () => {
         });
         expect(run(withReceipt, { type: "scanStarted" }, { type: "scanCancelled" })).toMatchObject({ mode: "form", receiptPreview: null });
     });
+
+    it("a removed saved photo can be restored until a new one is picked", () => {
+        const discarded = run(fresh({ initial: editInitial }), { type: "receiptDiscarded" });
+        expect(discarded).toMatchObject({ receiptPreview: null, storedReceiptUrl: null, discardedReceiptUrl: "/uploads/r.jpg" });
+        expect(run(discarded, { type: "receiptRestored" })).toMatchObject({
+            receiptPreview: "/uploads/r.jpg", storedReceiptUrl: "/uploads/r.jpg", discardedReceiptUrl: null,
+        });
+        const file = new File(["x"], "t.jpg");
+        expect(run(discarded, { type: "fileChosen", file, preview: "blob:x" }).discardedReceiptUrl).toBeNull();
+        // A freshly picked (unsaved) photo has nothing to undo.
+        expect(run(fresh(), { type: "fileChosen", file, preview: "blob:x" }, { type: "receiptDiscarded" }).discardedReceiptUrl).toBeNull();
+    });
 });
 
 describe("formReducer — options, tags and submit", () => {

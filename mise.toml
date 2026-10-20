@@ -35,6 +35,18 @@ run = "npm run typecheck"
 description = "Run Playwright against the configured database (fixtures reset it)"
 run = "node --env-file-if-exists=.env node_modules/@playwright/test/cli.js test"
 
+[tasks."ux:design"]
+description = "Render the chosen EQUIL mockups to scripts/ralph/design/*.png"
+run = "node scripts/ralph/render-design.mjs"
+
+[tasks."ux:capture"]
+description = "Screenshot the app per screen into scripts/ralph/shots (SCREENS=a,b to filter; resets the DB, stop dev first)"
+run = "node --env-file-if-exists=.env node_modules/@playwright/test/cli.js test -c scripts/ralph/playwright.ux.config.ts"
+
+[tasks.ralph]
+description = "Run the Ralph UX/UI loop (scripts/ralph/README.md); usage: mise run ralph -- [max-iterations]"
+run = "bash scripts/ralph/ralph.sh"
+
 [tasks."services:up"]
 description = "Start the isolated local MySQL service and wait until healthy"
 run = "node --env-file=.env scripts/dev-compose.mjs up --detach --wait --wait-timeout 120"

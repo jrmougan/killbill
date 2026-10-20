@@ -1,20 +1,22 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight, Clock, X } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getSessionCtx } from "@/lib/authz";
 import { getActiveGroup, getGroupMembers } from "@/lib/membership";
 import { materializeDueRecurringExpenses, materializeDueRecurringExpensesForOwner } from "@/lib/recurring";
 import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { getEffectiveCategories } from "@/lib/category-db";
-import { getIconComponent } from "@/lib/category-icons";
 import { formatCurrency } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 import { spaceTypeMeta } from "@/lib/space-ui";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
-import { getSettlementStatusLabel } from "@/lib/settlement-labels";
+import { getSettlementMethodLabel } from "@/lib/settlement-labels";
+import { settlementText } from "@/components/expenses/list-format";
 import { monthRange } from "@/lib/month-range";
+import { closeItemCount } from "@/lib/close-plan";
+import { debtOf } from "@/components/settle/settle-model";
 import { hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
 import { getPersonalMonthTotal, getSpaceSummaries, type SpaceSummary } from "@/lib/space-summaries";
 import {
@@ -30,7 +32,7 @@ import {
     signedEuros,
 } from "@/lib/home-format";
 import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
-import { EqLabel, EqRow } from "@/components/ui/eq";
+import { EqEmpty, EqLabel, EqRow } from "@/components/ui/eq";
 import { MemberBalanceList } from "@/components/ui/member-balance-list";
 import { SpaceCarousel, type SpaceCardData } from "@/components/dashboard/space-carousel";
 import { MonthSummary } from "@/components/dashboard/month-summary";
@@ -110,7 +112,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         ? { coupleId: active.id, visibility: "SHARED" as const }
         : { ownerId: userId, visibility: "PERSONAL" as const };
 
-    const [monthExpenses, recentExpenses, recentSettlements, pendingToMe, pendingFromMe, members, anyPersonalExpense] = await Promise.all([
+    // My own payments rejected this week: "news" is when the rejection happened (updatedAt), not the payment date.
+    const rejectedSince = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const archived = active?.status === SpaceStatus.ARCHIVED;
+
+    const [monthExpenses, recentExpenses, recentSettlements, pendingToMe, pendingFromMe, members, anyPersonalExpense, myRejected, archivedPendingCount, settlingPending] = await Promise.all([
         prisma.expense.findMany({
             where: { ...expenseWhere, date: { gte: month.start, lt: month.end } },
             select: { amount: true, ...CATEGORY_REF_SELECT },
@@ -123,7 +129,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         }),
         active
             ? prisma.settlement.findMany({
-                where: { coupleId: active.id, status: { in: ["PENDING", "CONFIRMED"] } },
+                // Plus my own payments rejected this week, so the payer learns it didn't count.
+                where: {
+                    coupleId: active.id,
+                    OR: [
+                        { status: { in: ["PENDING", "CONFIRMED"] } },
+                        { status: "REJECTED", fromUserId: userId, updatedAt: { gte: rejectedSince } },
+                    ],
+                },
                 orderBy: [{ date: "desc" }, { id: "desc" }],
                 take: 4,
             })
@@ -145,6 +158,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         !isGuest && summaries.length === 0
             ? prisma.expense.findFirst({ where: { ownerId: userId, visibility: "PERSONAL" }, select: { id: true } })
             : Promise.resolve(null),
+        active && !archived
+            ? prisma.settlement.findFirst({
+                where: { coupleId: active.id, fromUserId: userId, status: "REJECTED", updatedAt: { gte: rejectedSince } },
+                orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+                select: { id: true, amount: true, toUserId: true },
+            })
+            : Promise.resolve(null),
+        // An archived space can't resolve payments any more: just say how many were left open.
+        active && archived
+            ? prisma.settlement.count({ where: { coupleId: active.id, status: "PENDING" } })
+            : Promise.resolve(0),
+        // SETTLING banner: "faltan N" counts every PENDING too, like /close.
+        active?.status === SpaceStatus.SETTLING
+            ? prisma.settlement.findMany({
+                where: { coupleId: active.id, status: "PENDING", amount: { gt: 0 } },
+                select: { fromUserId: true, toUserId: true, amount: true },
+            })
+            : Promise.resolve([]),
     ]);
 
     const names: Record<string, string> = Object.fromEntries(members.map((m) => [m.id, m.name]));
@@ -168,11 +199,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 amount: absEuros(solo ? s.monthTotalCents : s.balanceCents),
                 tone: solo ? "neutral" : balanceTone(s.balanceCents),
                 signed: solo ? null : signedEuros(s.balanceCents),
-                settleHref: canSettle ? "/settle" : null,
+                settleHref: canSettle ? settleUrlFor(s.id) : null,
+                settleSub: canSettle ? `${s.balanceCents > 0 ? "Cobras" : "Pagas"} ${absEuros(s.balanceCents)}` : null,
                 // Debtor side of a two-step payment: say it is on its way (IE-27).
                 pendingNote:
                     isActive && pendingOutCents > 0 && s.status !== SpaceStatus.ARCHIVED
                         ? `Pago de ${formatCurrency(pendingOutCents)} pendiente de confirmar`
+                        : null,
+                rejectedNote:
+                    isActive && myRejected
+                        ? {
+                            text: `${names[myRejected.toUserId] ?? "Alguien"} no recibió tu pago de ${formatCurrency(myRejected.amount)}`,
+                            href: `/settle/${myRejected.id}`,
+                        }
                         : null,
             };
         });
@@ -203,7 +242,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const rows: Row[] = [
         ...recentExpenses.map((e) => {
             const meta = metaFor(categoryKeyOf(e));
-            const Icon = getIconComponent(meta.iconName);
             const how = active
                 ? expenseSub({ payerId: e.paidById, meId: userId, splits: e.splits, names, memberCount: active.memberCount })
                 : meta.label;
@@ -214,7 +252,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     <EqRow
                         key={e.id}
                         href={`/expense/${e.id}`}
-                        icon={<Icon className="h-[18px] w-[18px]" style={{ color: meta.hex }} aria-hidden="true" />}
+                        icon={<span aria-hidden>{meta.emoji}</span>}
                         title={e.description}
                         sub={`${how} · ${dayLabel(e.date, now)}`}
                         amount={formatCurrency(e.amount)}
@@ -222,28 +260,52 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 ),
             };
         }),
-        ...recentSettlements.map((s) => ({
-            id: s.id,
-            date: s.date,
-            node: (
-                <EqRow
-                    key={s.id}
-                    href={`/settle/${s.id}`}
-                    iconTint
-                    icon={<Check className="h-[18px] w-[18px]" aria-hidden="true" />}
-                    title="Liquidación"
-                    sub={`${names[s.fromUserId] ?? "Alguien"} → ${names[s.toUserId] ?? "Alguien"} · ${getSettlementStatusLabel(s.status)} · ${dayLabel(s.date, now)}`}
-                    amount={formatCurrency(s.amount)}
-                    amountClassName="text-[color:var(--positive)]"
-                />
-            ),
-        })),
+        ...recentSettlements.map((s) => {
+            const confirmed = s.status === "CONFIRMED";
+            const rejected = s.status === "REJECTED";
+            // A rejection is news when it happens, not when the payment was dated.
+            const when = rejected ? s.updatedAt : s.date;
+            // Same wording as Gastos and the detail page (Glosario).
+            const text = settlementText({
+                meId: userId,
+                fromId: s.fromUserId,
+                toId: s.toUserId,
+                members: Object.entries(names).map(([id, name]) => ({ id, name })),
+                methodLabel: s.method ? getSettlementMethodLabel(s.method) : "",
+                status: s.status,
+            });
+            const sub = `${text.sub} · ${dayLabel(when, now)}`;
+            return {
+                id: s.id,
+                date: when,
+                node: (
+                    <EqRow
+                        key={s.id}
+                        href={`/settle/${s.id}`}
+                        iconTint={confirmed}
+                        icon={confirmed
+                            ? <Check className="h-[18px] w-[18px]" aria-hidden="true" />
+                            : rejected
+                                ? <X className="h-[18px] w-[18px] text-muted-foreground" aria-hidden="true" />
+                                : <Clock className="h-[18px] w-[18px] text-muted-foreground" aria-hidden="true" />}
+                        title={text.title}
+                        sub={sub}
+                        amount={formatCurrency(s.amount)}
+                        amountClassName={confirmed ? "text-[color:var(--positive)]" : rejected ? "text-muted-foreground line-through" : "text-muted-foreground"}
+                    />
+                ),
+            };
+        }),
     ]
         .sort((a, b) => b.date.getTime() - a.date.getTime() || b.id.localeCompare(a.id))
         .slice(0, 4);
 
+    // What each payer really owes (their net balance, not the greedy pairing); with my net
+    // balance it words the sheet's consequence and toast ("Deuda saldada" only when it reaches 0).
+    const activeBalances: Record<string, number> = Object.fromEntries((active?.members ?? []).map((m) => [m.id, m.balanceCents]));
     const pending = pendingToMe.map((s) => ({
         id: s.id,
+        owedCents: debtOf(activeBalances, s.fromUserId),
         amount: s.amount,
         fromUser: { name: names[s.fromUserId] ?? "Alguien", avatar: avatars[s.fromUserId] ?? null },
         date: s.date.toISOString(),
@@ -292,7 +354,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 locked={isGuest}
             />
 
-            <div className="flex flex-col gap-5 px-5 pt-[18px]">
+            <div className="flex flex-col gap-5 px-5 pt-1.5">
                 {showWelcome && (
                     <Link
                         href="/welcome"
@@ -316,10 +378,31 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         expiresAt={active.expiresAt}
                         canManage={canManage}
                         settleHref={settleUrlFor(active.id)}
+                        openDebts={closeItemCount(activeBalances, settlingPending)}
+                        myBalanceOpen={hasOpenBalance(active.balanceCents)}
+                        isGuest={isGuest}
                     />
                 )}
 
-                {pending.length > 0 && active?.status !== "ARCHIVED" && <PendingSettlements settlements={pending} />}
+                {archived && archivedPendingCount > 0 && (
+                    <div
+                        role="note"
+                        data-testid="archived-pending"
+                        className="rounded-[18px] bg-[var(--track)] px-4 py-3.5 flex items-start gap-3"
+                    >
+                        <Clock className="mt-0.5 h-[18px] w-[18px] flex-none text-muted-foreground" aria-hidden="true" />
+                        <p className="text-[13.5px] leading-snug text-muted-foreground">
+                            <span className="block text-[15px] font-semibold text-foreground">
+                                {archivedPendingCount === 1 ? "Hay 1 pago sin confirmar." : `Hay ${archivedPendingCount} pagos sin confirmar.`}
+                            </span>
+                            El espacio está archivado y ya no se pueden resolver.
+                        </p>
+                    </div>
+                )}
+
+                {active && active.status !== "ARCHIVED" && (
+                    <PendingSettlements key={active.id} settlements={pending} settling={active.status === "SETTLING"} myName={user.name} balanceCents={active.balanceCents} />
+                )}
 
                 {active && invite && (
                     <SpaceInviteCard spaceId={active.id} spaceName={spaceName(active)} kind={invite.kind} maxUses={invite.maxUses} />
@@ -347,9 +430,33 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         </div>
                     </div>
                     {rows.length === 0 ? (
-                        <p className="py-6 text-center text-sm text-muted-foreground">
-                            {active ? "Aún no hay gastos en este espacio." : "Aún no hay gastos personales."}
-                        </p>
+                        active && active.status !== SpaceStatus.ACTIVE ? (
+                            <EqEmpty
+                                testId="recent-empty"
+                                title="Aún no hay gastos en este espacio."
+                                hint="Este espacio ya no admite gastos nuevos."
+                            />
+                        ) : active ? (
+                            <EqEmpty
+                                testId="recent-empty"
+                                title="Aún no hay gastos en este espacio."
+                                hint={
+                                    active.others.length > 0
+                                        ? "Apunta lo que pague cada uno y verás aquí quién debe a quién."
+                                        : "Apunta lo que pagues; cuando entre alguien más, verás quién debe a quién."
+                                }
+                                action="Añadir el primer gasto"
+                                href={`/expenses/new?space=${active.id}`}
+                            />
+                        ) : (
+                            <EqEmpty
+                                testId="recent-empty"
+                                title="Aún no hay gastos personales."
+                                hint="Apunta lo que gastas solo tú para ver en qué se va el mes."
+                                action="Añadir el primer gasto"
+                                href="/expenses/new?space=personal"
+                            />
+                        )
                     ) : (
                         <div className="flex flex-col">{rows.map((r) => r.node)}</div>
                     )}

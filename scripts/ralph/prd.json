@@ -1,0 +1,1372 @@
+{
+  "project": "Kill Bill · EQUIL",
+  "branch": "jrmougan/flujo-ralph-correcciones-ux",
+  "goal": "Detectar y corregir problemas de UX/UI de la app frente al diseño elegido: Mezcla · base 1a + espacios de 1b + ticket de 1c (opción 2a) y el resto de pantallas en su estilo (3a). Fuente: docs/design/EQUIL Rediseño.dc.html, renders en scripts/ralph/design/.",
+  "stories": [
+    {
+      "id": "UX-01",
+      "title": "Inicio",
+      "priority": 1,
+      "screens": [
+        "inicio"
+      ],
+      "design": [
+        "2a-inicio"
+      ],
+      "criteria": [
+        "Tarjetas deslizables por espacio con saldo en una frase con nombre (\"Lucía te debe…\", \"Debes…\") y acción \"Quedar en paz\" en la del espacio activo",
+        "Indicador de página del carrusel coherente con el número de tarjetas y accesible",
+        "Resumen del mes con barra por categorías legible y leyenda sin cortes",
+        "Lista de recientes legible: título, quién pagó, reparto, fecha e importe alineado",
+        "Barra de pestañas (Inicio, Gastos, +, Mes, Listas) sin solapes y con zonas táctiles ≥44px"
+      ],
+      "passes": true,
+      "notes": "Pestañas con zona táctil ≥44px, tarjetas del carrusel como 2a (subtítulo junto al nombre / abajo), espaciado y avatar del seed; barra en verdes y ✈️ fuera de alcance."
+    },
+    {
+      "id": "UX-02",
+      "title": "Añadir gasto",
+      "priority": 2,
+      "screens": [
+        "anadir-gasto"
+      ],
+      "design": [
+        "2a-anadir-gasto"
+      ],
+      "criteria": [
+        "Importe protagonista, concepto, quién pagó y reparto rápido (a medias / solo yo / solo él o ella) en una sola vista",
+        "Escanear ticket visible junto a Guardar; \"Más opciones\" expone reparto a medida, etiquetas, fecha y recurrencia",
+        "Guardar deshabilitado o con error claro si falta el importe; teclado numérico adecuado en móvil",
+        "Nada queda tapado por el teclado o la barra inferior a 360×760"
+      ],
+      "passes": true,
+      "notes": "Zonas táctiles de 44px (Cerrar, chips de espacio/categoría, Más opciones, enlaces de la hoja), € alineado, copy \"A medias\" y contraste; pendiente DM Mono (UX-13) y Volver/interruptor compartidos (UX-14)."
+    },
+    {
+      "id": "UX-03",
+      "title": "Quedar en paz · ticket",
+      "priority": 3,
+      "screens": [
+        "quedar-en-paz",
+        "historial-pagos"
+      ],
+      "design": [
+        "2a-quedar-en-paz-ticket"
+      ],
+      "criteria": [
+        "Ticket de 1c con la tipografía y el verde de 1a: quién paga a quién, importe y desglose",
+        "Acción principal según el rol: \"Ya me ha pagado\" (acreedor) / \"Ya he pagado\" (deudor, queda pendiente de confirmar)",
+        "\"Recordárselo a X\" como acción secundaria; estado pendiente comprensible",
+        "Historial de pagos con el mismo lenguaje visual"
+      ],
+      "passes": true,
+      "notes": "Zonas táctiles de 44px (Historial, Recordárselo, Editar, Volver de EqHeader), sin <main> anidado, saldo a 32px como 2a y copy/fechas del historial; pendiente la redundancia del estado pendiente y la fecha mono (UX-13)."
+    },
+    {
+      "id": "UX-04",
+      "title": "Gastos",
+      "priority": 4,
+      "screens": [
+        "gastos",
+        "gasto-detalle"
+      ],
+      "design": [
+        "3a-gastos"
+      ],
+      "criteria": [
+        "Lista agrupada por día con buscador/filtros como en 3a",
+        "Cada fila: icono de categoría, concepto, quién pagó y reparto, importe",
+        "El detalle del gasto sigue el estilo 2a/3a (sin restos del diseño anterior) y sus acciones son claras"
+      ],
+      "passes": true,
+      "notes": "Pago rechazado ya no se lee como pagado, Filtros como icono redondo 3a, zonas de 44px (chips, pestañas, Editar/Eliminar) y copy/avatares del detalle; pendiente iconos de categoría (UX-13) y fila 'Quedasteis en paz'."
+    },
+    {
+      "id": "UX-05",
+      "title": "Mes · Presupuestos",
+      "priority": 5,
+      "screens": [
+        "mes-presupuestos"
+      ],
+      "design": [
+        "3a-mes-presupuestos"
+      ],
+      "criteria": [
+        "Selector Presupuestos/Análisis en la pestaña Mes",
+        "Progreso por categoría con gastado / límite y aviso visual al acercarse o pasarse",
+        "Tocar una categoría sin presupuesto pide el importe (no un valor fijo)"
+      ],
+      "passes": true,
+      "notes": "Selector de espacio sin cortes y de 44px, chips +categoría y Cerrar de 44px, barras verdes/ámbar/rojo como 3a, hoja de importe alineada y seed con avisos; pendiente flechas de mes (funcionalidad nueva) y emoji de espacio (UX-13)."
+    },
+    {
+      "id": "UX-06",
+      "title": "Mes · Análisis",
+      "priority": 6,
+      "screens": [
+        "mes-analisis"
+      ],
+      "design": [
+        "3a-mes-analisis"
+      ],
+      "criteria": [
+        "Gráfico y cifras del mes legibles a 360px, con comparación con el mes anterior",
+        "Colores de categoría distinguibles también por claridad, no solo por tono"
+      ],
+      "passes": true,
+      "notes": "Importe sobre las barras de este mes y del anterior, meses antiguos atenuados, etiquetas del saldo alineadas y gráfico aria-hidden con figcaption; pendiente: meses antiguos en ux-showcase y paleta de categorías (datos sembrados)."
+    },
+    {
+      "id": "UX-07",
+      "title": "Listas de la compra",
+      "priority": 7,
+      "screens": [
+        "listas"
+      ],
+      "design": [
+        "3a-listas-de-la-compra"
+      ],
+      "criteria": [
+        "Chips por lista (Común primero, luego Personal) con pendientes",
+        "Añadir artículo rápido; marcar/desmarcar con zona táctil amplia",
+        "Pendientes agrupados por pasillo (se mantienen aunque el mockup sea plano) y \"En el carro\" separado",
+        "\"Terminar y apuntar gasto\" visible y comprensible"
+      ],
+      "passes": true,
+      "notes": "Casillas, chips, ⋯, + y campo de añadir a 44 px; cantidad del carro legible; ux-showcase con lista personal Farmacia. Fuera: \"×2\"/avatar del mockup, pasillos se mantienen."
+    },
+    {
+      "id": "UX-08",
+      "title": "Espacios",
+      "priority": 8,
+      "screens": [
+        "espacios",
+        "espacio-detalle"
+      ],
+      "design": [
+        "3a-espacios"
+      ],
+      "criteria": [
+        "Lista de espacios con tipo, miembros y saldo; se llega desde las tarjetas de Inicio",
+        "Invitar crea y comparte un enlace seguro /i/[token]; Unirme acepta un enlace pegado (sin códigos cortos)",
+        "Detalle de espacio coherente con 3a: miembros, estado (activo / liquidando / archivado) y acciones"
+      ],
+      "passes": true,
+      "notes": "Saldo de la fila activa en línea, saldos de miembros en una columna, aviso de invitación para miembros y texto vacío del enlace sin cortes; capturas de invitar/unirme/grupo; Personal 0 € (seed) y ✈️ (flag) pendientes."
+    },
+    {
+      "id": "UX-09",
+      "title": "Ajustes",
+      "priority": 9,
+      "screens": [
+        "ajustes"
+      ],
+      "design": [
+        "3a-ajustes"
+      ],
+      "criteria": [
+        "Solo perfil, herramientas y cuenta (grupos e invitaciones viven en Espacios)",
+        "Filas con zona táctil ≥44px y jerarquía clara; acciones destructivas diferenciadas"
+      ],
+      "passes": true,
+      "notes": "Fuera la sección Espacios (salir/unirse viven en Espacios); Editar a 44 px; export personal sin cortes. Pendiente: fila Contraseña (sin API) y estado \"sin conectar\" de Hermes."
+    },
+    {
+      "id": "UX-10",
+      "title": "Bienvenida",
+      "priority": 10,
+      "screens": [
+        "bienvenida"
+      ],
+      "design": [
+        "3a-bienvenida"
+      ],
+      "criteria": [
+        "Elegir modo (Pareja / Piso / Viaje / Solo yo) con una explicación breve de cada uno",
+        "CTA principal claro y salida para saltar el onboarding"
+      ],
+      "passes": true,
+      "notes": "Enlace \"Ahora no\" para saltar el onboarding y explicación breve del modo elegido bajo la rejilla; pendiente: \"Me han invitado\" bajo el pliegue a 760 px."
+    },
+    {
+      "id": "UX-11",
+      "title": "Estados vacíos y de ciclo de vida",
+      "priority": 11,
+      "screens": [
+        "inicio-vacio",
+        "gastos-vacio",
+        "inicio-liquidando",
+        "inicio-archivado"
+      ],
+      "design": [],
+      "criteria": [
+        "Vacíos que explican qué hacer y ofrecen la acción (añadir primer gasto, invitar)",
+        "Liquidando: se entiende que no se pueden añadir gastos pero sí saldar",
+        "Archivado: solo lectura evidente, sin botones que fallen al pulsarlos"
+      ],
+      "passes": true,
+      "notes": "Vacíos de Inicio/Gastos con explicación y \"Añadir el primer gasto\" (sin acción en SETTLING/ARCHIVED), \"Quitar filtros\" y copy de los avisos Liquidando/Archivado; queda el \"+\" visible (no falla) y \"Confirmar Pagos\" (contrato e2e)."
+    },
+    {
+      "id": "UX-12",
+      "title": "Login",
+      "priority": 12,
+      "screens": [
+        "login"
+      ],
+      "design": [],
+      "criteria": [
+        "Estética 2a (fondo, tipografía, verde) aunque no haya mockup",
+        "Campos con label, autocompletado correcto y error de credenciales claro"
+      ],
+      "passes": true,
+      "notes": "Email conservado tras error, copy claro de error, aria-invalid/describedby, contraste del aviso (--negative-ink) y Regístrate a 44 px; pendiente: mostrar contraseña (UX-14) y recuperación (sin API)."
+    },
+    {
+      "id": "UX-13",
+      "title": "Transversal · coherencia visual",
+      "priority": 13,
+      "screens": [
+        "*"
+      ],
+      "design": [
+        "*"
+      ],
+      "criteria": [
+        "Sin restos del diseño anterior (crema #F3EFE6, terracota #BD5D3A, Instrument Sans / Spline Sans Mono) en pantallas del camino elegido",
+        "Escala tipográfica, radios, sombras y espaciados consistentes entre pantallas",
+        "Iconos de categoría y emojis de espacio coherentes"
+      ],
+      "passes": true,
+      "notes": "Inicio con emoji de categoría y barra del mes en rampa verde; DM Mono solo en códigos/meta del ticket; Button primario plano; un solo mapa de emoji de espacio. Fuera de alcance: 🏠 por espacio y emojis/hex de categoría (datos sembrados)."
+    },
+    {
+      "id": "UX-14",
+      "title": "Transversal · accesibilidad y tacto",
+      "priority": 14,
+      "screens": [
+        "*"
+      ],
+      "design": [],
+      "criteria": [
+        "Zonas táctiles ≥44px (ver smallTargets en shots/*.json)",
+        "Contraste de texto ≥4.5:1 (incluidos grises pequeños)",
+        "Botones de solo icono con aria-label; encabezados y landmarks con sentido en *.aria.yml",
+        "Sin desbordamiento horizontal ni errores de consola"
+      ],
+      "passes": true,
+      "notes": "Grises --ink-2/--ink-3/muted a ≥4,5:1 también sobre pista y tintes, rojo sobre tinte con --negative-ink, 44 px en interruptor Recurrente, modos de reparto, Fecha, 'Volver a rápido' y buscador; pendiente: mostrar contraseña."
+    },
+    {
+      "id": "CF-01",
+      "title": "Renombrar la acción a 'Saldar deuda' en /settle y en el CTA de Inicio (con dirección Pagas/Cobras) y actualizar el README",
+      "priority": 101,
+      "screens": [
+        "quedar-en-paz",
+        "quedar-en-paz-deudor",
+        "inicio",
+        "inicio-vacio"
+      ],
+      "design": [],
+      "spec": [
+        "h1 VISIBLE 'Saldar deuda' en /settle (hoy es sr-only), con el estilo de título de EqHeader",
+        "Carrusel: enlace 'Saldar deuda' con icono HandCoins (no Check) y href settleUrlFor(spaceId). Subtexto 'Pagas {importe}' / 'Cobras {importe}' (aria-describedby; el nombre accesible sigue siendo 'Saldar deuda'). Zona táctil de al menos 44 px",
+        "Rama settle-peace: si !registered → 'Estáis al día' / 'Ya estás al día'. Si done.kind==='confirmed' y el saldo final es 0 → 'Deuda saldada'. Si queda resto → 'Pago registrado · aún te debe {resto}' / 'aún debes {resto}'",
+        "'Seguir saldando' → 'Saldar el resto'",
+        "Recordatorio del acreedor: 'Recordarle la deuda a {nombre}' / 'Recordar la deuda al grupo'. Texto: '¡Hola, {nombre}! En {espacio} me debes {importe}. Puedes saldarlo desde EQUIL.' / '{espacio}: me quedan {importe} por cobrar. Entrad en EQUIL para saldar vuestra parte.' Share title: 'Deuda pendiente en EQUIL'",
+        "'Saldo anterior' → 'Pendiente de antes'. 'Pagos sugeridos' → '¿Qué deuda quieres saldar?'. 'No hay nada que pagar' → 'No tienes deudas pendientes'. 'No hay nada que cobrar' → 'Nadie te debe nada'",
+        "Comentario de settle/page.tsx:23 → 'Saldar deuda'",
+        "docs/design/README.md: Chosen direction '(2a: Inicio, Añadir gasto, Saldar deuda)'. En la sección Settle: 'Saldar deuda', 'Recordarle la deuda' (solo el acreedor), 'Pedirle que lo confirme' (deudor) y la regla de 'Deuda saldada'"
+      ],
+      "criteria": [
+        "grep -n 'Quedar en paz\\|quedar en paz\\|Estáis en paz\\|Tú estás en paz\\|Recordárselo\\|Seguir saldando' src/app/settle/client.tsx src/app/settle/page.tsx src/components/dashboard/space-carousel.tsx docs/design/README.md no devuelve nada",
+        "shots/quedar-en-paz.png muestra el título visible 'Saldar deuda'",
+        "shots/inicio.png: la tarjeta activa dice 'Saldar deuda' sin check y con 'Cobras …' debajo",
+        "Abrir /settle con saldo cero (escenario couple-no-expenses) muestra 'Estáis al día' y NO 'Deuda saldada' (nuevo caso e2e o aserción en partial-and-scope)",
+        "e2e/dashboard/balance.spec.ts:79 espera el enlace 'Saldar deuda' con href '/settle?space=<id>' y pasa",
+        "create-and-confirm.spec.ts:161,216,228,238,259 y partial-and-scope.spec.ts:46,48,143 actualizados a la rama que cubre cada uno ('Deuda saldada' tras cobrar o confirmar el total, 'Saldar el resto', 'Recordarle la deuda a User B', 'Recordar la deuda al grupo') y en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/settle/client.tsx",
+        "src/app/settle/page.tsx",
+        "src/components/dashboard/space-carousel.tsx",
+        "src/app/dashboard/page.tsx",
+        "docs/design/README.md",
+        "e2e/dashboard/balance.spec.ts",
+        "e2e/settlements/create-and-confirm.spec.ts",
+        "e2e/settlements/partial-and-scope.spec.ts"
+      ],
+      "passes": true,
+      "notes": "h1 visible 'Saldar deuda', CTA de Inicio con HandCoins + 'Pagas/Cobras X' y href al espacio, 'Estáis al día'/'Deuda saldada'/'Pago registrado · aún te debe X', recordatorio y etiquetas del glosario, README y e2e; nueva captura saldar-al-dia. Pendiente: CTA con persona e importe (CF-09)."
+    },
+    {
+      "id": "CF-02",
+      "title": "Saldo cero 'Al día' y barrido de 'en paz' en filas, Mes, landing, salida y creación de espacio",
+      "priority": 102,
+      "screens": [
+        "inicio",
+        "mes-analisis",
+        "espacio-detalle",
+        "espacio-detalle-grupo"
+      ],
+      "design": [],
+      "spec": [
+        "home-format: rowBalance(0) → 'Al día'. Texto compartido → 'Estáis al día'",
+        "member-balance-list y member-list: 'En paz' → 'Al día'",
+        "analysis-view: 'en paz' / 'En paz' → 'al día' / 'Al día'",
+        "Landing src/app/page.tsx: '…y saldad las deudas con un toque.'",
+        "leave-space: 'Lo mejor es saldar la deuda antes de salir…' (el rediseño completo llega en CF-19)",
+        "create-space-flow: '…lo cerráis cuando hayáis saldado las deudas.'"
+      ],
+      "criteria": [
+        "grep -ni 'en paz' sobre los 8 ficheros de la historia no devuelve nada",
+        "home-format.test.ts espera 'Al día' / 'Estáis al día' y pasa",
+        "shots/mes-analisis.png no contiene 'paz'",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/lib/home-format.ts",
+        "src/lib/home-format.test.ts",
+        "src/components/ui/member-balance-list.tsx",
+        "src/components/space/member-list.tsx",
+        "src/components/month/analysis-view.tsx",
+        "src/app/page.tsx",
+        "src/components/space/leave-space.tsx",
+        "src/components/space/create-space-flow.tsx"
+      ],
+      "passes": true,
+      "notes": "'En paz' → 'Al día'/'Estáis al día' en home-format, filas de miembros y gráfico de Mes; landing, salir y crear espacio hablan de saldar deudas. Queda 'Solo cuando estéis en paz' de Gestión (historia de ciclo de vida) y /close + space-policy (CF-05/CF-16)."
+    },
+    {
+      "id": "CF-03",
+      "title": "SETTLING se llama 'Cerrando cuentas' en el chip, el banner, Gestión y /close (solo texto)",
+      "priority": 103,
+      "screens": [
+        "inicio-liquidando",
+        "espacio-cerrando"
+      ],
+      "design": [],
+      "spec": [
+        "space-ui.ts: SETTLING 'Liquidando' → 'Cerrando cuentas' (cabecera 'Pareja · Cerrando cuentas')",
+        "Banner: 'Ir a liquidar →' → 'Saldar deudas →'. El cuerpo del banner no cambia aquí (lo hace CF-17)",
+        "ConfirmSheet: errorHrefLabel por defecto → 'Saldar deudas'",
+        "actions-client: 'No se podrán añadir gastos; solo saldar deudas.' / 'Ir a liquidar deudas' → 'Saldar deudas' / 'Solo cuando estéis en paz.' → 'Solo cuando no queden deudas.'",
+        "close/client (solo texto, conservando todos los testids): subtítulo 'Saldad las deudas y archivad el espacio como recuerdo.' / 'Liquidaciones' → 'Pagos del cierre' / 'Ir a liquidar deudas' → 'Saldar deudas' / 'Iniciar liquidación' → 'Empezar a cerrar cuentas' / 'El espacio pasa a \"Cerrando cuentas\": no se pueden crear gastos nuevos, solo saldar deudas.' / error 'No se pudo empezar a cerrar cuentas'",
+        "Nueva captura 'espacio-cerrando' (escenario space-settling, /spaces/{coupleId})"
+      ],
+      "criteria": [
+        "grep -n 'Liquidando\\|liquidar\\|Liquidaciones\\|Iniciar liquidación\\|en paz' src/lib/space-ui.ts src/components/space/space-status-banner.tsx src/components/space/confirm-sheet.tsx 'src/app/spaces/[id]/actions-client.tsx' 'src/app/spaces/[id]/close/client.tsx' no devuelve nada (salvo comentarios)",
+        "shots/espacio-cerrando.png muestra 'Pareja · Cerrando cuentas'",
+        "lifecycle.spec.ts:92,140,181,195,196,264,289, manage.spec.ts:93,124 y settle-up.spec.ts:114 actualizados ('Pareja · Cerrando cuentas', /Saldar deudas/) y en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/lib/space-ui.ts",
+        "src/components/space/space-status-banner.tsx",
+        "src/components/space/confirm-sheet.tsx",
+        "src/app/spaces/[id]/actions-client.tsx",
+        "src/app/spaces/[id]/close/client.tsx",
+        "e2e/spaces/lifecycle.spec.ts",
+        "e2e/spaces/manage.spec.ts",
+        "e2e/spaces/settle-up.spec.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Chip/cabecera 'Cerrando cuentas', 'Saldar deudas' en banner, hoja, Gestión y /close, textos de /close renombrados; captura espacio-cerrando; quedan 'se está liquidando' (CF-05) y 'Espacio en liquidación' en Mes."
+    },
+    {
+      "id": "CF-04",
+      "title": "Avisos de solo lectura de SETTLING sin 'liquidando'",
+      "priority": 104,
+      "screens": [
+        "inicio-liquidando",
+        "listas"
+      ],
+      "design": [],
+      "spec": [
+        "expense/[id]: ARCHIVED 'Este espacio está archivado: solo lectura.' / SETTLING 'Estáis cerrando cuentas: este gasto ya no se puede cambiar.'",
+        "expenses/list/client: 'Estáis cerrando cuentas: no se admiten gastos nuevos.'",
+        "expense-form-sections: SETTLING 'está cerrando cuentas'",
+        "month-client: título 'Cerrando cuentas'. budget-view: '…archivado o cerrando cuentas…'",
+        "categories/client: '…archivado o cerrando cuentas…'",
+        "lists-hub: 'Carro vaciado. Estáis cerrando cuentas: apunta el gasto cuando se reabra el espacio.'"
+      ],
+      "criteria": [
+        "grep -ni 'liquid' sobre los 7 ficheros src de la historia no devuelve nada (la clave de búsqueda 'liquidación' de expenses/list/client.tsx, que mantiene CF-06, queda fuera de este grep)",
+        "lifecycle.spec.ts:122, features/month.spec.ts:52 y shopping/lifecycle.spec.ts:36 actualizados y en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/expense/[id]/page.tsx",
+        "src/app/expenses/list/client.tsx",
+        "src/components/expense/add/expense-form-sections.tsx",
+        "src/components/month/month-client.tsx",
+        "src/components/month/budget-view.tsx",
+        "src/app/categories/client.tsx",
+        "src/components/shopping/lists-hub.tsx",
+        "e2e/spaces/lifecycle.spec.ts",
+        "e2e/features/month.spec.ts",
+        "e2e/shopping/lifecycle.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Avisos de SETTLING/ARCHIVED en detalle de gasto, Gastos, añadir gasto, Mes, presupuestos, categorías y toast de Listas sin 'liquid'; e2e actualizados. Pendiente: filas 'Liquidación' (CF-06) y 409 de space-policy (CF-05)."
+    },
+    {
+      "id": "CF-05",
+      "title": "Texto de tres mensajes de API de space-policy (cambio de texto señalado; códigos, status y forma intactos)",
+      "priority": 105,
+      "screens": [
+        "espacio-detalle-grupo"
+      ],
+      "design": [],
+      "spec": [
+        "space-policy.ts:107 → 'Estáis cerrando cuentas en este espacio: no se pueden crear gastos nuevos'",
+        "space-policy.ts:230 (OPEN_BALANCES) → 'Aún hay deudas sin saldar en este espacio. Saldadlas antes de archivarlo.'",
+        "space-policy.ts:291 (HAS_BALANCE al quitar) → 'Esta persona aún tiene saldo pendiente en el espacio. Saldad sus deudas antes de quitarla.' (conserva 'saldo pendiente')",
+        "NO se tocan :135, :141, :222 ni :270 (necesitan visto bueno del usuario)",
+        "El commit y progress.md dicen: CAMBIO DE TEXTO DE MENSAJES DE API pedido por el usuario (renombrado); code, status y forma sin cambios",
+        "Comentario de space-policy.ts:192 'en paz' → 'al día'"
+      ],
+      "criteria": [
+        "grep -n 'Quedad en paz\\|se está liquidando' src/lib/space-policy.ts no devuelve nada",
+        "git diff de space-policy.ts solo cambia literales de mensaje y comentarios: ningún code ni status",
+        "space-policy.closing.test.ts:78 (/Saldad sus deudas antes de quitarla/) y api/expenses/route.test.ts:302 actualizados y en verde. api/spaces/[id]/members/[userId]/route.test.ts:136 (/saldo pendiente/) y api/spaces/[id]/route.test.ts (/deudas/) siguen en verde sin cambios",
+        "lifecycle.spec.ts:118 actualizado y en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/lib/space-policy.ts",
+        "src/lib/space-policy.closing.test.ts",
+        "src/app/api/expenses/route.test.ts",
+        "e2e/spaces/lifecycle.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Textos de space-policy.ts:107/230/291 (y comentario :192) con 'cerrando cuentas'/'Saldad'; code/status/forma intactos; tests y lifecycle.spec en verde. :135/:141/:222/:270 sin tocar (visto bueno)."
+    },
+    {
+      "id": "CF-06",
+      "title": "Filas de pago en Recientes y Gastos: título en presente si está pendiente, 'Pago de deuda' y rechazados recientes",
+      "priority": 106,
+      "screens": [
+        "inicio-liquidando",
+        "gastos",
+        "inicio"
+      ],
+      "design": [],
+      "spec": [
+        "list-format.ts: título PENDING 'Pago a {X} · por confirmar' / '{X} dice que te ha pagado'. CONFIRMED 'Pagaste a {X}' / '{X} te pagó'. REJECTED 'Pago a {X} · no recibido' / 'Pago de {X} · rechazado'. Subtítulo ['Pago de deuda', estado, método]",
+        "expenses/list/page.tsx: description 'Pago de deuda'. Búsqueda (client.tsx): claves 'pago deuda saldar liquidación {descripción}' ('liquidación' se queda como alias)",
+        "Recientes (dashboard/page.tsx): título 'Pago de deuda'. Si está PENDING: icono Clock, importe en gris (verde solo si CONFIRMED), subtítulo con el estado primero 'Pendiente · {De} → {Para}', sin truncar el estado",
+        "Recientes incluye los REJECTED en los que soy fromUserId con updatedAt de los últimos 7 días, con el subtítulo '{X} no lo recibió' (Settlement.updatedAt ya existe, sin backend)"
+      ],
+      "criteria": [
+        "shots/inicio-liquidando.full.png: la fila pendiente dice 'Pago de deuda', el importe no es verde y se lee 'Pendiente' completo",
+        "list-format.test.ts actualizado (títulos en presente para PENDING; 'Pago de deuda · Confirmado · Efectivo') y en verde",
+        "create-and-confirm.spec.ts:61,136,154 y settle-up.spec.ts:165,252 (hasText 'Pago de deuda') en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/dashboard/page.tsx",
+        "src/components/expenses/list-format.ts",
+        "src/components/expenses/list-format.test.ts",
+        "src/app/expenses/list/page.tsx",
+        "src/app/expenses/list/client.tsx",
+        "e2e/settlements/create-and-confirm.spec.ts",
+        "e2e/spaces/settle-up.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Títulos de pago según estado (presente si PENDING), subtítulo 'Pago de deuda', pendientes en gris con reloj en Gastos e Inicio, rechazados propios de 7 días en Recientes; pendiente la tarjeta 'Confirmar Pagos' (otras CF)."
+    },
+    {
+      "id": "CF-07",
+      "title": "Patrón compartido: CriticalActionSheet (alertdialog si es danger), toast con acción y flash toast",
+      "priority": 107,
+      "screens": [
+        "espacio-cerrando",
+        "hoja-archivar"
+      ],
+      "design": [],
+      "spec": [
+        "Nuevo src/components/ui/critical-action-sheet.tsx sobre ui/sheet.tsx. Props: title, facts[{label,value,emphasis}], consequences[], reversible (false → 'No se puede deshacer.'), tone primary|danger, confirmLabel, confirmDisabled + disabledReason, cancelLabel, secondary {label, href|onClick, tone}, children, busy, error/errorHref/errorHrefLabel ('Saldar deudas')",
+        "tone=danger → role='alertdialog', aria-modal, foco inicial en Cancelar. tone=primary → role='dialog'. Foco atrapado. Escape y el fondo cierran salvo con busy. Testids confirm-sheet-confirm, confirm-sheet-cancel, confirm-sheet-error",
+        "El error del servidor se pinta aunque confirmDisabled se haya calculado en el render (cubre la carrera entre render y clic)",
+        "ConfirmSheet (src/components/space/confirm-sheet.tsx) queda como envoltorio que delega, con la misma API y sin cambiar sus usos",
+        "EqToast/useEqToast: action opcional {label,onAction}|{label,href}. Unos 5 s cuando hay acción. Sigue siendo <output>",
+        "src/lib/flash-toast.ts (sessionStorage con try/catch) + <FlashToast/> montado en dashboard, expenses/list, spaces, lists y login",
+        "Nueva captura 'hoja-archivar' (escenario space-settling, /spaces/{coupleId}, pulsar 'Archivar espacio')"
+      ],
+      "criteria": [
+        "Test jsdom critical-action-sheet.test.tsx: pinta facts y consequences. Con tone=danger, role=alertdialog y foco inicial en Cancelar. reversible=false muestra 'No se puede deshacer.'. confirmDisabled muestra disabledReason. Escape llama a onClose salvo con busy. Con busy, aria-busy. Se pinta error con su enlace",
+        "Test de eq: el toast con action pinta el botón y llama a onAction",
+        "Test de flash-toast: funciona aunque sessionStorage lance",
+        "shots/hoja-archivar.png con el mismo CTA rojo",
+        "Los e2e que usan confirm-sheet-confirm (lifecycle, manage) siguen en verde sin cambios",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/components/ui/critical-action-sheet.tsx",
+        "src/components/ui/critical-action-sheet.test.tsx",
+        "src/components/space/confirm-sheet.tsx",
+        "src/components/ui/eq.tsx",
+        "src/lib/flash-toast.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "CriticalActionSheet (facts, consecuencias, reversible, alertdialog con foco en Cancelar, busy sin cierre, CTA desactivado con motivo, error con enlace) + ConfirmSheet delegando; toast con acción (~5 s) y flash toast montado en Inicio/Gastos/Espacios/Listas/login; captura hoja-archivar. Pendiente: copy y facts de la hoja de archivar (ciclo de vida)."
+    },
+    {
+      "id": "CF-08",
+      "title": "Pagos por confirmar en Inicio: textos, hojas de confirmar y rechazar, toast según el resto y manejo de 409",
+      "priority": 108,
+      "screens": [
+        "inicio-liquidando",
+        "hoja-confirmar-pago",
+        "hoja-rechazar-pago"
+      ],
+      "design": [],
+      "spec": [
+        "Encabezado 'Pagos por confirmar · {n}' + 'No cuentan en el saldo hasta que confirmes que los has recibido.' En SETTLING, además: 'Confirma los pagos para cerrar las cuentas'",
+        "Fila: '{X} dice que te ha pagado' · '{importe} · {método} · {fecha}'. Avatar y texto enlazan a /settle/{id}",
+        "Botones con texto: 'Lo he recibido' (primario) y 'No lo he recibido' (texto rojo). Ya no hay botón solo con X",
+        "'Lo he recibido' → CriticalActionSheet primary: '¿Has recibido {importe} de {X}?', facts De/Para/Importe/Método, consecuencia '{X} dejará de deberte {importe}' o '{X} aún te deberá {resto}' (con el saldo cargado), reversible=false, CTA 'Sí, he recibido {importe}'",
+        "'No lo he recibido' → CriticalActionSheet danger (alertdialog): '¿No has recibido el pago de {X}?', consecuencia 'La deuda de {importe} seguirá pendiente y {X} verá que no lo has recibido. Podrá registrarlo de nuevo.', CTA 'Rechazar el pago'",
+        "Toast según el resto: 'Deuda saldada: {X} ya no te debe nada' si queda en 0 / 'Pago confirmado · {X} aún te debe {resto}' / 'Pago rechazado: la deuda con {X} sigue pendiente'",
+        "409 (SETTLEMENT_CHANGED/NOT_PENDING): router.refresh() y error en la fila afectada. busy por fila con aria-busy",
+        "Los invitados (allowGuest en settle) ven las mismas hojas; no hay enlaces a /close",
+        "Capturas nuevas hoja-confirmar-pago y hoja-rechazar-pago (escenario space-settling, /dashboard)"
+      ],
+      "criteria": [
+        "shots/inicio-liquidando.png muestra 'Pagos por confirmar' y dos botones con texto, ninguno solo con icono",
+        "shots/hoja-confirmar-pago.png muestra importe, persona y 'No se puede deshacer.'. shots/hoja-rechazar-pago.png tiene el CTA rojo 'Rechazar el pago'",
+        "e2e: un toque en 'No lo he recibido' no lanza el PATCH hasta pulsar confirm-sheet-confirm",
+        "balance.spec.ts:64, create-and-confirm.spec.ts:82,114, settle-up.spec.ts:53,54,60,170 y committed-mutations.spec.ts:72-80 (clic en 'Lo he recibido' + confirm-sheet-confirm; 'Pagos por confirmar' desaparece; sigue sin navegación de documento) actualizados y en verde",
+        "partial-and-scope.spec.ts:94 pasa a /recibido|Rechazar el pago/ (sigue comprobando que no aparezca) y en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/components/dashboard/pending-settlements.tsx",
+        "src/app/dashboard/page.tsx",
+        "e2e/dashboard/balance.spec.ts",
+        "e2e/settlements/create-and-confirm.spec.ts",
+        "e2e/settlements/partial-and-scope.spec.ts",
+        "e2e/spaces/settle-up.spec.ts",
+        "e2e/refresh/committed-mutations.spec.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "'Pagos por confirmar · n' con explicación (y SETTLING), 'X dice que te ha pagado' enlazado al detalle, 'Lo he recibido'/'No lo he recibido' abren CriticalActionSheet (primary con resto / danger), toast según el resto, 409 → refresh + error en la fila; e2e actualizados + test de rechazo. Pendiente: 'te ha pagado' en /settle."
+    },
+    {
+      "id": "CF-09",
+      "title": "/settle: frase de quién debe a quién, CTA con persona e importe y textos del método",
+      "priority": 109,
+      "screens": [
+        "quedar-en-paz",
+        "quedar-en-paz-deudor",
+        "quedar-en-paz-pendiente"
+      ],
+      "design": [],
+      "spec": [
+        "Línea grande bajo el h1: 'Álvaro te debe 79,30 €' / 'Le debes 79,30 € a Álvaro'. En grupo: 'Debes 7,50 € en total' + 'Le pagas 7,50 € a Marta' (transferencia elegida)",
+        "CTA del deudor 'Ya le he pagado {importe} a {nombre}'. CTA del acreedor '{nombre} ya me ha pagado {importe}'. Con un pago entrante, 'Sí, he recibido {importe} de {nombre}' (de momento con la misma acción; la hoja llega en CF-10)",
+        "El importe del CTA es t.amount, no el balance",
+        "Método: '¿Cómo le has pagado?' (deudor) / '¿Cómo te ha pagado?' (acreedor). 'Transfer.' → 'Transferencia'",
+        "docs/design/README.md sección Settle: los CTA llevan importe y nombre"
+      ],
+      "criteria": [
+        "shots/quedar-en-paz.png: el CTA contiene nombre e importe",
+        "shots/quedar-en-paz-pendiente.png (grupo) muestra el acreedor fuera del radio",
+        "create-and-confirm.spec.ts:51,71,89,90,222,271, partial-and-scope.spec.ts:39,140 y settle-up.spec.ts:126 con regex (/^Ya le he pagado/, /ya me ha pagado/, /^Sí, he recibido .* de User B/) y en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/settle/client.tsx",
+        "src/components/settle/method-picker.tsx",
+        "src/components/settle/settle-model.ts",
+        "docs/design/README.md",
+        "e2e/settlements/create-and-confirm.spec.ts",
+        "e2e/settlements/partial-and-scope.spec.ts",
+        "e2e/spaces/settle-up.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Frase 'X te debe / Le debes / Debes … en total + Le pagas … a X' bajo el h1, CTAs con nombre e importe (t.amount; incoming.amount al confirmar), '¿Cómo le has/te ha pagado?', 'Transferencia', filas pendientes en presente; queda la redundancia del pendiente del deudor (CF-11) y la hoja de revisión (CF-10)."
+    },
+    {
+      "id": "CF-10",
+      "title": "/settle: hoja de revisión antes de registrar o confirmar, con importe parcial",
+      "priority": 110,
+      "screens": [
+        "hoja-saldar-deudor",
+        "hoja-saldar-acreedor"
+      ],
+      "design": [],
+      "spec": [
+        "Deudor → CriticalActionSheet primary 'Antes de marcarlo como pagado'. Facts De → Para, Importe, Método. Consecuencias: 'EQUIL no envía dinero: haz primero el {método} desde tu banco.', 'Avisaremos a {X}.', 'Contará cuando {X} confirme que lo ha recibido.' CTA 'Sí, ya le he pagado {importe}'. Cancelar 'Todavía no'",
+        "Acreedor → '¿Has recibido {importe} de {X}?', 'Se dará por saldado al momento. Márcalo solo si el dinero ya está en tu cuenta.', reversible=false, CTA 'Sí, lo he recibido'",
+        "El pago entrante ('Sí, he recibido … de …') abre la misma hoja de confirmación que CF-08 (componente compartido src/components/settle/settle-review-sheet.tsx)",
+        "Importe editable (parseEuroInput y validación compartidos con edit/client.tsx), prellenado con t.amount, 'máx. {t.amount}', 'Te quedará por pagar {resto}'. Se envía amount",
+        "Funciona para invitados (authz-guest permite saldar)",
+        "Capturas nuevas hoja-saldar-deudor (ux-showcase, asUserB) y hoja-saldar-acreedor (usuario A)"
+      ],
+      "criteria": [
+        "Ningún toque único en /settle hace POST o PATCH: solo desde confirm-sheet-confirm (e2e)",
+        "shots/hoja-saldar-deudor.png contiene 'EQUIL no envía dinero'",
+        "Caso nuevo en partial-and-scope.spec.ts: un parcial de 20 € desde la hoja deja 'aún te debe' con el resto correcto. Un importe por encima del máximo muestra un error en línea sin llamar a la API",
+        "Los e2e de settlements/* y spaces/settle-up que registran pagos hacen clic en confirm-sheet-confirm y pasan",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/settle/client.tsx",
+        "src/components/settle/settle-review-sheet.tsx",
+        "src/app/settle/[id]/edit/client.tsx",
+        "src/components/dashboard/pending-settlements.tsx",
+        "e2e/settlements/create-and-confirm.spec.ts",
+        "e2e/settlements/partial-and-scope.spec.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Hojas de revisión en /settle (deudor 'Antes de marcarlo como pagado' / acreedor '¿Has recibido…?' / entrante = hoja de CF-08 compartida en settle-review-sheet.tsx) con importe parcial editable y tope en línea; validación compartida con /settle/[id]/edit; e2e y capturas nuevas. Pendiente: el error 409 'stale' se pierde si el refresh deja el espacio al día."
+    },
+    {
+      "id": "CF-11",
+      "title": "/settle: pendiente del deudor sin redundancia, 'Pedirle que lo confirme' y pantallas de éxito con siguiente paso",
+      "priority": 111,
+      "screens": [
+        "quedar-en-paz-pendiente",
+        "saldar-exito"
+      ],
+      "design": [],
+      "spec": [
+        "Deudor con un pago pendiente: se ocultan el radio y el CTA de esa transferencia. El ticket añade la fila 'Pago en camino −{importe} · pendiente'. Un solo bloque con reloj: 'Falta que {X} confirme {importe}' + 'Ver el pago pendiente' + 'Pedirle que lo confirme' (share: 'Te he pagado {importe} por {método} en {espacio}. ¿Lo confirmas en EQUIL?')",
+        "Tras registrar como deudor: 'Avisado a {X}' / 'Le hemos dicho que le has pagado {importe} por {método}. La deuda quedará saldada cuando lo confirme.' + 'Pedirle que lo confirme'",
+        "Éxito del acreedor o tras confirmar: título según la regla de CF-01. 'Has registrado {importe} de {X} por {método}.' Botones 'Ver el pago' (/settle/{id} de la respuesta), 'Saldar el resto' si queda, 'Volver al inicio'",
+        "SETTLING con todo a cero: OWNER/ADMIN registrados (no invitados) ven 'Terminar y archivar' (→ /spaces/{id}/close). El resto: 'Avisa a quien gestiona el espacio para archivarlo.' settle/page.tsx lee el rol de Membership y isGuest desde getSessionCtx",
+        "Captura nueva saldar-exito (ux-showcase, asUserB, registrar un pago)"
+      ],
+      "criteria": [
+        "shots/quedar-en-paz-pendiente.png: 'Falta que' aparece una vez, no hay radio para la transferencia pendiente y no aparece 'Recordarle la deuda'",
+        "grep -n 'Recordarle la deuda' src/app/settle/client.tsx solo aparece en la rama canRemind (acreedor)",
+        "e2e en create-and-confirm: la pantalla de éxito tiene el enlace 'Ver el pago' a /settle/<id>",
+        "create-and-confirm y partial-and-scope en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/settle/client.tsx",
+        "src/app/settle/page.tsx",
+        "e2e/settlements/create-and-confirm.spec.ts",
+        "e2e/settlements/partial-and-scope.spec.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Pendiente del deudor en un solo bloque ('Falta que X confirme', 'Ver el pago pendiente', 'Pedirle que lo confirme') sin radio ni CTA y con 'Pago en camino' en el ticket; éxitos 'Avisado a X' / 'Has registrado … de X' con 'Ver el pago'; 'Terminar y archivar' en SETTLING a cero solo para OWNER/ADMIN. Pendiente: enlaces del bloque en dos líneas a 360 px."
+    },
+    {
+      "id": "CF-12",
+      "title": "Detalle del pago, acciones sin window.confirm, rechazado explicado, edición con consecuencia e historial",
+      "priority": 112,
+      "screens": [
+        "pago-detalle",
+        "pago-detalle-acreedor",
+        "pago-rechazado",
+        "historial-pagos"
+      ],
+      "design": [],
+      "spec": [
+        "Titular en PENDING: 'Pago a {X} · por confirmar' (deudor) / '{X} dice que te ha pagado' (acreedor). En pasado solo si está CONFIRMED",
+        "Chip PENDING 'Pendiente de confirmar'. REJECTED: 'No recibido' para el deudor y 'Rechazado' para el acreedor (settlement-labels por lado)",
+        "Textos: acreedor '…hasta entonces la deuda sigue pendiente.' Deudor 'Falta que {X} confirme que lo ha recibido.' + 'Pedirle que lo confirme' + nota provisional 'Si te has equivocado, edítalo o pide a {X} que lo rechace.' CONFIRMED: 'Confirmaste que lo recibiste. Ya cuenta en el saldo.' / '{X} confirmó que lo recibió.'",
+        "REJECTED visto por el deudor: '{X} indicó que no recibió este pago. Tu deuda de {importe} sigue pendiente.' + CTA 'Saldar deuda' (settleUrlFor). Sin 'Recordarle la deuda'",
+        "SettlementActions: explicación encima; 'Sí, he recibido {importe}' y 'No lo he recibido' abren las hojas de CF-08 (componente compartido). Se elimina window.confirm",
+        "Edición de un pendiente: 'máx. {deuda}' bajo el importe y el aviso '{X} tendrá que confirmar el nuevo importe.'",
+        "Historial: título 'Historial de pagos'. 'Te toca confirmarlo' → 'Confírmalo cuando lo recibas'. Pendiente propio: 'Esperando a {X}'",
+        "Capturas nuevas pago-detalle-acreedor y pago-rechazado (exponer rejectedSettlementId en el escenario ux-showcase de src/app/api/test/seed/route.ts)"
+      ],
+      "criteria": [
+        "grep -rn 'window.confirm\\|confirm(' src/components/settle src/app/settle no devuelve nada",
+        "shots/pago-detalle.png (PENDING) no contiene 'Pagaste a' ni 'te pagó'",
+        "shots/pago-rechazado.png (deudor) muestra 'No recibido' y 'Saldar deuda'",
+        "create-and-confirm.spec.ts:192 → 'Sí, he recibido' + confirm-sheet-confirm, en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/settle/[id]/page.tsx",
+        "src/components/settle/settlement-actions.tsx",
+        "src/lib/settlement-labels.ts",
+        "src/components/settle/status-chip.tsx",
+        "src/app/settle/history/page.tsx",
+        "src/app/settle/[id]/edit/client.tsx",
+        "src/app/api/test/seed/route.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Detalle en presente mientras está PENDING, chips por lado (No recibido/Rechazado), hojas de CF-08 sin window.confirm, 'Pedirle que lo confirme' y nota provisional, rechazado con 'Saldar deuda', edición con 'máx.' y aviso, 'Historial de pagos'; pendiente: 409 de un pago ya resuelto pierde el mensaje, '€' lejos en Editar pago."
+    },
+    {
+      "id": "CF-13",
+      "title": "Entradas a Saldar deuda: Mes > Análisis, aviso de rechazo en la tarjeta y pendientes en espacios archivados",
+      "priority": 113,
+      "screens": [
+        "inicio",
+        "mes-analisis",
+        "inicio-archivado"
+      ],
+      "design": [],
+      "spec": [
+        "Nota en la tarjeta del carrusel si hay un REJECTED con fromUserId = yo y updatedAt de los últimos 7 días: '{X} no recibió tu pago de {importe}' → /settle/{id}",
+        "Mes > Análisis: enlace 'Saldar deuda' → settleUrlFor(spaceId) cuando el saldo no es cero",
+        "ARCHIVED con pendientes: tarjeta de solo lectura 'Hay {n} pagos sin confirmar. El espacio está archivado y ya no se pueden resolver.'"
+      ],
+      "criteria": [
+        "shots/mes-analisis.png muestra el enlace 'Saldar deuda' junto al saldo",
+        "El filtro de rechazados usa updatedAt (revisión de código o test)",
+        "balance.spec.ts en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/components/dashboard/space-carousel.tsx",
+        "src/app/dashboard/page.tsx",
+        "src/components/month/analysis-view.tsx",
+        "src/app/month/page.tsx"
+      ],
+      "passes": true,
+      "notes": "Nota de pago rechazado (updatedAt 7 días) en la tarjeta activa de Inicio, 'Saldar deuda' junto al saldo de Mes > Análisis y tarjeta de pagos sin confirmar en ARCHIVED; queda: saldo de Análisis bajo el pliegue."
+    },
+    {
+      "id": "CF-14",
+      "title": "Gestión del espacio: hojas para empezar a cerrar cuentas, reabrir, archivar y convertir en grupo, más zona de peligro",
+      "priority": 114,
+      "screens": [
+        "espacio-detalle",
+        "espacio-cerrando",
+        "hoja-cerrar-cuentas",
+        "hoja-archivar"
+      ],
+      "design": [],
+      "spec": [
+        "'Empezar a cerrar cuentas' → CriticalActionSheet primary '¿Cerrar las cuentas de {espacio}?' con viñetas: no se pueden añadir, editar ni borrar gastos; los recurrentes se pausan; no entra gente nueva; sí se pueden saldar deudas y usar listas; 'Puedes reabrir el espacio cuando quieras'. CTA 'Empezar a cerrar cuentas'. NO navega: se queda en la página (router.refresh) y muestra el toast 'Estáis cerrando cuentas. Ahora saldad las deudas.' con la acción 'Ver qué falta' (href /spaces/{id}/close)",
+        "'Reabrir espacio': subtítulo 'Vuelve a permitir gastos. Los pagos ya registrados se mantienen.' + hoja primary '¿Reabrir {espacio}?' con CTA 'Reabrir espacio'. Toast 'Espacio reabierto: ya podéis añadir gastos.'",
+        "Archivar: oculto en ACTIVE. En SETTLING siempre abre la hoja danger '¿Archivar {espacio}? No se puede deshacer' ('Quedará solo para consultar…', CTA 'Archivar para siempre'). page.tsx calcula canArchive (saldos ya cargados + count de PENDING). Si es false: confirmDisabled con disabledReason ('Falta saldar N deudas' / 'Falta confirmar N pagos') y enlace 'Ver qué falta' → /close. El 409 del servidor se sigue pintando",
+        "Convertir en grupo: la hoja existente pasa a CriticalActionSheet primary, reversible=false: 'Podréis ser hasta 20 personas… Los gastos, saldos y deudas no cambian. No se puede volver a pareja.' Toast '{espacio} ya es un grupo'",
+        "Encabezado 'Zona de peligro' con margen para Archivar y Salir",
+        "Captura nueva hoja-cerrar-cuentas (ux-showcase, /spaces/{coupleId})"
+      ],
+      "criteria": [
+        "Pulsar 'Empezar a cerrar cuentas' no hace el PATCH hasta confirm-sheet-confirm (e2e)",
+        "committed-mutations.spec.ts:31-45 actualizado: cada ciclo pulsa confirm-sheet-confirm tras space-action-settle y tras space-action-reopen, y assertSameDocument sigue pasando (sin navegación de documento)",
+        "lifecycle.spec.ts:86 y :143 pulsan confirm-sheet-confirm antes de esperar el PATCH. :96 pasa a esperar space-action-archive con toHaveCount(0) en ACTIVE",
+        "lifecycle.spec.ts:169-215 REESCRITO: con un pago pendiente, la hoja de archivar muestra el motivo y el CTA desactivado; tras confirmar el pago, se archiva. La cobertura del 409 PENDING_SETTLEMENTS/OPEN_BALANCES se queda en src/app/api/spaces/[id]/route.test.ts y el pintado del error en critical-action-sheet.test.tsx",
+        "shots/espacio-detalle.png (ACTIVE) no muestra 'Archivar espacio' y sí 'Zona de peligro'",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/spaces/[id]/actions-client.tsx",
+        "src/app/spaces/[id]/page.tsx",
+        "e2e/spaces/lifecycle.spec.ts",
+        "e2e/refresh/committed-mutations.spec.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Hojas CriticalActionSheet para cerrar cuentas (toast 'Ver qué falta'), reabrir, convertir (reversible=false) y archivar (solo SETTLING, CTA desactivado con motivo); 'Zona de peligro'; EqToast hace wrap. Pendiente: nada."
+    },
+    {
+      "id": "CF-15",
+      "title": "/close: archivar con la hoja danger en lugar de confirm()",
+      "priority": 115,
+      "screens": [
+        "cierre-activo",
+        "cierre-cerrando"
+      ],
+      "design": [],
+      "spec": [
+        "Se sustituye confirm() por la misma hoja danger de archivar de CF-14, con confirmDisabled según canArchive y el motivo visible",
+        "Tras archivar: flash toast '{espacio} archivado. Lo encontrarás en Espacios.' y router.push('/dashboard') como hoy (sin recarga de documento)",
+        "Se mantiene el testid close-archive. No se toca nada más de /close (eso es CF-16)",
+        "Capturas nuevas cierre-activo (ux-showcase, /spaces/{coupleId}/close) y cierre-cerrando (space-settling, /spaces/{coupleId}/close)"
+      ],
+      "criteria": [
+        "grep -n 'confirm(' 'src/app/spaces/[id]/close/client.tsx' no devuelve nada",
+        "committed-mutations.spec.ts:100-110 sin page.once('dialog'): clic en close-archive → confirm-sheet-confirm. Sigue llegando a /dashboard con el banner ARCHIVED en el mismo documento, en verde",
+        "settle-up.spec.ts:110-112 sigue en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/spaces/[id]/close/client.tsx",
+        "e2e/refresh/committed-mutations.spec.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "/close archiva con la hoja danger archive-sheet (motivo y CTA desactivado vía archiveBlockReason compartido en space-ui.ts) y flash toast al llegar a Inicio; archivar en ACTIVE sigue visible hasta CF-16."
+    },
+    {
+      "id": "CF-16",
+      "title": "/close como checklist de 3 pasos y 'Empezar a cerrar cuentas' sin crear pagos falsos",
+      "priority": 116,
+      "screens": [
+        "cierre-activo",
+        "cierre-cerrando"
+      ],
+      "design": [],
+      "spec": [
+        "startSettling: PATCH /api/spaces/{id} {status:'SETTLING'} con la hoja de consecuencias de CF-14, en lugar de POST settle-up. CAMBIO DE COMPORTAMIENTO señalado: el endpoint settle-up no se borra, solo deja de usarse desde la UI",
+        "Subtítulo 'Tres pasos: cerrar cuentas, saldar las deudas y archivar.' Paso 1 'Cerrar cuentas' (hecho + 'Reabrir'). Paso 2 'Saldar deudas' con TODAS las deudas del espacio (getGroupBalances + la simplificación de /settle). Filas '{A} debe {importe} a {B}' con la acción que toca a quien mira: 'Saldar deuda' (si es deudor), 'Revisar pago' → /settle/{id} (si es acreedor de un PENDING) o 'Esperando a {A}'. Contador 'Faltan N'. Paso 3 'Archivar para siempre' con el motivo",
+        "'Pagos del cierre' = los PENDING más el plan calculado (no todo el historial)",
+        "Testids CONSERVADOS: close-debt-row (filas de MIS deudas, mismo texto 'Debes a {B}'), close-amount, close-settlement-row con data-status, close-progress, close-start-settling, close-archive",
+        "close/page.tsx pasa a getSessionCtx y mantiene la redirección de invitados a /dashboard"
+      ],
+      "criteria": [
+        "grep -n 'settle-up' 'src/app/spaces/[id]/close/client.tsx' no devuelve nada",
+        "Tras 'Empezar a cerrar cuentas' en /close, el Inicio del acreedor no muestra 'Pagos por confirmar' (e2e)",
+        "settle-up.spec.ts:219-237 ('starts the settle-up from the UI') y committed-mutations.spec.ts:48-70 rehechos: esperan el PATCH. El PENDING lo crea el deudor desde /settle con 'Ya le he pagado' + confirm-sheet-confirm; luego close-progress y close-settlement-row data-status=PENDING. Las pruebas de API de settle-up no cambian",
+        "shots/cierre-cerrando.png lista deudas entre otros miembros y 'Faltan'",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/spaces/[id]/close/client.tsx",
+        "src/app/spaces/[id]/close/page.tsx",
+        "e2e/spaces/settle-up.spec.ts",
+        "e2e/refresh/committed-mutations.spec.ts"
+      ],
+      "passes": true,
+      "notes": "/close es una checklist de 3 pasos (PATCH a SETTLING con settle-sheet, sin settle-up; todas las deudas del espacio con la acción de quien mira y 'Faltan N'; archivar solo en SETTLING con el motivo); escenario group-settling; e2e rehechos. Pendiente: el endpoint settle-up sigue creando PENDING (backend)."
+    },
+    {
+      "id": "CF-17",
+      "title": "Banner de 'Cerrando cuentas' con progreso y un único CTA (sin enlace al cierre para invitados)",
+      "priority": 117,
+      "screens": [
+        "inicio-liquidando",
+        "espacio-cerrando"
+      ],
+      "design": [],
+      "spec": [
+        "Texto: 'Cerrando cuentas · faltan N deudas' / 'No se pueden añadir ni editar gastos; sí saldar deudas.'",
+        "CTA primario 'Saldar deudas' si quien mira tiene algo pendiente. Si no, 'Ver qué falta' (→ /close) solo para miembros registrados; los invitados solo ven el texto de progreso",
+        "Todo saldado y rol OWNER/ADMIN: 'Todo saldado · Archivar →'",
+        "dashboard/page.tsx y spaces/[id]/page.tsx pasan el recuento, el rol e isGuest"
+      ],
+      "criteria": [
+        "lifecycle.spec.ts:108-110 actualizado con los nuevos textos del banner y en verde",
+        "Revisión: con isGuest no se renderiza ningún enlace a /close (test jsdom de space-status-banner)",
+        "shots/inicio-liquidando.png muestra 'faltan'",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/components/space/space-status-banner.tsx",
+        "src/components/space/space-status-banner.test.tsx",
+        "src/app/dashboard/page.tsx",
+        "src/app/spaces/[id]/page.tsx",
+        "e2e/spaces/lifecycle.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Banner SETTLING con progreso ('falta 1 deuda'/'faltan N deudas'/'estáis al día') y un único CTA (Saldar deudas / Ver qué falta solo registrados / Todo saldado · Archivar para OWNER/ADMIN); test jsdom sin /close para invitados; captura nueva inicio-cerrando-al-dia."
+    },
+    {
+      "id": "CF-18",
+      "title": "Quitar miembro y cambiar rol con confirmación; la deuda se muestra antes de intentarlo",
+      "priority": 118,
+      "screens": [
+        "espacio-detalle-grupo",
+        "hoja-quitar-miembro"
+      ],
+      "design": [],
+      "spec": [
+        "Separador entre el bloque de Rol y la acción destructiva",
+        "Si |balance| ≤ 1: 'Quitar a {nombre} del espacio' → hoja danger '¿Quitar a {nombre}?' ('{nombre} dejará de ver {espacio}… Para volver necesitará un enlace nuevo.') con CTA 'Quitar a {nombre}'",
+        "Con saldo, sin botón rojo. Si el miembro debe: '{nombre} debe {importe} en este espacio' + 'Para quitarle, primero hay que saldar su deuda.' + 'Recordarle la deuda a {nombre}' (share) + 'Saldar deuda' si quien gestiona es el acreedor. Si al miembro le deben: 'A {nombre} le deben {importe}' + 'Saldar deuda' si quien gestiona es su deudor; si no, 'Cuando se salde su deuda podrás quitarle.' El 409 HAS_BALANCE usa balanceCents y settleUrl",
+        "Propietario: confirmación en línea '{nombre} podrá cambiar roles, quitar a personas (también a ti) y archivar el espacio.' con 'Hacer propietaria a {nombre}'",
+        "Toasts '{nombre} ahora es {rol}' / '{nombre} ya no está en {espacio}'",
+        "Captura nueva hoja-quitar-miembro (ux-showcase, /spaces/{groupId})"
+      ],
+      "criteria": [
+        "e2e en manage.spec.ts: 'Quitar a X' no lanza el DELETE sin confirm-sheet-confirm",
+        "manage.spec.ts:110-113 pulsa 'Hacer propietaria a User B' antes de esperar el PATCH y pasa",
+        "shots/espacio-detalle-grupo: al abrir el ··· de Lucía (−7,50 €) se ven la cifra y 'Recordarle la deuda', no el botón rojo",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/components/space/member-list.tsx",
+        "src/app/spaces/[id]/page.tsx",
+        "e2e/spaces/manage.spec.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Quitar con hoja danger (remove-sheet); con saldo, cifra + 'Recordarle la deuda'/'Saldar deuda' según el plan simplificado (pairCents); 'Hacer propietaria a X' en línea; toasts. Lisboa con Sergio al día (5 personas)."
+    },
+    {
+      "id": "CF-19",
+      "title": "Salir del espacio: deuda visible antes, 'Saldar deuda' como acción principal, consecuencia para todos y última persona propietaria",
+      "priority": 119,
+      "screens": [
+        "hoja-salir-con-deuda",
+        "espacio-detalle-grupo"
+      ],
+      "design": [],
+      "spec": [
+        "page.tsx precarga mi saldo, mis PENDING salientes, myRole y ownerCount. La PRIMERA hoja ya muestra la deuda, sin esperar al 409 (que se sigue manejando)",
+        "Con deuda: 'Antes de salir, salda tu deuda'. 'Debes {importe} en {espacio}. Si sales sin saldarla, {acreedor} seguirá viendo que le debes {importe} y no podrá saldarlo en la app.' Si te deben: 'Te deben {importe}. Si sales ahora, dejarás de verlo y no podrás reclamarlo desde la app.'",
+        "CTA primario 'Saldar deuda' → settleUrl. secondary en texto rojo 'Salir sin saldar', que abre un segundo paso con la casilla 'Entiendo que la deuda de {importe} queda sin saldar' antes de force=1. Se quita la caja duplicada",
+        "PENDING propio: 'Ya marcaste un pago de {importe} a {X}. Falta que lo confirme.' + 'Pedirle que lo confirme'",
+        "LAST_OWNER: CTA 'Elegir persona propietaria' (cierra la hoja, hace scroll a #members-title y abre el ··· del primer candidato)",
+        "Última persona activa: 'Eres la última persona en {espacio}. Al salir, nadie podrá verlo.'",
+        "Flash toast en Inicio: 'Has salido de {espacio}. Tu historial se conserva.'",
+        "Captura nueva hoja-salir-con-deuda (ux-showcase, asUserB, /spaces/{coupleId})"
+      ],
+      "criteria": [
+        "shots/hoja-salir-con-deuda.png: el botón grande es 'Saldar deuda' (no rojo) y 'Salir sin saldar' va como texto",
+        "'Salir sin saldar' no llama a la API sin marcar la casilla (test jsdom leave-space.test.tsx)",
+        "Los e2e de salir (manage.spec.ts) actualizados y en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/components/space/leave-space.tsx",
+        "src/components/space/leave-space.test.tsx",
+        "src/app/spaces/[id]/page.tsx",
+        "src/components/space/member-list.tsx",
+        "e2e/spaces/manage.spec.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Primera hoja con la deuda precargada, 'Saldar deuda' primario y 'Salir sin saldar' con casilla; LAST_OWNER abre el ··· del candidato; PENDING propio, última persona y flash toast. Pendiente: pendingCents en el 409 (API)."
+    },
+    {
+      "id": "CF-20",
+      "title": "Invitaciones: generar nuevo, desactivar, atajo a convertir, consentimiento de invitados y bienvenida al unirse",
+      "priority": 120,
+      "screens": [
+        "espacios-invitar",
+        "espacio-detalle",
+        "espacio-detalle-grupo"
+      ],
+      "design": [],
+      "spec": [
+        "'Generar nuevo' → hoja primary '¿Crear un enlace nuevo?' ('El enlace que ya enviaste dejará de funcionar…') con CTA 'Crear enlace nuevo'. Se comprueba res.ok del DELETE: si falla, no crea otro y avisa 'No se pudo desactivar el enlace anterior'. Toast 'Enlace nuevo listo. El anterior ya no funciona.' + 'Enviar'",
+        "invite-manager: Desactivar con hoja danger '¿Desactivar este enlace?' ('Quien lo tenga ya no podrá unirse. Las personas que ya entraron siguen en el espacio.') con CTA 'Desactivar enlace'. Filas con 'Creado {fecha relativa}'. Toast 'Enlace desactivado'",
+        "'La pareja está completa': botón en línea 'Convertir en grupo' que abre la hoja de CF-14 (solo OWNER/ADMIN; a los demás se les dice quién puede)",
+        "/i/[token]: la nota propia para invitados ('Tu acceso termina cuando acabe el viaje.') solo se muestra con flags.ephemeral && type===EPHEMERAL && enlace de invitado. La nota de cuenta no cambia",
+        "ClaimButton: flash toast 'Ya estás en {espacio}'"
+      ],
+      "criteria": [
+        "grep -rn 'window.confirm\\|confirm(' src/components/space no devuelve nada",
+        "manage.spec.ts:136-176 (incluida la 168) pulsa confirm-sheet-confirm tras 'Generar nuevo' y antes de esperar el DELETE, y pasa",
+        "Los e2e de invites en e2e/ siguen en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/components/space/space-invite-card.tsx",
+        "src/components/space/invite-manager.tsx",
+        "src/app/spaces/[id]/page.tsx",
+        "src/app/i/[token]/page.tsx",
+        "src/app/i/[token]/claim-button.tsx",
+        "e2e/spaces/manage.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Hojas 'Crear enlace nuevo' (con res.ok del DELETE) y 'Desactivar enlace' (danger), filas 'Creado …', atajo 'Convertir en grupo' en pareja completa, nota de invitados solo en viajes y toast 'Ya estás en {espacio}'; pendiente: CTA duplicado con Gestión (por spec)."
+    },
+    {
+      "id": "CF-21",
+      "title": "Eliminar gasto: alertdialog con nombre, importe, efecto en el saldo y aviso de recurrencia",
+      "priority": 121,
+      "screens": [
+        "gasto-detalle",
+        "hoja-eliminar-gasto"
+      ],
+      "design": [],
+      "spec": [
+        "DeleteExpenseButton recibe description, amount, coupleId/visibility, splits, payer e isRecurringTemplate",
+        "Se usa CriticalActionSheet tone=danger (role=alertdialog, foco en Cancelar) con el título '¿Eliminar «{descripción}» de {importe}?'. Consecuencias: 'Lucía dejará de deberte 32,10 €' / 'Dejarás de deber 32,10 € a Lucía' / 'Es un gasto personal: solo cambia tus cuentas'. En compartidos: 'Si ya saldasteis esta deuda, el saldo cambiará y puede que tengáis que saldar deuda de nuevo.' reversible=false",
+        "Plantilla recurrente: 'Al eliminarlo dejarán de crearse los próximos. Los ya creados se mantienen.' CTA 'Eliminar y detener recurrencia'. Si no, 'Eliminar gasto'",
+        "Flash toast en Gastos: 'Gasto «X» eliminado · saldo actualizado' + 'Saldar deuda' (/settle?space=) en compartidos",
+        "Captura nueva hoja-eliminar-gasto (ux-showcase, /expense/{expenseId})"
+      ],
+      "criteria": [
+        "e2e/expenses/edit-delete.spec.ts:82-86 usa getByRole('alertdialog', { name: /^¿Eliminar/ }), sigue comprobando el foco en Cancelar y pasa",
+        "shots/hoja-eliminar-gasto.png contiene nombre, importe y una línea de efecto con el nombre de una persona",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/components/expense/delete-button.tsx",
+        "src/app/expense/[id]/page.tsx",
+        "src/app/expenses/list/client.tsx",
+        "e2e/expenses/edit-delete.spec.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "CriticalActionSheet danger con «descripción» e importe, efecto en el saldo por persona (delete-effect.ts), aviso de deuda ya saldada y de recurrencia, flash toast con Saldar deuda; sin deshacer (API)."
+    },
+    {
+      "id": "CF-22",
+      "title": "Editar y promover un gasto compartido: consecuencia visible en el saldo",
+      "priority": 122,
+      "screens": [
+        "gasto-detalle"
+      ],
+      "design": [],
+      "spec": [
+        "Promover un gasto personal a compartido: la confirmación existente (expense-promote-confirm) dice '{X} pasará a deberte {importe}' (calculado con el reparto por defecto)",
+        "Editar un gasto compartido: bajo el botón Guardar, si cambian el importe o el reparto, la línea 'Al guardar, el saldo con {X} cambia en {delta}. Si ya saldasteis, puede volver a quedar deuda.'"
+      ],
+      "criteria": [
+        "committed-mutations.spec.ts:86-97 sigue en verde (testids expense-promote y expense-promote-confirm intactos)",
+        "Test jsdom o revisión: la confirmación de promover muestra el importe",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/components/expense/promote-button.tsx",
+        "src/app/expense/[id]/edit/page.tsx",
+        "src/components/expense/add/expense-form-sections.tsx"
+      ],
+      "passes": true,
+      "notes": "Compartir gasto con CriticalActionSheet (espacio, importe, 'Lucía pasará a deberte X' con el reparto real de /share) y línea de efecto en el saldo bajo 'Guardar cambios' al editar compartidos; pendiente: efecto entre terceros en grupos."
+    },
+    {
+      "id": "CF-23",
+      "title": "Listas: borrar los tachados con hoja (sin deshacer), línea de efecto en 'Terminar y apuntar gasto', eliminar lista y producto",
+      "priority": 123,
+      "screens": [
+        "listas",
+        "hoja-borrar-tachados"
+      ],
+      "design": [],
+      "spec": [
+        "Menú: 'Vaciar el carro (N)' → 'Borrar los tachados (N)'. Hoja danger '¿Borrar {n} productos tachados?' ('Se quitarán de la lista{ para todo el espacio}. Los pendientes no cambian.') con CTA 'Borrar {n} productos'. Toast '{n} productos borrados', SIN Deshacer",
+        "CTA 'Terminar y apuntar gasto' (mismo texto) + línea secundaria 'Quita de la lista los {n} productos tachados'. En SETTLING se mantiene 'Terminar compra'",
+        "Eliminar lista: '…Se borrarán sus {n} productos{ para todos los miembros del espacio}. No afecta a ningún gasto.' CTA 'Eliminar lista'. Flash toast 'Lista «X» eliminada'",
+        "Eliminar producto: sin modal. Toast '«X» eliminado' + Deshacer (lo vuelve a crear con nombre, cantidad, unidad, nota y pasillo)",
+        "Captura nueva hoja-borrar-tachados (ux-showcase, /lists/{listId})"
+      ],
+      "criteria": [
+        "Borrar los tachados no llama a clear-checked sin confirm-sheet-confirm (e2e en shopping/ui.spec.ts)",
+        "Deshacer de producto lo vuelve a crear (test jsdom o e2e)",
+        "shopping/ui.spec.ts:81,124 y lifecycle.spec.ts:35,121 siguen en verde con 'Terminar y apuntar gasto' / 'Terminar compra' sin cambios. Los specs que usaban 'Vaciar el carro' actualizados",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/components/shopping/lists-hub.tsx",
+        "src/components/shopping/item-edit-sheet.tsx",
+        "e2e/shopping/ui.spec.ts",
+        "e2e/shopping/lifecycle.spec.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "'Borrar los tachados (N)' con hoja danger y toast sin Deshacer, línea de efecto sobre 'Terminar y apuntar gasto', eliminar lista con alcance/conteo y flash toast, producto con Deshacer; e2e nuevo en shopping/ui.spec.ts. Pendiente: restaurar tachados (API)."
+    },
+    {
+      "id": "CF-24",
+      "title": "Etiquetas y categorías: hojas propias y choque de presupuesto resoluble",
+      "priority": 124,
+      "screens": [
+        "categorias",
+        "etiquetas"
+      ],
+      "design": [],
+      "spec": [
+        "Etiquetas: la X pasa a Trash2 con 44 px. Hoja danger '¿Eliminar la etiqueta «X»?' ('Se quitará de todos los gastos del espacio, también de los de los demás. Los gastos no se borran.'; versión personal aparte) con CTA 'Eliminar etiqueta'. Toast",
+        "Categoría: título '¿Eliminar la categoría «X»?', 'Los gastos, gastos recurrentes y presupuestos de «X» pasarán a la categoría que elijas.', CTA 'Eliminar y mover a «{destino}»'. Cancelar debajo",
+        "BUDGET_CONFLICT (por json.code): '«{destino}» ya tiene presupuesto en un mes en que «X» también lo tiene…' + 'Elegir otro destino' (foco en el select) + 'Ir a Presupuestos'",
+        "Botones de fila de categorías de 44 px",
+        "Capturas nuevas categorias (/categories) y etiquetas (/tags), escenario ux-showcase"
+      ],
+      "criteria": [
+        "grep -rn 'confirm(' src/app/tags no devuelve nada",
+        "Test jsdom de delete-category-modal: un 409 BUDGET_CONFLICT muestra 'Ir a Presupuestos'",
+        "Los e2e de categories y tags actualizados y en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/tags/client.tsx",
+        "src/components/category/delete-category-modal.tsx",
+        "src/components/category/delete-category-modal.test.tsx",
+        "src/app/categories/client.tsx",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Hoja danger para eliminar etiqueta (común/personal, Trash2 44 px, toast) y categoría (destino en el CTA, BUDGET_CONFLICT con 'Elegir otro destino' e 'Ir a Presupuestos'); filas de categorías a 44 px con menú ⋯. Pendiente: conteos de uso y mes del choque (API)."
+    },
+    {
+      "id": "CF-25",
+      "title": "Desglose de ticket y foto: deshacer local y toques de 44 px",
+      "priority": 125,
+      "screens": [
+        "anadir-gasto-opciones"
+      ],
+      "design": [],
+      "spec": [
+        "Al borrar una línea: fila temporal '«X» eliminada · el total baja a {importe} · Deshacer' (estado local)",
+        "Al borrar la última línea: 'Sin desglose: el importe se queda en {importe}'",
+        "Papelera de 44 px separada del selector ½/Yo/{inicial}",
+        "'Quitar' → 'Quitar foto' con min-h-11. Al editar con un recibo guardado: 'La foto se borrará del gasto al guardar' + Deshacer"
+      ],
+      "criteria": [
+        "Test jsdom de receipt-items-editor: borrar y luego Deshacer restaura la línea y el total",
+        "shots/anadir-gasto-opciones (json/aria): papelera y 'Quitar foto' de al menos 44 px",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/components/expense/add/receipt-items-editor.tsx",
+        "src/components/expense/add/expense-form-state.ts",
+        "src/components/expense/add/expense-more-options.tsx",
+        "src/components/expense/add/use-receipt-scan.ts"
+      ],
+      "passes": true,
+      "notes": "Deshacer local al borrar línea (total que baja / \"Sin desglose\"), papelera y ½/Yo/L de 44 px, \"Quitar foto\" de 44 px y Deshacer de la foto guardada; pendiente: campos qty/precio de 16 px."
+    },
+    {
+      "id": "CF-26",
+      "title": "Ajustes: aviso del token corregido, cerrar todas las sesiones en rojo, aviso en el login y nombre del espacio al exportar",
+      "priority": 126,
+      "screens": [
+        "ajustes",
+        "ajustes-revocar",
+        "login"
+      ],
+      "design": [],
+      "spec": [
+        "Hoja del token: 'Trátalo como una contraseña: da acceso a tu cuenta durante 90 días. Generar otro NO desactiva este. Si crees que alguien lo tiene, usa «Cerrar sesión en todos los dispositivos».' + botón que abre la revocación",
+        "Si mcpCopied es false al cerrar: confirmación en línea con 'Volver' / 'Cerrar sin copiar'",
+        "Dentro de la región 'Cuenta' (se mantienen Organizar, Conexiones y Cuenta): 'Cerrar sesión en todos los dispositivos' en color de peligro, sin chevron, con el subtexto 'También desconecta Hermes y otros clientes MCP'. 'Cerrar sesión' pasa a neutro",
+        "RevokeSessionsSheet → CriticalActionSheet danger con CTA 'Cerrar todas las sesiones' y viñetas",
+        "Navegación a /login?signedOut=all y ?signedOut=1. El login muestra un aviso con role=status",
+        "LogoutButton comprueba res.ok ('No se pudo cerrar la sesión. Inténtalo de nuevo.') y muestra 'Cerrando sesión…' con aria-busy",
+        "Exportar: se mantiene <a href download> con el mismo nombre accesible. Subtexto '{espacio activo} · gastos compartidos y tu parte'",
+        "docs/design/README.md: el bullet MCP pasa a decir que los tokens se revocan con 'Cerrar sesión en todos los dispositivos' (tokenVersion)",
+        "Captura nueva ajustes-revocar (ux-showcase, /settings)"
+      ],
+      "criteria": [
+        "grep -n 'Aún no se puede revocar' src/app/settings no devuelve nada",
+        "shots/ajustes-revocar.png tiene el CTA rojo 'Cerrar todas las sesiones'",
+        "e2e/features/settings.spec.ts: :21 (la hoja menciona 'Cerrar sesión en todos los dispositivos'), :46-48 (regiones) y :75 (enlace 'Exportar gastos (CSV)' con href) siguen en verde. Los pasos de revocación pulsan confirm-sheet-confirm",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/settings/settings-client.tsx",
+        "src/app/login/page.tsx",
+        "src/components/auth/logout-button.tsx",
+        "docs/design/README.md",
+        "e2e/features/settings.spec.ts",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Aviso del token corregido + botón a la revocación y confirmación 'Cerrar sin copiar'; 'todos los dispositivos' en rojo con subtexto MCP y CriticalActionSheet danger; login con aviso ?signedOut=1|all; LogoutButton con res.ok y aria-busy; exportar con el nombre del espacio. Pendiente: tokens uno a uno (API)."
+    },
+    {
+      "id": "CF-27",
+      "title": "Admin: anular invitación con consecuencia y separar las caducadas",
+      "priority": 127,
+      "screens": [
+        "admin"
+      ],
+      "design": [],
+      "spec": [
+        "'Eliminar' → 'Anular'. Hoja danger '¿Anular la invitación {code}?' ('El enlace de registro que hayas enviado dejará de funcionar…') con CTA 'Anular invitación'. Toast 'Invitación anulada'",
+        "Caducadas (expiresAt < ahora): grupo 'Caducadas', sin botón de copiar y fuera de Disponibles",
+        "Cabecera 'Enlaces para crear una cuenta en EQUIL. Cada enlace sirve una vez y caduca a los 7 días.' Texto visible 'Copiar enlace'",
+        "Captura nueva admin (ux-showcase, admin, /admin)"
+      ],
+      "criteria": [
+        "Test jsdom de admin-invites: una invitación caducada no cuenta en Disponibles",
+        "Los e2e de admin actualizados y en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/app/admin/admin-invites.tsx",
+        "src/app/admin/admin-invites.test.tsx",
+        "scripts/ralph/capture.spec.ts"
+      ],
+      "passes": true,
+      "notes": "Anular con hoja danger + toast 'Invitación anulada'; grupo 'Caducadas' sin copiar ni contar en Disponibles; cabecera de enlaces y 'Copiar enlace' visible; test jsdom y e2e nuevo e2e/features/admin.spec.ts. Sin pendientes."
+    },
+    {
+      "id": "CF-28",
+      "title": "MCP, comentarios y barrido final de vocabulario",
+      "priority": 128,
+      "screens": [],
+      "design": [],
+      "spec": [
+        "finance.ts create_settlement: 'Settle a debt (\"Saldar deuda\"): record that the caller paid another member… Creates a PENDING payment that counts only after the receiver confirms it. Before calling, restate the amount and the receiver to the user and get explicit confirmation.'",
+        "finance.ts confirm_settlement: 'Confirm (\"Lo he recibido\") or reject (\"No lo he recibido\")… rejecting leaves the debt pending. Before calling, restate the payer, the amount and the action to the user and get explicit confirmation.'",
+        "resources-prompts.ts settle_up_guide: corregir (solo confirma quien recibe; create_settlement usa toUserId; confirmar con el usuario antes de cada llamada)",
+        "Comentarios: api/settle/route.ts:12, settle-model.ts:1, settlement-rules.ts:2, settlement-service.ts:12, settlement-space.ts:7, pending-settlements.tsx:22,39, close/client.tsx:16, confirm-sheet.tsx:11, space-carousel.tsx:29, e2e/settlements/rules.api.spec.ts:8",
+        "AGENTS.md: ARCHIVED no se puede reabrir (solo SETTLING) y SETTLING se muestra como 'Cerrando cuentas'"
+      ],
+      "criteria": [
+        "grep -rn 'Quedar en paz\\|Quedad en paz\\|quedar en paz\\|both parties\\|Recordárselo\\|Confirmar Pagos\\|Liquidando' src e2e docs AGENTS.md (sin src/generated) no devuelve nada",
+        "grep -rn 'window.confirm\\|[^.]confirm(' src --include=*.tsx no devuelve nada",
+        "grep -rni 'en paz\\|liquidación' src --include=*.tsx --include=*.ts solo devuelve el alias de búsqueda de expenses/list/client.tsx",
+        "Los tests de src/mcp siguen en verde",
+        "mise run check en verde"
+      ],
+      "files": [
+        "src/mcp/tools/finance.ts",
+        "src/mcp/resources-prompts.ts",
+        "AGENTS.md",
+        "src/lib/settlement-space.ts",
+        "src/app/api/settle/route.ts",
+        "e2e/settlements/rules.api.spec.ts"
+      ],
+      "passes": true,
+      "notes": "MCP create/confirm_settlement piden confirmación explícita y usan 'Saldar deuda'/'Lo he recibido'; settle_up_guide corregido; comentarios y AGENTS.md (ARCHIVED terminal, 'Cerrando cuentas') al día. Quedan en el grep solo el glosario del plan y los mockups .dc.html (fuera de alcance)."
+    },
+    {
+      "id": "RV-01",
+      "title": "/settle: hoja tras 409, importe de la deuda al rechazar, sin prometer avisos",
+      "priority": 200,
+      "screens": [],
+      "design": [],
+      "spec": [
+        "(media) La hoja de revisión de /settle sigue abierta con datos viejos tras un 409 y reenvía lo mismo — src/app/settle/client.tsx:114. Con un StaleError (SETTLEMENT_CHANGED, SETTLEMENT_EXCEEDS_DEBT, SETTLEMENT_PENDING_EXISTS…), run() pone el error y hace router.refresh(), pero no limpia `review`. La hoja sigue tomando sus datos de `review.t` / `review.incoming`, que se guardaron al abrirla (líneas 436-455). Así, el `maxCents`, el 'máx.' y el `expectedAmountCents` de confirmIncoming (línea 136) son los de antes del refresh. En cambio, pending-settlements.tsx y settlement-actions.tsx cierran la hoja ante un 409. FALLO: El deudor edita su pago PENDING de 20 € a 15 € mientras el acreedor tiene abierta la hoja 'Sí, he recibido 20,00 €'. El acreedor confirma y recibe 409 'El importe de este pago ha cambiado'. La página se refresca, pero la hoja sigue diciendo 20 € y cada nuevo intento manda expectedAmountCents=2000 y vuelve a dar 409. Solo se arregla cerrando la hoja y abriéndola otra vez. Pasa lo mismo con SETTLEMENT_EXCEEDS_DEBT: el error dice que el tope nuevo es X, pero el campo sigue validando contra el tope viejo. ARREGLO: En run(), ante un StaleError, cerrar la hoja (setReview(null)) y mostrar el error fuera de ella, como hace Inicio. Otra opción: volver a derivar t/incoming de las props nuevas por id antes de pintar la hoja.",
+        "(media) La hoja de rechazo dice que la deuda es el importe del pago, no la deuda real — src/components/settle/settle-review-sheet.tsx:174. La consecuencia de rechazar usa `amount` (el importe del pago PENDING) como si fuera la deuda: 'La deuda de {amount} seguirá pendiente'. El componente ya recibe `owedCents`, que es lo que el pagador debe de verdad. En un pago parcial las dos cifras no coinciden. FALLO: B debe 50 € a A y avisa de que le ha pagado 20 €. A pulsa 'No lo he recibido' y la hoja dice 'La deuda de 20,00 € seguirá pendiente', cuando lo que sigue pendiente son 50 €. ARREGLO: Usar formatCurrency(owedCents) (o decir 'La deuda seguirá pendiente' sin cifra cuando owedCents sea 0).",
+        "(media) Reject sheet calls the payment amount 'la deuda' — src/components/settle/settle-review-sheet.tsx:174. PendingPaymentSheet with status REJECTED says `La deuda de ${amount} seguirá pendiente`, where `amount` is the amount of the PENDING payment, not the debt. The component already receives `owedCents` (the real debt) and uses it in the confirm branch. FALLO: Luis owes 50 € and registers a 10 € payment. Ana taps 'No lo he recibido' and reads 'La deuda de 10,00 € seguirá pendiente', but 50 € is still owed. ARREGLO: Use formatCurrency(owedCents) for the debt, e.g. `La deuda de ${formatCurrency(owedCents)} seguirá pendiente…`, or drop the amount: 'La deuda seguirá pendiente…'.",
+        "(media) El pago se presenta como 'avisado' a la otra persona, pero EQUIL no envía ningún aviso — src/components/settle/settle-review-sheet.tsx:96. La hoja de revisión del deudor dice 'Avisaremos a {name}.' y la pantalla de éxito de /settle (src/app/settle/client.tsx:211-212) dice 'Avisado a {name}' y 'Le hemos dicho que le has pagado…'. En el código no hay notificaciones, push ni correo (grep de notif/push/sendMail en src/lib y src/app/api: nada). El acreedor solo lo ve si abre la app y entra en 'Pagos por confirmar'. Es una consecuencia falsa en una acción de dinero, y la propia pantalla tiene que ofrecer 'Pedirle que lo confirme' porque en realidad no se avisa a nadie. FALLO: Marta registra 'Ya le he pagado 30 € a Juan'. La hoja le promete que avisarán a Juan y el éxito le dice 'Avisado a Juan'. Marta no comparte el recordatorio. Juan nunca se entera y el pago se queda PENDING indefinidamente, mientras Marta cree que Juan ya lo sabe. ARREGLO: Sustituir por consecuencias verdaderas: 'Juan lo verá en Pagos por confirmar la próxima vez que entre' y, en el éxito, 'Pago registrado · falta que Juan lo confirme'. 'Pedirle que lo confirme' pasa a ser la acción principal.",
+        "(media) After 'Ya le he pagado', the app says it has told the creditor, but nothing is sent — src/app/settle/client.tsx:211. The success screen for a PENDING payment has the title `Avisado a ${name}` and the text 'Le hemos dicho que le has pagado X…'. The review sheet (settle-review-sheet.tsx:96) also promises `Avisaremos a ${name}.` The app has no notifications (no push or email in src/lib). The creditor only finds out if they open Inicio or /settle. The same screen offers 'Pedirle que lo confirme' because the app does not tell the creditor itself. 'Avisado a X' is also awkward Spanish (it should be 'Has avisado a X' or 'Aviso enviado'). FALLO: A debtor registers a payment, reads 'Avisado a Ana · Le hemos dicho…' and does nothing more. Ana gets no message and the payment stays unconfirmed indefinitely. ARREGLO: Use honest copy, e.g. title 'Pago a Ana · por confirmar', text 'Lo verá en EQUIL como pago por confirmar. La deuda quedará saldada cuando lo confirme.', and in the sheet 'Ana lo verá en Pagos por confirmar.' Keep 'Pedirle que lo confirme' as the main action.",
+        "(baja) Al confirmar un pago desde Inicio, la hoja y el toast se basan en la deuda por pareja del plan simplificado, no en el saldo — src/components/settle/settle-review-sheet.tsx:195. owedCents viene de resolveMyDebts, que es el emparejamiento voraz por parejas (dashboard/page.tsx:294). El servidor, en cambio, permite pagos de hasta min(-deudor, acreedor) (settlement-rules.ts:43), que puede ser más que esa deuda por pareja. Cuando amount >= owedCents, la hoja dice '{X} dejará de deberte {amount}' y el toast de Inicio (pending-settlements.tsx:68-73) dice 'Deuda saldada: X ya no te debe nada' aunque el saldo final no sea 0. El glosario reserva 'Deuda saldada' para cuando el saldo final es 0, y /settle sí usa balance - amount. FALLO: Grupo: X te debe 30 € e Y te debe 20 €. X registra un pago de 30 € y lo confirmas desde Inicio. El toast dice 'Deuda saldada' aunque aún te deben 20 €. Otro caso: si el plan empareja a X con otra persona (owedCents = 0) y X te paga 10 €, la hoja afirma que X 'dejará de deberte 10 €' cuando nunca te debía. ARREGLO: Calcular el resto con el saldo neto del receptor (balance - amount), como hace /settle, y mostrar 'Deuda saldada' solo cuando ese saldo llegue a 0."
+      ],
+      "criteria": [
+        "Cada hallazgo de spec está corregido (o marcado fuera de alcance con motivo en findings/RV-01.md)",
+        "Capturas de las pantallas afectadas revisadas",
+        "mise run check y los e2e afectados en verde"
+      ],
+      "files": [
+        "src/app/settle/client.tsx",
+        "src/components/settle/settle-review-sheet.tsx"
+      ],
+      "passes": true,
+      "notes": "409 cierra la hoja de /settle con el error fuera; rechazo con la deuda real; sin 'Avisaremos'/'Avisado a' (Pago a X · por confirmar); 'Deuda saldada' según el saldo neto (incomingOutcome). Nada pendiente."
+    },
+    {
+      "id": "RV-02",
+      "title": "Coherencia de saldos: tope de edición, rechazo, /close y bloqueo de archivado con el mismo cálculo que la API",
+      "priority": 201,
+      "screens": [],
+      "design": [],
+      "spec": [
+        "(media) La edición de un pago limita el importe con el emparejamiento voraz, no con el tope que aplica la API — src/app/settle/[id]/edit/page.tsx:36. Antes, el tope del importe lo decidía la API (`pairCap` = min(lo que debe el pagador en total, lo que se le debe al receptor), en settlement-service.ts:46). Ahora la página calcula `maxCents` con `resolveMyDebts(...)[toUserId]`, que es el reparto voraz deudor→acreedor. `validateSettleAmount` desactiva «Guardar cambios» por encima de esa cifra. En un grupo, el reparto voraz puede asignar al pagador una parte del receptor mucho menor que `pairCap`, o incluso ninguna. FALLO: Grupo con saldos A −50, B −30, C +60, D +20. El reparto voraz da A→C 50, B→C 10 y B→D 20. B tiene un pago PENDING de 25 € a C, que la API acepta porque pairCap(B,C)=30 (por ejemplo, creado por MCP `create_settlement`, o que quedó por encima del reparto tras gastos nuevos). B abre /settle/[id]/edit y el valor inicial de 25 € ya sale en error («No puede ser más de 10,00 €»). El botón Guardar queda desactivado: ni siquiera puede cambiar el método sin bajar el importe, aunque la API aceptaría hasta 30 €. ARREGLO: Calcular el tope con la misma regla que la API: settlementCap(balances[from], balances[to]), o exportar pairCap/settlementCap para la página. Otra opción es no pasar maxCents y dejar que el 409 SETTLEMENT_EXCEEDS_DEBT (con maxAmountCents) pinte el error.",
+        "(media) La consecuencia, el toast y «Saldar deuda» tras un rechazo usan el reparto voraz y en grupos afirman cosas falsas — src/app/dashboard/page.tsx:294. `owedCents` sale de `resolveMyDebts(balances, payer)[receiver]`: lo que el plan simplificado asigna a esa pareja, no lo que el pagador debe de verdad. Se usa en tres sitios: en PendingPaymentSheet («X dejará de deberte» / «aún te deberá»), en el toast de pending-settlements.tsx:68 («Deuda saldada: X ya no te debe nada») y en settle/[id]/page.tsx:89-105, donde `canSettleRejected` y «Tu deuda de … sigue pendiente» dependen de `owedCents > 0`. FALLO: Grupo en el que B le debe 30 € al grupo y el plan voraz lo empareja con D, pero B le pagó 20 € a C (PENDING, válido según pairCap). C pulsa «Lo he recibido»: owedCents=0, así que la hoja dice «B dejará de deberte 20,00 €» y el toast «Deuda saldada: B ya no te debe nada», aunque B sigue debiendo. Si C lo rechaza, B ve el detalle del pago sin «Tu deuda sigue pendiente» y sin el botón «Saldar deuda», porque owedCents es 0. ARREGLO: Para esas frases y para el CTA, usar el saldo real de la pareja (settlementCap(balances[payer], balances[receiver]), o -balances[payer] para «sigue debiendo»). Si no se puede afirmar algo exacto, usar un texto neutro en lugar de «Deuda saldada».",
+        "(baja) /close resta los PENDING por pareja exacta y lista dos veces la misma deuda cuando el pago va a otro acreedor — src/app/spaces/[id]/close/page.tsx:64. Un PENDING solo se descuenta del plan si coincide exactamente el par `${debtor}>${creditor}` del reparto voraz. En un grupo, el deudor puede haber pagado (PENDING) a un acreedor distinto del que le asigna el plan. En ese caso la fila del PENDING y la fila de deuda completa del plan aparecen a la vez, y «Faltan N» cuenta ambas. FALLO: B debe 30 € y el plan lo empareja con D, pero B ya registró 30 € a C (PENDING). En /close aparecen «B dice que ha pagado a C · 30 €» y «B debe a D · 30 €», con «Faltan 2», aunque al confirmarse el PENDING B quedará a 0. ARREGLO: Descontar los PENDING del saldo del deudor (y del acreedor) antes de calcular el plan, en lugar de restarlos por pareja después.",
+        "(baja) El motivo de bloqueo del archivado y el progreso del banner cuentan solo deudores, pero la API bloquea con cualquier saldo abierto — src/app/spaces/[id]/close/page.tsx:82. `openDebts = balances.filter(c => c < 0 && hasOpenBalance(c))`. assertCanArchive bloquea si `some(hasOpenBalance)` en cualquier signo, y así lo calculaba el canArchive de antes de esta rama. Pasa lo mismo en spaces/[id]/page.tsx:115 y dashboard/page.tsx:367. Si varios deudores tienen −1 céntimo (dentro de la tolerancia) y el acreedor acumula +2, archiveBlockReason da null y el banner dice 'estáis al día · Todo saldado · Archivar'. Mientras tanto, /close lista esas deudas de 0,01 € (resolveMyDebts incluye amount <= −1) y la API responde 409 OPEN_BALANCES. FALLO: Grupo de 3 con restos de redondeo: B −1, C −1, A +2. La hoja de archivar tiene el CTA activo y sin motivo, el banner invita a archivar y el PATCH devuelve 409. Además, el paso 2 de /close muestra 'Faltan 2'. ARREGLO: Para bloquear, usar el mismo predicado que la API (Object.values(balances).some(hasOpenBalance)). Para el texto, contar las filas del plan (o los saldos abiertos de cualquier signo) para que coincida con 'Faltan N' de /close."
+      ],
+      "criteria": [
+        "Cada hallazgo de spec está corregido (o marcado fuera de alcance con motivo en findings/RV-02.md)",
+        "Capturas de las pantallas afectadas revisadas",
+        "mise run check y los e2e afectados en verde"
+      ],
+      "files": [
+        "src/app/dashboard/page.tsx",
+        "src/app/settle/[id]/edit/page.tsx",
+        "src/app/spaces/[id]/close/page.tsx"
+      ],
+      "passes": true,
+      "notes": "Tope de edición con settlementCap, deuda real del pagador (debtOf) en hoja/toast/detalle, /close con PENDING aplicados antes del plan y bloqueo/banner con el predicado de la API (close-plan.ts); nada pendiente."
+    },
+    {
+      "id": "RV-03",
+      "title": "Compartir gasto irreversible y con el espacio mostrado; Borrar los tachados sin borrar de más",
+      "priority": 202,
+      "screens": [],
+      "design": [],
+      "spec": [
+        "(baja) 'Compartir con {espacio}' no manda el espacio que muestra la hoja — src/components/expense/promote-button.tsx:38. El servidor calcula la vista previa (nombre del espacio y 'X pasará a deberte Y') con getActiveGroup() al pintar la página. El POST va sin cuerpo, así que la ruta vuelve a resolver getActiveGroup() en el momento de la petición. La ruta acepta `targetGroupId`, pero no se envía. FALLO: El usuario abre el detalle de un gasto personal con 'Casa' como espacio activo, cambia en otra pestaña el activo a 'Viaje' y confirma 'Compartir con Casa'. El gasto se comparte en Viaje con otro reparto y otros deudores distintos de los que mostraba la hoja. ARREGLO: Pasar el myGroupId de la vista previa a PromoteButton y enviar body: { targetGroupId }.",
+        "(media) Compartir un gasto personal no tiene vuelta atrás y la hoja no lo dice — src/components/expense/promote-button.tsx:68. POST /api/expenses/[id]/share pasa el gasto a SHARED, le pone coupleId y crea los splits. No existe ningún endpoint que lo devuelva a PERSONAL (src/app/api/expenses/[id]/ solo tiene receipt-lines, share y tags, y el PATCH no cambia visibility). Aun así, la hoja usa el valor por defecto reversible=true, sin la línea 'No se puede deshacer.' ni nada equivalente. En cambio, 'Convertir en grupo', que también es de un solo sentido, sí pasa reversible={false}. Se pierde privacidad y cambian los saldos de forma permanente; la única salida es eliminar el gasto para todos. FALLO: Un usuario comparte por error un gasto privado (p. ej. de farmacia) con el grupo pensando que luego podrá volver a hacerlo privado. Todo el grupo lo ve ya, y la única forma de deshacerlo es eliminar el gasto, con lo que pierde también su registro personal. ARREGLO: Pasar reversible={false} y añadir la consecuencia 'No podrás volver a hacerlo privado; solo eliminarlo'.",
+        "(media) 'Borrar los tachados' anuncia N productos, pero el servidor borra todos los tachados en ese momento — src/components/shopping/lists-hub.tsx:641. ClearCheckedSheet recibe count={done.length}, sacado del estado local, que se refresca por sondeo cada ~6 s. El título, el CTA ('Borrar 3 productos') y el toast (onCleared(count), línea 885) usan ese número. Pero clearCheckedForScope hace deleteMany({ listId, checked: true }) (list-crud.ts:330), así que borra también lo que otro miembro haya tachado después del último sondeo. La hoja de una acción irreversible y danger se queda corta con lo que se pierde, y el toast confirma una cifra equivocada. FALLO: En una lista común, Luis tacha 2 productos en el súper. Segundos después, Ana, que aún ve 3 tachados, confirma 'Borrar 3 productos'. El servidor borra 5, el toast dice '3 productos borrados' y los 2 de Luis desaparecen sin aviso ni forma de recuperarlos. ARREGLO: Mandar al endpoint los ids que muestra la hoja (borrar solo esos) o devolver el número real borrado y usarlo en el toast. Si el número real es mayor que el anunciado, avisar o abortar."
+      ],
+      "criteria": [
+        "Cada hallazgo de spec está corregido (o marcado fuera de alcance con motivo en findings/RV-03.md)",
+        "Capturas de las pantallas afectadas revisadas",
+        "mise run check y los e2e afectados en verde"
+      ],
+      "files": [
+        "src/components/expense/promote-button.tsx",
+        "src/components/shopping/lists-hub.tsx"
+      ],
+      "passes": true,
+      "notes": "Compartir envía targetGroupId de la vista previa y es irreversible («No podrás volver a hacerlo privado; solo eliminarlo»); clear-checked acepta ids opcionales y el toast usa el número real borrado. Nada pendiente."
+    },
+    {
+      "id": "RV-04",
+      "title": "Glosario: restos y concordancias tras la revisión",
+      "priority": 203,
+      "screens": [],
+      "design": [],
+      "spec": [
+        "(media) 'No cuentan en el saldo' is still in the Pagos por confirmar card — src/components/dashboard/pending-settlements.tsx:108. The Glosario (row 'Número con signo') explicitly retires 'no cuenta en el saldo' in favour of 'la deuda sigue pendiente'. The Inicio card still shows 'No cuentan en el saldo hasta que confirmes que los has recibido.' The detail page (settle/[id]/page.tsx:101) also says 'Ya cuenta en el saldo', which uses 'saldo' in a retired way. FALLO: On Inicio, a creditor reads the retired 'saldo' wording, while the detail page and the sheets say 'la deuda sigue pendiente'. The same concept gets two names. ARREGLO: Use 'Hasta que confirmes que los has recibido, la deuda sigue pendiente.' On the detail page use 'Confirmaste que lo recibiste. La deuda se ha reducido.' or similar.",
+        "(media) Recientes on Inicio names payments differently from Gastos and the detail page — src/app/dashboard/page.tsx:278. The Glosario row 'Fila de un pago en Gastos o Recientes' requires titles like 'Pago a X · por confirmar' / 'X dice que te ha pagado' / 'Pagaste a X' / 'X te pagó', with subtitle 'Pago de deuda · {estado} · {método}'. Inicio's Recientes uses the fixed title 'Pago de deuda' and the subtitle `${getSettlementStatusLabel} · A → B` (line ~264). That shows 'Pendiente', while the chips say 'Pendiente de confirmar', and the method is missing. list-format.ts:130-145 (Gastos) follows the glossary. FALLO: The same PENDING payment reads 'Pago de deuda · Pendiente · Luis → Ana' in Inicio, but 'Luis dice que te ha pagado · Pago de deuda · Pendiente · Bizum' in Gastos and the detail page. ARREGLO: Reuse settlementRowText (list-format.ts) for the Recientes rows so the title and subtitle match Gastos.",
+        "(media) Member sheet says 'su deuda' when the debt is the manager's or the member is owed — src/components/space/member-list.tsx:375. With `cents < 0 || pair < 0` the text is 'Para quitarle, primero hay que saldar su deuda.' When pair < 0 and cents > 0, the manager owes the member, so the debt belongs to the manager, not the member. When cents > 0 and pair === 0, the fallback 'Cuando se salde su deuda podrás quitarle.' also says 'su deuda', but the member is owed money and has no debt. 'quitarle' is also leísmo, and the names can be any gender. FALLO: The manager owes Marta 20 € and opens her sheet. It reads 'A Marta le deben 20 €… primero hay que saldar su deuda', and the 'Saldar deuda' button that follows is for the manager's own debt. ARREGLO: Choose the text by direction: pair < 0 → 'Para quitarla, primero salda tu deuda con {name}.'; cents < 0 → 'Primero tiene que saldar su deuda.'; cents > 0 && pair === 0 → 'Cuando le paguen lo que le deben podrás quitarla del espacio.' (or a gender-neutral 'quitar a {name}').",
+        "(baja) Pending payment in the Historial is worded differently from /settle, /close and Gastos — src/app/settle/history/page.tsx:73. For a payment of mine still PENDING, the history title is `Pago a ${to}` (without '· por confirmar') and the detail is `Esperando a ${to}`. The Glosario sets 'Pago a X · por confirmar' / 'Falta que X lo confirme', which /settle (client.tsx:615), /close (close/client.tsx:374-380), the detail page and Gastos (list-format.ts:131) all use. FALLO: The same payment shows as 'Pago a Ana · por confirmar / Falta que Ana lo confirme' in /settle and as 'Pago a Ana / Esperando a Ana' in the Historial de pagos. ARREGLO: Use `pending ? `Pago a ${to} · por confirmar` : …` and the detail `Falta que ${to} lo confirme`.",
+        "(baja) The same owner change says 'propietaria' on the button and 'propietario' in the toast — src/components/space/member-list.tsx:338. The button reads `Hacer propietaria a {member.name}` (feminine), while the toast for the same action uses ROLE_NOUN.OWNER = 'propietario' (line 38/132: `${m.name} ahora es propietario`). The gender changes within one flow, and both forms assume a gender for any name. FALLO: Tapping 'Hacer propietaria a Juan' shows the toast 'Juan ahora es propietario'. ARREGLO: Use one neutral form in both places, e.g. 'Hacer propietario/a a…', or better 'Dar el rol de propietario a {name}' / '{name} ya tiene el rol de propietario'.",
+        "(baja) SETTLING path on lists still uses the retired 'Carro vaciado' — src/components/shopping/lists-hub.tsx:370. The Glosario retires 'Vaciar el carro'. In SETTLING, the toast still says 'Carro vaciado. Estáis cerrando cuentas…' and the button says 'Terminar compra' (line 586), while the effect line above it says 'Quita de la lista los N productos tachados' and the normal path toast says 'N productos borrados' (line 648). FALLO: In a space that is closing its accounts, the user taps 'Terminar compra' and reads 'Carro vaciado'. This is the same action that shows 'N productos borrados' from the menu. ARREGLO: Use 'N productos quitados de la lista. Estáis cerrando cuentas: apunta el gasto cuando se reabra el espacio.' with the same plural logic as line 648.",
+        "(baja) Space consequences use 'borrar gastos', but the glossary says 'Eliminar' for gastos — src/lib/space-ui.ts:45. SETTLING_CONSEQUENCES says 'No se podrán añadir, editar ni borrar gastos.' and REOPEN_CONSEQUENCES says 'Podréis volver a añadir, editar y borrar gastos.' The Glosario sets 'Eliminar' for gasto and retires mixing Borrar and Eliminar. The expense button and toast use 'Eliminar'/'eliminado'. DeleteListSheet (lists-hub.tsx:943-946) also says 'Se borrará(n)…' under the title '¿Eliminar…?' and the CTA 'Eliminar lista'. FALLO: The close-accounts sheet says 'borrar gastos', while the expense's own button says 'Eliminar gasto'. ARREGLO: Use 'eliminar gastos' in both constants, and 'Se eliminará la lista / sus N productos' in DeleteListSheet.",
+        "(baja) Desglose toast always uses the feminine form with the product name — src/components/expense/add/receipt-items-editor.tsx:76. The undo label is `«${name}» eliminada`, agreeing with 'línea' but placed right after the product name. The list toast for the same kind of thing uses `«${item.name}» eliminado` (lists-hub.tsx:330). FALLO: Deleting the 'Pan' line shows '«Pan» eliminada'. ARREGLO: Use `Línea «${name}» eliminada`, or the masculine form to match lists ('«Pan» eliminado').",
+        "(baja) Leave-space sheet uses 'saldarla' with no antecedent, and its gender varies — src/components/space/leave-space.tsx:143. 'Debes 20 € en X. Si sales sin saldarla, …' The pronoun 'la' points to a 'deuda' that has not been mentioned, and the next sentence switches to 'saldarlo' (line 144). The title 'Antes de salir, saldad la deuda' (line 149) addresses the group with 'saldad' in a sheet where only the viewer acts. FALLO: The user reads 'Debes 20 € en Viaje. Si sales sin saldarla…', which sounds unnatural. ARREGLO: Use 'Tienes una deuda de 20 € en X. Si sales sin saldarla, … no podrán saldarla en la app.' (feminine throughout), and for the creditor 'Antes de salir, cobra lo que te deben'.",
+        "(baja) Al salir sin saldar, la hoja dice que el resto seguirá viendo tu deuda, y no es así — src/components/space/leave-space.tsx:182. La consecuencia del paso de casilla dice '{acreedores} seguirá(n) viendo tu deuda de {importe}'. Pero los saldos solo se calculan sobre miembros ACTIVE (ledger-read.ts:59-66, getGroupBalances), y space-policy.ts:280 reconoce que quien sale 'drops out of every ACTIVE balance view'. Después de salir con ?force=1, la deuda no aparece atribuida a esa persona en ningún sitio: el acreedor solo ve un saldo positivo que nadie cubre. La consecuencia de una acción irreversible queda suavizada. FALLO: Pedro debe 40 € a Ana, marca la casilla y sale. Cree que Ana seguirá viendo 'Pedro te debe 40 €', pero Ana solo ve que le deben 40 € sin saber quién, y /settle no le propone ninguna transferencia. ARREGLO: Redactarla con lo que pasa de verdad: 'Tu deuda de 40 € dejará de aparecer a tu nombre: Ana verá que le deben 40 € pero no podrá saldarlo en la app.'",
+        "(baja) Al eliminar una categoría de espacio no se dice que afecta a los gastos de todos los miembros — src/components/category/delete-category-modal.tsx:84. La consecuencia es la misma para el contexto personal y para el de espacio: 'Los gastos, gastos recurrentes y presupuestos de «X» pasarán a la categoría que elijas.' En un espacio, la acción (solo OWNER/ADMIN) recategoriza los gastos y presupuestos de todos los miembros. La hoja de etiquetas sí lo distingue ('…también de los de los demás', tags/client.tsx:258). FALLO: Una admin elimina la categoría de espacio 'Mascotas' pensando que solo toca sus gastos. Los gastos y presupuestos de todo el grupo pasan a 'Otros' sin que la hoja lo haya advertido. ARREGLO: Cuando context.kind es de espacio, añadir 'para todo el espacio, también los gastos de los demás', igual que en etiquetas."
+      ],
+      "criteria": [
+        "Cada hallazgo de spec está corregido (o marcado fuera de alcance con motivo en findings/RV-04.md)",
+        "Capturas de las pantallas afectadas revisadas",
+        "mise run check y los e2e afectados en verde"
+      ],
+      "files": [
+        "src/app/dashboard/page.tsx",
+        "src/app/settle/history/page.tsx",
+        "src/components/category/delete-category-modal.tsx",
+        "src/components/dashboard/pending-settlements.tsx",
+        "src/components/expense/add/receipt-items-editor.tsx",
+        "src/components/shopping/lists-hub.tsx",
+        "src/components/space/leave-space.tsx",
+        "src/components/space/member-list.tsx",
+        "src/lib/space-ui.ts"
+      ],
+      "passes": true,
+      "notes": "Glosario aplicado en los 11 hallazgos (deuda pendiente, Recientes con settlementText, hoja de miembro por dirección, salir sin saldar veraz, categoría de espacio para todos, eliminar/quitar/línea); sin pendientes."
+    },
+    {
+      "id": "RV-05",
+      "title": "Accesibilidad de Sheet, CriticalActionSheet y toasts",
+      "priority": 204,
+      "screens": [],
+      "design": [],
+      "spec": [
+        "(media) El foco no vuelve al disparador al cerrar la hoja (Sheet/CriticalActionSheet) — src/components/ui/sheet.tsx:44. El cierre se hace en la limpieza de un useEffect. En React 18/19 la limpieza de los efectos pasivos de un árbol desmontado se ejecuta después de que el nodo <dialog> se haya quitado del DOM. Al quitar el diálogo, la especificación HTML lo saca de la capa superior y pone is-modal a false, y el foco pasa a <body>. Cuando close() se ejecuta después, wasModal es false y el foco ya no está dentro del diálogo, así que no se restaura el 'previously focused element'. Afecta a todas las CriticalActionSheet/ConfirmSheet nuevas (Cancelar, Escape, fondo, éxito). FALLO: Un usuario de teclado o lector de pantalla abre 'Eliminar gasto' / 'Anular invitación' y pulsa Cancelar o Escape. La hoja se cierra y el foco cae en <body>: el siguiente Tab empieza al principio de la página en lugar de volver al botón que abrió la hoja. ARREGLO: Guardar document.activeElement antes de showModal() y, al desmontar, restaurarlo en una limpieza de useLayoutEffect (se ejecuta antes de quitar el nodo del DOM) o con trigger.focus() si trigger.isConnected. Si el disparador ya no existe (fila borrada), enfocar un destino razonable.",
+        "(media) El toast se monta ya con contenido: los lectores de pantalla pueden no anunciarlo — src/components/ui/eq.tsx:271. <output> (role=status, aria-live polite implícito) solo se renderiza cuando hay mensaje ({toast && <EqToast>}), así que la región viva entra en el árbol a la vez que su texto. VoiceOver y NVDA suelen ignorar regiones vivas que aparecen ya con contenido. Eso deja sin anunciar 'Gasto eliminado · saldo actualizado', 'Has salido de X' y el 'Deshacer' nuevo. FALLO: Un usuario de lector de pantalla borra un producto o sale de un espacio: no oye ningún aviso y no sabe que existe la acción 'Deshacer' ni el enlace 'Saldar deuda'. ARREGLO: Mantener un contenedor role=status/aria-live=polite montado siempre (vacío) en el layout o en FlashToast y cambiar solo su contenido, o renderizar el <output> de forma persistente y vaciarlo en lugar de desmontarlo.",
+        "(baja) Al ponerse busy, el CTA enfocado se deshabilita y el foco se pierde sin anuncio de progreso — src/components/ui/critical-action-sheet.tsx:127. Al pulsar el CTA, busy pone disabled al botón enfocado (y a Cancelar), y la X desaparece porque dismissible={!busy}. Deshabilitar el elemento con foco hace que el navegador lo mueva a <body>. Además, aria-busy está en el div interior y no en el diálogo, y la etiqueta del botón no cambia (el Loader2 tiene aria-hidden), así que no se anuncia nada mientras se procesa. FALLO: Un usuario de lector de pantalla confirma 'Archivar espacio': el foco salta fuera del botón, no oye 'Procesando' y, si llega un 409, tiene que volver a buscar los controles del diálogo desde el principio. ARREGLO: Usar aria-disabled en lugar de disabled en el CTA mientras está busy (ignorando el clic), o mover el foco a un contenedor del diálogo. Añadir texto de estado accesible (p. ej. un sr-only 'Procesando…' o aria-busy en el <dialog>).",
+        "(baja) alertdialog sin aria-describedby: los hechos y consecuencias no se anuncian — src/components/ui/sheet.tsx:57. Con tone=danger la hoja pasa a role=alertdialog, pero Sheet solo pone aria-labelledby. No hay aria-describedby que apunte a la lista de hechos (QUIÉN/CUÁNTO), a las consecuencias ni a 'No se puede deshacer.'. Como el foco inicial va a Cancelar, el lector de pantalla anuncia solo el título y 'Cancelar, botón'. FALLO: Un usuario de lector de pantalla abre 'Expulsar a Ana' o 'Eliminar categoría' y oye el título y 'Cancelar', pero no el importe ni que la acción es irreversible, que es justo lo que la hoja crítica pretende comunicar. ARREGLO: Permitir que Sheet reciba un describedBy y que CriticalActionSheet pase el id del bloque de hechos y consecuencias (o de un resumen) como aria-describedby del <dialog>.",
+        "(baja) Contraste del enlace de error (text-primary sobre --negative-tint) por debajo de 4.5:1 — src/components/ui/critical-action-sheet.tsx:117. El enlace 'Saldar deudas →' usa text-primary (#2F7D5B) a 14 px semibold sobre bg-[var(--negative-tint)] (rgba(180,85,58,.1) sobre la tarjeta blanca, unos #F7EEEB). El contraste calculado es de unos 4.38:1, por debajo del AA para texto normal. globals.css ya marca este fondo como problemático y define --negative-ink para el texto sobre la tinta. FALLO: Al bloquearse el archivado o la expulsión por saldo pendiente, la salida 'Saldar deudas' queda con contraste insuficiente para usuarios con baja visión. ARREGLO: Usar un verde más oscuro para este enlace, o poner el error sobre un fondo neutro, y verificar ≥4.5:1."
+      ],
+      "criteria": [
+        "Cada hallazgo de spec está corregido (o marcado fuera de alcance con motivo en findings/RV-05.md)",
+        "Capturas de las pantallas afectadas revisadas",
+        "mise run check y los e2e afectados en verde"
+      ],
+      "files": [
+        "src/components/ui/critical-action-sheet.tsx",
+        "src/components/ui/eq.tsx",
+        "src/components/ui/sheet.tsx"
+      ],
+      "passes": true,
+      "notes": "Foco vuelve al disparador (useLayoutEffect en Sheet, h1 si desaparece), toast con región viva montada vacía, CTA busy con aria-disabled + \"Procesando…\", aria-describedby con hechos/consecuencias y enlace de error #235F45; nada pendiente."
+    },
+    {
+      "id": "RV-06",
+      "title": "Tests: settle-up sigue cubierto y el archivado vuelve a probar los 409 en la hoja",
+      "priority": 205,
+      "screens": [],
+      "design": [],
+      "spec": [
+        "(media) settle-up se ha quedado sin ningún test que compruebe que crea pagos PENDING — e2e/spaces/settle-up.spec.ts:280. El encargo exige que POST /api/spaces/[id]/settle-up siga funcionando para clientes de la API. La rama se borró las aserciones `expect(settleUp.body).toEqual({ success: true, status: 'SETTLING', suggested: [{ toUserId: userB.id, amount: 5000 }] })` y el flujo que comprobaba el PENDING generado. Ahora settle-up solo se llama cuando el deudor ya ha pagado (suggested: []), cuando está ARCHIVED (409) o en el 403 de miembro. No existe test unitario de src/app/api/spaces/[id]/settle-up/route.ts (git grep no encuentra ninguno). FALLO: Si un cambio futuro rompe la creación de sugerencias en settle-up (devolver `suggested` vacío o no insertar el PENDING), toda la suite seguiría en verde aunque los clientes de la API dependan de ese contrato. ARREGLO: Añadir de nuevo un caso solo de API: el OWNER deudor llama a POST settle-up en ACTIVE y se espera `suggested: [{toUserId, amount: 5000}]` y una fila PENDING, más la idempotencia al repetirlo. También vale un route.test.ts con mocks.",
+        "(baja) El e2e de archivado ya no recorre los 409 PENDING_SETTLEMENTS / OPEN_BALANCES pintados en la hoja — e2e/spaces/lifecycle.spec.ts:203. Se borraron las aserciones de extremo a extremo: el 409 PENDING_SETTLEMENTS con `settleUrl`, el error y el enlace dentro de la hoja, y el 409 OPEN_BALANCES tras rechazar el pago. Se sustituyeron por el estado deshabilitado previo que calcula el cliente. Los códigos siguen cubiertos por src/app/api/spaces/[id]/route.test.ts, pero el camino de error de CriticalActionSheet (error + errorHref) cuando el dato de la página está desfasado ya no lo ejercita ningún e2e. FALLO: Si la página se queda desfasada (otro miembro registra un PENDING después de cargarla), el CTA está habilitado y la API responde 409. Una regresión en cómo actions-client/close-client pintan `data.error`/`settleUrl` no la detectaría ningún test. ARREGLO: Mantener un paso que fuerce el 409, por ejemplo creando el PENDING por API después de cargar la página, y comprobar confirm-sheet-error junto con su enlace."
+      ],
+      "criteria": [
+        "Cada hallazgo de spec está corregido (o marcado fuera de alcance con motivo en findings/RV-06.md)",
+        "Capturas de las pantallas afectadas revisadas",
+        "mise run check y los e2e afectados en verde"
+      ],
+      "files": [
+        "e2e/spaces/lifecycle.spec.ts",
+        "e2e/spaces/settle-up.spec.ts"
+      ],
+      "passes": true,
+      "notes": "settle-up vuelve a tener un e2e de API (suggested 5000 + PENDING + idempotencia) y el archivado fuerza los 409 OPEN_BALANCES/PENDING_SETTLEMENTS con la hoja abierta (error + enlace); nada pendiente."
+    }
+  ],
+  "goal2": "Acciones críticas claras y vocabulario 'Saldar deuda' (historias CF-*): plan en docs/ux/plan-acciones-criticas.md, generado por un workflow de auditoría de flujos."
+}

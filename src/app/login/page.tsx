@@ -4,6 +4,7 @@ import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { EqCta } from "@/components/ui/eq";
+import { FlashToast } from "@/components/ui/flash-toast";
 import { AuthShell, AuthField, AuthError } from "@/components/auth/auth-shell";
 import { loginAction } from "./actions";
 import type { AuthState } from "@/lib/auth-types";
@@ -11,6 +12,13 @@ import type { AuthState } from "@/lib/auth-types";
 function LoginForm() {
     const searchParams = useSearchParams();
     const inviteCode = searchParams.get("code");
+    const signedOut = searchParams.get("signedOut");
+    const signedOutNote =
+        signedOut === "all"
+            ? "Has cerrado la sesión en todos tus dispositivos. Los tokens de Hermes y otros clientes MCP ya no funcionan."
+            : signedOut === "1"
+              ? "Has cerrado la sesión."
+              : null;
 
     // Server Action handles auth + cookie + redirect in a single server response,
     // so navigation never races the cookie write (the old "tap login twice on
@@ -30,7 +38,7 @@ function LoginForm() {
                     ¿No tienes cuenta?{" "}
                     <Link
                         href={`/register${inviteCode ? `?code=${encodeURIComponent(inviteCode)}` : ""}`}
-                        className="font-semibold text-primary"
+                        className="-my-3 inline-flex min-h-11 items-center px-1 font-semibold text-primary rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                     >
                         Regístrate
                     </Link>
@@ -38,7 +46,20 @@ function LoginForm() {
             }
         >
             <form action={formAction} className="flex flex-col gap-3">
-                {state.error && <AuthError data-testid="login-error">{state.error}</AuthError>}
+                {signedOutNote && !state.error && (
+                    // <output> = role="status": announced politely on arrival.
+                    <output
+                        data-testid="login-signed-out"
+                        className="block rounded-[14px] bg-[var(--positive-tint)] px-3.5 py-3 text-sm font-medium text-pretty"
+                    >
+                        {signedOutNote}
+                    </output>
+                )}
+                {state.error && (
+                    <AuthError id="login-error" data-testid="login-error">
+                        {state.error}
+                    </AuthError>
+                )}
 
                 {inviteCode && <input type="hidden" name="inviteCode" defaultValue={inviteCode} />}
 
@@ -52,6 +73,10 @@ function LoginForm() {
                     autoFocus
                     autoComplete="email"
                     inputMode="email"
+                    // Keep what was typed after a failed attempt (the form resets).
+                    defaultValue={state.email}
+                    aria-invalid={state.error ? true : undefined}
+                    aria-describedby={state.error ? "login-error" : undefined}
                 />
                 <AuthField
                     data-testid="login-password"
@@ -60,6 +85,8 @@ function LoginForm() {
                     type="password"
                     required
                     autoComplete="current-password"
+                    aria-invalid={state.error ? true : undefined}
+                    aria-describedby={state.error ? "login-error" : undefined}
                 />
 
                 <EqCta data-testid="login-submit" type="submit" disabled={pending} aria-busy={pending} className="mt-3">
@@ -74,6 +101,7 @@ export default function LoginPage() {
     return (
         <Suspense>
             <LoginForm />
+            <FlashToast />
         </Suspense>
     );
 }

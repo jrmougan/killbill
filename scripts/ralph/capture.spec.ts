@@ -1,0 +1,426 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { test, type APIRequestContext, type Page } from '@playwright/test';
+import { resetDb, seedScenario, type SeedResult } from '../../e2e/fixtures/db.fixture';
+
+/**
+ * Screenshots of the real app for the Ralph UX loop (scripts/ralph/README.md).
+ * Each screen writes, under scripts/ralph/shots/:
+ *   <id>.png       — the first viewport (what the user sees without scrolling)
+ *   <id>.full.png  — the whole scrollable page
+ *   <id>.aria.yml  — accessibility tree (names, roles, headings)
+ *   <id>.json      — url, console errors, overflow and small-touch-target report
+ * The `design` field names the matching mockup in scripts/ralph/design/ (if any).
+ *
+ * Run:  mise run ux:capture                         (every screen)
+ *       SCREENS=inicio,listas mise run ux:capture   (only those ids)
+ */
+
+type Screen = {
+  id: string;
+  scenario: 'ux-showcase' | 'couple-no-expenses' | 'solo-user' | 'space-settling' | 'space-archived' | 'group-settling';
+  path: (d: SeedResult) => string;
+  design?: string;
+  /** Lands on /welcome instead of skipping it like the e2e loginAs helper. */
+  keepWelcome?: boolean;
+  /** Log in as the seed's second user (default: userA). */
+  asUserB?: boolean;
+  /** Log in as another user of the seed (e.g. `d.userC`); wins over `asUserB`. */
+  as?: (d: SeedResult) => unknown;
+  /** Interaction run before the screenshots (e.g. type an amount, open a sheet). */
+  act?: (page: Page) => Promise<void>;
+  /** Space pinned as active (`active_group` cookie); default: the seed's `coupleId`. */
+  activeGroup?: (d: SeedResult) => string;
+  /** Captured logged out (entry screens). */
+  anonymous?: boolean;
+};
+
+const SCREENS: Screen[] = [
+  { id: 'inicio', scenario: 'ux-showcase', path: () => '/dashboard', design: '2a-inicio' },
+  { id: 'anadir-gasto', scenario: 'ux-showcase', path: () => '/expenses/new', design: '2a-anadir-gasto' },
+  {
+    id: 'anadir-gasto-relleno', scenario: 'ux-showcase', path: () => '/expenses/new', design: '2a-anadir-gasto',
+    act: async (page) => {
+      for (const k of ['2', '4', 'comma', '5', '0']) await page.click(`[data-testid="numpad-${k}"]`);
+      await page.fill('[data-testid="expense-description"]', 'Farmacia');
+    },
+  },
+  {
+    id: 'anadir-gasto-opciones', scenario: 'ux-showcase', path: () => '/expenses/new',
+    act: async (page) => {
+      await page.click('[data-testid="numpad-2"]');
+      await page.click('[data-testid="expense-more"]');
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+      await page.getByRole('button', { name: 'Añadir producto' }).click(); // a line shows the 44 px trash
+    },
+  },
+  { id: 'quedar-en-paz', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.coupleId}`, design: '2a-quedar-en-paz-ticket' },
+  { id: 'quedar-en-paz-deudor', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.coupleId}`, design: '2a-quedar-en-paz-ticket', asUserB: true },
+  { id: 'quedar-en-paz-pendiente', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.groupId}` },
+  { id: 'pago-detalle', scenario: 'ux-showcase', path: (d) => `/settle/${d.settlementId}` },
+  {
+    id: 'pago-detalle-acreedor', scenario: 'ux-showcase', path: (d) => `/settle/${d.settlementId}`,
+    as: (d) => d.userC, activeGroup: (d) => d.groupId as string,
+  },
+  { id: 'pago-rechazado', scenario: 'ux-showcase', path: (d) => `/settle/${d.rejectedSettlementId}`, asUserB: true },
+  { id: 'pago-editar', scenario: 'ux-showcase', path: (d) => `/settle/${d.settlementId}/edit` },
+  { id: 'gastos', scenario: 'ux-showcase', path: () => '/expenses/list', design: '3a-gastos' },
+  { id: 'gasto-detalle', scenario: 'ux-showcase', path: (d) => `/expense/${d.expenseId}` },
+  {
+    id: 'hoja-eliminar-gasto', scenario: 'ux-showcase', path: (d) => `/expense/${d.expenseId}`,
+    act: async (page) => {
+      await page.getByTestId('expense-delete').click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    id: 'hoja-compartir-gasto', scenario: 'ux-showcase', path: (d) => `/expense/${d.personalExpenseId}`,
+    act: async (page) => {
+      await page.getByTestId('expense-promote').click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    // Editing a shared expense: changing the amount shows how the balance moves.
+    id: 'editar-gasto-efecto', scenario: 'ux-showcase', path: (d) => `/expense/${d.expenseId}/edit`,
+    act: async (page) => {
+      // 64,20 € → 80 €
+      for (let i = 0; i < 5; i++) await page.getByTestId('numpad-del').click();
+      await page.getByTestId('numpad-8').click();
+      await page.getByTestId('numpad-0').click();
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    id: 'editar-gasto-ticket', scenario: 'ux-showcase', path: (d) => `/expense/${d.personalExpenseId}/edit`,
+    act: async (page) => {
+      await page.click('[data-testid="expense-more"]');
+      await page.waitForTimeout(600);
+      await page.getByRole('button', { name: 'Eliminar producto 2' }).click();
+      await page.getByRole('button', { name: 'Quitar foto' }).click();
+      await page.waitForTimeout(200);
+    },
+  },
+  { id: 'mes-presupuestos', scenario: 'ux-showcase', path: () => '/month', design: '3a-mes-presupuestos' },
+  {
+    id: 'mes-presupuestos-anadir', scenario: 'ux-showcase', path: () => '/month',
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Añadir presupuesto de Alquiler', exact: true }).click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  {
+    id: 'mes-analisis', scenario: 'ux-showcase', path: () => '/month?view=analysis', design: '3a-mes-analisis',
+    // The balance and its "Saldar deuda" link sit below the fold (CF-13).
+    act: async (page) => { await page.getByTestId('analysis-settle').evaluate((el) => el.scrollIntoView({ block: 'center' })); await page.waitForTimeout(200); },
+  },
+  { id: 'listas', scenario: 'ux-showcase', path: (d) => `/lists/${d.listId}`, design: '3a-listas-de-la-compra' },
+  {
+    id: 'hoja-borrar-tachados', scenario: 'ux-showcase', path: (d) => `/lists/${d.listId}`,
+    act: async (page) => {
+      await page.getByRole('button', { name: /^Opciones de / }).click();
+      await page.getByRole('button', { name: /^Borrar los tachados/ }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  { id: 'categorias', scenario: 'ux-showcase', path: () => '/categories' },
+  // Moving "Mascotas" to "Compras" (both with a budget this month) → 409 BUDGET_CONFLICT (CF-24).
+  {
+    id: 'hoja-eliminar-categoria', scenario: 'ux-showcase', path: () => '/categories',
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Eliminar Mascotas', exact: true }).click();
+      await page.getByLabel('Mover a').selectOption({ label: '🛍️ Compras' });
+      await page.getByTestId('confirm-sheet-confirm').click();
+      await page.getByTestId('category-budget-conflict').waitFor();
+      await page.waitForTimeout(300);
+    },
+  },
+  { id: 'etiquetas', scenario: 'ux-showcase', path: () => '/tags' },
+  {
+    id: 'hoja-eliminar-etiqueta', scenario: 'ux-showcase', path: () => '/tags',
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Eliminar etiqueta Vacaciones', exact: true }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  { id: 'espacios', scenario: 'ux-showcase', path: () => '/spaces', design: '3a-espacios' },
+  { id: 'espacio-detalle', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}` },
+  // Lisboa active: Casa (a full couple) can't invite, so this shows the "Invitar a…" card.
+  { id: 'espacios-invitar', scenario: 'ux-showcase', path: () => '/spaces', activeGroup: (d) => d.groupId as string },
+  // "Enviar" crea el enlace; "Generar nuevo" abre la hoja antes de desactivarlo (CF-20).
+  {
+    id: 'hoja-generar-enlace', scenario: 'ux-showcase', path: () => '/spaces', activeGroup: (d) => d.groupId as string,
+    act: async (page) => {
+      await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+      await page.getByTestId('space-invite-card').getByRole('button', { name: 'Enviar' }).click();
+      await page.getByRole('button', { name: 'Generar nuevo' }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  // Lisboa con un enlace creado: fila "Creado hoy · …" y la hoja danger de "Desactivar enlace" (CF-20).
+  {
+    id: 'espacio-invitaciones', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}`,
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Crear enlace de invitación' }).click();
+      await page.getByRole('button', { name: 'Crear enlace', exact: true }).click();
+      await page.getByTestId('invite-current-link').waitFor();
+      await page.getByTestId('invite-manager').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: 'hoja-desactivar-enlace', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}`,
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Crear enlace de invitación' }).click();
+      await page.getByRole('button', { name: 'Crear enlace', exact: true }).click();
+      await page.getByTestId('invite-current-link').waitFor();
+      await page.getByRole('button', { name: /^Desactivar enlace/ }).first().click();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    id: 'espacios-unirme', scenario: 'ux-showcase', path: () => '/spaces',
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Unirme con enlace' }).click();
+      await page.waitForTimeout(600); // let the form/sheet finish opening
+    },
+  },
+  {
+    id: 'hoja-cerrar-cuentas', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}`,
+    act: async (page) => {
+      await page.getByTestId('space-action-settle').click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  {
+    id: 'cerrar-cuentas-toast', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}`,
+    act: async (page) => {
+      await page.getByTestId('space-action-settle').click();
+      await page.getByTestId('confirm-sheet-confirm').click();
+      await page.getByTestId('space-action-reopen').waitFor();
+      await page.waitForTimeout(600); // the toast fills 150 ms after mounting, then slides in
+    },
+  },
+  { id: 'cierre-activo', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}/close` },
+  { id: 'cierre-cerrando', scenario: 'group-settling', path: (d) => `/spaces/${d.coupleId}/close` },
+  { id: 'cierre-cerrando-acreedora', scenario: 'group-settling', path: (d) => `/spaces/${d.coupleId}/close`, as: (d) => d.userC },
+  { id: 'cierre-al-dia', scenario: 'couple-no-expenses', path: (d) => `/spaces/${d.coupleId}/close` },
+  {
+    id: 'cierre-archivar', scenario: 'space-settling', path: (d) => `/spaces/${d.coupleId}/close`,
+    act: async (page) => {
+      await page.getByTestId('close-archive').click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  // Lucía debe 7,50 €: su hoja enseña la deuda y "Recordarle la deuda", no el botón rojo (CF-18).
+  {
+    id: 'espacio-detalle-grupo', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}`,
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Opciones de Lucía' }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  // Sergio está al día: "Quitar a Sergio del espacio" abre la hoja danger.
+  {
+    id: 'hoja-quitar-miembro', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}`,
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Opciones de Sergio' }).click();
+      await page.getByTestId('member-remove').click();
+      await page.waitForTimeout(600);
+    },
+  },
+  // Lucía debe en Casa: la primera hoja de "Salir" ya enseña la deuda con "Saldar deuda".
+  {
+    id: 'hoja-salir-con-deuda', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}`, asUserB: true,
+    act: async (page) => {
+      await page.getByTestId('leave-space').click();
+      await page.waitForTimeout(600);
+    },
+  },
+  // Segundo paso: "Salir sin saldar" pide la casilla antes de llamar a la API.
+  {
+    id: 'hoja-salir-sin-saldar', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}`, asUserB: true,
+    act: async (page) => {
+      await page.getByTestId('leave-space').click();
+      await page.getByRole('button', { name: 'Salir sin saldar' }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  { id: 'ajustes', scenario: 'ux-showcase', path: () => '/settings', design: '3a-ajustes' },
+  {
+    id: 'ajustes-revocar', scenario: 'ux-showcase', path: () => '/settings',
+    act: async (page) => {
+      await page.getByRole('button', { name: /^Cerrar sesión en todos los dispositivos/ }).click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  // Sergio (admin): Disponibles, Caducadas y Usadas (CF-27).
+  { id: 'admin', scenario: 'ux-showcase', path: () => '/admin', as: (d) => d.admin },
+  {
+    id: 'hoja-anular-invitacion', scenario: 'ux-showcase', path: () => '/admin', as: (d) => d.admin,
+    act: async (page) => {
+      await page.getByRole('button', { name: /^Anular invitación / }).first().click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  { id: 'historial-pagos', scenario: 'ux-showcase', path: () => '/settle/history' },
+  { id: 'historial-pagos-pendiente', scenario: 'ux-showcase', path: (d) => `/settle/history?space=${d.groupId}` },
+  { id: 'bienvenida', scenario: 'solo-user', path: () => '/welcome', design: '3a-bienvenida', keepWelcome: true },
+  { id: 'inicio-vacio', scenario: 'couple-no-expenses', path: () => '/dashboard' },
+  { id: 'saldar-al-dia', scenario: 'couple-no-expenses', path: () => '/settle' },
+  { id: 'gastos-vacio', scenario: 'couple-no-expenses', path: () => '/expenses/list' },
+  { id: 'inicio-liquidando', scenario: 'space-settling', path: () => '/dashboard' },
+  // Álvaro (OWNER) al día en un grupo que aún debe: el banner lleva "Ver qué falta" (CF-17).
+  { id: 'inicio-cerrando-al-dia', scenario: 'group-settling', path: () => '/dashboard' },
+  {
+    id: 'hoja-confirmar-pago', scenario: 'space-settling', path: () => '/dashboard',
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Lo he recibido', exact: true }).click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  {
+    id: 'hoja-rechazar-pago', scenario: 'space-settling', path: () => '/dashboard',
+    act: async (page) => {
+      await page.getByRole('button', { name: 'No lo he recibido', exact: true }).click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  {
+    id: 'hoja-saldar-deudor', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.coupleId}`, asUserB: true,
+    act: async (page) => {
+      await page.getByRole('button', { name: /^Ya le he pagado/ }).click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  {
+    id: 'hoja-saldar-acreedor', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.coupleId}`,
+    act: async (page) => {
+      await page.getByRole('button', { name: /ya me ha pagado/ }).click();
+      await page.getByTestId('settle-review-amount').fill('20');
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  {
+    id: 'saldar-exito', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.coupleId}`, asUserB: true,
+    act: async (page) => {
+      await page.getByRole('button', { name: /^Ya le he pagado/ }).click();
+      await page.getByTestId('confirm-sheet-confirm').click();
+      await page.getByTestId('settle-pending').waitFor();
+      await page.waitForTimeout(600); // let the refresh settle
+    },
+  },
+  { id: 'inicio-deudor', scenario: 'ux-showcase', path: () => '/dashboard', design: '2a-inicio', asUserB: true },
+  { id: 'espacio-cerrando', scenario: 'space-settling', path: (d) => `/spaces/${d.coupleId}` },
+  {
+    id: 'hoja-archivar', scenario: 'space-settling', path: (d) => `/spaces/${d.coupleId}`,
+    act: async (page) => {
+      await page.getByTestId('space-action-archive').click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  { id: 'gasto-cerrando', scenario: 'space-settling', path: (d) => `/expense/${d.expenseId}` },
+  { id: 'gastos-cerrando', scenario: 'space-settling', path: () => '/expenses/list' },
+  { id: 'mes-cerrando', scenario: 'space-settling', path: () => '/month' },
+  { id: 'inicio-archivado', scenario: 'space-archived', path: () => '/dashboard' },
+  { id: 'login', scenario: 'ux-showcase', path: () => '/login', anonymous: true },
+  { id: 'login-sesiones-cerradas', scenario: 'ux-showcase', path: () => '/login?signedOut=all', anonymous: true },
+  {
+    id: 'login-error', scenario: 'ux-showcase', path: () => '/login', anonymous: true,
+    act: async (page) => {
+      await page.fill('[data-testid="login-email"]', 'alvaro@example.com');
+      await page.fill('[data-testid="login-password"]', 'no-es-esta');
+      await page.click('[data-testid="login-submit"]');
+      await page.waitForSelector('[data-testid="login-error"]');
+      await page.waitForTimeout(300); // let the border colour transition finish
+    },
+  },
+];
+
+const OUT = 'scripts/ralph/shots';
+mkdirSync(OUT, { recursive: true });
+
+let api: APIRequestContext;
+const seeds = new Map<string, Promise<SeedResult>>();
+const seed = (scenario: string) => {
+  if (!seeds.has(scenario)) seeds.set(scenario, seedScenario(api, scenario));
+  return seeds.get(scenario)!;
+};
+
+test.beforeAll(async ({ playwright, baseURL }) => {
+  api = await playwright.request.newContext({ baseURL });
+  await resetDb(api);
+});
+
+test.afterAll(async () => {
+  await api.dispose();
+});
+
+async function login(page: Page, user: { email: string; password: string }, keepWelcome: boolean) {
+  await page.goto('/login');
+  await page.fill('[data-testid="login-email"]', user.email);
+  await page.fill('[data-testid="login-password"]', user.password);
+  await page.click('[data-testid="login-submit"]');
+  await page.waitForURL(/\/(dashboard|welcome)(\?|$)/);
+  if (!keepWelcome && new URL(page.url()).pathname === '/welcome') await page.goto('/dashboard');
+}
+
+const only = process.env.SCREENS?.split(',').map((s) => s.trim()).filter(Boolean);
+
+for (const screen of SCREENS.filter((s) => !only?.length || only.includes(s.id))) {
+  test(screen.id, async ({ page, context }) => {
+    const consoleErrors: string[] = [];
+    page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
+    page.on('pageerror', (e) => consoleErrors.push(String(e)));
+
+    const data = await seed(screen.scenario);
+    const user = (screen.as?.(data) ?? (screen.asUserB ? data.userB : data.userA ?? data.user)) as { email: string; password: string } | undefined;
+    if (!screen.anonymous) {
+      await login(page, user!, !!screen.keepWelcome);
+      // Pin the space the screen is about (the active_group cookie otherwise picks the primary one).
+      const activeGroup = screen.activeGroup?.(data) ?? data.coupleId;
+      if (typeof activeGroup === 'string') {
+        await context.addCookies([{ name: 'active_group', value: activeGroup, url: page.url() }]);
+      }
+    }
+    await page.goto(screen.path(data));
+    await page.waitForLoadState('networkidle');
+    // The Next dev-tools badge sits on top of the tab bar; it is not part of the UI.
+    await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
+    if (screen.act) await screen.act(page);
+    await page.evaluate(() => document.fonts.ready);
+
+    await page.screenshot({ path: `${OUT}/${screen.id}.png` });
+    await page.screenshot({ path: `${OUT}/${screen.id}.full.png`, fullPage: true });
+    writeFileSync(`${OUT}/${screen.id}.aria.yml`, await page.locator('body').ariaSnapshot());
+
+    const layout = await page.evaluate(() => {
+      const vw = document.documentElement.clientWidth;
+      const smallTargets = [...document.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [role="button"], [role="tab"]')]
+        .filter((el) => el.offsetParent !== null)
+        .map((el) => ({ el, r: el.getBoundingClientRect() }))
+        .filter(({ r }) => r.width > 0 && (r.width < 44 || r.height < 44))
+        .map(({ el, r }) => ({
+          tag: el.tagName.toLowerCase(),
+          name: (el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 40),
+          size: `${Math.round(r.width)}×${Math.round(r.height)}`,
+        }));
+      // Content of a horizontal scroller (the space cards carousel) is meant to overflow.
+      const inScroller = (el: HTMLElement) => {
+        for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+          if (['auto', 'scroll'].includes(getComputedStyle(p).overflowX)) return true;
+        }
+        return false;
+      };
+      const overflowing = [...document.querySelectorAll<HTMLElement>('body *')]
+        .filter((el) => el.getBoundingClientRect().right > vw + 1 && !inScroller(el))
+        .slice(0, 10)
+        .map((el) => `${el.tagName.toLowerCase()}.${[...el.classList].slice(0, 3).join('.')}`);
+      return { scrollWidth: document.documentElement.scrollWidth, viewportWidth: vw, overflowing, smallTargets };
+    });
+
+    writeFileSync(`${OUT}/${screen.id}.json`, JSON.stringify({
+      id: screen.id, url: page.url(), design: screen.design ? `scripts/ralph/design/${screen.design}.png` : null,
+      consoleErrors, ...layout,
+    }, null, 2));
+  });
+}

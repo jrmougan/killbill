@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { Check, Clock } from "lucide-react";
+import { CircleAlert, Clock, HandCoins } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useActivateSpace } from "@/components/space/use-activate-space";
 
@@ -26,10 +26,14 @@ export type SpaceCardData = {
      * couple still waiting for its second member.
      */
     signed: string | null;
-    /** "Quedar en paz" target (active, shared, open balance); null hides it. */
+    /** "Saldar deuda" target (active, shared, open balance); null hides it. */
     settleHref: string | null;
+    /** Direction under "Saldar deuda": "Pagas 7,50 €" / "Cobras 79,30 €". */
+    settleSub?: string | null;
     /** A payment I sent is waiting for confirmation (debtor side). */
     pendingNote?: string | null;
+    /** A payment I sent was rejected this week: "Álvaro no recibió tu pago de 15,00 €" → its detail. */
+    rejectedNote?: { text: string; href: string } | null;
 };
 
 /**
@@ -72,18 +76,27 @@ export function SpaceCarousel({
             <div className="eq-scroll flex gap-2.5 overflow-x-auto px-5 snap-x">
                 {cards.map((c) => {
                     const active = c.key === activeKey;
+                    const title = (
+                        <span className="flex items-center gap-1.5 min-w-0 text-sm font-semibold">
+                            <span aria-hidden="true" className="flex-none">{c.emoji}</span>
+                            <span className="truncate">{c.name}</span>
+                        </span>
+                    );
+                    // Mockup 2a: the wide active card puts "con Lucía" beside the name;
+                    // the narrow ones move it to the bottom so neither is cut to "Perso…".
+                    const header = active ? (
+                        <div className="flex items-center justify-between gap-2 min-w-0">
+                            {title}
+                            <span className="min-w-0 max-w-[50%] truncate text-xs font-medium opacity-75">{c.sub}</span>
+                        </div>
+                    ) : (
+                        title
+                    );
                     const body = (
                         <>
-                            {/* Title and subtitle on their own lines so neither is cut to "Perso…". */}
-                            <div className="min-w-0 text-sm font-semibold">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                    <span aria-hidden="true" className="flex-none">{c.emoji}</span>
-                                    <span className="truncate">{c.name}</span>
-                                </div>
-                                <div className="truncate text-xs font-medium opacity-75">{c.sub}</div>
-                            </div>
+                            {header}
                             <div className="min-w-0">
-                                <div className="text-[13px] opacity-80 truncate">{c.label}</div>
+                                <div className={cn("truncate", active ? "text-[13px] opacity-80" : "text-xs text-muted-foreground")}>{c.label}</div>
                                 <div
                                     aria-hidden={c.signed ? true : undefined}
                                     className={cn(
@@ -111,6 +124,16 @@ export function SpaceCarousel({
                                 className="snap-center flex-none w-[248px] min-h-[150px] rounded-[22px] bg-primary text-primary-foreground border border-primary p-4 flex flex-col justify-between gap-2 transition-[width,background-color] duration-250"
                             >
                                 {body}
+                                {c.rejectedNote && (
+                                    <Link
+                                        href={c.rejectedNote.href}
+                                        data-testid="rejected-note"
+                                        className="-my-2 -ml-1 self-start min-h-11 px-1 flex items-center gap-1.5 text-[13px] font-semibold"
+                                    >
+                                        <CircleAlert className="h-[15px] w-[15px] flex-none" aria-hidden="true" />
+                                        <span className="line-clamp-2">{c.rejectedNote.text}</span>
+                                    </Link>
+                                )}
                                 {c.pendingNote ? (
                                     <Link
                                         href={c.settleHref ?? "/settle"}
@@ -121,13 +144,22 @@ export function SpaceCarousel({
                                         <span className="line-clamp-2">{c.pendingNote}</span>
                                     </Link>
                                 ) : c.settleHref ? (
-                                    <Link
-                                        href={c.settleHref}
-                                        className="-my-2 -ml-1 self-start min-h-11 px-1 flex items-center gap-1.5 text-[13px] font-semibold"
-                                    >
-                                        <Check className="h-[15px] w-[15px]" aria-hidden="true" />
-                                        Quedar en paz
-                                    </Link>
+                                    // The direction sits under the link (described-by, not part of its name).
+                                    <div className="-my-2 -ml-1 self-start flex flex-col">
+                                        <Link
+                                            href={c.settleHref}
+                                            aria-describedby={c.settleSub ? `settle-sub-${c.key}` : undefined}
+                                            className="min-h-11 px-1 flex items-center gap-1.5 text-[13px] font-semibold"
+                                        >
+                                            <HandCoins className="h-[15px] w-[15px] flex-none" aria-hidden="true" />
+                                            Saldar deuda
+                                        </Link>
+                                        {c.settleSub && (
+                                            <span id={`settle-sub-${c.key}`} className="-mt-2.5 pb-1 pl-[27px] text-xs font-medium">
+                                                {c.settleSub}
+                                            </span>
+                                        )}
+                                    </div>
                                 ) : null}
                             </div>
                         );
@@ -143,6 +175,7 @@ export function SpaceCarousel({
                             className="snap-center flex-none w-[156px] min-h-[150px] rounded-[22px] bg-card text-foreground border border-[color:var(--line)] p-4 flex flex-col justify-between gap-2 text-left transition-[width,opacity] duration-250 disabled:opacity-60 active:scale-[0.98]"
                         >
                             {body}
+                            <span className="truncate text-xs text-muted-foreground">{c.sub}</span>
                         </button>
                     );
                 })}

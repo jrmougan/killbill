@@ -4,20 +4,23 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { EqCta } from "@/components/ui/eq";
 import { AuthError } from "@/components/auth/auth-shell";
+import { setFlashToast } from "@/lib/flash-toast";
 
 /**
  * Explicit-consent join button for a REGISTERED visitor on `/i/[token]`. POSTs
  * the token to /api/invites/claim (MEMBER link, or `asMember` for a trip's GUEST
  * link: "Unirme con mi cuenta") and moves to Inicio on success. The label is
  * short and the button wraps instead of overflowing (T-14); the space name lives
- * in the page title.
+ * in the page title and in the "Ya estás en {espacio}" welcome toast on Inicio.
  */
 export function ClaimButton({
     token,
+    spaceName,
     asMember = false,
     label = "Unirme",
 }: {
     token: string;
+    spaceName: string;
     asMember?: boolean;
     label?: string;
 }) {
@@ -40,6 +43,7 @@ export function ClaimButton({
                 setPending(false);
                 return;
             }
+            setFlashToast(`Ya estás en ${spaceName}`);
             router.push("/dashboard");
             router.refresh();
         } catch {

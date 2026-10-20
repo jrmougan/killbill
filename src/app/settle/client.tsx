@@ -7,6 +7,7 @@ import { Check, Clock } from "lucide-react";
 import { EqCta, EqHeader, EqLabel, EqRow, EqToast, useEqToast } from "@/components/ui/eq";
 import { GuestBanner } from "@/components/guest/guest-banner";
 import { MethodPicker } from "@/components/settle/method-picker";
+import { PendingPaymentSheet, RecordSettlementSheet } from "@/components/settle/settle-review-sheet";
 import { ReceiptTicket, TicketRow, TicketRule } from "@/components/settle/receipt-ticket";
 import { isAtPeace, methodPhrase, shareLabel, type SettleMethod, type Ticket, type Transfer } from "@/components/settle/settle-model";
 import { formatCurrency } from "@/lib/currency";
@@ -14,14 +15,23 @@ import { cn } from "@/lib/utils";
 
 type PendingSettlement = { id: string; fromUserId: string; toUserId: string; amount: number; method: string };
 
-type Done =
-    | { kind: "confirmed"; method: string; /** What is still owed to me after this payment (cents). */ remaining: number }
-    | { kind: "pending"; id: string | null; name: string; amount: number; method: string };
+/** The payment just recorded (`id` from the response, for "Ver el pago"). */
+type Done = { id: string | null; name: string; amount: number; method: string } & (
+    | { kind: "confirmed"; /** What is still owed to me after this payment (cents). */ remaining: number }
+    | { kind: "pending" }
+);
+
+/** The review sheet open over the ticket, with the transfer it was opened for. */
+type Review =
+    | { kind: "pay" | "receive"; t: Transfer; method: SettleMethod }
+    | { kind: "incoming"; t: Transfer; incoming: PendingSettlement };
 
 interface SettleClientProps {
     space: { id: string; name: string; status: string };
     me: string;
     isGuest: boolean;
+    /** OWNER/ADMIN registered member: may archive the space once everything is settled. */
+    canArchive: boolean;
     memberCount: number;
     /** The other member in a COUPLE-sized space (2 members), else null. */
     partnerId: string | null;
@@ -34,6 +44,8 @@ interface SettleClientProps {
     meta: string;
     transfers: Transfer[];
     pending: PendingSettlement[];
+    /** What each member really owes (`debtOf`, cents): the confirm sheet's consequence. */
+    debts: Record<string, number>;
 }
 
 /** Rule failures after which the screen is stale: refresh it so it shows the truth. */
@@ -54,7 +66,7 @@ async function failure(res: Response, fallback: string): Promise<Error> {
     return STALE_CODES.has(json.code) ? new StaleError(message) : new Error(message);
 }
 
-export function SettleClient({ space, me, isGuest, memberCount, partnerId, names, balance, everyoneSettled, ticket, meta, transfers, pending }: SettleClientProps) {
+export function SettleClient({ space, me, isGuest, canArchive, memberCount, partnerId, names, balance, everyoneSettled, ticket, meta, transfers, pending, debts }: SettleClientProps) {
     const router = useRouter();
     const [toast, showToast] = useEqToast(2400);
     const [method, setMethod] = useState<SettleMethod>("BIZUM");
@@ -62,16 +74,18 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [done, setDone] = useState<Done | null>(null);
+    const [review, setReview] = useState<Review | null>(null);
 
     const nameOf = (id: string) => names[id] ?? "Alguien";
     const isCouple = memberCount === 2;
     const partnerName = isCouple && partnerId ? nameOf(partnerId) : null;
     const archived = space.status === "ARCHIVED";
 
-    const t: Transfer | undefined = transfers[Math.min(selected, transfers.length - 1)];
-    const outgoing = t?.direction === "pay"
-        ? pending.find((p) => p.fromUserId === me && p.toUserId === t.userId)
-        : undefined;
+    // A transfer I already reported as paid is not offered again: it shows as
+    // one "Falta que X confirme" block instead of a radio + CTA.
+    const outgoingPending = pending.filter((p) => p.fromUserId === me);
+    const open = transfers.filter((tr) => tr.direction !== "pay" || !outgoingPending.some((p) => p.toUserId === tr.userId));
+    const t: Transfer | undefined = open[Math.min(selected, open.length - 1)];
     const incoming = t?.direction === "receive"
         ? pending.find((p) => p.fromUserId === t.userId && p.toUserId === me)
         : undefined;
@@ -88,35 +102,40 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
         return (await res.json()) as { settlement?: { id: string; status: string; amount: number }; merged?: boolean };
     }
 
+    // Every write goes through a review sheet: run() is only called from its CTA
+    // and closes it on success. A rule failure (409) means the sheet's amounts and
+    // cap are stale: close it and show the error over the refreshed ticket, so a
+    // retry reopens the sheet with fresh data. Other failures stay in the sheet.
     async function run(action: () => Promise<Done>) {
         setSubmitting(true);
         setError(null);
         try {
             setDone(await action());
+            setReview(null);
             router.refresh();
         } catch (e) {
             setError(e instanceof Error ? e.message : "Algo ha fallado. Inténtalo de nuevo.");
-            if (e instanceof StaleError) router.refresh();
+            if (e instanceof StaleError) {
+                setReview(null);
+                router.refresh();
+            }
         } finally {
             setSubmitting(false);
         }
     }
 
-    const iPaid = () => run(async () => {
-        if (!t) throw new Error("No hay nada que pagar");
-        const json = await post({ toUserId: t.userId, amount: t.amount / 100, method });
-        return { kind: "pending", id: json.settlement?.id ?? null, name: nameOf(t.userId), amount: t.amount, method };
+    const iPaid = (tr: Transfer, cents: number, how: SettleMethod) => run(async () => {
+        const json = await post({ toUserId: tr.userId, amount: cents / 100, method: how });
+        return { kind: "pending", id: json.settlement?.id ?? null, name: nameOf(tr.userId), amount: json.settlement?.amount ?? cents, method: how };
     });
 
-    const theyPaid = () => run(async () => {
-        if (!t) throw new Error("No hay nada que cobrar");
-        const json = await post({ fromUserId: t.userId, amount: t.amount / 100, method });
-        const paid = json.settlement?.amount ?? t.amount;
-        return { kind: "confirmed", method, remaining: balance - paid };
+    const theyPaid = (tr: Transfer, cents: number, how: SettleMethod) => run(async () => {
+        const json = await post({ fromUserId: tr.userId, amount: cents / 100, method: how });
+        const paid = json.settlement?.amount ?? cents;
+        return { kind: "confirmed", id: json.settlement?.id ?? null, name: nameOf(tr.userId), amount: paid, method: how, remaining: balance - paid };
     });
 
-    const confirmIncoming = () => run(async () => {
-        if (!incoming) throw new Error("No hay pago que confirmar");
+    const confirmIncoming = (incoming: PendingSettlement) => run(async () => {
         const res = await fetch(`/api/settle/${incoming.id}/status`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -124,18 +143,21 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
             body: JSON.stringify({ status: "CONFIRMED", expectedAmountCents: incoming.amount }),
         });
         if (!res.ok) throw await failure(res, "No se pudo confirmar el pago");
-        return { kind: "confirmed", method: incoming.method, remaining: balance - incoming.amount };
+        return {
+            kind: "confirmed",
+            id: incoming.id,
+            name: nameOf(incoming.fromUserId),
+            amount: incoming.amount,
+            method: incoming.method,
+            remaining: balance - incoming.amount,
+        };
     });
 
-    async function remind() {
-        const amount = formatCurrency(Math.abs(balance));
-        const url = `${window.location.origin}/settle?space=${encodeURIComponent(space.id)}`;
-        const text = isCouple
-            ? `¡Hola, ${partnerName}! Para quedar en paz en ${space.name} me debes ${amount}. Lo tienes en EQUIL.`
-            : `Cuentas de ${space.name}: me quedan ${amount} por cobrar. Entrad en EQUIL para quedar en paz.`;
+    async function share(title: string, text: string, path: string) {
+        const url = `${window.location.origin}${path}`;
         if (typeof navigator.share === "function") {
             try {
-                await navigator.share({ title: "Quedar en paz", text, url });
+                await navigator.share({ title, text, url });
                 return;
             } catch (e) {
                 if (e instanceof DOMException && e.name === "AbortError") return;
@@ -150,16 +172,47 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
         }
     }
 
+    /** Creditor → debtor: the debt is still open. */
+    function remind() {
+        const amount = formatCurrency(Math.abs(balance));
+        const text = isCouple
+            ? `¡Hola, ${partnerName}! En ${space.name} me debes ${amount}. Puedes saldarlo desde EQUIL.`
+            : `${space.name}: me quedan ${amount} por cobrar. Entrad en EQUIL para saldar vuestra parte.`;
+        return share("Deuda pendiente en EQUIL", text, `/settle?space=${encodeURIComponent(space.id)}`);
+    }
+
+    /** Debtor → creditor: please confirm the payment I reported. */
+    function askToConfirm(p: { id: string | null; name: string; amount: number; method: string }) {
+        const text = `¡Hola, ${p.name}! Te he pagado ${formatCurrency(p.amount)} ${methodPhrase(p.method)} en ${space.name}. ¿Lo confirmas en EQUIL?`;
+        return share("Pago por confirmar en EQUIL", text, p.id ? `/settle/${p.id}` : `/settle?space=${encodeURIComponent(space.id)}`);
+    }
+
+    function openReview(r: Review) {
+        setError(null);
+        setReview(r);
+    }
+
+    function closeReview() {
+        setReview(null);
+        setError(null);
+    }
+
     // ---- states -----------------------------------------------------------
 
     const header = (
-        <EqHeader back="/dashboard">
-            <h1 className="sr-only">Quedar en paz</h1>
-            <Link href={`/settle/history?space=${encodeURIComponent(space.id)}`} className="ml-auto text-sm font-semibold text-primary px-1">
+        <EqHeader back="/dashboard" title="Saldar deuda">
+            <Link href={`/settle/history?space=${encodeURIComponent(space.id)}`} className="-my-2.5 min-h-11 flex items-center text-sm font-semibold text-primary px-1">
                 Historial
             </Link>
         </EqHeader>
     );
+
+    // A 409 closed the sheet: the error stays over whatever the refresh shows.
+    const staleAlert = error && !review ? (
+        <p role="alert" data-testid="settle-error" className="w-full rounded-[14px] bg-[var(--negative-tint)] px-3.5 py-3 text-sm text-[color:var(--negative-ink)]">
+            {error}
+        </p>
+    ) : null;
 
     if (done?.kind === "pending") {
         return (
@@ -169,17 +222,15 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                     testId="settle-pending"
                     icon={<Clock className="h-10 w-10" />}
                     tone="tint"
-                    title={`Pendiente de que ${done.name} confirme`}
-                    sub={`Has registrado ${formatCurrency(done.amount)} ${methodPhrase(done.method)}. Contará en el saldo cuando ${done.name} confirme que lo ha recibido.`}
+                    title={`Pago a ${done.name} · por confirmar`}
+                    sub={`Has registrado ${formatCurrency(done.amount)} ${methodPhrase(done.method)}. ${done.name} lo verá en EQUIL como pago por confirmar; la deuda quedará saldada cuando lo confirme.`}
                 />
                 <Footer>
-                    <EqCta onClick={() => router.push("/dashboard")}>Volver al inicio</EqCta>
-                    {done.id && (
-                        <Link href={`/settle/${done.id}`} className="text-sm font-semibold text-primary p-1">
-                            Ver el pago
-                        </Link>
-                    )}
+                    <EqCta onClick={() => askToConfirm(done)}>Pedirle que lo confirme</EqCta>
+                    <EqCta variant="outline" onClick={() => router.push("/dashboard")}>Volver al inicio</EqCta>
+                    {done.id && <TextLink href={`/settle/${done.id}`}>Ver el pago</TextLink>}
                 </Footer>
+                {toast && <EqToast>{toast}</EqToast>}
             </Screen>
         );
     }
@@ -189,12 +240,19 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
         const stillOpen = registered && !isAtPeace(done.remaining);
         // In a group I can be at peace while others still owe each other.
         const onlyMe = !stillOpen && !isCouple && !everyoneSettled;
-        const title = stillOpen ? "Pago registrado" : onlyMe ? "Tú estás en paz" : "Estáis en paz";
+        // "Deuda saldada" only right after a payment that leaves the balance at 0;
+        // opening /settle with nothing owed is just "al día".
+        const rest = stillOpen ? formatCurrency(Math.abs(done.remaining)) : "";
+        const title = stillOpen
+            ? done.remaining > 0
+                ? `Pago registrado · aún te ${isCouple ? "debe" : "deben"} ${rest}`
+                : `Pago registrado · aún debes ${rest}`
+            : registered ? "Deuda saldada" : onlyMe ? "Ya estás al día" : "Estáis al día";
+        // SETTLING with every balance at zero: the last step is archiving.
+        const readyToArchive = space.status === "SETTLING" && !stillOpen && everyoneSettled;
         let sub: string;
-        if (stillOpen) {
-            sub = `Pago registrado ${methodPhrase(done.method)}. Aún te ${isCouple ? "debe" : "deben"} ${formatCurrency(done.remaining)}.`;
-        } else if (registered) {
-            sub = `Pago registrado ${methodPhrase(done.method)}. Lo verás en Gastos.`;
+        if (registered) {
+            sub = `Has registrado ${formatCurrency(done.amount)} de ${done.name} ${methodPhrase(done.method)}.`;
         } else if (onlyMe) {
             sub = `No tienes nada pendiente, pero aún quedan cuentas entre otros miembros de ${space.name}.`;
         } else {
@@ -210,14 +268,24 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                     sub={sub}
                 >
                     {!registered && <PendingList pending={pending} me={me} nameOf={nameOf} />}
+                    {readyToArchive && !canArchive && (
+                        <p className="text-[15px] text-muted-foreground text-center" data-testid="settle-archive-hint">
+                            Avisa a quien gestiona el espacio para archivarlo.
+                        </p>
+                    )}
                 </Centered>
                 <Footer>
-                    <EqCta onClick={() => router.push("/dashboard")}>Volver al inicio</EqCta>
-                    {stillOpen && (
-                        <button type="button" onClick={() => { setDone(null); setSelected(0); }} className="text-sm font-semibold text-primary p-1">
-                            Seguir saldando
-                        </button>
+                    {staleAlert}
+                    {readyToArchive && canArchive && (
+                        <EqCta onClick={() => router.push(`/spaces/${space.id}/close`)} data-testid="settle-archive">Terminar y archivar</EqCta>
                     )}
+                    {done?.id && <Link href={`/settle/${done.id}`} className={OUTLINE_LINK}>Ver el pago</Link>}
+                    {stillOpen && (
+                        <EqCta variant="outline" onClick={() => { setDone(null); setSelected(0); }}>Saldar el resto</EqCta>
+                    )}
+                    {readyToArchive && canArchive
+                        ? <TextLink href="/dashboard">Volver al inicio</TextLink>
+                        : <EqCta onClick={() => router.push("/dashboard")}>Volver al inicio</EqCta>}
                 </Footer>
                 {toast && <EqToast>{toast}</EqToast>}
             </Screen>
@@ -231,38 +299,49 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
         ? owed ? `${partnerName} te debe` : `Le debes a ${partnerName}`
         : owed ? "Te deben" : "Debes";
     const eachLabel = shareLabel(ticket, memberCount);
-    const showTransfers = !isCouple || transfers.length > 1;
+    const showTransfers = !isCouple || open.length > 1;
+    const total = formatCurrency(Math.abs(balance));
+    // The headline says who owes whom on its own; in a group, the second line
+    // names the transfer the CTA will record.
+    const headline = isCouple
+        ? owed ? `${partnerName} te debe ${total}` : `Le debes ${total} a ${partnerName}`
+        : owed ? `Te deben ${total} en total` : `Debes ${total} en total`;
+    const transferLine = !isCouple && t
+        ? t.direction === "pay"
+            ? `Le pagas ${formatCurrency(t.amount)} a ${nameOf(t.userId)}`
+            : `${nameOf(t.userId)} te paga ${formatCurrency(t.amount)}`
+        : null;
 
     let cta: React.ReactNode = null;
     if (!archived && t) {
-        if (t.direction === "pay" && outgoing) {
+        if (t.direction === "pay") {
             cta = (
-                <>
-                    <p className="text-sm text-muted-foreground text-center" data-testid="settle-outgoing-pending">
-                        Ya registraste {formatCurrency(outgoing.amount)} para {nameOf(t.userId)}. Pendiente de que lo confirme.
-                    </p>
-                    <EqCta variant="outline" onClick={() => router.push(`/settle/${outgoing.id}`)}>Ver el pago</EqCta>
-                </>
+                <EqCta onClick={() => openReview({ kind: "pay", t, method })} className={CTA_WRAP}>
+                    Ya le he pagado {formatCurrency(t.amount)} a {nameOf(t.userId)}
+                </EqCta>
             );
-        } else if (t.direction === "pay") {
-            cta = <EqCta onClick={iPaid} disabled={submitting} aria-busy={submitting}>Ya he pagado</EqCta>;
         } else if (incoming) {
             cta = (
                 <>
-                    <EqCta onClick={confirmIncoming} disabled={submitting} aria-busy={submitting}>
-                        Confirmar pago de {nameOf(t.userId)}
+                    <EqCta onClick={() => openReview({ kind: "incoming", t, incoming })} className={CTA_WRAP}>
+                        Sí, he recibido {formatCurrency(incoming.amount)} de {nameOf(t.userId)}
                     </EqCta>
-                    <Link href={`/settle/${incoming.id}`} className="text-sm font-semibold text-primary p-1">
+                    <TextLink href={`/settle/${incoming.id}`}>
                         {nameOf(t.userId)} dice que te ha pagado {formatCurrency(incoming.amount)} · ver
-                    </Link>
+                    </TextLink>
                 </>
             );
         } else {
-            cta = <EqCta onClick={theyPaid} disabled={submitting} aria-busy={submitting}>Ya me ha pagado</EqCta>;
+            cta = (
+                <EqCta onClick={() => openReview({ kind: "receive", t, method })} className={CTA_WRAP}>
+                    {nameOf(t.userId)} ya me ha pagado {formatCurrency(t.amount)}
+                </EqCta>
+            );
         }
     }
     const canRemind = !archived && owed && !incoming;
-    const usesMethod = !archived && !!t && !outgoing && !incoming;
+    const usesMethod = !archived && !!t && !incoming;
+    const inFlight = outgoingPending.reduce((sum, p) => sum + p.amount, 0);
 
     return (
         <Screen>
@@ -275,7 +354,12 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                     </p>
                 )}
 
-                <ReceiptTicket className="mx-5 mt-4" data-testid="settle-ticket">
+                <div className="px-5 pt-3 flex flex-col gap-1" data-testid="settle-summary">
+                    <p className="text-[24px] font-bold tracking-[-0.02em] leading-tight text-balance">{headline}</p>
+                    {transferLine && <p className="text-[15px] text-muted-foreground" data-testid="settle-summary-transfer">{transferLine}</p>}
+                </div>
+
+                <ReceiptTicket className="mx-5" data-testid="settle-ticket">
                     <h2 className="text-[22px] font-bold tracking-[-0.02em] text-center">Cuenta de {space.name}</h2>
                     <p className="text-center text-muted-foreground font-mono text-[11px] -mt-1.5" data-testid="settle-ticket-meta">{meta}</p>
                     <TicketRule />
@@ -294,7 +378,7 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                     )}
                     {ticket.carry !== 0 && (
                         <TicketRow
-                            label="Saldo anterior"
+                            label="Pendiente de antes"
                             value={`${ticket.carry > 0 ? "+" : "−"}${formatCurrency(Math.abs(ticket.carry))}`}
                             muted
                             testId="settle-ticket-carry"
@@ -306,18 +390,35 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
                         <span
                             data-testid="settle-balance"
                             className={cn(
-                                "shrink-0 whitespace-nowrap text-[length:clamp(20px,7vw,32px)] font-bold tracking-[-0.03em] tabular-nums",
+                                "shrink-0 whitespace-nowrap text-[length:clamp(20px,8.9vw,32px)] font-bold tracking-[-0.03em] tabular-nums",
                                 owed ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"
                             )}
                         >
                             {formatCurrency(Math.abs(balance))}
                         </span>
                     </div>
+                    {inFlight > 0 && (
+                        <TicketRow label="Pago en camino" value={`−${formatCurrency(inFlight)} · pendiente`} muted testId="settle-ticket-in-flight" />
+                    )}
                 </ReceiptTicket>
 
-                {showTransfers && transfers.length > 0 && (
+                {outgoingPending.length > 0 && (
+                    <div className="px-5 flex flex-col gap-3">
+                        {outgoingPending.map((p) => (
+                            <OutgoingPending
+                                key={p.id}
+                                name={nameOf(p.toUserId)}
+                                amount={p.amount}
+                                href={`/settle/${p.id}`}
+                                onAsk={() => askToConfirm({ id: p.id, name: nameOf(p.toUserId), amount: p.amount, method: p.method })}
+                            />
+                        ))}
+                    </div>
+                )}
+
+                {showTransfers && open.length > 0 && (
                     <TransferPicker
-                        transfers={transfers}
+                        transfers={open}
                         selected={selected}
                         onSelect={setSelected}
                         nameOf={nameOf}
@@ -327,24 +428,54 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
 
                 {usesMethod && (
                     <div className="px-5">
-                        <MethodPicker value={method} onChange={setMethod} />
+                        <MethodPicker
+                            value={method}
+                            onChange={setMethod}
+                            label={t?.direction === "pay" ? "¿Cómo le has pagado?" : "¿Cómo te ha pagado?"}
+                        />
                     </div>
                 )}
 
                 <div className="px-5">
-                    <PendingList pending={pending} me={me} nameOf={nameOf} />
+                    <PendingList pending={pending.filter((p) => p.toUserId === me)} me={me} nameOf={nameOf} />
                 </div>
             </div>
 
             <Footer>
-                {error && <p role="alert" className="text-sm text-destructive text-center">{error}</p>}
+                {staleAlert}
                 {cta}
                 {canRemind && (
-                    <button type="button" onClick={remind} className="text-sm font-semibold text-primary p-1">
-                        {isCouple ? `Recordárselo a ${partnerName}` : "Recordárselo al grupo"}
+                    <button type="button" onClick={remind} className={TEXT_LINK}>
+                        {isCouple ? `Recordarle la deuda a ${partnerName}` : "Recordar la deuda al grupo"}
                     </button>
                 )}
             </Footer>
+            {review?.kind === "incoming" ? (
+                <PendingPaymentSheet
+                    status="CONFIRMED"
+                    name={nameOf(review.t.userId)}
+                    myName={nameOf(me)}
+                    amountCents={review.incoming.amount}
+                    method={review.incoming.method}
+                    owedCents={debts[review.t.userId] ?? 0}
+                    balanceCents={balance}
+                    busy={submitting}
+                    error={error}
+                    onConfirm={() => confirmIncoming(review.incoming)}
+                    onClose={closeReview}
+                />
+            ) : review && (
+                <RecordSettlementSheet
+                    direction={review.kind}
+                    name={nameOf(review.t.userId)}
+                    maxCents={review.t.amount}
+                    method={review.method}
+                    busy={submitting}
+                    error={error}
+                    onConfirm={(cents) => (review.kind === "pay" ? iPaid : theyPaid)(review.t, cents, review.method)}
+                    onClose={closeReview}
+                />
+            )}
             {toast && <EqToast>{toast}</EqToast>}
         </Screen>
     );
@@ -352,8 +483,19 @@ export function SettleClient({ space, me, isGuest, memberCount, partnerId, names
 
 // ---- layout pieces ---------------------------------------------------------
 
+/** The CTAs carry a name and an amount: let a long one wrap instead of clipping. */
+const CTA_WRAP = "h-auto min-h-14 px-5 py-3 text-center leading-snug text-balance";
+
+/** EqCta "outline" look on a real link. */
+const OUTLINE_LINK = "w-full h-14 rounded-[18px] text-base font-semibold flex items-center justify-center bg-card border border-[color:var(--line)] text-foreground";
+const TEXT_LINK = "min-h-11 px-2 text-sm font-semibold text-primary inline-flex items-center";
+
+function TextLink({ href, children }: { href: string; children: React.ReactNode }) {
+    return <Link href={href} className={TEXT_LINK}>{children}</Link>;
+}
+
 function Screen({ children }: { children: React.ReactNode }) {
-    return <main className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">{children}</main>;
+    return <div className="eq-in min-h-dvh w-full max-w-md mx-auto flex flex-col bg-background pt-[max(env(safe-area-inset-top),12px)]">{children}</div>;
 }
 
 function Footer({ children }: { children: React.ReactNode }) {
@@ -414,7 +556,7 @@ function TransferPicker({
     return (
         <div className="px-5">
         <fieldset className="flex flex-col gap-2" disabled={disabled} data-testid="settle-transfers">
-            <legend className="text-xs font-semibold text-muted-foreground mb-2">Pagos sugeridos</legend>
+            <legend className="text-xs font-semibold text-muted-foreground mb-2">¿Qué deuda quieres saldar?</legend>
             {transfers.map((tr, i) => {
                 const active = i === selected;
                 const who = nameOf(tr.userId);
@@ -454,6 +596,24 @@ function TransferPicker({
     );
 }
 
+/** A payment I reported that the creditor has not confirmed yet: the only place it is shown. */
+function OutgoingPending({ name, amount, href, onAsk }: { name: string; amount: number; href: string; onAsk: () => void }) {
+    return (
+        <div className="rounded-[18px] bg-card border border-[color:var(--line)] p-4 flex flex-col gap-3" data-testid="settle-outgoing-pending">
+            <div className="flex items-center gap-3">
+                <div aria-hidden className="h-10 w-10 flex-none rounded-[12px] bg-[var(--accent-tint)] text-primary flex items-center justify-center">
+                    <Clock className="h-[18px] w-[18px]" />
+                </div>
+                <p className="text-[15px] font-semibold leading-snug">Falta que {name} confirme {formatCurrency(amount)}</p>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 -mb-1.5">
+                <Link href={href} className={cn(TEXT_LINK, "px-0")}>Ver el pago pendiente</Link>
+                <button type="button" onClick={onAsk} className={cn(TEXT_LINK, "px-0")}>Pedirle que lo confirme</button>
+            </div>
+        </div>
+    );
+}
+
 /** PENDING settlements that involve me (either side), linking to the detail. */
 function PendingList({ pending, me, nameOf }: { pending: PendingSettlement[]; me: string; nameOf: (id: string) => string }) {
     if (pending.length === 0) return null;
@@ -468,8 +628,8 @@ function PendingList({ pending, me, nameOf }: { pending: PendingSettlement[]; me
                         href={`/settle/${p.id}`}
                         icon={<Clock className="h-[18px] w-[18px]" />}
                         iconTint={toMe}
-                        title={toMe ? `${nameOf(p.fromUserId)} te ha pagado` : `Pagaste a ${nameOf(p.toUserId)}`}
-                        sub={toMe ? "Te toca confirmarlo" : `Esperando a ${nameOf(p.toUserId)}`}
+                        title={toMe ? `${nameOf(p.fromUserId)} dice que te ha pagado` : `Pago a ${nameOf(p.toUserId)}`}
+                        sub={toMe ? "Confírmalo cuando lo recibas" : `Falta que ${nameOf(p.toUserId)} lo confirme`}
                         amount={formatCurrency(p.amount)}
                     />
                 );

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { resolveInviteToken } from "@/lib/invite-resolve";
 import { sessionKindOf } from "@/lib/invite-policy";
+import { ephemeralSpacesEnabled } from "@/lib/flags";
+import { SpaceType } from "@/generated/prisma/enums";
 import { MembershipStatus } from "@/generated/prisma/enums";
 import { AuthShell, AuthNote } from "@/components/auth/auth-shell";
 import { ClaimButton } from "./claim-button";
@@ -32,6 +34,9 @@ const outlineLink = `${linkCta} bg-card border border-[color:var(--line)] text-f
 
 const CONSENT_NOTE =
     "Al unirte, las demás personas del espacio verán tu nombre y los gastos que registres. No compartimos tus datos con terceros. Puedes salir del espacio cuando quieras desde Espacios.";
+
+/** Only for a trip's guest link: a guest's access ends with the trip. */
+const GUEST_NOTE = "Tu acceso termina cuando acabe el viaje.";
 
 export default async function InviteConsentPage({ params }: { params: Promise<{ token: string }> }) {
     const { token } = await params;
@@ -98,6 +103,7 @@ export default async function InviteConsentPage({ params }: { params: Promise<{ 
 
     // ── Trip (EPHEMERAL) guest link ──────────────────────────────────────────
     if (resolved.kind === "GUEST") {
+        const guestNote = ephemeralSpacesEnabled() && resolved.spaceType === SpaceType.EPHEMERAL;
         if (kind === "guest" && session?.groupId === resolved.spaceId) {
             return (
                 <AuthShell
@@ -119,6 +125,7 @@ export default async function InviteConsentPage({ params }: { params: Promise<{ 
                     }
                     footer={
                         <>
+                            {guestNote && <AuthNote>{GUEST_NOTE}</AuthNote>}
                             <AuthNote>{CONSENT_NOTE}</AuthNote>
                             <Link href="/dashboard" className="text-sm font-semibold text-muted-foreground px-2 py-2">
                                 Ahora no
@@ -127,7 +134,7 @@ export default async function InviteConsentPage({ params }: { params: Promise<{ 
                     }
                 >
                     {resolved.accountJoinable && (
-                        <ClaimButton token={token} asMember label="Unirme con mi cuenta" />
+                        <ClaimButton token={token} spaceName={resolved.spaceName} asMember label="Unirme con mi cuenta" />
                     )}
                     <GuestEntry token={token} spaceName={resolved.spaceName} replacesSessionOf={sessionEmail ?? ""} />
                 </AuthShell>
@@ -144,6 +151,7 @@ export default async function InviteConsentPage({ params }: { params: Promise<{ 
                 }
                 footer={
                     <>
+                        {guestNote && <AuthNote>{GUEST_NOTE}</AuthNote>}
                         <AuthNote>{CONSENT_NOTE}</AuthNote>
                         <p className="text-sm text-muted-foreground">
                             ¿Prefieres una cuenta?{" "}
@@ -190,7 +198,7 @@ export default async function InviteConsentPage({ params }: { params: Promise<{ 
                     </>
                 }
             >
-                <ClaimButton token={token} label="Unirme al espacio" />
+                <ClaimButton token={token} spaceName={resolved.spaceName} label="Unirme al espacio" />
             </AuthShell>
         );
     }

@@ -31,9 +31,9 @@ test.describe('Shopping lists — lifecycle, quantities and duplicates', () => {
     await addInput.press('Enter');
     await expect(page.getByRole('checkbox', { name: 'Huevos' })).toBeVisible();
 
-    // No new expenses while settling: "Terminar compra" just clears the cart.
+    // No new expenses while settling: "Terminar compra" just clears the cart (Leche + the 2 seeded checked items).
     await page.getByRole('button', { name: 'Terminar compra' }).click();
-    const toast = page.getByText(/Carro vaciado\. El espacio se está liquidando/);
+    const toast = page.getByText(/3 productos quitados de la lista\. Estáis cerrando cuentas/);
     await expect(toast).toBeVisible();
     await expect(page).toHaveURL(`/lists/${groupListId}`);
     // The toast wraps inside the viewport (no horizontal overflow).
