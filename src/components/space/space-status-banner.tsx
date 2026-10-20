@@ -59,7 +59,7 @@ export function SpaceStatusBanner({
                                     data-testid="space-status-settle-link"
                                     className="min-h-11 flex items-center text-[13px] font-semibold text-primary"
                                 >
-                                    Ir a liquidar →
+                                    Saldar deudas →
                                 </Link>
                             )}
                             {canManage && (

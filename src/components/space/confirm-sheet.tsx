@@ -7,8 +7,8 @@ import { Sheet } from "@/components/ui/sheet";
 
 /**
  * EQUIL confirmation bottom sheet (replaces `window.confirm` on the space
- * screens). `error` shows inline; `errorHref` adds a way out (e.g. "Ir a
- * liquidar" when archiving is blocked by open balances).
+ * screens). `error` shows inline; `errorHref` adds a way out (e.g. "Saldar
+ * deudas" when archiving is blocked by open balances).
  */
 export function ConfirmSheet({
     title,
@@ -18,7 +18,7 @@ export function ConfirmSheet({
     busy = false,
     error,
     errorHref,
-    errorHrefLabel = "Ir a liquidar",
+    errorHrefLabel = "Saldar deudas",
     onConfirm,
     onClose,
     testId,

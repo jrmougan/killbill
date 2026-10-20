@@ -89,7 +89,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     expect(JSON.parse(patch.request().postData() ?? '{}')).toEqual({ status: 'SETTLING' });
 
     // The page reloads with the committed lifecycle status.
-    await expect(header).toHaveText('Pareja · Liquidando');
+    await expect(header).toHaveText('Pareja · Cerrando cuentas');
     await expect(header).toHaveAttribute('data-status', 'SETTLING');
     await expect(page.getByTestId('space-action-settle')).toHaveCount(0);
     await expect(page.getByTestId('space-action-reopen')).toBeVisible();
@@ -137,7 +137,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await page.goto(`/spaces/${spaceId}`);
 
     const header = page.getByTestId('space-header-status');
-    await expect(header).toHaveText('Pareja · Liquidando');
+    await expect(header).toHaveText('Pareja · Cerrando cuentas');
 
     const patchPromise = spacePatch(page, spaceId);
     await page.getByTestId('space-action-reopen').click();
@@ -178,7 +178,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await page.goto(`/spaces/${spaceId}`);
 
     const header = page.getByTestId('space-header-status');
-    await expect(header).toHaveText('Pareja · Liquidando');
+    await expect(header).toHaveText('Pareja · Cerrando cuentas');
 
     // Archiving asks for confirmation in a sheet; with a PENDING payment the API refuses (409).
     await page.getByTestId('space-action-archive').click();
@@ -192,8 +192,8 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     expect(blocked.code).toBe('PENDING_SETTLEMENTS');
     expect(blocked.settleUrl).toBe(`/settle?space=${spaceId}`);
     await expect(sheet.getByTestId('confirm-sheet-error')).toContainText('pago pendiente de confirmar');
-    await expect(sheet.getByRole('link', { name: /Ir a liquidar/ })).toHaveAttribute('href', `/settle?space=${spaceId}`);
-    await expect(header).toHaveText('Pareja · Liquidando');
+    await expect(sheet.getByRole('link', { name: /Saldar deudas/ })).toHaveAttribute('href', `/settle?space=${spaceId}`);
+    await expect(header).toHaveText('Pareja · Cerrando cuentas');
 
     // Rejecting the payment leaves the 50 € debt open → still 409, now OPEN_BALANCES.
     const reject = await page.request.patch(`/api/settle/${settlementId}/status`, { data: { status: 'REJECTED' } });
@@ -261,7 +261,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     await loginAs(page, userB);
     await page.goto(`/spaces/${spaceId}`);
 
-    await expect(page.getByTestId('space-header-status')).toHaveText('Pareja · Liquidando');
+    await expect(page.getByTestId('space-header-status')).toHaveText('Pareja · Cerrando cuentas');
     await expect(page.getByTestId('space-status-banner')).toHaveAttribute('data-status', 'SETTLING');
     // The whole "Gestión" section (SpaceActions) is gated on canManage.
     await expect(page.getByRole('heading', { name: 'Gestión' })).toHaveCount(0);
@@ -286,6 +286,6 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     const archive = await page.request.patch(`/api/spaces/${spaceId}`, { data: { status: 'ARCHIVED' } });
     expect(archive.status()).toBe(403);
     await page.goto(`/spaces/${spaceId}`);
-    await expect(page.getByTestId('space-header-status')).toHaveText('Pareja · Liquidando');
+    await expect(page.getByTestId('space-header-status')).toHaveText('Pareja · Cerrando cuentas');
   });
 });

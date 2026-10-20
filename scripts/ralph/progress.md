@@ -218,3 +218,15 @@
 - Ficheros: `src/lib/home-format{,.test}.ts`, `src/components/{ui/member-balance-list,space/member-list,space/spaces-list,month/analysis-view,space/leave-space,space/create-space-flow}.tsx`, `src/app/page.tsx`.
 - Aprendizajes: el ux-showcase no tiene ningún miembro con saldo cero, así que "Al día" no se ve en las capturas de espacio;
   sí sale en `mes-analisis.aria.yml` (meses pasados). Ningún e2e afirmaba "En paz" (solo "Estáis al día" en `settle-peace`).
+
+## 2026-10-20 · CF-03 SETTLING = "Cerrando cuentas"
+- Corregido: `SPACE_STATUS_META` SETTLING → "Cerrando cuentas" (cabecera "Pareja · Cerrando cuentas", chips); "Saldar deudas →" en
+  el banner y en el error de /close; `ConfirmSheet` con "Saldar deudas" por defecto; Gestión ("solo saldar deudas", "Saldar deudas"
+  con `HandCoins`, "Solo cuando no queden deudas."); /close ("Saldad las deudas y archivad…", "Pagos del cierre", "Empezar a cerrar
+  cuentas", aviso y error nuevos); captura nueva `espacio-cerrando`; e2e de lifecycle/manage/settle-up actualizados y en verde.
+- Pendiente / fuera de alcance: "se está liquidando" en `space-policy.ts:107`, añadir gasto, Gastos y Listas (CF-05 y siguientes);
+  "Espacio en liquidación" del banner de Mes (`e2e/features/month.spec.ts:52`); "Confirmar Pagos" con mayúscula.
+- Ficheros: `src/lib/{space-ui,settlement-space}.ts`, `src/components/space/{space-status-banner,confirm-sheet}.tsx`,
+  `src/app/spaces/[id]/{actions-client,close/client}.tsx`, `e2e/spaces/{lifecycle,manage,settle-up}.spec.ts`, `scripts/ralph/capture.spec.ts`.
+- Aprendizajes: el escenario `space-settling` (User A/B, saldo ±50 € y un pago en efectivo pendiente) sirve para ver el banner,
+  la Gestión de SETTLING y /close; su `coupleId` es el espacio. Los e2e afirman la cabecera con `toHaveText` exacto.

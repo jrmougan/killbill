@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Archive, ChevronRight, DoorClosed, DoorOpen, Users } from "lucide-react";
+import { Archive, ChevronRight, DoorClosed, DoorOpen, HandCoins, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SpaceType, SpaceStatus } from "@/generated/prisma/enums";
 import { ConfirmSheet } from "@/components/space/confirm-sheet";
@@ -75,7 +75,7 @@ export function SpaceActions({
                     <DoorClosed className="h-5 w-5 text-primary flex-none" aria-hidden="true" />
                     <span className="flex-1">
                         Empezar a cerrar cuentas
-                        <span className="block text-[12.5px] font-normal text-muted-foreground">No se podrán añadir gastos; solo liquidar.</span>
+                        <span className="block text-[12.5px] font-normal text-muted-foreground">No se podrán añadir gastos; solo saldar deudas.</span>
                     </span>
                 </button>
             )}
@@ -83,8 +83,8 @@ export function SpaceActions({
             {status === SpaceStatus.SETTLING && (
                 <>
                     <Link href={settleHref} className={row} data-testid="space-action-go-settle">
-                        <DoorClosed className="h-5 w-5 text-primary flex-none" aria-hidden="true" />
-                        <span className="flex-1">Ir a liquidar deudas</span>
+                        <HandCoins className="h-5 w-5 text-primary flex-none" aria-hidden="true" />
+                        <span className="flex-1">Saldar deudas</span>
                         <ChevronRight className="h-5 w-5 text-[color:var(--ink-4)]" aria-hidden="true" />
                     </Link>
                     <button
@@ -132,7 +132,7 @@ export function SpaceActions({
                 <Archive className="h-5 w-5 flex-none" aria-hidden="true" />
                 <span className="flex-1">
                     Archivar espacio
-                    <span className="block text-[12.5px] font-normal text-muted-foreground">Solo cuando estéis en paz.</span>
+                    <span className="block text-[12.5px] font-normal text-muted-foreground">Solo cuando no queden deudas.</span>
                 </span>
             </button>
 

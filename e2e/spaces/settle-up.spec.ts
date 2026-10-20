@@ -111,7 +111,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await expect(pageA.getByTestId('close-start-settling')).toHaveCount(0);
     await expect(pageA.getByTestId('close-archive')).toBeVisible();
     await pageA.goto(`/spaces/${spaceId}`);
-    await expect(pageA.getByTestId('space-header-status')).toHaveText('Pareja · Liquidando');
+    await expect(pageA.getByTestId('space-header-status')).toHaveText('Pareja · Cerrando cuentas');
 
     // The MEMBER debtor cannot drive settle-up (OWNER/ADMIN only)...
     const forbidden = await pageB.request.post(`/api/spaces/${spaceId}/settle-up`);

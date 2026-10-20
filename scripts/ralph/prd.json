@@ -372,8 +372,8 @@
         "e2e/spaces/settle-up.spec.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Chip/cabecera 'Cerrando cuentas', 'Saldar deudas' en banner, hoja, Gestión y /close, textos de /close renombrados; captura espacio-cerrando; quedan 'se está liquidando' (CF-05) y 'Espacio en liquidación' en Mes."
     },
     {
       "id": "CF-04",

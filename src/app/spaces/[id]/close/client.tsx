@@ -13,7 +13,7 @@ type Debt = { userId: string; name: string; amountCents: number };
 type SettlementRow = { id: string; fromName: string; toName: string; amountCents: number; status: string };
 
 /**
- * Guided close flow for a space: what the caller owes, "Iniciar liquidación"
+ * Guided close flow for a space: what the caller owes, "Empezar a cerrar cuentas"
  * (POST /api/spaces/[id]/settle-up → SETTLING + suggested PENDING settlements),
  * the settlement checklist with progress, a link to settle THIS space
  * (`/settle?space=<id>`, not the active-space cookie) and the final "Archivar"
@@ -71,7 +71,7 @@ export function CloseSpaceClient({
             if (res.ok) {
                 startTransition(() => router.refresh());
             } else {
-                setError({ message: data?.error || "No se pudo iniciar la liquidación", href: null });
+                setError({ message: data?.error || "No se pudo empezar a cerrar cuentas", href: null });
             }
         } catch {
             setError({ message: "Sin conexión. Inténtalo de nuevo.", href: null });
@@ -115,7 +115,7 @@ export function CloseSpaceClient({
             </header>
             <div className="px-5 pt-1 flex flex-col gap-1">
                 <h1 className="text-2xl font-bold tracking-[-0.02em] break-words">Cerrar {spaceName}</h1>
-                <p className="text-[15px] text-muted-foreground">Quedad en paz y archivad el espacio como recuerdo.</p>
+                <p className="text-[15px] text-muted-foreground">Saldad las deudas y archivad el espacio como recuerdo.</p>
             </div>
 
             <div className="px-5 pt-5 flex flex-col gap-6">
@@ -159,7 +159,7 @@ export function CloseSpaceClient({
                 {total > 0 && (
                     <section aria-labelledby="settlements-title" className="flex flex-col gap-2">
                         <div className="flex items-center justify-between">
-                            <h2 id="settlements-title" className="text-xs font-semibold text-muted-foreground">Liquidaciones</h2>
+                            <h2 id="settlements-title" className="text-xs font-semibold text-muted-foreground">Pagos del cierre</h2>
                             <span data-testid="close-progress" className="text-xs text-muted-foreground">{confirmed}/{total} confirmadas</span>
                         </div>
                         <div className="rounded-[18px] bg-card border border-[color:var(--line-2)] px-4 divide-y divide-[color:var(--line-2)]">
@@ -192,7 +192,7 @@ export function CloseSpaceClient({
                         </p>
                         {error.href && (
                             <Link href={error.href} className="mt-1 inline-flex min-h-11 items-center font-semibold text-primary">
-                                Ir a liquidar →
+                                Saldar deudas →
                             </Link>
                         )}
                     </div>
@@ -208,7 +208,7 @@ export function CloseSpaceClient({
                                 status === SpaceStatus.SETTLING ? "bg-primary text-primary-foreground" : "bg-card border border-[color:var(--line)]",
                             )}
                         >
-                            Ir a liquidar deudas
+                            Saldar deudas
                         </Link>
                     )}
                     {canManage && status === SpaceStatus.ACTIVE && (
@@ -221,10 +221,10 @@ export function CloseSpaceClient({
                                 data-testid="close-start-settling"
                             >
                                 {busy === "settle" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CircleDollarSign className="h-4 w-4" aria-hidden="true" />}
-                                Iniciar liquidación
+                                Empezar a cerrar cuentas
                             </button>
                             <p className="text-xs text-center text-muted-foreground -mt-1">
-                                El espacio pasa a &quot;Liquidando&quot;: no se pueden crear gastos nuevos.
+                                El espacio pasa a &quot;Cerrando cuentas&quot;: no se pueden crear gastos nuevos, solo saldar deudas.
                             </p>
                         </>
                     )}

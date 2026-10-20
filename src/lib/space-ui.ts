@@ -23,7 +23,7 @@ export type SpaceStatusMeta = { label: string; tone: "active" | "settling" | "ar
 
 export const SPACE_STATUS_META: Record<SpaceStatus, SpaceStatusMeta> = {
     [SpaceStatus.ACTIVE]: { label: "Activo", tone: "active" },
-    [SpaceStatus.SETTLING]: { label: "Liquidando", tone: "settling" },
+    [SpaceStatus.SETTLING]: { label: "Cerrando cuentas", tone: "settling" },
     [SpaceStatus.ARCHIVED]: { label: "Archivado", tone: "archived" },
 };
 

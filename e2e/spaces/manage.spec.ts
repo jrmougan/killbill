@@ -90,7 +90,7 @@ test.describe('Spaces - Management', () => {
     expect(await blocked.json()).toMatchObject({ code: 'HAS_BALANCE', balanceCents: -3333 });
     const sheet = pageC.getByTestId('leave-sheet');
     await expect(sheet).toContainText(/Todavía debes 33,33\s€/);
-    await expect(sheet.getByRole('link', { name: /Ir a liquidar/ })).toHaveAttribute('href', `/settle?space=${spaceId}`);
+    await expect(sheet.getByRole('link', { name: /Saldar deudas/ })).toHaveAttribute('href', `/settle?space=${spaceId}`);
     const forced = pageC.waitForResponse((r) => r.url().includes(`/members/${userC.id}?force=1`));
     await sheet.getByRole('button', { name: 'Salir igualmente' }).click();
     expect((await forced).status()).toBe(200);
