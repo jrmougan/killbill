@@ -960,8 +960,8 @@
         "src/app/i/[token]/claim-button.tsx",
         "e2e/spaces/manage.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Hojas 'Crear enlace nuevo' (con res.ok del DELETE) y 'Desactivar enlace' (danger), filas 'Creado …', atajo 'Convertir en grupo' en pareja completa, nota de invitados solo en viajes y toast 'Ya estás en {espacio}'; pendiente: CTA duplicado con Gestión (por spec)."
     },
     {
       "id": "CF-21",

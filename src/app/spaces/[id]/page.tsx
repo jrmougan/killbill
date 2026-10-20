@@ -15,7 +15,7 @@ import { InviteManager } from "@/components/space/invite-manager";
 import { inviteConfigFor } from "@/components/space/invite-eligibility";
 import { RenameSpace } from "@/components/space/rename-space";
 import { LeaveSpace } from "@/components/space/leave-space";
-import { ArchiveSpaceAction, SpaceActions } from "./actions-client";
+import { ArchiveSpaceAction, ConvertToGroupInline, SpaceActions } from "./actions-client";
 
 export const dynamic = "force-dynamic";
 
@@ -33,9 +33,14 @@ function noInviteReason(type: SpaceType, status: SpaceStatus, memberCount: numbe
 }
 
 /** Members can't mint links: tell them who can (instead of hiding invitations silently). */
-function memberInviteHint(members: SpaceMember[]): string {
+function memberInviteHint(members: SpaceMember[], fullCouple: boolean): string {
     const owner = members.find((m) => m.role === "OWNER");
     const who = owner ? owner.name.trim().split(/\s+/)[0] : null;
+    if (fullCouple) {
+        return who
+            ? `La pareja está completa. Solo ${who} puede convertirla en grupo para invitar a más personas.`
+            : "La pareja está completa. Solo quien administra el espacio puede convertirla en grupo.";
+    }
     return who
         ? `Solo quien administra el espacio puede invitar. Pídele un enlace a ${who}.`
         : "Solo quien administra el espacio puede invitar.";
@@ -104,6 +109,7 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
         { type: space.type, status: space.status, role: myMembership.role, memberCount: members.length },
         ephemeralOn,
     );
+    const fullCouple = space.type === SpaceType.COUPLE && space.status === SpaceStatus.ACTIVE && members.length >= capFor(space.type);
     const settleHref = settleUrlFor(space.id);
     // Same rule as the archive guard of the API (it still answers 409 if this goes stale).
     const openDebts = Object.values(balances).filter((c) => c < 0 && hasOpenBalance(c)).length;
@@ -171,13 +177,18 @@ export default async function SpaceManagePage({ params }: { params: Promise<{ id
                             kind={invite?.kind ?? null}
                             maxUsesCap={invite?.maxUses ?? 1}
                             reason={noInviteReason(space.type, space.status, members.length, ephemeralOn)}
+                            reasonAction={
+                                space.status === SpaceStatus.ACTIVE && (
+                                    <ConvertToGroupInline spaceId={space.id} spaceName={displayName} visible={fullCouple} />
+                                )
+                            }
                         />
                     </section>
                 ) : (
                     !archived && (
                         <section aria-labelledby="invites-title" className="flex flex-col gap-2">
                             <h2 id="invites-title" className="text-xs font-semibold text-muted-foreground">Invitaciones</h2>
-                            <p className="text-[13px] text-muted-foreground">{memberInviteHint(members)}</p>
+                            <p className="text-[13px] text-muted-foreground">{memberInviteHint(members, fullCouple)}</p>
                         </section>
                     )
                 )}

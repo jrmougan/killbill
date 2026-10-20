@@ -10,6 +10,8 @@ import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
 import { EqToast, useEqToast } from "@/components/ui/eq";
 import { REOPEN_CONSEQUENCES, SETTLING_CONSEQUENCES } from "@/lib/space-ui";
 
+const CONVERT_CONSEQUENCES = ["Podréis ser hasta 20 personas.", "Los gastos, saldos y deudas no cambian.", "No se puede volver a pareja."];
+
 type Pending = "settle" | "reopen" | "convert" | "archive" | null;
 type ActionError = { message: string; href: string | null };
 
@@ -166,7 +168,7 @@ export function SpaceActions({
                 <CriticalActionSheet
                     testId="convert-sheet"
                     title={`¿Convertir ${spaceName} en grupo?`}
-                    consequences={["Podréis ser hasta 20 personas.", "Los gastos, saldos y deudas no cambian.", "No se puede volver a pareja."]}
+                    consequences={CONVERT_CONSEQUENCES}
                     reversible={false}
                     confirmLabel="Convertir en grupo"
                     busy={busy === "convert"}
@@ -177,6 +179,47 @@ export function SpaceActions({
             )}
             {toast && <EqToast action={toastAction}>{toast}</EqToast>}
         </div>
+    );
+}
+
+/**
+ * Inline "Convertir en grupo" next to "La pareja está completa" (Invitaciones,
+ * OWNER/ADMIN of an ACTIVE full couple): the same sheet and toast as Gestión.
+ * Stays mounted after the conversion (`visible` turns false) so the toast is
+ * not lost when the refreshed page no longer offers it.
+ */
+export function ConvertToGroupInline({ spaceId, spaceName, visible }: { spaceId: string; spaceName: string; visible: boolean }) {
+    const { patch, busy, confirming, open, close, error, disabled } = useSpacePatch(spaceId);
+    const [toast, showToast] = useEqToast(3500);
+
+    return (
+        <>
+            {visible && (
+                <button
+                    type="button"
+                    onClick={() => open("convert")}
+                    disabled={disabled}
+                    data-testid="invite-convert"
+                    className="-mt-2.5 self-start min-h-11 flex items-center text-[13px] font-semibold text-primary disabled:opacity-50"
+                >
+                    Convertir en grupo
+                </button>
+            )}
+            {confirming === "convert" && (
+                <CriticalActionSheet
+                    testId="convert-sheet"
+                    title={`¿Convertir ${spaceName} en grupo?`}
+                    consequences={CONVERT_CONSEQUENCES}
+                    reversible={false}
+                    confirmLabel="Convertir en grupo"
+                    busy={busy === "convert"}
+                    error={error?.message}
+                    onConfirm={() => patch({ type: SpaceType.GROUP }, "convert", () => showToast(`${spaceName} ya es un grupo`))}
+                    onClose={close}
+                />
+            )}
+            {toast && <EqToast>{toast}</EqToast>}
+        </>
     );
 }
 

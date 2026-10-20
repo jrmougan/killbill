@@ -205,14 +205,22 @@ test.describe('Spaces - Management', () => {
     await page.getByTestId('space-invite-card').getByRole('button', { name: 'Enviar' }).click();
     expect(posts).toBe(1);
 
-    // "Generar nuevo" revokes the old invite (awaited DELETE) and then mints a new
-    // one; the link is briefly cleared in between, so wait for the mint itself
-    // instead of the first DOM change before counting/listing.
+    // "Generar nuevo" asks first (nothing is sent until the sheet is confirmed),
+    // then revokes the old invite (awaited DELETE) and mints a new one; the link
+    // is briefly cleared in between, so wait for the mint itself instead of the
+    // first DOM change before counting/listing.
+    let deletes = 0;
+    page.on('request', (r) => {
+      if (r.method() === 'DELETE' && new URL(r.url()).pathname === `/api/spaces/${spaceId}/invites`) deletes++;
+    });
+    await page.getByRole('button', { name: 'Generar nuevo' }).click();
+    await expect(page.getByRole('dialog', { name: '¿Crear un enlace nuevo?' })).toContainText('El enlace que ya enviaste dejará de funcionar');
+    expect(deletes).toBe(0);
     const revoked = page.waitForResponse((r) =>
       r.request().method() === 'DELETE' && new URL(r.url()).pathname === `/api/spaces/${spaceId}/invites`);
     const minted = page.waitForResponse((r) =>
       r.request().method() === 'POST' && new URL(r.url()).pathname === `/api/spaces/${spaceId}/invites`);
-    await page.getByRole('button', { name: 'Generar nuevo' }).click();
+    await page.getByTestId('regenerate-sheet').getByTestId('confirm-sheet-confirm').click();
     expect((await revoked).ok()).toBeTruthy();
     expect((await minted).ok()).toBeTruthy();
     await expect(page.getByTestId('invite-link')).toContainText('/i/');
@@ -221,11 +229,68 @@ test.describe('Spaces - Management', () => {
     const list = await (await page.request.get(`/api/spaces/${spaceId}/invites`)).json();
     const live = list.invites.filter((i: { revokedAt: string | null }) => !i.revokedAt);
     expect(live).toHaveLength(1);
+    await expect(page.getByText('Enlace nuevo listo. El anterior ya no funciona.')).toBeVisible();
 
     // The management page shows the same remembered link and no short code.
     await page.goto(`/spaces/${spaceId}`);
     await expect(page.getByTestId('invite-current-link')).toContainText('/i/');
     await expect(page.getByText(/código/i)).toHaveCount(0);
+
+    // Deactivating a link asks first (danger sheet, focus on Cancelar).
+    const liveRow = page.locator('[data-testid="invite-row"][data-live="true"]');
+    await expect(liveRow).toHaveCount(1);
+    await expect(liveRow).toContainText('Creado hoy');
+    await liveRow.getByRole('button', { name: /^Desactivar enlace/ }).click();
+    const revokeSheet = page.getByTestId('revoke-sheet');
+    await expect(revokeSheet).toContainText('Las personas que ya entraron siguen en el espacio.');
+    await expect(page.getByTestId('confirm-sheet-cancel')).toBeFocused();
+    const deactivated = page.waitForResponse((r) =>
+      r.request().method() === 'DELETE' && new URL(r.url()).pathname === `/api/spaces/${spaceId}/invites`);
+    await revokeSheet.getByTestId('confirm-sheet-confirm').click();
+    expect((await deactivated).ok()).toBeTruthy();
+    await expect(page.getByText('Enlace desactivado')).toBeVisible();
+    await expect(liveRow).toHaveCount(0);
+    await expect(page.getByTestId('invite-current-link')).toHaveCount(0);
+  });
+
+  test('a full couple offers "Convertir en grupo" next to Invitaciones; joining greets with "Ya estás en…"', async ({ page }) => {
+    const data = await seedScenario(apiContext, 'couple-no-expenses');
+    const spaceId = data.coupleId as string;
+
+    // A member is told who can convert it.
+    await loginAs(page, data.userB as Creds);
+    await page.goto(`/spaces/${spaceId}`);
+    await expect(page.getByText(/La pareja está completa\. Solo User puede convertirla en grupo/)).toBeVisible();
+    await expect(page.getByTestId('invite-convert')).toHaveCount(0);
+
+    await page.context().clearCookies();
+    await loginAs(page, data.userA as Creds); // OWNER
+    await page.goto(`/spaces/${spaceId}`);
+    await expect(page.getByTestId('invite-reason')).toContainText('La pareja está completa');
+    let patches = 0;
+    page.on('request', (r) => {
+      if (r.method() === 'PATCH' && new URL(r.url()).pathname === `/api/spaces/${spaceId}`) patches++;
+    });
+    await page.getByTestId('invite-convert').click();
+    const sheet = page.getByTestId('convert-sheet');
+    await expect(sheet).toContainText('No se puede volver a pareja.');
+    expect(patches).toBe(0);
+    await sheet.getByTestId('confirm-sheet-confirm').click();
+    await expect(page.getByText('Test Couple ya es un grupo')).toBeVisible();
+    await expect(page.getByTestId('space-header-status')).toHaveText('Grupo · Activo');
+    await expect(page.getByRole('button', { name: 'Crear enlace de invitación' })).toBeVisible();
+
+    // A third person joins through a link and lands on Inicio with a welcome toast.
+    const minted = await page.request.post(`/api/spaces/${spaceId}/invites`, { data: { kind: 'MEMBER', maxUses: 1, expiresAt: new Date(Date.now() + 86400000).toISOString() } });
+    expect(minted.ok(), await minted.text()).toBeTruthy();
+    const token = (await minted.json()).token as string;
+    const solo = await seedScenario(apiContext, 'solo-user');
+    await page.context().clearCookies();
+    await loginAs(page, solo.user as Creds);
+    await page.goto(`/i/${token}`);
+    await page.getByTestId('invite-join').click();
+    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page.getByText('Ya estás en Test Couple')).toBeVisible();
   });
 
   test('month totals ignore future-dated expenses (Inicio and Espacios)', async ({ page }) => {

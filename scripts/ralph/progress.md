@@ -443,3 +443,19 @@
 - Aprendizajes: el `title` de `CriticalActionSheet` va en el `Sheet`, fuera del `data-testid`: en e2e búscalo con
   `getByRole('dialog' | 'alertdialog', { name })`. En jsdom el `<dialog>` cerrado oculta roles: usa `{ hidden: true }` o testids.
   Capturas nuevas `hoja-salir-con-deuda` y `hoja-salir-sin-saldar` (ux-showcase, asUserB, Casa).
+
+## 2026-10-20 · CF-20 Invitaciones: generar nuevo, desactivar, atajo a convertir, nota de invitados y bienvenida
+- Corregido: "Generar nuevo" abre `regenerate-sheet` ("¿Crear un enlace nuevo?", CTA "Crear enlace nuevo"); comprueba `res.ok` del DELETE
+  (404 = ya desactivado, cuenta como hecho) y si falla no crea otro ("No se pudo desactivar el enlace anterior…"); toast "Enlace nuevo listo. El
+  anterior ya no funciona." + "Enviar"; `InviteManager` sin `confirm()`: `revoke-sheet` danger "¿Desactivar este enlace?" + "Desactivar enlace" +
+  toast "Enlace desactivado"; filas "Creado hoy/ayer/el {día} · …" sin truncar; "Desactivado"/"Desactiva los que ya no uses"; pareja completa con
+  `invite-convert` (hoja de CF-14) y, para MEMBER, "Solo {X} puede convertirla en grupo…"; `/i/[token]` con "Tu acceso termina cuando acabe el
+  viaje." solo en enlaces de invitado de un EPHEMERAL con el flag; `ClaimButton` deja el flash toast "Ya estás en {espacio}"; capturas nuevas
+  `hoja-generar-enlace`, `espacio-invitaciones`, `hoja-desactivar-enlace`; e2e nuevo de pareja completa + unirse.
+- Pendiente / fuera de alcance: "Convertir en grupo" sale en Invitaciones y en Gestión (lo pide la spec).
+- Ficheros: `src/components/space/{space-invite-card,invite-manager}.tsx`, `src/app/spaces/[id]/{page,actions-client}.tsx`,
+  `src/app/i/[token]/{page,claim-button}.tsx`, `scripts/ralph/capture.spec.ts`, `e2e/spaces/manage.spec.ts`.
+- Aprendizajes: una acción que el servidor deja de pintar tras `router.refresh()` pierde su toast; móntala en un hueco estable con `visible`
+  (aquí `reasonAction` de `InviteManager`, que se pasa mientras el espacio está ACTIVE). El POST de invitaciones exige `expiresAt` en los e2e.
+  Las capturas no resetean la BD entre pantallas del mismo escenario: Lisboa acumula enlaces (usa `.first()`). `DELETE …/invites` da 404 si ya
+  estaba desactivado. e2e de invitaciones: `e2e/spaces/manage.spec.ts`, `e2e/api/invites.spec.ts`, `e2e/guest/guest-security.spec.ts`.

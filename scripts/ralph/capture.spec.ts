@@ -82,6 +82,37 @@ const SCREENS: Screen[] = [
   { id: 'espacio-detalle', scenario: 'ux-showcase', path: (d) => `/spaces/${d.coupleId}` },
   // Lisboa active: Casa (a full couple) can't invite, so this shows the "Invitar a…" card.
   { id: 'espacios-invitar', scenario: 'ux-showcase', path: () => '/spaces', activeGroup: (d) => d.groupId as string },
+  // "Enviar" crea el enlace; "Generar nuevo" abre la hoja antes de desactivarlo (CF-20).
+  {
+    id: 'hoja-generar-enlace', scenario: 'ux-showcase', path: () => '/spaces', activeGroup: (d) => d.groupId as string,
+    act: async (page) => {
+      await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+      await page.getByTestId('space-invite-card').getByRole('button', { name: 'Enviar' }).click();
+      await page.getByRole('button', { name: 'Generar nuevo' }).click();
+      await page.waitForTimeout(600);
+    },
+  },
+  // Lisboa con un enlace creado: fila "Creado hoy · …" y la hoja danger de "Desactivar enlace" (CF-20).
+  {
+    id: 'espacio-invitaciones', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}`,
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Crear enlace de invitación' }).click();
+      await page.getByRole('button', { name: 'Crear enlace', exact: true }).click();
+      await page.getByTestId('invite-current-link').waitFor();
+      await page.getByTestId('invite-manager').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    id: 'hoja-desactivar-enlace', scenario: 'ux-showcase', path: (d) => `/spaces/${d.groupId}`,
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Crear enlace de invitación' }).click();
+      await page.getByRole('button', { name: 'Crear enlace', exact: true }).click();
+      await page.getByTestId('invite-current-link').waitFor();
+      await page.getByRole('button', { name: /^Desactivar enlace/ }).first().click();
+      await page.waitForTimeout(600);
+    },
+  },
   {
     id: 'espacios-unirme', scenario: 'ux-showcase', path: () => '/spaces',
     act: async (page) => {
