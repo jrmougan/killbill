@@ -42,6 +42,14 @@ ficheros previstos (orientativo). Además de lo de abajo:
 - Al cambiar un texto que afirman los e2e, actualiza esos specs y ejecútalos (lista en la
   sección 4 del plan).
 
+### Historias RV-* (hallazgos verificados de la revisión)
+
+`spec` trae cada hallazgo con su fallo concreto y el arreglo propuesto; ya fueron verificados,
+pero confírmalo en el código antes de cambiarlo. Escribe la tabla en `findings/<ID>.md`.
+Excepción permitida para "Borrar los tachados" (RV-03): un cambio **aditivo** y compatible en
+`…/[listId]/clear-checked` (p. ej. `ids` opcional en el cuerpo y/o `deleted` en la respuesta),
+con sus tests; sin cambiar status, errores ni el comportamiento sin `ids`.
+
 ## 2. Captura el estado actual
 
 ```bash
