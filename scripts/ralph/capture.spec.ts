@@ -53,6 +53,13 @@ const SCREENS: Screen[] = [
   { id: 'gastos', scenario: 'ux-showcase', path: () => '/expenses/list', design: '3a-gastos' },
   { id: 'gasto-detalle', scenario: 'ux-showcase', path: (d) => `/expense/${d.expenseId}` },
   { id: 'mes-presupuestos', scenario: 'ux-showcase', path: () => '/month', design: '3a-mes-presupuestos' },
+  {
+    id: 'mes-presupuestos-anadir', scenario: 'ux-showcase', path: () => '/month',
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Añadir presupuesto de Alquiler', exact: true }).click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
   { id: 'mes-analisis', scenario: 'ux-showcase', path: () => '/month?view=analysis', design: '3a-mes-analisis' },
   { id: 'listas', scenario: 'ux-showcase', path: (d) => `/lists/${d.listId}`, design: '3a-listas-de-la-compra' },
   { id: 'espacios', scenario: 'ux-showcase', path: () => '/spaces', design: '3a-espacios' },

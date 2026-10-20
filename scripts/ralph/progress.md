@@ -67,3 +67,15 @@
 - Aprendizajes: los e2e de pagos buscan "Liquidación", "Pendiente" y "Confirmado" en las filas de `/expenses/list`
   (no quites esas palabras). `EqSegmented` lo usa también Mes. Botones de icono en cabeceras: `h-11 w-11 -my-1`.
   `qa-fixes.spec.ts:25` (returnTo) falla a veces en la tanda completa y pasa solo: es inestable, no regresión.
+
+## 2026-10-20 · UX-05 Mes · Presupuestos
+- Corregido: selector "💑 Casa ⇆" ya no se corta y tiene 44 px (va en `children` de `EqHeader`, no en `meta`); chips
+  "+ Categoría" con `EqChip touch`; barras de categoría en verde (ámbar ≥80 %, rojo pasado) como 3a; Cerrar de la hoja
+  a 44 px, "€" centrado con el importe y sin "€" huérfano en la pista; `ux-showcase` con Comida cerca del límite y Ocio pasado.
+- Pendiente / fuera de alcance: flechas ‹ › de mes (el loader solo sirve el mes actual); fila de % (se queda: lleva el
+  aviso en texto); emoji 💑 vs 🏠 (UX-13).
+- Ficheros: `src/components/month/{month-client,budget-view,budget-sheet}.tsx`, `src/app/api/test/seed/route.ts`,
+  `scripts/ralph/capture.spec.ts` (nueva captura `mes-presupuestos-anadir`).
+- Aprendizajes: el slot `meta` de `EqHeader` es un `<span truncate>`: recorta (y deja sin zona táctil) cualquier enlace
+  con padding/márgenes negativos; los enlaces de cabecera van en `children` con `-my-2.5 min-h-11 max-w-[55%] flex-none`.
+  e2e de Mes: `e2e/features/{month,budget-errors,financial-features}.spec.ts`.

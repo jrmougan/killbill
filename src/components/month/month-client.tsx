@@ -66,23 +66,25 @@ export function MonthClient(props: MonthClientProps) {
         window.history.replaceState(window.history.state, "", monthHref(v, scope));
     };
 
-    const meta = alt ? (
+    // The lens switch is a link with its own 44px touch target, so it goes in the
+    // header children (the `meta` slot clips its content to the text line).
+    const switcher = alt ? (
         <Link
             href={monthHref(view, alt.scope)}
             aria-label={`Cambiar a ${alt.name}`}
-            className="inline-flex max-w-full items-center gap-1 rounded-full px-1 -mx-1 py-2 hover:text-foreground"
+            className="-my-2.5 min-h-11 max-w-[55%] flex-none inline-flex items-center gap-1 rounded-full text-[13px] text-muted-foreground hover:text-foreground"
         >
             <span className="truncate">{space.emoji} {space.name}</span>
             <ArrowLeftRight className="h-3 w-3 flex-none" aria-hidden />
         </Link>
-    ) : (
-        `${space.emoji} ${space.name}`
-    );
+    ) : null;
 
     return (
         <div className="flex flex-col flex-1 pb-28 eq-in">
             <div className="flex flex-col gap-3.5 pt-[max(env(safe-area-inset-top),12px)]">
-                <EqHeader title={props.monthName} meta={meta} />
+                <EqHeader title={props.monthName} meta={switcher ? undefined : `${space.emoji} ${space.name}`}>
+                    {switcher}
+                </EqHeader>
                 {banner && (
                     <output
                         data-testid="month-status-banner"

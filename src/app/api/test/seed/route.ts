@@ -761,7 +761,8 @@ export async function POST(request: Request) {
 
       const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      for (const [key, amount] of [['shopping', 30000], ['food', 15000], ['entertainment', 6000]] as const) {
+      // One budget per state: ok (Compras), near the limit (Comida 38/45 €) and over (Ocio 18/15 €).
+      for (const [key, amount] of [['shopping', 30000], ['food', 4500], ['entertainment', 1500]] as const) {
         const categoryId = await resolveCategoryId(key);
         if (!categoryId) throw new Error(`System category "${key}" is not seeded`);
         await prisma.budget.create({

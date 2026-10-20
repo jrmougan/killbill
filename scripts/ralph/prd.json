@@ -96,8 +96,8 @@
         "Progreso por categoría con gastado / límite y aviso visual al acercarse o pasarse",
         "Tocar una categoría sin presupuesto pide el importe (no un valor fijo)"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Selector de espacio sin cortes y de 44px, chips +categoría y Cerrar de 44px, barras verdes/ámbar/rojo como 3a, hoja de importe alineada y seed con avisos; pendiente flechas de mes (funcionalidad nueva) y emoji de espacio (UX-13)."
     },
     {
       "id": "UX-06",

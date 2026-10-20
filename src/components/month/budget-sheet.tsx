@@ -75,7 +75,7 @@ export function BudgetSheet({
                         aria-label="Cerrar"
                         disabled={saving}
                         onClick={onClose}
-                        className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-card"
+                        className="-my-1.5 -mr-1.5 h-11 w-11 flex items-center justify-center rounded-full hover:bg-card"
                     >
                         <X className="h-5 w-5" />
                     </button>
@@ -91,7 +91,7 @@ export function BudgetSheet({
                         <label htmlFor={inputId} className="text-xs font-semibold text-muted-foreground">
                             Importe del presupuesto
                         </label>
-                        <div className="flex items-baseline gap-2 rounded-[14px] bg-card border border-[color:var(--line)] px-4 py-3 focus-within:border-primary">
+                        <div className="flex items-center gap-2 rounded-[14px] bg-card border border-[color:var(--line)] px-4 py-1.5 focus-within:border-primary">
                             <input
                                 id={inputId}
                                 type="text"
@@ -104,14 +104,14 @@ export function BudgetSheet({
                                 disabled={saving}
                                 value={value}
                                 onChange={(e) => setValue(e.target.value)}
-                                className="flex-1 min-w-0 bg-transparent text-[32px] font-bold tracking-[-0.03em] leading-none outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                className="flex-1 min-w-0 h-12 bg-transparent text-[32px] font-bold tracking-[-0.03em] leading-none outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                 // oxlint-disable-next-line jsx-a11y/no-autofocus -- the sheet exists to type this amount
                                 autoFocus
                             />
                             <span className="text-xl font-semibold text-muted-foreground">€</span>
                         </div>
                         <p id={`${inputId}-hint`} className="text-[12.5px] text-muted-foreground">
-                            Límite mensual para esta categoría (máx. 1.000.000 €)
+                            Límite mensual para esta categoría (máx. 1.000.000&nbsp;€)
                         </p>
                         {error && <p role="alert" className="text-[13px] text-[color:var(--negative)]">{error}</p>}
                     </div>
