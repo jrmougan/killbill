@@ -25,6 +25,23 @@ descartadas: no las uses como referencia.
 La de menor `priority` con `"passes": false`. Si no queda ninguna, responde exactamente
 `<promise>COMPLETE</promise>` y termina.
 
+### Historias CF-* (acciones críticas y vocabulario "Saldar deuda")
+
+Lee antes `docs/ux/plan-acciones-criticas.md`: su **Glosario** es la fuente única de los textos
+y su **Patrón de acción crítica** (`CriticalActionSheet`, CF-07) es el que deben usar todas las
+confirmaciones; `spec` de la historia trae los detalles de implementación y `files` los
+ficheros previstos (orientativo). Además de lo de abajo:
+
+- Puedes **añadir capturas** a `SCREENS` en `scripts/ralph/capture.spec.ts` (ids de la historia
+  y de la sección 6 del plan), incluido un paso opcional que pulse un botón para abrir una hoja
+  antes de la captura, entrar como `userB` o usar otro escenario; y ampliar o crear escenarios
+  en `src/app/api/test/seed/route.ts` (solo esa ruta de test).
+- Cambios aprobados por el usuario que salen de "solo UI": el texto de los mensajes de
+  `src/lib/space-policy.ts:107, 230 y 291` (CF-05; nunca códigos, status ni forma) y que `/close`
+  deje de llamar a settle-up y pase a SETTLING con PATCH (CF-16). Nada más de la API.
+- Al cambiar un texto que afirman los e2e, actualiza esos specs y ejecútalos (lista en la
+  sección 4 del plan).
+
 ## 2. Captura el estado actual
 
 ```bash
