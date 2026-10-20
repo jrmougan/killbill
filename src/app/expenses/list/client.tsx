@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Search, X } from "lucide-react";
+import { Check, Clock, Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { EqChip, EqEmpty, EqHeader, EqRow, EqSegmented } from "@/components/ui/eq";
 import type { CategoryBadgeMeta } from "@/components/category/category-badge";
@@ -89,7 +89,8 @@ export function ExpensesListClient({
             if (payer === "other" && e.paidBy === userId) return false;
             if (advanced.categories.length > 0 && (isSettle || !advanced.categories.includes(e.category))) return false;
             if (since && new Date(e.date) < since) return false;
-            const text = isSettle ? `liquidación ${e.description}` : e.description;
+            // "liquidación" stays as a search alias of the old name.
+            const text = isSettle ? `pago deuda saldar liquidación ${e.description}` : e.description;
             return matchesSearch({ text, amountCents: e.amountCents }, q);
         });
     }, [items, q, payer, advanced, userId]);
@@ -219,21 +220,24 @@ export function ExpensesListClient({
                                         methodLabel: e.method ? getSettlementMethodLabel(e.method) : "",
                                         status: e.status,
                                     });
-                                    // A rejected payment never moved money: neutral tile and a
-                                    // struck-through amount instead of the green "paid" look.
+                                    // Only a confirmed payment gets the green "paid" look: a pending one
+                                    // is grey with a clock, a rejected one never moved money (struck through).
                                     const rejected = e.status === "REJECTED";
+                                    const pending = e.status === "PENDING";
                                     return (
                                         <EqRow
                                             key={e.id}
                                             href={`/settle/${e.id}`}
                                             icon={rejected
                                                 ? <X className="h-5 w-5 text-muted-foreground" aria-hidden />
-                                                : <Check className="h-5 w-5" aria-hidden />}
-                                            iconTint={!rejected}
+                                                : pending
+                                                    ? <Clock className="h-5 w-5 text-muted-foreground" aria-hidden />
+                                                    : <Check className="h-5 w-5" aria-hidden />}
+                                            iconTint={!rejected && !pending}
                                             title={t.title}
                                             sub={t.sub}
                                             amount={formatCurrency(e.amountCents)}
-                                            amountClassName={rejected ? "text-muted-foreground line-through" : "text-primary"}
+                                            amountClassName={rejected ? "text-muted-foreground line-through" : pending ? "text-muted-foreground" : "text-primary"}
                                         />
                                     );
                                 }

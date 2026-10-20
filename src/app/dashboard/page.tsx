@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Check, ChevronRight } from "lucide-react";
+import { Check, ChevronRight, Clock, X } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getSessionCtx } from "@/lib/authz";
 import { getActiveGroup, getGroupMembers } from "@/lib/membership";
@@ -122,7 +122,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         }),
         active
             ? prisma.settlement.findMany({
-                where: { coupleId: active.id, status: { in: ["PENDING", "CONFIRMED"] } },
+                // Plus my own payments rejected this week, so the payer learns it didn't count.
+                where: {
+                    coupleId: active.id,
+                    OR: [
+                        { status: { in: ["PENDING", "CONFIRMED"] } },
+                        { status: "REJECTED", fromUserId: userId, updatedAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) } },
+                    ],
+                },
                 orderBy: [{ date: "desc" }, { id: "desc" }],
                 take: 4,
             })
@@ -221,22 +228,38 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 ),
             };
         }),
-        ...recentSettlements.map((s) => ({
-            id: s.id,
-            date: s.date,
-            node: (
-                <EqRow
-                    key={s.id}
-                    href={`/settle/${s.id}`}
-                    iconTint
-                    icon={<Check className="h-[18px] w-[18px]" aria-hidden="true" />}
-                    title="Liquidación"
-                    sub={`${names[s.fromUserId] ?? "Alguien"} → ${names[s.toUserId] ?? "Alguien"} · ${getSettlementStatusLabel(s.status)} · ${dayLabel(s.date, now)}`}
-                    amount={formatCurrency(s.amount)}
-                    amountClassName="text-[color:var(--positive)]"
-                />
-            ),
-        })),
+        ...recentSettlements.map((s) => {
+            const from = names[s.fromUserId] ?? "Alguien";
+            const to = names[s.toUserId] ?? "Alguien";
+            const confirmed = s.status === "CONFIRMED";
+            const rejected = s.status === "REJECTED";
+            // A rejection is news when it happens, not when the payment was dated.
+            const when = rejected ? s.updatedAt : s.date;
+            // Status first so a narrow row truncates the names, never the state.
+            const sub = rejected
+                ? `${to} no lo recibió · ${dayLabel(when, now)}`
+                : `${getSettlementStatusLabel(s.status)} · ${from} → ${to} · ${dayLabel(s.date, now)}`;
+            return {
+                id: s.id,
+                date: when,
+                node: (
+                    <EqRow
+                        key={s.id}
+                        href={`/settle/${s.id}`}
+                        iconTint={confirmed}
+                        icon={confirmed
+                            ? <Check className="h-[18px] w-[18px]" aria-hidden="true" />
+                            : rejected
+                                ? <X className="h-[18px] w-[18px] text-muted-foreground" aria-hidden="true" />
+                                : <Clock className="h-[18px] w-[18px] text-muted-foreground" aria-hidden="true" />}
+                        title="Pago de deuda"
+                        sub={sub}
+                        amount={formatCurrency(s.amount)}
+                        amountClassName={confirmed ? "text-[color:var(--positive)]" : rejected ? "text-muted-foreground line-through" : "text-muted-foreground"}
+                    />
+                ),
+            };
+        }),
     ]
         .sort((a, b) => b.date.getTime() - a.date.getTime() || b.id.localeCompare(a.id))
         .slice(0, 4);

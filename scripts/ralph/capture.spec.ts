@@ -85,6 +85,7 @@ const SCREENS: Screen[] = [
   { id: 'saldar-al-dia', scenario: 'couple-no-expenses', path: () => '/settle' },
   { id: 'gastos-vacio', scenario: 'couple-no-expenses', path: () => '/expenses/list' },
   { id: 'inicio-liquidando', scenario: 'space-settling', path: () => '/dashboard' },
+  { id: 'inicio-deudor', scenario: 'ux-showcase', path: () => '/dashboard', design: '2a-inicio', asUserB: true },
   { id: 'espacio-cerrando', scenario: 'space-settling', path: (d) => `/spaces/${d.coupleId}` },
   { id: 'gasto-cerrando', scenario: 'space-settling', path: (d) => `/expense/${d.expenseId}` },
   { id: 'gastos-cerrando', scenario: 'space-settling', path: () => '/expenses/list' },

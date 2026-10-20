@@ -162,7 +162,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await expect(pageB.getByTestId('balance-amount')).toHaveText(MINUS_50);
     const pendingCard = pageB.locator(`a[href="/settle/${settlementId}"]`);
     await expect(pendingCard).toBeVisible();
-    await expect(pendingCard).toContainText('Liquidación');
+    await expect(pendingCard).toContainText('Pago de deuda');
     await expect(pendingCard).toContainText('User B → User A');
     await expect(pendingCard).toContainText('Pendiente');
     await expect(pendingCard).toContainText(/50,00\s€/);
@@ -249,7 +249,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     // Payer's dashboard: pending card, balance still −50,00 € (PENDING never posts).
     await pageA.goto('/dashboard');
     await expect(pageA.getByTestId('balance-amount')).toHaveText(MINUS_50);
-    const pendingCards = pageA.locator('a[href^="/settle/"]', { hasText: 'Liquidación' });
+    const pendingCards = pageA.locator('a[href^="/settle/"]', { hasText: 'Pago de deuda' });
     await expect(pendingCards).toHaveCount(1);
     await expect(pendingCards.first()).toContainText('Pendiente');
     const settlementId = (await pendingCards.first().getAttribute('href'))?.split('/').pop();

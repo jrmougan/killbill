@@ -253,3 +253,16 @@
 - Aprendizajes: estos mensajes solo los afirman `route.test.ts:302` (expenses), `space-policy.closing.test.ts:78` y
   `lifecycle.spec.ts:118`; los tests de miembros/espacio buscan subcadenas (`/saldo pendiente/`, `/deudas/`): consérvalas.
   Ninguna pantalla de captura muestra estos 409 sin interacción.
+
+## 2026-10-20 · CF-06 Filas de pago: "Pago de deuda" y títulos en presente
+- Corregido: `settlementText` → PENDING "Pago a X · por confirmar" / "X dice que te ha pagado" (y "Pago de X a Y · por confirmar"),
+  CONFIRMED "Pagaste a X" / "X te pagó", REJECTED "Pago a X · no recibido" / "Pago de X · rechazado"; subtítulo "Pago de deuda ·
+  {estado} · {método}" (+ test); Gastos con reloj e importe gris en PENDING; búsqueda "pago deuda saldar liquidación"; Recientes
+  "Pago de deuda" con "Pendiente · De → Para · día" primero, verde solo CONFIRMED, y mis REJECTED de 7 días ("X no lo recibió",
+  tachado, ordenados por `updatedAt`); captura nueva `inicio-deudor` (Lucía) y rechazo de 15 € de ayer en `ux-showcase`.
+- Pendiente / fuera de alcance: tarjeta "Confirmar Pagos" / "te ha pagado" / botón X de Inicio (CF de confirmación).
+- Ficheros: `src/components/expenses/list-format{,.test}.ts`, `src/app/expenses/list/{page,client}.tsx`, `src/app/dashboard/page.tsx`,
+  `src/app/api/test/seed/route.ts`, `scripts/ralph/capture.spec.ts`, `e2e/settlements/create-and-confirm.spec.ts`, `e2e/spaces/settle-up.spec.ts`.
+- Aprendizajes: los e2e localizan las filas de pago con `a[href^="/settle/"]` + `hasText: 'Pago de deuda'` y afirman "Pendiente",
+  "Confirmado" y "User B → User A" (Inicio): conserva esas cadenas. `ux-showcase` tiene ahora en Casa un REJECTED Lucía→Álvaro de ayer
+  (sale en el ticket de /settle y en Gastos de Álvaro como "Pago de Lucía · rechazado").

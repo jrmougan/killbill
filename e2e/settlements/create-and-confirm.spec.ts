@@ -58,7 +58,7 @@ test.describe('Settlements - Create and Confirm', () => {
 
     // Navigate to expenses/list to verify settlement appears as PENDING with exact amount
     await pageB.goto('/expenses/list');
-    const settlementCard = pageB.locator('a[href^="/settle/"]', { hasText: 'Liquidación' }).first();
+    const settlementCard = pageB.locator('a[href^="/settle/"]', { hasText: 'Pago de deuda' }).first();
     await expect(settlementCard).toBeVisible({ timeout: 10000 });
     await expect(settlementCard).toContainText(/50,00\s*€/);
     await expect(settlementCard).toContainText('Pendiente');
@@ -133,7 +133,7 @@ test.describe('Settlements - Create and Confirm', () => {
 
     // Verify settlement in expenses/list shows CONFIRMED ('Confirmado') and exact amount
     await pageA.goto('/expenses/list');
-    const settlementCardA = pageA.locator('a[href^="/settle/"]', { hasText: 'Liquidación' }).first();
+    const settlementCardA = pageA.locator('a[href^="/settle/"]', { hasText: 'Pago de deuda' }).first();
     await expect(settlementCardA).toBeVisible({ timeout: 10000 });
     await expect(settlementCardA).toContainText(/50,00\s*€/);
     await expect(settlementCardA).toContainText('Confirmado');
@@ -151,7 +151,7 @@ test.describe('Settlements - Create and Confirm', () => {
 
     // Verify settlement in expenses/list also shows CONFIRMED for userB
     await pageB.goto('/expenses/list');
-    const settlementCardB = pageB.locator('a[href^="/settle/"]', { hasText: 'Liquidación' }).first();
+    const settlementCardB = pageB.locator('a[href^="/settle/"]', { hasText: 'Pago de deuda' }).first();
     await expect(settlementCardB).toBeVisible({ timeout: 10000 });
     await expect(settlementCardB).toContainText(/50,00\s*€/);
     await expect(settlementCardB).toContainText('Confirmado');

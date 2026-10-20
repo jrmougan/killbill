@@ -726,6 +726,14 @@ export async function POST(request: Request) {
         });
         await postSettlementLedger(tx, s);
       });
+      // This week Lucía said she paid 15 € in cash and Álvaro said he never got it:
+      // her Inicio lists it under Recientes as "Álvaro no lo recibió" (CF-06).
+      await prisma.settlement.create({
+        data: {
+          coupleId: casa.id, fromUserId: lucia.id, toUserId: alvaro.id, amount: 1500,
+          method: 'CASH', status: 'REJECTED', date: daysAgo(2), createdAt: daysAgo(2), updatedAt: daysAgo(1),
+        },
+      });
       const casaExpenses: [string, number, typeof alvaro, string, number][] = [
         ['Mercadona', 6420, alvaro, 'shopping', 0],
         ['Cena sushi', 3800, lucia, 'food', 0],

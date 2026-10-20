@@ -475,8 +475,8 @@
         "e2e/settlements/create-and-confirm.spec.ts",
         "e2e/spaces/settle-up.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Títulos de pago según estado (presente si PENDING), subtítulo 'Pago de deuda', pendientes en gris con reloj en Gastos e Inicio, rechazados propios de 7 días en Recientes; pendiente la tarjeta 'Confirmar Pagos' (otras CF)."
     },
     {
       "id": "CF-07",
