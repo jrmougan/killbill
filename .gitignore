@@ -54,3 +54,7 @@ next-env.d.ts
 # stray build/typecheck output
 *.log
 tsc_output*
+
+# Ralph UX loop screenshots and iteration logs (scripts/ralph)
+/scripts/ralph/shots/
+/scripts/ralph/logs/

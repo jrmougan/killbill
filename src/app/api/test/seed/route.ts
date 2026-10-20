@@ -685,6 +685,84 @@ export async function POST(request: Request) {
       });
     }
 
+    if (scenario === 'ux-showcase') {
+      // Realistic data mirroring the EQUIL mockups (docs/design) for the Ralph UX
+      // loop's screenshots (scripts/ralph): a couple "Casa" where Lucía owes Álvaro,
+      // a 4-person trip "Lisboa" where Álvaro owes, budgets and a shared list.
+      const [alvaro, lucia, marta, pablo] = await createUsers(hashedPassword, ['alvaro', 'lucia', 'marta', 'pablo']);
+      const names: [typeof alvaro, string][] = [[alvaro, 'Álvaro'], [lucia, 'Lucía'], [marta, 'Marta'], [pablo, 'Pablo']];
+      await Promise.all(names.map(([u, name]) => prisma.user.update({ where: { id: u.id }, data: { name } })));
+
+      const couple = [alvaro, lucia];
+      const casa = await createSpace('Casa', couple, { type: 'COUPLE' });
+      const now = new Date();
+      const daysAgo = (n: number) => new Date(now.getTime() - n * DAY_MS);
+      const half = (amount: number, first: string, second: string) => [
+        { userId: first, amount: Math.ceil(amount / 2) },
+        { userId: second, amount: Math.floor(amount / 2) },
+      ];
+      const casaExpenses: [string, number, typeof alvaro, string, number][] = [
+        ['Mercadona', 6420, alvaro, 'shopping', 0],
+        ['Cena sushi', 3800, lucia, 'food', 0],
+        ['Luz octubre', 5830, alvaro, 'utilities', 2],
+        ['Cine', 1800, lucia, 'entertainment', 3],
+        ['Lidl', 4210, alvaro, 'shopping', 5],
+        ['Gasolina', 5000, alvaro, 'transport', 8],
+      ];
+      const casaIds: string[] = [];
+      for (const [description, amount, payer, key, ago] of casaExpenses) {
+        const { id } = await createSharedExpense({
+          groupId: casa.id, description, amount, paidById: payer.id,
+          splits: half(amount, alvaro.id, lucia.id), members: couple,
+          categoryId: await resolveCategoryId(key), date: daysAgo(ago),
+        });
+        casaIds.push(id);
+      }
+
+      const trip = [alvaro, lucia, marta, pablo];
+      const lisboa = await createSpace('Lisboa', [marta, alvaro, lucia, pablo], { type: 'GROUP' });
+      await createSharedExpense({
+        groupId: lisboa.id, description: 'Pastéis de nata', amount: 3000, paidById: marta.id,
+        splits: trip.map((u) => ({ userId: u.id, amount: 750 })), members: trip,
+        categoryId: await resolveCategoryId('food'), date: daysAgo(1),
+      });
+
+      const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      for (const [key, amount] of [['shopping', 30000], ['food', 15000], ['entertainment', 6000]] as const) {
+        const categoryId = await resolveCategoryId(key);
+        if (!categoryId) throw new Error(`System category "${key}" is not seeded`);
+        await prisma.budget.create({
+          data: { categoryId, amount, periodStart, periodEnd, periodType: 'MONTH', coupleId: casa.id },
+        });
+      }
+
+      const list = await prisma.shoppingList.create({
+        data: {
+          name: 'Mercadona', groupId: casa.id, createdById: alvaro.id,
+          items: {
+            create: [
+              { name: 'Leche', quantity: 6, unit: 'L', aisle: 'lacteos', sortOrder: 0 },
+              { name: 'Tomates', quantity: 1, unit: 'kg', aisle: 'fruta_verdura', sortOrder: 1 },
+              { name: 'Pan', quantity: 2, unit: 'ud', aisle: 'panaderia', sortOrder: 2,
+                checked: true, checkedById: lucia.id, checkedAt: now },
+              { name: 'Yogures', quantity: 8, unit: 'ud', aisle: 'lacteos', sortOrder: 3 },
+              { name: 'Detergente', aisle: 'drogueria', sortOrder: 4 },
+            ],
+          },
+        },
+      });
+
+      return NextResponse.json({
+        userA: creds(alvaro, PASSWORD),
+        userB: creds(lucia, PASSWORD),
+        coupleId: casa.id,
+        groupId: lisboa.id,
+        expenseId: casaIds[0],
+        listId: list.id,
+      });
+    }
+
     if (scenario === 'categories-custom-with-budget') {
       const [userA, userB] = await createUsers(hashedPassword, ['userA', 'userB']);
       const members = [userA, userB];

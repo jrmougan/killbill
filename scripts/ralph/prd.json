@@ -1,0 +1,205 @@
+{
+  "project": "Kill Bill · EQUIL",
+  "branch": "jrmougan/flujo-ralph-correcciones-ux",
+  "goal": "Detectar y corregir problemas de UX/UI de la app frente al diseño elegido: Mezcla · base 1a + espacios de 1b + ticket de 1c (opción 2a) y el resto de pantallas en su estilo (3a). Fuente: docs/design/EQUIL Rediseño.dc.html, renders en scripts/ralph/design/.",
+  "stories": [
+    {
+      "id": "UX-01",
+      "title": "Inicio",
+      "priority": 1,
+      "screens": ["inicio"],
+      "design": ["2a-inicio"],
+      "criteria": [
+        "Tarjetas deslizables por espacio con saldo en una frase con nombre (\"Lucía te debe…\", \"Debes…\") y acción \"Quedar en paz\" en la del espacio activo",
+        "Indicador de página del carrusel coherente con el número de tarjetas y accesible",
+        "Resumen del mes con barra por categorías legible y leyenda sin cortes",
+        "Lista de recientes legible: título, quién pagó, reparto, fecha e importe alineado",
+        "Barra de pestañas (Inicio, Gastos, +, Mes, Listas) sin solapes y con zonas táctiles ≥44px"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-02",
+      "title": "Añadir gasto",
+      "priority": 2,
+      "screens": ["anadir-gasto"],
+      "design": ["2a-anadir-gasto"],
+      "criteria": [
+        "Importe protagonista, concepto, quién pagó y reparto rápido (a medias / solo yo / solo él o ella) en una sola vista",
+        "Escanear ticket visible junto a Guardar; \"Más opciones\" expone reparto a medida, etiquetas, fecha y recurrencia",
+        "Guardar deshabilitado o con error claro si falta el importe; teclado numérico adecuado en móvil",
+        "Nada queda tapado por el teclado o la barra inferior a 360×760"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-03",
+      "title": "Quedar en paz · ticket",
+      "priority": 3,
+      "screens": ["quedar-en-paz", "historial-pagos"],
+      "design": ["2a-quedar-en-paz-ticket"],
+      "criteria": [
+        "Ticket de 1c con la tipografía y el verde de 1a: quién paga a quién, importe y desglose",
+        "Acción principal según el rol: \"Ya me ha pagado\" (acreedor) / \"Ya he pagado\" (deudor, queda pendiente de confirmar)",
+        "\"Recordárselo a X\" como acción secundaria; estado pendiente comprensible",
+        "Historial de pagos con el mismo lenguaje visual"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-04",
+      "title": "Gastos",
+      "priority": 4,
+      "screens": ["gastos", "gasto-detalle"],
+      "design": ["3a-gastos"],
+      "criteria": [
+        "Lista agrupada por día con buscador/filtros como en 3a",
+        "Cada fila: icono de categoría, concepto, quién pagó y reparto, importe",
+        "El detalle del gasto sigue el estilo 2a/3a (sin restos del diseño anterior) y sus acciones son claras"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-05",
+      "title": "Mes · Presupuestos",
+      "priority": 5,
+      "screens": ["mes-presupuestos"],
+      "design": ["3a-mes-presupuestos"],
+      "criteria": [
+        "Selector Presupuestos/Análisis en la pestaña Mes",
+        "Progreso por categoría con gastado / límite y aviso visual al acercarse o pasarse",
+        "Tocar una categoría sin presupuesto pide el importe (no un valor fijo)"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-06",
+      "title": "Mes · Análisis",
+      "priority": 6,
+      "screens": ["mes-analisis"],
+      "design": ["3a-mes-analisis"],
+      "criteria": [
+        "Gráfico y cifras del mes legibles a 360px, con comparación con el mes anterior",
+        "Colores de categoría distinguibles también por claridad, no solo por tono"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-07",
+      "title": "Listas de la compra",
+      "priority": 7,
+      "screens": ["listas"],
+      "design": ["3a-listas-de-la-compra"],
+      "criteria": [
+        "Chips por lista (Común primero, luego Personal) con pendientes",
+        "Añadir artículo rápido; marcar/desmarcar con zona táctil amplia",
+        "Pendientes agrupados por pasillo (se mantienen aunque el mockup sea plano) y \"En el carro\" separado",
+        "\"Terminar y apuntar gasto\" visible y comprensible"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-08",
+      "title": "Espacios",
+      "priority": 8,
+      "screens": ["espacios", "espacio-detalle"],
+      "design": ["3a-espacios"],
+      "criteria": [
+        "Lista de espacios con tipo, miembros y saldo; se llega desde las tarjetas de Inicio",
+        "Invitar crea y comparte un enlace seguro /i/[token]; Unirme acepta un enlace pegado (sin códigos cortos)",
+        "Detalle de espacio coherente con 3a: miembros, estado (activo / liquidando / archivado) y acciones"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-09",
+      "title": "Ajustes",
+      "priority": 9,
+      "screens": ["ajustes"],
+      "design": ["3a-ajustes"],
+      "criteria": [
+        "Solo perfil, herramientas y cuenta (grupos e invitaciones viven en Espacios)",
+        "Filas con zona táctil ≥44px y jerarquía clara; acciones destructivas diferenciadas"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-10",
+      "title": "Bienvenida",
+      "priority": 10,
+      "screens": ["bienvenida"],
+      "design": ["3a-bienvenida"],
+      "criteria": [
+        "Elegir modo (Pareja / Piso / Viaje / Solo yo) con una explicación breve de cada uno",
+        "CTA principal claro y salida para saltar el onboarding"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-11",
+      "title": "Estados vacíos y de ciclo de vida",
+      "priority": 11,
+      "screens": ["inicio-vacio", "gastos-vacio", "inicio-liquidando", "inicio-archivado"],
+      "design": [],
+      "criteria": [
+        "Vacíos que explican qué hacer y ofrecen la acción (añadir primer gasto, invitar)",
+        "Liquidando: se entiende que no se pueden añadir gastos pero sí saldar",
+        "Archivado: solo lectura evidente, sin botones que fallen al pulsarlos"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-12",
+      "title": "Login",
+      "priority": 12,
+      "screens": ["login"],
+      "design": [],
+      "criteria": [
+        "Estética 2a (fondo, tipografía, verde) aunque no haya mockup",
+        "Campos con label, autocompletado correcto y error de credenciales claro"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-13",
+      "title": "Transversal · coherencia visual",
+      "priority": 13,
+      "screens": ["*"],
+      "design": ["*"],
+      "criteria": [
+        "Sin restos del diseño anterior (crema #F3EFE6, terracota #BD5D3A, Instrument Sans / Spline Sans Mono) en pantallas del camino elegido",
+        "Escala tipográfica, radios, sombras y espaciados consistentes entre pantallas",
+        "Iconos de categoría y emojis de espacio coherentes"
+      ],
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "UX-14",
+      "title": "Transversal · accesibilidad y tacto",
+      "priority": 14,
+      "screens": ["*"],
+      "design": [],
+      "criteria": [
+        "Zonas táctiles ≥44px (ver smallTargets en shots/*.json)",
+        "Contraste de texto ≥4.5:1 (incluidos grises pequeños)",
+        "Botones de solo icono con aria-label; encabezados y landmarks con sentido en *.aria.yml",
+        "Sin desbordamiento horizontal ni errores de consola"
+      ],
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

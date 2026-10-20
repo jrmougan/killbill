@@ -27,3 +27,10 @@ The prototype contradicts some existing product rules. These are the resolutions
   "Desconectar" because MCP JWTs cannot be revoked yet.
 - **Shopping aisles** are kept (grouping/ordering) even though the prototype
   shows a flat list.
+
+## Chosen direction
+
+`EQUIL Rediseño.dc.html` holds the canvas trimmed to the chosen path: **"Mezcla · base 1a +
+espacios de 1b + ticket de 1c"** (2a: Inicio, Añadir gasto, Quedar en paz) and the remaining
+screens in that style (3a). The discarded directions (1a/1b/1c) and the old-app reference (0a)
+were removed. The Ralph UX loop in `scripts/ralph/` audits the app against it.

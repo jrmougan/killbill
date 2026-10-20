@@ -7,7 +7,8 @@
   "include": [
     "e2e/**/*.ts",
     "e2e/**/*.mts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "scripts/ralph/**/*.ts"
   ],
   "exclude": [
     "node_modules"
