@@ -554,8 +554,8 @@
         "e2e/refresh/committed-mutations.spec.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "'Pagos por confirmar · n' con explicación (y SETTLING), 'X dice que te ha pagado' enlazado al detalle, 'Lo he recibido'/'No lo he recibido' abren CriticalActionSheet (primary con resto / danger), toast según el resto, 409 → refresh + error en la fila; e2e actualizados + test de rechazo. Pendiente: 'te ha pagado' en /settle."
     },
     {
       "id": "CF-09",

@@ -286,3 +286,17 @@
   con `document.querySelector('dialog')`, y Escape se simula con `fireEvent(dialog, new Event('cancel', { cancelable: true }))`.
   El efecto del padre corre después del de `Sheet` (showModal), así que el padre puede mover el foco inicial. `FlashToast` re-lee en
   cada cambio de `pathname` porque los layouts de pestaña no se remontan al navegar dentro del segmento.
+
+## 2026-10-20 · CF-08 Pagos por confirmar en Inicio
+- Corregido: tarjeta "Pagos por confirmar · n" + "No cuentan en el saldo hasta que confirmes que los has recibido." (+ "Confirma los pagos
+  para cerrar las cuentas" en SETTLING); fila "X dice que te ha pagado" (avatar y texto → /settle/{id}, importe sin verde); botones
+  "Lo he recibido" / "No lo he recibido" que abren `CriticalActionSheet` (primary con facts De/Para/Importe/Método, "X dejará de deberte…" /
+  "X aún te deberá…", no reversible, CTA "Sí, he recibido {importe}"; danger "Rechazar el pago"); toasts "Deuda saldada: X ya no te debe nada" /
+  "Pago confirmado · X aún te debe…" / "Pago rechazado: la deuda con X sigue pendiente"; 409 → `router.refresh()` + error en la fila (o suelto
+  si la fila desaparece); `aria-busy` por fila; capturas nuevas `hoja-confirmar-pago` y `hoja-rechazar-pago`; e2e nuevo de rechazo.
+- Pendiente / fuera de alcance: "X te ha pagado" en las filas pendientes de /settle (`src/app/settle/client.tsx:477`).
+- Ficheros: `src/components/dashboard/pending-settlements.tsx`, `src/app/dashboard/page.tsx`, `scripts/ralph/capture.spec.ts`,
+  `e2e/{dashboard/balance,settlements/create-and-confirm,settlements/partial-and-scope,spaces/settle-up,refresh/committed-mutations}.spec.ts`.
+- Aprendizajes: el resto de la deuda de X conmigo sale de `resolveMyDebts(balances de active.members, X)[yo]` (mismo emparejamiento que
+  /settle). `PendingSettlements` se monta siempre (con `key` = espacio) y solo pinta la tarjeta si hay pagos: así el toast sobrevive al
+  refresh que la vacía. A 360 px dos botones de texto no caben con la sangría del avatar: fila de botones a todo el ancho.

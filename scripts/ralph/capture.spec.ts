@@ -85,6 +85,20 @@ const SCREENS: Screen[] = [
   { id: 'saldar-al-dia', scenario: 'couple-no-expenses', path: () => '/settle' },
   { id: 'gastos-vacio', scenario: 'couple-no-expenses', path: () => '/expenses/list' },
   { id: 'inicio-liquidando', scenario: 'space-settling', path: () => '/dashboard' },
+  {
+    id: 'hoja-confirmar-pago', scenario: 'space-settling', path: () => '/dashboard',
+    act: async (page) => {
+      await page.getByRole('button', { name: 'Lo he recibido', exact: true }).click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
+  {
+    id: 'hoja-rechazar-pago', scenario: 'space-settling', path: () => '/dashboard',
+    act: async (page) => {
+      await page.getByRole('button', { name: 'No lo he recibido', exact: true }).click();
+      await page.waitForTimeout(600); // let the sheet finish sliding in
+    },
+  },
   { id: 'inicio-deudor', scenario: 'ux-showcase', path: () => '/dashboard', design: '2a-inicio', asUserB: true },
   { id: 'espacio-cerrando', scenario: 'space-settling', path: (d) => `/spaces/${d.coupleId}` },
   {

@@ -1,10 +1,14 @@
 "use client";
 
-import { Check, X } from "lucide-react";
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/currency";
 import { isAvatarUrl } from "@/lib/avatar";
 import { getSettlementMethodLabel } from "@/lib/settlement-labels";
 import { useApiMutation } from "@/hooks/use-api-mutation";
+import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
+import { EqToast, useEqToast } from "@/components/ui/eq";
 
 interface PendingSettlement {
     id: string;
@@ -12,91 +16,215 @@ interface PendingSettlement {
     fromUser: { name: string; avatar: string | null };
     date: string;
     method: string;
+    /** What the payer owes me right now (cents, before this payment counts). */
+    owedCents: number;
 }
 
 interface PendingSettlementsProps {
     settlements: PendingSettlement[];
+    /** The space is SETTLING: these confirmations are what closes it. */
+    settling?: boolean;
+    myName: string;
 }
 
-/**
- * "Confirmar Pagos" (Inicio): payments other members say they sent me, waiting
- * for my confirmation. Text gets the full width (it wraps instead of being cut
- * to "User B te …"); the actions sit on their own row with 44px targets.
- */
-export function PendingSettlements({ settlements }: PendingSettlementsProps) {
-    const { mutate, busy, error } = useApiMutation();
+type Review = { s: PendingSettlement; status: "CONFIRMED" | "REJECTED" };
 
-    const handleStatusUpdate = (id: string, newStatus: "CONFIRMED" | "REJECTED", expectedAmountCents: number) =>
-        mutate(`/api/settle/${id}/status`, {
+const shortDate = (iso: string) =>
+    new Date(iso).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short" }).replace(".", "");
+
+/**
+ * "Pagos por confirmar" (Inicio): payments other members say they sent me.
+ * Both buttons open a review sheet (CriticalActionSheet) before the PATCH;
+ * the toast tells what is left of the debt. A 409 (edited or already
+ * answered meanwhile) refreshes and shows the error on that row. The card
+ * stays mounted while empty so the success toast survives the refresh.
+ */
+export function PendingSettlements({ settlements, settling = false, myName }: PendingSettlementsProps) {
+    const router = useRouter();
+    const { mutate, busy } = useApiMutation();
+    const [review, setReview] = useState<Review | null>(null);
+    const [sheetError, setSheetError] = useState<string | null>(null);
+    const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+    const [toast, showToast] = useEqToast(3500);
+
+    const open = (s: PendingSettlement, status: Review["status"]) => {
+        setSheetError(null);
+        setReview({ s, status });
+    };
+
+    const submit = async () => {
+        if (!review) return;
+        const { s, status } = review;
+        const name = s.fromUser.name;
+        const result = await mutate(`/api/settle/${s.id}/status`, {
             method: "PATCH",
             // expectedAmountCents: confirm exactly the amount on screen (409 if the payer edited it meanwhile).
-            body: { status: newStatus, expectedAmountCents },
-            errorMessage: newStatus === "CONFIRMED" ? "No se pudo confirmar el pago" : "No se pudo rechazar el pago",
+            body: { status, expectedAmountCents: s.amount },
+            errorMessage: status === "CONFIRMED" ? "No se pudo confirmar el pago" : "No se pudo rechazar el pago",
         });
+        if (result.ok) {
+            setReview(null);
+            setRowErrors(({ [s.id]: _, ...rest }) => rest);
+            const rest = Math.max(0, s.owedCents - s.amount);
+            showToast(
+                status === "REJECTED"
+                    ? `Pago rechazado: la deuda con ${name} sigue pendiente`
+                    : rest > 0
+                        ? `Pago confirmado · ${name} aún te debe ${formatCurrency(rest)}`
+                        : `Deuda saldada: ${name} ya no te debe nada`,
+            );
+        } else if (result.status === 409) {
+            // The payment changed or was already answered: show the fresh state.
+            setReview(null);
+            setRowErrors((e) => ({ ...e, [s.id]: result.error }));
+            router.refresh();
+        } else {
+            setSheetError(result.error);
+        }
+    };
 
-    if (settlements.length === 0) return null;
+    // A 409 on a payment that the refresh removed (already answered): keep the message visible.
+    const orphanErrors = Object.entries(rowErrors).filter(([id]) => !settlements.some((s) => s.id === id));
 
-    // Copy ("Confirmar Pagos", "X te ha pagado", "Confirmar") is an e2e contract.
     return (
-        <section aria-labelledby="pending-title" className="eq-in rounded-[18px] bg-[var(--accent-tint)] border border-[color:var(--accent-border)] p-4 flex flex-col gap-3">
-            <h2 id="pending-title" className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
-                <span className="relative flex h-2 w-2" aria-hidden="true">
-                    <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                </span>
-                Confirmar Pagos
-            </h2>
+        <>
+            {orphanErrors.map(([id, msg]) => (
+                <p key={id} role="alert" className="rounded-[14px] bg-[var(--negative-tint)] px-3.5 py-3 text-sm text-[color:var(--negative-ink)]">{msg}</p>
+            ))}
+            {settlements.length > 0 && (
+                <section aria-labelledby="pending-title" className="eq-in rounded-[18px] bg-[var(--accent-tint)] border border-[color:var(--accent-border)] p-4 flex flex-col gap-3">
+                    <div>
+                        <h2 id="pending-title" className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
+                            <span className="relative flex h-2 w-2" aria-hidden="true">
+                                <span className="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                            </span>
+                            Pagos por confirmar · {settlements.length}
+                        </h2>
+                        {settling && (
+                            <p className="mt-1 text-[13px] font-semibold text-foreground">Confirma los pagos para cerrar las cuentas</p>
+                        )}
+                        <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                            No cuentan en el saldo hasta que confirmes que los has recibido.
+                        </p>
+                    </div>
 
-            <ul className="flex flex-col gap-4">
-                {settlements.map((s) => {
-                    return (
-                        <li key={s.id} className="flex flex-col gap-2.5" data-testid="pending-settlement">
-                            <div className="flex items-start gap-3">
-                                <span className="h-10 w-10 flex-none rounded-full bg-card flex items-center justify-center text-lg overflow-hidden text-primary font-bold" aria-hidden="true">
-                                    {isAvatarUrl(s.fromUser.avatar) ? (
-                                        // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
-                                        <img src={s.fromUser.avatar!} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-                                    ) : (
-                                        s.fromUser.avatar || s.fromUser.name.charAt(0).toUpperCase()
+                    <ul className="flex flex-col gap-4">
+                        {settlements.map((s) => {
+                            const rowBusy = busy && review?.s.id === s.id;
+                            return (
+                                <li key={s.id} className="flex flex-col gap-2.5" data-testid="pending-settlement" aria-busy={rowBusy || undefined}>
+                                    <Link href={`/settle/${s.id}`} className="flex items-start gap-3 rounded-xl min-h-11">
+                                        <span className="h-10 w-10 flex-none rounded-full bg-card flex items-center justify-center text-lg overflow-hidden text-primary font-bold" aria-hidden="true">
+                                            {isAvatarUrl(s.fromUser.avatar) ? (
+                                                // oxlint-disable-next-line nextjs/no-img-element -- user-uploaded avatar URL of unknown dimensions; next/image would change layout/runtime
+                                                <img src={s.fromUser.avatar!} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                                            ) : (
+                                                s.fromUser.avatar || s.fromUser.name.charAt(0).toUpperCase()
+                                            )}
+                                        </span>
+                                        <span className="flex-1 min-w-0">
+                                            <span className="block text-[15px] font-semibold break-words">{s.fromUser.name} dice que te ha pagado</span>
+                                            <span className="block text-[12.5px] text-muted-foreground">
+                                                <span className="font-semibold text-foreground">{formatCurrency(s.amount)}</span>
+                                                {" · "}
+                                                {getSettlementMethodLabel(s.method)}
+                                                {" · "}
+                                                {shortDate(s.date)}
+                                            </span>
+                                        </span>
+                                    </Link>
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            className="h-11 flex-1 whitespace-nowrap rounded-xl bg-primary px-3.5 text-sm font-semibold text-primary-foreground flex items-center justify-center disabled:opacity-50 active:scale-[0.97]"
+                                            onClick={() => open(s, "CONFIRMED")}
+                                            disabled={busy}
+                                        >
+                                            Lo he recibido
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="h-11 flex-none whitespace-nowrap rounded-xl px-3 text-sm font-semibold text-[color:var(--negative-ink)] flex items-center justify-center disabled:opacity-50 active:scale-[0.97]"
+                                            onClick={() => open(s, "REJECTED")}
+                                            disabled={busy}
+                                        >
+                                            No lo he recibido
+                                        </button>
+                                    </div>
+                                    {rowErrors[s.id] && (
+                                        <p role="alert" className="text-xs text-[color:var(--negative-ink)]">{rowErrors[s.id]}</p>
                                     )}
-                                </span>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-[15px] font-semibold break-words">{s.fromUser.name} te ha pagado</p>
-                                    <p className="text-[12.5px] text-muted-foreground">
-                                        <span className="font-semibold text-[color:var(--positive)]">{formatCurrency(s.amount)}</span>
-                                        {" · "}
-                                        {getSettlementMethodLabel(s.method)}
-                                        {" · "}
-                                        {new Date(s.date).toLocaleDateString("es-ES", { timeZone: "Europe/Madrid", day: "numeric", month: "short" }).replace(".", "")}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex gap-2 pl-[52px]">
-                                <button
-                                    type="button"
-                                    className="h-11 flex-1 rounded-xl bg-primary px-3.5 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-1.5 disabled:opacity-50 active:scale-[0.97]"
-                                    onClick={() => handleStatusUpdate(s.id, "CONFIRMED", s.amount)}
-                                    disabled={busy}
-                                >
-                                    <Check className="h-4 w-4" aria-hidden="true" /> Confirmar
-                                </button>
-                                <button
-                                    type="button"
-                                    aria-label={`Rechazar el pago de ${s.fromUser.name}`}
-                                    className="h-11 w-11 flex-none rounded-xl bg-[var(--negative-tint)] text-destructive flex items-center justify-center disabled:opacity-50 active:scale-[0.97]"
-                                    onClick={() => handleStatusUpdate(s.id, "REJECTED", s.amount)}
-                                    disabled={busy}
-                                >
-                                    <X className="h-4 w-4" aria-hidden="true" />
-                                </button>
-                            </div>
-                        </li>
-                    );
-                })}
-            </ul>
-            {error && (
-                <p role="alert" className="text-xs text-destructive">{error}</p>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </section>
             )}
-        </section>
+
+            {review && <ReviewSheet review={review} myName={myName} busy={busy} error={sheetError} onConfirm={submit} onClose={() => setReview(null)} />}
+            {toast && <EqToast>{toast}</EqToast>}
+        </>
+    );
+}
+
+function ReviewSheet({
+    review: { s, status },
+    myName,
+    busy,
+    error,
+    onConfirm,
+    onClose,
+}: {
+    review: Review;
+    myName: string;
+    busy: boolean;
+    error: string | null;
+    onConfirm: () => void;
+    onClose: () => void;
+}) {
+    const name = s.fromUser.name;
+    const amount = formatCurrency(s.amount);
+    if (status === "REJECTED") {
+        return (
+            <CriticalActionSheet
+                testId="reject-settlement-sheet"
+                tone="danger"
+                title={`¿No has recibido el pago de ${name}?`}
+                facts={[
+                    { label: "De", value: name },
+                    { label: "Importe", value: amount, emphasis: true },
+                    { label: "Método", value: getSettlementMethodLabel(s.method) },
+                ]}
+                consequences={[`La deuda de ${amount} seguirá pendiente y ${name} verá que no lo has recibido. Podrá registrarlo de nuevo.`]}
+                confirmLabel="Rechazar el pago"
+                busy={busy}
+                error={error}
+                errorHref={null}
+                onConfirm={onConfirm}
+                onClose={onClose}
+            />
+        );
+    }
+    const rest = Math.max(0, s.owedCents - s.amount);
+    return (
+        <CriticalActionSheet
+            testId="confirm-settlement-sheet"
+            title={`¿Has recibido ${amount} de ${name}?`}
+            facts={[
+                { label: "De", value: name },
+                { label: "Para", value: `${myName} (tú)` },
+                { label: "Importe", value: amount, emphasis: true },
+                { label: "Método", value: getSettlementMethodLabel(s.method) },
+            ]}
+            consequences={[rest > 0 ? `${name} aún te deberá ${formatCurrency(rest)}.` : `${name} dejará de deberte ${amount}.`]}
+            reversible={false}
+            confirmLabel={`Sí, he recibido ${amount}`}
+            busy={busy}
+            error={error}
+            errorHref={null}
+            onConfirm={onConfirm}
+            onClose={onClose}
+        />
     );
 }

@@ -60,8 +60,8 @@ test.describe('Dashboard - Balance', () => {
     await loginAs(page, userA!);
     await expect(page).toHaveURL(/\/dashboard/);
 
-    // UserA is the receiver of the pending settlement - should see "Confirmar Pagos"
-    const confirmSection = page.getByText(/Confirmar Pagos/i);
+    // UserA is the receiver of the pending settlement - should see "Pagos por confirmar"
+    const confirmSection = page.getByText(/Pagos por confirmar/);
     await expect(confirmSection).toBeVisible({ timeout: 10000 });
   });
 

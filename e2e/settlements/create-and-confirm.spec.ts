@@ -79,9 +79,9 @@ test.describe('Settlements - Create and Confirm', () => {
     const pageA = await ctxA.newPage();
     pageA.on('pageerror', (error) => pageErrors.push(error.message));
     await pageA.goto('/dashboard');
-    const confirmSection = pageA.getByText(/Confirmar Pagos/i);
+    const confirmSection = pageA.getByText(/Pagos por confirmar/);
     await expect(confirmSection).toBeVisible({ timeout: 10000 });
-    await expect(pageA.getByText(/User B te ha pagado/i)).toBeVisible();
+    await expect(pageA.getByText('User B dice que te ha pagado')).toBeVisible();
     await expect(pageA.getByTestId('pending-settlement').getByText(/^50,00\s€$/)).toBeVisible();
 
     // ...and on /settle the creditor confirms the pending one instead of a new "Ya me ha pagado".
@@ -107,21 +107,23 @@ test.describe('Settlements - Create and Confirm', () => {
 
     await pageA.goto('/dashboard');
 
-    // UserA should see positive balance (+50,00 €) and a "Confirmar Pagos" section
+    // UserA should see positive balance (+50,00 €) and a "Pagos por confirmar" section
     const balanceElA = pageA.locator('[data-testid="balance-amount"]');
     await expect(balanceElA).toHaveText(/\+50,00\s*€/, { timeout: 10000 });
 
-    const confirmSection = pageA.getByText(/Confirmar Pagos/i);
+    const confirmSection = pageA.getByText(/Pagos por confirmar/);
     await expect(confirmSection).toBeVisible({ timeout: 10000 });
 
-    // Click confirm button and wait for PATCH response
-    const confirmPayBtn = pageA.getByRole('button', { name: /Confirmar/i }).first();
+    // "Lo he recibido" opens the review sheet; its CTA sends the PATCH.
+    const confirmPayBtn = pageA.getByRole('button', { name: 'Lo he recibido', exact: true });
     await expect(confirmPayBtn).toBeVisible({ timeout: 10000 });
+    await confirmPayBtn.click();
+    await expect(pageA.getByRole('dialog', { name: /¿Has recibido 50,00\s€ de User B\?/ })).toBeVisible();
 
     const patchResponsePromise = pageA.waitForResponse(
       (res) => res.url().includes('/api/settle/') && res.url().includes('/status') && res.request().method() === 'PATCH'
     );
-    await confirmPayBtn.click();
+    await pageA.getByTestId('confirm-sheet-confirm').click();
     const patchResponse = await patchResponsePromise;
     expect(patchResponse.ok()).toBeTruthy();
 
@@ -163,6 +165,31 @@ test.describe('Settlements - Create and Confirm', () => {
 
     await pageB.close();
     await ctxB.close();
+  });
+
+  test('"No lo he recibido" asks first and only the sheet CTA rejects', async ({ newContext }) => {
+    await resetDb(apiContext);
+    const data = await seedScenario(apiContext, 'couple-with-pending-settlement');
+    const ctxA = await createAuthenticatedContext(newContext, data.userA as Creds);
+    const pageA = await ctxA.newPage();
+    const patches: string[] = [];
+    pageA.on('request', (req) => { if (req.method() === 'PATCH' && req.url().includes('/status')) patches.push(req.url()); });
+
+    await pageA.goto('/dashboard');
+    await pageA.getByRole('button', { name: 'No lo he recibido', exact: true }).click();
+    const sheet = pageA.getByRole('alertdialog', { name: '¿No has recibido el pago de User B?' });
+    await expect(sheet).toBeVisible();
+    await expect(pageA.getByTestId('confirm-sheet-cancel')).toBeFocused();
+    await expect(pageA.getByTestId('confirm-sheet-confirm')).toHaveText('Rechazar el pago');
+    expect(patches).toEqual([]);
+
+    const patch = pageA.waitForResponse((res) => res.url().includes('/status') && res.request().method() === 'PATCH');
+    await pageA.getByTestId('confirm-sheet-confirm').click();
+    expect((await patch).ok()).toBeTruthy();
+    await expect(pageA.getByText('Pago rechazado: la deuda con User B sigue pendiente')).toBeVisible();
+    await expect(pageA.getByText(/Pagos por confirmar/)).toHaveCount(0);
+    await expect(pageA.getByTestId('balance-amount')).toHaveText(/\+50,00\s*€/);
+    await ctxA.close();
   });
 
   test('creditor confirms from /settle/[id] detail', async ({ newContext }) => {

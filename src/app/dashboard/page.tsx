@@ -14,6 +14,7 @@ import { spaceTypeMeta } from "@/lib/space-ui";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
 import { getSettlementStatusLabel } from "@/lib/settlement-labels";
 import { monthRange } from "@/lib/month-range";
+import { resolveMyDebts } from "@/lib/finance";
 import { hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
 import { getPersonalMonthTotal, getSpaceSummaries, type SpaceSummary } from "@/lib/space-summaries";
 import {
@@ -264,8 +265,11 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         .sort((a, b) => b.date.getTime() - a.date.getTime() || b.id.localeCompare(a.id))
         .slice(0, 4);
 
+    // What each payer owes me now (same greedy pairing as /settle), for the sheet's consequence and toast.
+    const activeBalances: Record<string, number> = Object.fromEntries((active?.members ?? []).map((m) => [m.id, m.balanceCents]));
     const pending = pendingToMe.map((s) => ({
         id: s.id,
+        owedCents: resolveMyDebts(activeBalances, s.fromUserId)[userId] ?? 0,
         amount: s.amount,
         fromUser: { name: names[s.fromUserId] ?? "Alguien", avatar: avatars[s.fromUserId] ?? null },
         date: s.date.toISOString(),
@@ -341,7 +345,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     />
                 )}
 
-                {pending.length > 0 && active?.status !== "ARCHIVED" && <PendingSettlements settlements={pending} />}
+                {active && active.status !== "ARCHIVED" && (
+                    <PendingSettlements key={active.id} settlements={pending} settling={active.status === "SETTLING"} myName={user.name} />
+                )}
 
                 {active && invite && (
                     <SpaceInviteCard spaceId={active.id} spaceName={spaceName(active)} kind={invite.kind} maxUses={invite.maxUses} />

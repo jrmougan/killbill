@@ -100,7 +100,7 @@ test.describe('Settlements - partial payments, explicit space, archived, edit', 
     const pageA = await (await as(newContext, A)).newPage();
     await pageA.goto(`/settle/${seed.settlementId}`);
     await expect(pageA.getByTestId('settlement-amount')).toBeVisible();
-    await expect(pageA.getByRole('button', { name: /Confirmar|Rechazar/ })).toHaveCount(0);
+    await expect(pageA.getByRole('button', { name: /recibido|Rechazar el pago/ })).toHaveCount(0);
   });
 
   test('S-09: the edit screen parses es-ES amounts strictly and shows errors', async ({ request, newContext }) => {

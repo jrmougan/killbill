@@ -75,8 +75,9 @@ test('confirming a payment refreshes both the pending card and exact balance', a
   await loginAs(page, data.userA as { email: string; password: string });
   await expect(page.getByTestId('balance-amount')).toHaveText(/^\+50,00\s€$/);
   const assertSameDocument = await watchDocument(page);
-  await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
-  await expect(page.getByText('Confirmar Pagos', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Lo he recibido', exact: true }).click();
+  await page.getByTestId('confirm-sheet-confirm').click();
+  await expect(page.getByText(/Pagos por confirmar/)).toHaveCount(0);
   await expect(page.getByTestId('balance-amount')).toHaveText(/^0,00\s€$/);
   await assertSameDocument();
 });
