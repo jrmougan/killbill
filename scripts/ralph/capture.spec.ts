@@ -64,6 +64,13 @@ const SCREENS: Screen[] = [
   { id: 'pago-editar', scenario: 'ux-showcase', path: (d) => `/settle/${d.settlementId}/edit` },
   { id: 'gastos', scenario: 'ux-showcase', path: () => '/expenses/list', design: '3a-gastos' },
   { id: 'gasto-detalle', scenario: 'ux-showcase', path: (d) => `/expense/${d.expenseId}` },
+  {
+    id: 'hoja-eliminar-gasto', scenario: 'ux-showcase', path: (d) => `/expense/${d.expenseId}`,
+    act: async (page) => {
+      await page.getByTestId('expense-delete').click();
+      await page.waitForTimeout(600);
+    },
+  },
   { id: 'mes-presupuestos', scenario: 'ux-showcase', path: () => '/month', design: '3a-mes-presupuestos' },
   {
     id: 'mes-presupuestos-anadir', scenario: 'ux-showcase', path: () => '/month',

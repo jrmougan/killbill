@@ -991,8 +991,8 @@
         "e2e/expenses/edit-delete.spec.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "CriticalActionSheet danger con «descripción» e importe, efecto en el saldo por persona (delete-effect.ts), aviso de deuda ya saldada y de recurrencia, flash toast con Saldar deuda; sin deshacer (API)."
     },
     {
       "id": "CF-22",

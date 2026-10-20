@@ -79,8 +79,9 @@ test.describe('Expenses - Edit and Delete', () => {
 
     // The confirmation is an accessible modal: focus on Cancelar, Escape closes it (G-23).
     await pageA.locator('[data-testid="expense-delete"]').click();
-    const dialog = pageA.getByRole('alertdialog', { name: '¿Eliminar gasto?' });
+    const dialog = pageA.getByRole('alertdialog', { name: /^¿Eliminar/ });
     await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Test Expense');
     await expect(dialog.getByRole('button', { name: 'Cancelar' })).toBeFocused();
     await pageA.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
@@ -89,14 +90,15 @@ test.describe('Expenses - Edit and Delete', () => {
     const deletePromise = pageA.waitForResponse(
       (res) => res.url().includes(`/api/expenses/${expenseId}`) && res.request().method() === 'DELETE'
     );
-    await pageA.locator('[data-testid="expense-delete-confirm"]').click();
+    await dialog.getByRole('button', { name: 'Eliminar gasto' }).click();
     const deleteResponse = await deletePromise;
     expect(deleteResponse.ok()).toBeTruthy();
 
     // Back to the list it came from (shared scope), without the expense (G-24)
     await expect(pageA).toHaveURL(/\/expenses\/list$/, { timeout: 10000 });
-    await expect(pageA.getByText('Test Expense')).not.toBeVisible({ timeout: 10000 });
+    await expect(pageA.getByText('Test Expense', { exact: true })).not.toBeVisible({ timeout: 10000 });
     await expect(pageA.getByText('Todavía no hay gastos.')).toBeVisible();
+    await expect(pageA.getByText('Gasto «Test Expense» eliminado · saldo actualizado')).toBeVisible();
 
     // The balance is back to zero
     await pageA.goto('/dashboard');

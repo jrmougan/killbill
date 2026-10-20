@@ -35,6 +35,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
             },
             ...RECEIPT_LINES_SELECT,
             ...CATEGORY_REF_SELECT,
+            templateForSeries: { select: { isActive: true } },
         }
     });
 
@@ -102,7 +103,17 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                             <Pencil className="h-4 w-4" />
                         </Link>
                         {canPromote && <PromoteButton expenseId={expense.id} />}
-                        <DeleteExpenseButton expenseId={expense.id} redirectTo={backHref} />
+                        <DeleteExpenseButton
+                            expenseId={expense.id}
+                            description={expense.description}
+                            amount={expense.amount}
+                            coupleId={isPersonal ? null : expense.coupleId}
+                            viewerId={userId}
+                            payer={{ id: expense.paidById, name: expense.paidBy.name }}
+                            splits={expense.splits.map((s) => ({ userId: s.userId, name: s.user.name, amount: s.amount }))}
+                            isRecurringTemplate={expense.templateForSeries?.isActive ?? false}
+                            redirectTo={backHref}
+                        />
                     </div>
                 )}
             </EqHeader>

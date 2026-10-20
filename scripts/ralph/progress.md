@@ -459,3 +459,15 @@
   (aquí `reasonAction` de `InviteManager`, que se pasa mientras el espacio está ACTIVE). El POST de invitaciones exige `expiresAt` en los e2e.
   Las capturas no resetean la BD entre pantallas del mismo escenario: Lisboa acumula enlaces (usa `.first()`). `DELETE …/invites` da 404 si ya
   estaba desactivado. e2e de invitaciones: `e2e/spaces/manage.spec.ts`, `e2e/api/invites.spec.ts`, `e2e/guest/guest-security.spec.ts`.
+
+## 2026-10-20 · CF-21 Eliminar gasto con alertdialog, importe, efecto y recurrencia
+- Corregido: `DeleteExpenseButton` usa `CriticalActionSheet` danger (`expense-delete-sheet`): "¿Eliminar «X» de N €?", efecto en el saldo
+  en negrita ("Lucía dejará de deberte…", "Dejarás de deber … a X", personal, "Tu saldo no cambia…", >3 deudores resumidos), aviso de deuda ya
+  saldada en compartidos, aviso + CTA "Eliminar y detener recurrencia" si es plantilla activa, "No se puede deshacer."; flash toast en Gastos
+  "Gasto «X» eliminado · saldo actualizado" + "Saldar deuda" (/settle?space=) en compartidos. Captura nueva `hoja-eliminar-gasto`.
+- Pendiente / fuera de alcance: Deshacer (borrado lógico en la API).
+- Ficheros: `src/components/expense/{delete-button,delete-effect,delete-effect.test}.ts(x)`, `src/app/expense/[id]/page.tsx`,
+  `scripts/ralph/capture.spec.ts`, `e2e/expenses/edit-delete.spec.ts`.
+- Aprendizajes: ya no existe `Expense.isRecurring`: una plantilla recurrente se detecta con `templateForSeries: { select: { isActive } }`.
+  El testid `expense-delete-confirm` desaparece: en e2e pulsa `getByRole('button', { name: 'Eliminar gasto' })` dentro del alertdialog.
+  Ojo con `getByText('X')` tras un flash toast que contiene X: usa `{ exact: true }`.
