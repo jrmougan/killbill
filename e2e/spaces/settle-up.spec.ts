@@ -128,7 +128,7 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await pageB.getByRole('button', { name: /^Ya le he pagado/ }).click();
     await pageB.getByTestId('confirm-sheet-confirm').click();
     expect((await settlePromise).ok()).toBeTruthy();
-    await expect(pageB.getByTestId('settle-pending')).toContainText('Pendiente de que User A confirme');
+    await expect(pageB.getByTestId('settle-pending')).toContainText('Avisado a User A');
 
     // Creditor's checklist: exactly one PENDING B → A of 50,00 €.
     await pageA.goto(`/spaces/${spaceId}/close`);
@@ -190,6 +190,15 @@ test.describe('Spaces - Settle-up (close flow)', () => {
     await expect(pageA.getByTestId('close-progress')).toHaveText('1/1 confirmadas');
     await expect(pageA.getByTestId('close-settlement-row')).toHaveAttribute('data-status', 'CONFIRMED');
     await expect(pageA.getByTestId('close-no-debts')).toBeVisible();
+
+    // SETTLING with every balance at zero: only the OWNER is offered to archive.
+    await pageA.goto(`/settle?space=${spaceId}`);
+    await expect(pageA.getByTestId('settle-peace')).toContainText('Estáis al día');
+    await pageA.getByTestId('settle-archive').click();
+    await expect(pageA).toHaveURL(`/spaces/${spaceId}/close`);
+    await pageB.goto(`/settle?space=${spaceId}`);
+    await expect(pageB.getByTestId('settle-archive-hint')).toHaveText('Avisa a quien gestiona el espacio para archivarlo.');
+    await expect(pageB.getByTestId('settle-archive')).toHaveCount(0);
 
     await ctxA.close();
     await ctxB.close();

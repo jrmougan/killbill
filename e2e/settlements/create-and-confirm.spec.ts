@@ -67,7 +67,7 @@ test.describe('Settlements - Create and Confirm', () => {
     expect(settleResponse.request().postDataJSON()).toMatchObject({ toUserId: userA.id, amount: 50, method: 'TRANSFER' });
 
     // Two-step confirmation: the debtor sees it as pending on the creditor.
-    await expect(pageB.getByTestId('settle-pending')).toContainText('Pendiente de que User A confirme');
+    await expect(pageB.getByTestId('settle-pending')).toContainText('Avisado a User A');
 
     // Navigate to expenses/list to verify settlement appears as PENDING with exact amount
     await pageB.goto('/expenses/list');
@@ -80,7 +80,14 @@ test.describe('Settlements - Create and Confirm', () => {
     // but a second "Ya he pagado" is not offered for the same transfer.
     await pageB.goto('/settle');
     await expect(pageB.getByTestId('settle-balance')).toHaveText(/50,00\s*€/);
-    await expect(pageB.getByTestId('settle-outgoing-pending')).toBeVisible();
+    // One block for the pending payment: no radio/CTA for it, no creditor reminder.
+    const inFlight = pageB.getByTestId('settle-outgoing-pending');
+    await expect(inFlight).toContainText(/Falta que User A confirme 50,00\s€/);
+    await expect(pageB.getByText('Falta que', { exact: false })).toHaveCount(1);
+    await expect(inFlight.getByRole('link', { name: 'Ver el pago pendiente' })).toHaveAttribute('href', /^\/settle\/[^/?]+$/);
+    await expect(inFlight.getByRole('button', { name: 'Pedirle que lo confirme' })).toBeVisible();
+    await expect(pageB.getByTestId('settle-ticket-in-flight')).toContainText(/Pago en camino\s*−50,00\s€ · pendiente/);
+    await expect(pageB.getByRole('button', { name: /Recordarle la deuda/ })).toHaveCount(0);
     await expect(pageB.getByRole('button', { name: /^Ya le he pagado/ })).toHaveCount(0);
     expect(pageErrors, 'el flujo de liquidación debe hidratar sin errores del navegador').toEqual([]);
 
@@ -273,7 +280,9 @@ test.describe('Settlements - Create and Confirm', () => {
 
     const peace = pageA.getByTestId('settle-peace');
     await expect(peace).toContainText('Deuda saldada');
-    await expect(peace).toContainText('Pago registrado en efectivo');
+    await expect(peace).toContainText(/Has registrado 50,00\s€ de User B en efectivo\./);
+    const settlementId = (await res.json()).settlement.id as string;
+    await expect(pageA.getByRole('link', { name: 'Ver el pago' })).toHaveAttribute('href', `/settle/${settlementId}`);
 
     await pageA.goto('/dashboard');
     await expect(pageA.locator('[data-testid="balance-amount"]')).toHaveText(/0,00\s*€/, { timeout: 10000 });
@@ -321,7 +330,7 @@ test.describe('Settlements - Create and Confirm', () => {
     const res = await post;
     expect(res.ok()).toBeTruthy();
     expect(res.request().postDataJSON()).toMatchObject({ toUserId: userA.id, amount: 33.33 });
-    await expect(pageB.getByTestId('settle-pending')).toContainText('Pendiente de que User A confirme');
+    await expect(pageB.getByTestId('settle-pending')).toContainText('Avisado a User A');
     await ctxB.close();
   });
 });

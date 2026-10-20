@@ -114,6 +114,15 @@ const SCREENS: Screen[] = [
       await page.waitForTimeout(600); // let the sheet finish sliding in
     },
   },
+  {
+    id: 'saldar-exito', scenario: 'ux-showcase', path: (d) => `/settle?space=${d.coupleId}`, asUserB: true,
+    act: async (page) => {
+      await page.getByRole('button', { name: /^Ya le he pagado/ }).click();
+      await page.getByTestId('confirm-sheet-confirm').click();
+      await page.getByTestId('settle-pending').waitFor();
+      await page.waitForTimeout(600); // let the refresh settle
+    },
+  },
   { id: 'inicio-deudor', scenario: 'ux-showcase', path: () => '/dashboard', design: '2a-inicio', asUserB: true },
   { id: 'espacio-cerrando', scenario: 'space-settling', path: (d) => `/spaces/${d.coupleId}` },
   {

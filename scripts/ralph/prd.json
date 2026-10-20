@@ -658,8 +658,8 @@
         "e2e/settlements/partial-and-scope.spec.ts",
         "scripts/ralph/capture.spec.ts"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Pendiente del deudor en un solo bloque ('Falta que X confirme', 'Ver el pago pendiente', 'Pedirle que lo confirme') sin radio ni CTA y con 'Pago en camino' en el ticket; éxitos 'Avisado a X' / 'Has registrado … de X' con 'Ver el pago'; 'Terminar y archivar' en SETTLING a cero solo para OWNER/ADMIN. Pendiente: enlaces del bloque en dos líneas a 360 px."
     },
     {
       "id": "CF-12",

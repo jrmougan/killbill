@@ -327,3 +327,15 @@
 - Aprendizajes: el `title` de `CriticalActionSheet` lo pinta `Sheet` fuera del div con `testId`: en e2e búscalo con
   `getByRole('dialog', { name })`. `facts[].value` admite un nodo (aquí el `<input>` del importe con su "máx."). En /settle la hoja guarda
   la transferencia en el estado `review` para no depender de `t` tras un `router.refresh()`.
+
+## 2026-10-20 · CF-11 /settle: pendiente del deudor sin redundancia, 'Pedirle que lo confirme' y éxitos con siguiente paso
+- Corregido: las transferencias con un pago mío PENDING salen del selector/CTA (`open` en `client.tsx`) y se pintan como un bloque
+  `settle-outgoing-pending` ("Falta que X confirme {importe}" + "Ver el pago pendiente" + "Pedirle que lo confirme"); la lista "Pagos por
+  confirmar" del ticket solo muestra los entrantes; fila del ticket `settle-ticket-in-flight` "Pago en camino −X · pendiente"; éxito del
+  deudor "Avisado a X" con "Pedirle que lo confirme"; éxito del acreedor/confirmación "Has registrado {importe} de X {método}." con enlace
+  "Ver el pago" y "Saldar el resto"; SETTLING a cero: `settle-archive` "Terminar y archivar" (OWNER/ADMIN no invitados, `canArchive` desde
+  `auth.role` en `page.tsx`) o `settle-archive-hint`; captura nueva `saldar-exito`.
+- Pendiente / fuera de alcance: a 360 px los dos enlaces del bloque pendiente van en dos líneas.
+- Ficheros: `src/app/settle/{client,page}.tsx`, `scripts/ralph/capture.spec.ts`, `e2e/settlements/create-and-confirm.spec.ts`, `e2e/spaces/settle-up.spec.ts`.
+- Aprendizajes: `resolveSettleSpace` ya devuelve `auth.role`/`auth.isGuest` (DB, no JWT). `Done` lleva ahora `id/name/amount/method` en ambos
+  tipos; compartir va por `share(title, text, path)` (navigator.share → portapapeles + toast). Los e2e del éxito del deudor buscan "Avisado a User A".

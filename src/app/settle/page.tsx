@@ -127,6 +127,7 @@ export default async function SettlePage({ searchParams }: { searchParams: Promi
             }}
             me={userId}
             isGuest={isGuest}
+            canArchive={!isGuest && !auth.isGuest && (auth.role === "OWNER" || auth.role === "ADMIN")}
             memberCount={n}
             partnerId={n === 2 ? members.find((m) => m.id !== userId)?.id ?? null : null}
             names={Object.fromEntries(nameOf)}
