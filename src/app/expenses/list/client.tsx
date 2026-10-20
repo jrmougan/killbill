@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { EqChip, EqHeader, EqRow, EqSegmented } from "@/components/ui/eq";
+import { EqChip, EqEmpty, EqHeader, EqRow, EqSegmented } from "@/components/ui/eq";
 import type { CategoryBadgeMeta } from "@/components/category/category-badge";
 import { formatCurrency } from "@/lib/currency";
 import { getSettlementMethodLabel } from "@/lib/settlement-labels";
@@ -129,6 +129,11 @@ export function ExpensesListClient({
 
     const filterCount = activeFilterCount(advanced);
     const anyFilter = q.trim() !== "" || payer !== "all" || filterCount > 0;
+    const clearFilters = () => {
+        setQ("");
+        setPayer("all");
+        setAdvanced(EMPTY_FILTERS);
+    };
 
     return (
         <div className="eq-in flex flex-col w-full pt-3 pb-28">
@@ -174,9 +179,29 @@ export function ExpensesListClient({
 
             <div className="px-5 pt-3">
                 {groups.length === 0 ? (
-                    <p className="py-10 text-center text-sm text-muted-foreground">
-                        {anyFilter || items.length > 0 ? "No hay gastos que coincidan." : "Todavía no hay gastos."}
-                    </p>
+                    anyFilter || items.length > 0 ? (
+                        <EqEmpty
+                            testId="expenses-empty"
+                            title="No hay gastos que coincidan."
+                            hint="Prueba con otra búsqueda o quita los filtros."
+                            action={anyFilter ? "Quitar filtros" : undefined}
+                            onClick={clearFilters}
+                        />
+                    ) : readOnlyStatus ? (
+                        <EqEmpty testId="expenses-empty" title="Todavía no hay gastos." hint="Este espacio ya no admite gastos nuevos." />
+                    ) : (
+                        <EqEmpty
+                            testId="expenses-empty"
+                            title="Todavía no hay gastos."
+                            hint={
+                                personal
+                                    ? "Apunta lo que gastas solo tú y aquí verás el historial."
+                                    : "Cada gasto que apuntéis aparecerá aquí, con quién pagó y cómo se reparte."
+                            }
+                            action="Añadir el primer gasto"
+                            href={personal ? "/expenses/new?space=personal" : "/expenses/new"}
+                        />
+                    )
                 ) : (
                     groups.map((g) => (
                         <section key={g.key} aria-label={g.label} className="flex flex-col">

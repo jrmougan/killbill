@@ -204,8 +204,8 @@
         "Liquidando: se entiende que no se pueden añadir gastos pero sí saldar",
         "Archivado: solo lectura evidente, sin botones que fallen al pulsarlos"
       ],
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Vacíos de Inicio/Gastos con explicación y \"Añadir el primer gasto\" (sin acción en SETTLING/ARCHIVED), \"Quitar filtros\" y copy de los avisos Liquidando/Archivado; queda el \"+\" visible (no falla) y \"Confirmar Pagos\" (contrato e2e)."
     },
     {
       "id": "UX-12",

@@ -38,7 +38,7 @@ export function SpaceStatusBanner({
                 <Lock className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
                 <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-foreground">Espacio archivado</p>
-                    <p className="text-[12px] text-muted-foreground">Solo lectura — un recuerdo de lo compartido.</p>
+                    <p className="text-[12px] text-muted-foreground">Solo lectura: puedes consultar lo compartido, pero no añadir ni cambiar nada.</p>
                 </div>
             </div>
         );
@@ -50,7 +50,7 @@ export function SpaceStatusBanner({
                 <Clock className="h-4 w-4 mt-0.5 text-primary shrink-0" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
                     <p className="text-[13px] font-semibold text-foreground">Cerrando cuentas</p>
-                    <p className="text-[12px] text-muted-foreground">No se pueden crear gastos nuevos; solo liquidar.</p>
+                    <p className="text-[12px] text-muted-foreground">Ya no se pueden añadir gastos, pero sí saldar lo pendiente.</p>
                     {(settleHref || canManage) && (
                         <div className="flex flex-wrap gap-x-4 -mb-2">
                             {settleHref && (

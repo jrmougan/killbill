@@ -226,6 +226,40 @@ export function EqRow({
     return <div className={cls}>{inner}</div>;
 }
 
+/**
+ * Empty state: what is missing, what to do, and (optionally) the action as a
+ * 44px pill — a link (`href`) or a button (`onClick`). Without an action it is
+ * just the explanation (e.g. a read-only space).
+ */
+export function EqEmpty({
+    title,
+    hint,
+    action,
+    href,
+    onClick,
+    testId,
+}: {
+    title: string;
+    hint?: React.ReactNode;
+    action?: string;
+    href?: string;
+    onClick?: () => void;
+    testId?: string;
+}) {
+    const cls =
+        "mt-3 min-h-11 inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-tint)] border border-[color:var(--accent-border)] px-4 text-sm font-semibold text-primary active:scale-[0.97] transition-transform";
+    return (
+        <div data-testid={testId} className="flex flex-col items-center gap-1 py-8 text-center">
+            <p className="text-[15px] font-semibold text-foreground">{title}</p>
+            {hint && <p className="max-w-[30ch] text-[13px] leading-snug text-muted-foreground">{hint}</p>}
+            {action && href && <Link href={href} className={cls}>{action}</Link>}
+            {action && !href && onClick && (
+                <button type="button" onClick={onClick} className={cls}>{action}</button>
+            )}
+        </div>
+    );
+}
+
 /** Ephemeral bottom toast (dark pill above the nav). Render conditionally. */
 export function EqToast({ children }: { children: React.ReactNode }) {
     return (

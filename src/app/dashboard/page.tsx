@@ -30,7 +30,7 @@ import {
     signedEuros,
 } from "@/lib/home-format";
 import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
-import { EqLabel, EqRow } from "@/components/ui/eq";
+import { EqEmpty, EqLabel, EqRow } from "@/components/ui/eq";
 import { MemberBalanceList } from "@/components/ui/member-balance-list";
 import { SpaceCarousel, type SpaceCardData } from "@/components/dashboard/space-carousel";
 import { MonthSummary } from "@/components/dashboard/month-summary";
@@ -347,9 +347,33 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         </div>
                     </div>
                     {rows.length === 0 ? (
-                        <p className="py-6 text-center text-sm text-muted-foreground">
-                            {active ? "Aún no hay gastos en este espacio." : "Aún no hay gastos personales."}
-                        </p>
+                        active && active.status !== SpaceStatus.ACTIVE ? (
+                            <EqEmpty
+                                testId="recent-empty"
+                                title="Aún no hay gastos en este espacio."
+                                hint="Este espacio ya no admite gastos nuevos."
+                            />
+                        ) : active ? (
+                            <EqEmpty
+                                testId="recent-empty"
+                                title="Aún no hay gastos en este espacio."
+                                hint={
+                                    active.others.length > 0
+                                        ? "Apunta lo que pague cada uno y verás aquí quién debe a quién."
+                                        : "Apunta lo que pagues; cuando entre alguien más, verás quién debe a quién."
+                                }
+                                action="Añadir el primer gasto"
+                                href={`/expenses/new?space=${active.id}`}
+                            />
+                        ) : (
+                            <EqEmpty
+                                testId="recent-empty"
+                                title="Aún no hay gastos personales."
+                                hint="Apunta lo que gastas solo tú para ver en qué se va el mes."
+                                action="Añadir el primer gasto"
+                                href="/expenses/new?space=personal"
+                            />
+                        )
                     ) : (
                         <div className="flex flex-col">{rows.map((r) => r.node)}</div>
                     )}

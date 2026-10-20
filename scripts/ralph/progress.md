@@ -16,6 +16,7 @@
 - Estados con interacción en las capturas: campo `act` del `Screen` en `capture.spec.ts`
   (p. ej. `anadir-gasto-relleno`, `anadir-gasto-opciones`; espera ~600 ms a que entren las hojas).
 - El layout raíz ya renderiza `<main>`: las páginas no deben anidar otro (usa `<div>`).
+- Estados vacíos: `EqEmpty` (`eq.tsx`) con `title`, `hint` y `action` + `href`/`onClick`.
 - Enlaces de texto en cabeceras: `-my-2.5 min-h-11 flex items-center` da 44 px sin cambiar la altura de la fila.
 
 ## Iteraciones
@@ -135,3 +136,16 @@
 - Aprendizajes: `/welcome` y `/spaces/new` comparten `CreateSpaceFlow` (`mode` `onboard`/`create`); lo propio del primer
   arranque va condicionado a `mode === "onboard"`. La captura `bienvenida` tiene `EPHEMERAL_SPACES_ENABLED` activo ("Un viaje").
   e2e de Bienvenida: `e2e/auth/{register,login}.spec.ts`, `e2e/couple/create-couple.spec.ts`, `e2e/spaces/manage.spec.ts`.
+
+## 2026-10-20 · UX-11 Estados vacíos y de ciclo de vida
+- Corregido: nueva primitiva `EqEmpty` (título, explicación y acción de 44 px como enlace o botón); Inicio y Gastos vacíos
+  explican qué hacer y ofrecen "Añadir el primer gasto" (al espacio activo o `?space=personal`), sin acción si el espacio
+  está liquidando/archivado; "Quitar filtros" cuando nada coincide; avisos "Cerrando cuentas"/"Espacio archivado" con copy
+  que dice qué se puede y qué no.
+- Pendiente / fuera de alcance: el "+" de la barra sigue en espacios SETTLING/ARCHIVED (no falla: el formulario lo explica y
+  ofrece Personal); "Confirmar Pagos" con mayúscula (contrato e2e).
+- Ficheros: `src/components/ui/eq.tsx`, `src/app/dashboard/page.tsx`, `src/app/expenses/list/client.tsx`,
+  `src/components/space/space-status-banner.tsx`, `e2e/spaces/lifecycle.spec.ts`.
+- Aprendizajes: los e2e buscan "Todavía no hay gastos." (lista) y el texto de los avisos de ciclo de vida (`lifecycle.spec.ts`):
+  si cambias el copy, actualízalos. Detalle de gasto y `/settle` ya ocultan editar/borrar en SETTLING/ARCHIVED.
+  e2e de ciclo de vida: `e2e/spaces/lifecycle.spec.ts`, `e2e/shopping/lifecycle.spec.ts`.

@@ -106,7 +106,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     const banner = page.getByTestId('space-status-banner');
     await expect(banner).toHaveAttribute('data-status', 'SETTLING');
     await expect(banner).toContainText('Cerrando cuentas');
-    await expect(banner).toContainText('No se pueden crear gastos nuevos; solo liquidar.');
+    await expect(banner).toContainText('Ya no se pueden añadir gastos, pero sí saldar lo pendiente.');
     await expect(page.getByTestId('space-status-close-link')).toHaveAttribute('href', `/spaces/${spaceId}/close`);
     await expect(page.getByTestId('balance-amount')).toHaveText(PLUS_50);
 
@@ -228,7 +228,7 @@ test.describe('Spaces - Lifecycle (UI)', () => {
     const banner = page.getByTestId('space-status-banner');
     await expect(banner).toHaveAttribute('data-status', 'ARCHIVED');
     await expect(banner).toContainText('Espacio archivado');
-    await expect(banner).toContainText('Solo lectura — un recuerdo de lo compartido.');
+    await expect(banner).toContainText('Solo lectura: puedes consultar lo compartido, pero no añadir ni cambiar nada.');
     await expect(page.getByTestId('space-status-close-link')).toHaveCount(0);
 
     // Expense detail: no edit/delete.
