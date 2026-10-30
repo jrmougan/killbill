@@ -31,7 +31,9 @@ const adapter = new PrismaMariaDb({
     password: dbConfig.password,
     database: dbConfig.database,
     port: dbConfig.port,
-    connectionLimit: 10
+    connectionLimit: 10,
+    // Opt-in: MySQL 8.4+ (caching_sha2_password without TLS) needs the server's RSA public key.
+    allowPublicKeyRetrieval: process.env.DATABASE_ALLOW_PUBLIC_KEY_RETRIEVAL === 'true'
 });
 
 const prisma = new PrismaClient({ adapter });
