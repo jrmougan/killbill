@@ -164,7 +164,7 @@ export function ExpenseForm({
     };
 
     // ---------- Amount entry (numpad + physical keyboard + paste) ----------
-    const pressKey = useCallback((k: AmountKey) => dispatch({ type: "amountKey", key: k }), []);
+    const pressKey = useCallback((k: AmountKey) => dispatch({ type: "amountKey", key: k }), [dispatch]);
     useAmountKeyboard(mode === "form" && !moreOpen, pressKey);
 
     // ---------- Split ----------

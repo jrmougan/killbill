@@ -95,8 +95,13 @@ export function ExpensesListClient({
         });
     }, [items, q, payer, advanced, userId]);
 
-    // Reset the window whenever the result set changes.
-    useEffect(() => { setVisible(PAGE); }, [q, payer, advanced]);
+    // Reset the window whenever the result set changes (adjusted while
+    // rendering, so the first paint of a new filter is already windowed).
+    const [windowFor, setWindowFor] = useState({ q, payer, advanced });
+    if (windowFor.q !== q || windowFor.payer !== payer || windowFor.advanced !== advanced) {
+        setWindowFor({ q, payer, advanced });
+        setVisible(PAGE);
+    }
 
     const groups = useMemo(() => {
         // Day totals come from the whole filtered set so a day cut by the

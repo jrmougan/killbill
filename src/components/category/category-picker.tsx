@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useEffectEvent, useMemo } from "react";
 import Link from "next/link";
 import { Loader2, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -50,10 +50,11 @@ export function CategoryPicker({
     const { categories, loading, error, reload } = useCategoryList(context, initial);
 
     // Notify the parent of the effective set (for OCR/validation) on every load.
-    const onLoadedRef = useRef(onLoaded);
-    onLoadedRef.current = onLoaded;
+    // An effect event always sees the latest `onLoaded` without re-running the
+    // effect when the parent passes a new callback.
+    const notifyLoaded = useEffectEvent((loaded: CategoryListItem[]) => onLoaded?.(loaded));
     useEffect(() => {
-        if (categories.length > 0) onLoadedRef.current?.(categories);
+        if (categories.length > 0) notifyLoaded(categories);
     }, [categories]);
 
     // Merge in the forced-current category when it isn't already present.

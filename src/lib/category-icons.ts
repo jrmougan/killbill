@@ -19,6 +19,7 @@
  * and prisma/seed.ts) MUST be present here, or the DB-driven render of the system
  * categories themselves breaks. Guarded by category-icons.test.ts.
  */
+import { createElement } from "react";
 import {
     // System-category icons (the 8 — keep in sync with categories.ts / seed.ts)
     ShoppingBag,
@@ -69,6 +70,7 @@ import {
     GraduationCap,
     MoreHorizontal,
     type LucideIcon,
+    type LucideProps,
 } from "lucide-react";
 
 /**
@@ -136,6 +138,16 @@ export const ICON_KEYS: string[] = Object.keys(ICON_REGISTRY);
 export function getIconComponent(name: string | null | undefined): LucideIcon {
     if (!name) return FALLBACK_ICON;
     return ICON_REGISTRY[name] ?? FALLBACK_ICON;
+}
+
+/**
+ * Render a registry icon by its stored name. The registry entries are static
+ * module-level components, so resolving them here (instead of binding
+ * `const Icon = getIconComponent(name)` inside a caller's render) keeps every
+ * caller free of components created during render.
+ */
+export function CategoryIcon({ name, ...props }: { name: string | null | undefined } & LucideProps) {
+    return createElement(getIconComponent(name), props);
 }
 
 /** Whether a name is a valid, registered icon key (for server validation). */

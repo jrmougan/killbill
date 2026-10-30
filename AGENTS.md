@@ -2,7 +2,7 @@
 
 ## Commands
 
-Use the versions pinned in `mise.toml` (Node 24.22.1, bundled npm 11.19.1).
+Use the versions pinned in `mise.toml` (Node 26.13.0, bundled npm 11.20.0).
 
 ```bash
 mise install

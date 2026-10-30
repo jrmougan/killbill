@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Copy, Loader2, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { daysUntil } from "@/lib/space-ui";
@@ -86,19 +86,24 @@ export function InviteManager({
     const [revokeError, setRevokeError] = useState<string | null>(null);
     const [toast, showToast] = useEqToast();
 
-    const load = useCallback(async () => {
-        const list = await fetchInvites(spaceId);
-        setInvites(list ?? []);
-        if (!kind || !list) return;
-        const remembered = recallInvite(spaceId, kind);
-        const row = remembered && list.find((i) => i.id === remembered.inviteId);
-        if (remembered && row && isInviteLive(row)) setCurrent({ inviteId: remembered.inviteId, url: remembered.url });
-        else if (remembered) forgetInvite(spaceId, kind);
-    }, [spaceId, kind]);
-
+    // Show the space's links and restore the one remembered for this browser
+    // (if still live). Applied once the request settles; a response for a
+    // previous space/kind is dropped.
     useEffect(() => {
-        void load();
-    }, [load]);
+        let current = true;
+        void fetchInvites(spaceId).then((list) => {
+            if (!current) return;
+            setInvites(list ?? []);
+            if (!kind || !list) return;
+            const remembered = recallInvite(spaceId, kind);
+            const row = remembered && list.find((i) => i.id === remembered.inviteId);
+            if (remembered && row && isInviteLive(row)) setCurrent({ inviteId: remembered.inviteId, url: remembered.url });
+            else if (remembered) forgetInvite(spaceId, kind);
+        });
+        return () => {
+            current = false;
+        };
+    }, [spaceId, kind]);
 
     const create = async () => {
         if (!kind) return;

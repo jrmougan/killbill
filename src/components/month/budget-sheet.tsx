@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { EqCta } from "@/components/ui/eq";
 import { CategoryGlyph } from "./category-glyph";
@@ -47,12 +47,13 @@ export function BudgetSheet({
     // Tapping the backdrop dismisses (a mouse/touch nicety — keyboard users have
     // Escape and the "Cerrar" button). A click whose target is the <dialog>
     // itself landed outside the padded content, i.e. on ::backdrop.
-    const dismiss = useRef(() => {});
-    dismiss.current = () => { if (!saving) onClose(); };
+    const dismiss = () => { if (!saving) onClose(); };
+    // Effect event: the listener below always sees the latest `saving`/`onClose`.
+    const onBackdropClick = useEffectEvent((e: MouseEvent) => { if (e.target === ref.current) dismiss(); });
     useEffect(() => {
         const el = ref.current;
         if (!el) return;
-        const onClick = (e: MouseEvent) => { if (e.target === el) dismiss.current(); };
+        const onClick = (e: MouseEvent) => onBackdropClick(e);
         el.addEventListener("click", onClick);
         return () => el.removeEventListener("click", onClick);
     }, []);
@@ -61,7 +62,7 @@ export function BudgetSheet({
         <dialog
             ref={ref}
             aria-labelledby={titleId}
-            onCancel={(e) => { e.preventDefault(); dismiss.current(); }}
+            onCancel={(e) => { e.preventDefault(); dismiss(); }}
             className="eq-in mt-auto mb-0 mx-auto w-full max-w-none sm:max-w-md p-0 border-0 rounded-t-[24px] bg-background text-foreground backdrop:bg-black/30"
         >
             <div className="px-5 pt-5 pb-[max(env(safe-area-inset-bottom),20px)] flex flex-col gap-4">
