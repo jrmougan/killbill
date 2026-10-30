@@ -1,4 +1,4 @@
-import { getIconComponent } from "@/lib/category-icons";
+import { CategoryIcon } from "@/lib/category-icons";
 import { cn } from "@/lib/utils";
 import type { MonthCategory } from "./types";
 
@@ -7,6 +7,5 @@ export function CategoryGlyph({ category, className }: { category: Pick<MonthCat
     if (category.emoji) {
         return <span aria-hidden className={cn("leading-none", className)}>{category.emoji}</span>;
     }
-    const Icon = getIconComponent(category.iconName);
-    return <Icon aria-hidden className={cn("h-4 w-4 flex-none", className)} style={{ color: category.hex || undefined }} />;
+    return <CategoryIcon name={category.iconName} aria-hidden className={cn("h-4 w-4 flex-none", className)} style={{ color: category.hex || undefined }} />;
 }

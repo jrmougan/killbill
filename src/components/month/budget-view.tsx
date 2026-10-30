@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle } from "lucide-react";
 import { EqCard, EqChip, EqLabel, EqToast, useEqToast } from "@/components/ui/eq";
@@ -75,10 +75,13 @@ export function BudgetView({
     const [error, setError] = useState<string | null>(null);
     const [toast, showToast] = useEqToast();
 
-    // A server re-render (router.refresh after a write) is the source of truth.
-    useEffect(() => {
+    // A server re-render (router.refresh after a write) is the source of truth:
+    // adopt new props while rendering (no effect → no extra stale render).
+    const [syncedBudgets, setSyncedBudgets] = useState(initialBudgets);
+    if (syncedBudgets !== initialBudgets) {
+        setSyncedBudgets(initialBudgets);
         setBudgets(initialBudgets);
-    }, [initialBudgets]);
+    }
 
     const catByKey = useMemo(() => new Map(categories.map((c) => [c.key, c])), [categories]);
     const order = useMemo(() => new Map(categories.map((c, i) => [c.key, i])), [categories]);

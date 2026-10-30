@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { requestTime } from "@/lib/request-time";
 import { redirect } from "next/navigation";
 import { getGroupBalances } from "@/lib/ledger-read";
 import { getGroupMembers } from "@/lib/membership";
@@ -107,7 +108,7 @@ export default async function SettlePage({ searchParams }: { searchParams: Promi
     const ticket = buildTicket(expenses, userId, balance, period.payments);
 
     const firstExpense = rawExpenses.reduce<Date | null>((min, e) => (!min || e.date < min ? e.date : min), null);
-    const meta = ticketMeta(period.since ?? firstExpense, new Date(), ticket.count);
+    const meta = ticketMeta(period.since ?? firstExpense, await requestTime(), ticket.count);
 
     const nameOf = new Map(members.map((m) => [m.id, m.name]));
     // A settlement can involve a member who already left: resolve their name too.

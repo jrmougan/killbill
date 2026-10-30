@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Check, ChevronRight, Clock, X } from "lucide-react";
 import { prisma } from "@/lib/db";
+import { requestTime } from "@/lib/request-time";
 import { getSessionCtx } from "@/lib/authz";
 import { getActiveGroup, getGroupMembers } from "@/lib/membership";
 import { materializeDueRecurringExpenses, materializeDueRecurringExpensesForOwner } from "@/lib/recurring";
@@ -76,7 +77,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         return <div className="p-10 text-center">Usuario no encontrado. <Link href="/login" className="underline">Inicia sesión de nuevo</Link></div>;
     }
 
-    const now = new Date();
+    const now = await requestTime();
     const month = monthRange(now);
     const activeGroupId = await getActiveGroup(userId);
     const { scope } = await searchParams;

@@ -7,6 +7,20 @@ import {
     categoriesEndpoint,
 } from "@/lib/category-context";
 
+type FetchResult = { categories: CategoryListItem[] } | { error: string };
+
+async function fetchCategories(endpoint: string): Promise<FetchResult> {
+    try {
+        const res = await fetch(endpoint);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        return { categories: Array.isArray(json.categories) ? json.categories : [] };
+    } catch (e) {
+        console.error("Failed to load categories", e);
+        return { error: "No se pudieron cargar las categorías" };
+    }
+}
+
 interface UseCategoryListResult {
     categories: CategoryListItem[];
     loading: boolean;
@@ -30,25 +44,41 @@ export function useCategoryList(
 
     const endpoint = categoriesEndpoint(context);
 
-    const load = useCallback(async () => {
+    const apply = useCallback((result: FetchResult) => {
+        if ("categories" in result) {
+            setCategories(result.categories);
+            setError(null);
+        } else {
+            setError(result.error);
+        }
+        setLoading(false);
+    }, []);
+
+    // Manual retry (event handler): show the loading state straight away.
+    const reload = useCallback(() => {
         setLoading(true);
         setError(null);
-        try {
-            const res = await fetch(endpoint);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const json = await res.json();
-            setCategories(Array.isArray(json.categories) ? json.categories : []);
-        } catch (e) {
-            console.error("Failed to load categories", e);
-            setError("No se pudieron cargar las categorías");
-        } finally {
-            setLoading(false);
-        }
-    }, [endpoint]);
+        void fetchCategories(endpoint).then(apply);
+    }, [endpoint, apply]);
 
+    // A new context means a new list: back to loading, adjusted while rendering.
+    const [loadedFor, setLoadedFor] = useState(endpoint);
+    if (loadedFor !== endpoint) {
+        setLoadedFor(endpoint);
+        setLoading(true);
+        setError(null);
+    }
+
+    // Sync with the server; a response for a superseded endpoint is dropped.
     useEffect(() => {
-        load();
-    }, [load]);
+        let current = true;
+        void fetchCategories(endpoint).then((result) => {
+            if (current) apply(result);
+        });
+        return () => {
+            current = false;
+        };
+    }, [endpoint, apply]);
 
-    return { categories, loading, error, reload: load };
+    return { categories, loading, error, reload };
 }

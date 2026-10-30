@@ -10,6 +10,7 @@ import { SpaceStatus, SpaceType } from "@/generated/prisma/enums";
 import { daysLeftInMonth, monthName, monthShort, normalizeMonthView, type MonthScope } from "@/components/month/format";
 import { MonthClient } from "@/components/month/month-client";
 import { loadAnalysis, loadBudgets } from "./data";
+import { requestTime } from "@/lib/request-time";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export default async function MonthPage({
         getEffectiveCategories(scope === "shared" ? { groupId: groupId! } : { ownerId: userId }),
     ]);
 
-    const now = new Date();
+    const now = await requestTime();
     const where = { scope, userId, groupId };
     const [{ budgets, spentByCategory }, analysis] = await Promise.all([
         loadBudgets(where, now),

@@ -6,7 +6,7 @@ con autenticación JWT y lectura de tickets mediante OCR.
 ## Desarrollo local
 
 Requisitos: [mise](https://mise.jdx.dev/getting-started.html) y Docker (Podman es opcional).
-`mise.toml` fija Node 24.22.1 (incluye npm 11.19.1) y Compose 5.6.1.
+`mise.toml` fija Node 26.13.0 (incluye npm 11.20.0) y Compose 5.6.1.
 
 ```bash
 mise trust
