@@ -120,6 +120,13 @@ Los secretos y la conexión de producción se configuran en Coolify. La base de
 producción es MySQL 8.0 (el driver se llama `@prisma/adapter-mariadb`, pero el
 servidor es MySQL).
 
+`DATABASE_ALLOW_PUBLIC_KEY_RETRIEVAL=true` activa `allowPublicKeyRetrieval` en el
+adaptador (app y seed). Solo hace falta con MySQL 8.4+, que ya no admite
+`--default-authentication-plugin` y autentica con `caching_sha2_password`: sin
+TLS, el driver necesita pedir la clave pública RSA del servidor. Por defecto está
+desactivado y MySQL 8.0 (`mysql_native_password`) no lo necesita. Antes de pasar
+producción a 8.4, planifica la migración y activa la variable en Coolify.
+
 `GET /api/health` es público y sin caché: responde 200 `{"status":"ok"}` tras un
 `SELECT 1` y 503 si la base no responde. La imagen trae un `HEALTHCHECK` que lo
 usa; también sirve como healthcheck de Coolify/Traefik.
