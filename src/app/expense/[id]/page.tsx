@@ -114,7 +114,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
 
     return (
         <div className="eq-in flex flex-col min-h-screen w-full pt-3 pb-10 overflow-x-hidden">
-            <EqHeader title={expense.description} back={backHref}>
+            <EqHeader title={expense.description} back={backHref} wrapActions>
                 {!isReadOnly && (
                     <div className="flex flex-none items-center gap-1">
                         <Link
@@ -148,7 +148,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
             </EqHeader>
 
             <div className="flex flex-col gap-5 px-5 pt-5">
-                <EqCard className="flex flex-col items-center gap-3 px-5 py-6 text-center">
+                <EqCard className="flex flex-col items-center gap-3 px-5 py-6 text-center [overflow-wrap:anywhere]">
                     <span className="flex items-center gap-1.5 rounded-full bg-[var(--accent-tint)] px-2.5 py-1 text-xs font-semibold text-primary">
                         <span aria-hidden>{categoryMeta.emoji}</span> {categoryMeta.label}
                     </span>
@@ -157,7 +157,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                     </h2>
                     <p className="text-[13px] text-muted-foreground first-letter:uppercase">{dateLabel}</p>
                     <div className="flex items-center gap-2">
-                        <div aria-hidden className="h-6 w-6 rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-xs font-semibold text-foreground">
+                        <div aria-hidden className="h-6 w-6 flex-none rounded-full bg-[var(--track)] flex items-center justify-center overflow-hidden text-xs font-semibold text-foreground">
                             {avatar(expense.paidBy)}
                         </div>
                         <p className="text-sm font-medium text-[color:var(--body-ink)]">{isMe ? "Pagaste tú" : <>Pagó <span className="text-primary">{expense.paidBy.name}</span></>}</p>
@@ -178,8 +178,8 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                 )}
 
                 {isPersonal ? (
-                    <EqCard className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
-                        <User className="h-4 w-4 text-primary" />
+                    <EqCard className="flex items-center justify-center gap-2 px-3 py-3 text-sm text-muted-foreground">
+                        <User className="h-4 w-4 flex-none text-primary" />
                         Gasto personal — privado, solo tú lo ves
                     </EqCard>
                 ) : (
@@ -197,7 +197,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                                     {avatar(split.user)}
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <p className="truncate text-sm font-semibold text-foreground">{split.userId === userId ? "Tú" : split.user.name}</p>
+                                                    <p className="text-sm font-semibold text-foreground [overflow-wrap:anywhere]">{split.userId === userId ? "Tú" : split.user.name}</p>
                                                     {split.userId === expense.paidById && (
                                                         <p className="text-[11px] font-semibold text-primary">Pagó {formatCurrency(expense.amount)}</p>
                                                     )}
@@ -229,7 +229,7 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                             {expense.tags.map(({ tag }) => (
                                 <span
                                     key={tag.id}
-                                    className="inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold"
+                                    className="inline-flex max-w-full items-center rounded-full border px-3 py-1 text-xs font-semibold [overflow-wrap:anywhere]"
                                     style={{ backgroundColor: `${tag.color}20`, borderColor: `${tag.color}66`, color: tag.color }}
                                 >
                                     {tag.name}
@@ -279,11 +279,11 @@ export default async function ExpenseDetailPage({ params }: { params: Promise<{ 
                                             </div>
                                         )}
                                         {[...byAssignee.entries()].map(([uid, total]) => (
-                                            <div key={uid} className="flex justify-between text-xs text-primary">
-                                                <span className="flex items-center gap-1">
-                                                    <User className="h-3 w-3" /> Solo {uid === userId ? "tú" : memberName(uid)}
+                                            <div key={uid} className="flex justify-between gap-3 text-xs text-primary">
+                                                <span className="flex min-w-0 items-center gap-1 [overflow-wrap:anywhere]">
+                                                    <User className="h-3 w-3 flex-none" /> <span className="min-w-0">Solo {uid === userId ? "tú" : memberName(uid)}</span>
                                                 </span>
-                                                <span className="tabular-nums">{formatEuros(total)}</span>
+                                                <span className="flex-none tabular-nums">{formatEuros(total)}</span>
                                             </div>
                                         ))}
                                     </div>

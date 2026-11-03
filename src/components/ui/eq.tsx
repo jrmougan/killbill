@@ -37,6 +37,7 @@ export function EqHeader({
     back,
     onBack,
     close,
+    wrapActions = false,
     className,
     children,
 }: {
@@ -45,6 +46,8 @@ export function EqHeader({
     back?: string;
     onBack?: () => void;
     close?: boolean;
+    /** Drop wide `children` to a right-aligned line of their own instead of breaking a title word to fit beside them. */
+    wrapActions?: boolean;
     className?: string;
     children?: React.ReactNode;
 }) {
@@ -59,14 +62,22 @@ export function EqHeader({
         </button>
     ) : null;
     return (
-        <header className={cn("px-5 pt-1 flex items-center gap-2.5", className)}>
+        <header className={cn("px-5 pt-1 flex items-center gap-2.5", wrapActions && "flex-wrap justify-end", className)}>
             {backEl}
             {title !== undefined && (
-                <h1 className="text-2xl font-bold tracking-[-0.02em] flex-1 min-w-0 truncate">{title}</h1>
+                <h1
+                    className={cn(
+                        "text-2xl font-bold tracking-[-0.02em] flex-1",
+                        // break-word keeps the longest word as min-content, so it decides when the actions wrap; the cap (back icon + gap) keeps the title beside the back icon.
+                        wrapActions ? "max-w-[calc(100%-2.125rem)] [overflow-wrap:break-word]" : "min-w-0 [overflow-wrap:anywhere]",
+                    )}
+                >
+                    {title}
+                </h1>
             )}
             {children}
-            {/* The meta (often a space name) truncates and is capped so it never squeezes the title to 0. */}
-            {meta !== undefined && <span className="text-[13px] text-muted-foreground min-w-0 max-w-[55%] truncate">{meta}</span>}
+            {/* The meta (often a space name) truncates, capped so a one-word title still fits at 320px. */}
+            {meta !== undefined && <span className="text-[13px] text-muted-foreground min-w-0 max-w-[45%] truncate">{meta}</span>}
         </header>
     );
 }
@@ -86,7 +97,7 @@ export function EqChip({
     touch?: boolean;
 }) {
     const pill = cn(
-        "flex-none whitespace-nowrap rounded-full px-3 py-[7px] text-[13px] font-semibold border transition-colors",
+        "flex-none max-w-full [overflow-wrap:anywhere] rounded-full px-3 py-[7px] text-[13px] font-semibold border transition-colors",
         tone === "add" && "border-dashed border-[color:var(--line-strong)] hover:bg-card",
         tone === "ink" && (selected ? "bg-foreground text-white border-foreground" : "bg-card text-foreground border-[color:var(--line)]"),
         tone === "accent" && (selected ? "bg-primary text-white border-primary" : "bg-card text-foreground border-[color:var(--line)]"),
@@ -96,7 +107,7 @@ export function EqChip({
         <button
             type="button"
             aria-pressed={tone === "add" ? undefined : !!selected}
-            className={touch ? "group flex-none min-w-0 min-h-11 flex items-center outline-none" : pill}
+            className={touch ? "group flex-none min-w-0 max-w-full min-h-11 flex items-center outline-none" : pill}
             {...props}
         >
             {touch ? <span className={cn("block", pill, "group-focus-visible:ring-2 group-focus-visible:ring-ring")}>{children}</span> : children}
@@ -282,7 +293,7 @@ export function EqToast({ children, action, className }: { children: React.React
     return (
         <output
             className={cn(
-                "fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 w-max max-w-[calc(100vw-2rem)] rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]",
+                "fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 w-max max-w-[calc(100vw-2rem)] [overflow-wrap:anywhere] rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]",
                 ready ? "eq-in" : "opacity-0",
                 action && "flex items-center gap-3",
                 className,
@@ -290,7 +301,7 @@ export function EqToast({ children, action, className }: { children: React.React
         >
             {ready && (
                 <>
-                    {action ? <span>{children}</span> : children}
+                    {action ? <span className="min-w-0">{children}</span> : children}
                     {action?.href && (
                         <Link href={action.href} className={actionCls}>
                             {action.label}

@@ -47,6 +47,9 @@ interface ShoppingItemRowProps {
  */
 export function ShoppingItemRow({ item, divider, onToggle, onEdit, readOnly }: ShoppingItemRowProps) {
     const meta = itemMeta(item);
+    // Tapping opens the editor with the full text; read-only rows can't, so they wrap instead.
+    const textFit = readOnly ? "[overflow-wrap:anywhere]" : "truncate";
+
     return (
         <div
             className={cn(
@@ -81,9 +84,9 @@ export function ShoppingItemRow({ item, divider, onToggle, onEdit, readOnly }: S
                 aria-label={`Editar ${item.name}`}
                 className={cn("flex-1 min-w-0 min-h-11 text-left", item.checked ? "py-1" : "py-[13px]")}
             >
-                <span className={cn("block truncate text-[15px]", item.checked && "line-through")}>{item.name}</span>
+                <span className={cn("block text-[15px]", textFit, item.checked && "line-through")}>{item.name}</span>
                 {meta && (
-                    <span className={cn("block truncate text-xs", item.checked ? "text-[color:var(--ink-3)]" : "text-muted-foreground")}>
+                    <span className={cn("block text-xs", textFit, item.checked ? "text-[color:var(--ink-3)]" : "text-muted-foreground")}>
                         {meta}
                     </span>
                 )}

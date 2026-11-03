@@ -10,7 +10,7 @@ export function ReceiptTicket({ className, children, ...props }: React.HTMLAttri
     return (
         <div
             className={cn(
-                "bg-card border border-[color:var(--line)] rounded-t-[10px] px-5 pt-[22px] pb-7 flex flex-col gap-3 text-sm",
+                "bg-card border border-[color:var(--line)] rounded-t-[10px] px-5 pt-[22px] pb-7 flex flex-col gap-3 text-sm [overflow-wrap:anywhere]",
                 className
             )}
             style={{ WebkitMask: ZIGZAG, mask: ZIGZAG }}

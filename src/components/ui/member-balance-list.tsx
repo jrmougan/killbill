@@ -58,8 +58,8 @@ export function MemberBalanceList({
                                 )}
                             </span>
                             <span className="flex-1 min-w-0">
-                                <span className="flex items-center gap-1.5 text-[15px] font-semibold">
-                                    <span className="truncate">{isMe ? "Tú" : firstName(m.name)}</span>
+                                <span className="flex flex-wrap items-center gap-x-1.5 text-[15px] font-semibold">
+                                    <span className="min-w-0 [overflow-wrap:anywhere]">{isMe ? "Tú" : firstName(m.name)}</span>
                                     {m.isGuest && (
                                         <span className="flex-none rounded-md bg-[var(--track)] px-1.5 py-px text-[11px] font-semibold text-muted-foreground">
                                             Invitado

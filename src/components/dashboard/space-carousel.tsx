@@ -37,8 +37,9 @@ export type SpaceCardData = {
 };
 
 /**
- * The cards have a fixed width, so a long amount ("2.633.939,47 €") would lose
- * its last digits to `truncate`: step the font size down with the text length.
+ * The cards have a fixed width, so a long amount ("2.633.939,47 €") must not
+ * run out of it: step the font size down with the text length. Money is never
+ * truncated; if it still does not fit, it wraps.
  */
 function amountSize(amount: string, active: boolean): string {
     const n = amount.length;
@@ -87,7 +88,7 @@ export function SpaceCarousel({
                     const header = active ? (
                         <div className="flex items-center justify-between gap-2 min-w-0">
                             {title}
-                            <span className="min-w-0 max-w-[50%] truncate text-xs font-medium opacity-75">{c.sub}</span>
+                            <span className="flex-none max-w-[50%] truncate text-xs font-medium opacity-75">{c.sub}</span>
                         </div>
                     ) : (
                         title
@@ -100,7 +101,7 @@ export function SpaceCarousel({
                                 <div
                                     aria-hidden={c.signed ? true : undefined}
                                     className={cn(
-                                        "font-bold tracking-[-0.03em] leading-[1.05] truncate",
+                                        "font-bold tracking-[-0.03em] leading-[1.05] [overflow-wrap:anywhere]",
                                         amountSize(c.amount, active),
                                         !active && c.tone === "positive" && "text-[color:var(--positive)]",
                                         !active && c.tone === "negative" && "text-[color:var(--negative)]",
@@ -131,7 +132,7 @@ export function SpaceCarousel({
                                         className="-my-2 -ml-1 self-start min-h-11 px-1 flex items-center gap-1.5 text-[13px] font-semibold"
                                     >
                                         <CircleAlert className="h-[15px] w-[15px] flex-none" aria-hidden="true" />
-                                        <span className="line-clamp-2">{c.rejectedNote.text}</span>
+                                        <span className="min-w-0 [overflow-wrap:anywhere]">{c.rejectedNote.text}</span>
                                     </Link>
                                 )}
                                 {c.pendingNote ? (
@@ -141,7 +142,7 @@ export function SpaceCarousel({
                                         className="-my-2 -ml-1 self-start min-h-11 px-1 flex items-center gap-1.5 text-[13px] font-semibold"
                                     >
                                         <Clock className="h-[15px] w-[15px] flex-none" aria-hidden="true" />
-                                        <span className="line-clamp-2">{c.pendingNote}</span>
+                                        <span className="min-w-0 [overflow-wrap:anywhere]">{c.pendingNote}</span>
                                     </Link>
                                 ) : c.settleHref ? (
                                     // The direction sits under the link (described-by, not part of its name).

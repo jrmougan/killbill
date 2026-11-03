@@ -59,7 +59,7 @@ export function EditSettleClient({ settlementId, initialCents, initialMethod, to
             <EqHeader back={`/settle/${settlementId}`} close title="Editar pago" />
 
             <div className="flex-1 flex flex-col gap-8 px-5 pt-8">
-                <div className="flex flex-col items-center gap-2 text-center">
+                <div className="flex flex-col items-center gap-2 text-center [overflow-wrap:anywhere]">
                     <label htmlFor="settle-amount" className="text-[15px] text-muted-foreground">
                         Importe pagado a {toName}
                     </label>
@@ -73,7 +73,8 @@ export function EditSettleClient({ settlementId, initialCents, initialMethod, to
                             onBlur={() => setTouched(true)}
                             aria-invalid={!!fieldError}
                             aria-describedby={fieldError ? "settle-amount-error" : maxCents !== undefined ? "settle-amount-max" : undefined}
-                            className="w-[200px] bg-transparent text-center text-[44px] font-bold tracking-[-0.03em] tabular-nums outline-none border-b border-[color:var(--line)] focus:border-primary transition-colors"
+                            // At 44px the 200px field holds 8 characters ("12345,67"); longer amounts step down instead of scrolling out of view.
+                            className={`w-[200px] bg-transparent text-center ${amount.length > 8 ? "text-[32px]" : "text-[44px]"} font-bold tracking-[-0.03em] tabular-nums outline-none border-b border-[color:var(--line)] focus:border-primary transition-colors`}
                             placeholder="0,00"
                         />
                         <span className="text-[28px] font-bold text-muted-foreground">€</span>

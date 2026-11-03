@@ -122,7 +122,7 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
                                     if (/\p{Extended_Pictographic}/u.test(v)) onAvatarChange(v);
                                 }}
                                 aria-label="Emoji personalizado"
-                                className="h-8 bg-card border-[color:var(--line)] text-center"
+                                className="h-8 py-0 bg-card border-[color:var(--line)] text-center"
                                 placeholder="🚀"
                             />
                         </div>

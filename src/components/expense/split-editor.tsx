@@ -243,7 +243,7 @@ export function SplitEditor({
     };
 
     return (
-        <fieldset className={cn("space-y-3 border-0 p-0 m-0", className)}>
+        <fieldset className={cn("min-w-0 space-y-3 border-0 p-0 m-0", className)}>
             <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">
                 ¿Cómo se divide?
             </legend>
@@ -279,9 +279,9 @@ export function SplitEditor({
             {value.mode === "equal" && (
                 <div className="rounded-xl bg-secondary p-4 space-y-1.5 animate-in fade-in duration-200">
                     {members.map((m) => (
-                        <div key={m.id} className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground truncate">{nameOf(m)}</span>
-                            <span className="font-semibold text-foreground">
+                        <div key={m.id} className="flex items-center justify-between gap-3 text-sm">
+                            <span className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">{nameOf(m)}</span>
+                            <span className="flex-none font-semibold text-foreground">
                                 {formatEuros((result.shares[m.id] ?? 0) / 100)}
                             </span>
                         </div>
@@ -297,7 +297,7 @@ export function SplitEditor({
                 <div className="rounded-xl bg-secondary p-4 space-y-2 animate-in fade-in duration-200">
                     {members.map((m) => (
                         <div key={m.id} className="flex items-center justify-between gap-3">
-                            <label htmlFor={`split-amount-${m.id}`} className="min-w-0 flex-1 text-sm text-muted-foreground truncate">
+                            <label htmlFor={`split-amount-${m.id}`} className="min-w-0 flex-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">
                                 {nameOf(m)}
                             </label>
                             <div className="flex shrink-0 items-center gap-1.5">
@@ -331,11 +331,12 @@ export function SplitEditor({
             {value.mode === "percent" && (
                 <div className="rounded-xl bg-secondary p-4 space-y-2 animate-in fade-in duration-200">
                     {members.map((m) => (
-                        <div key={m.id} className="flex items-center justify-between gap-3">
-                            <label htmlFor={`split-pct-${m.id}`} className="min-w-0 flex-1 text-sm text-muted-foreground truncate">
+                        <div key={m.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                            {/* The 6rem basis sends the input group to its own line when the name would get under ~4 letters (320px). */}
+                            <label htmlFor={`split-pct-${m.id}`} className="min-w-0 flex-[1_1_6rem] text-sm text-muted-foreground [overflow-wrap:anywhere]">
                                 {nameOf(m)}
                             </label>
-                            <div className="flex shrink-0 items-center gap-1.5">
+                            <div className="ml-auto flex shrink-0 items-center gap-1.5">
                                 <input
                                     id={`split-pct-${m.id}`}
                                     type="number"
@@ -388,7 +389,7 @@ export function SplitEditor({
                                     onClick={() => onChange({ ...value, beneficiaryId: m.id })}
                                     aria-pressed={sel}
                                     className={cn(
-                                        "px-3 py-2 rounded-xl text-sm font-semibold border transition-all active:scale-[0.98]",
+                                        "max-w-full [overflow-wrap:anywhere] px-3 py-2 rounded-xl text-sm font-semibold border transition-all active:scale-[0.98]",
                                         sel
                                             ? "bg-primary text-white border-primary shadow"
                                             : "bg-card border-[color:var(--line)] text-muted-foreground hover:bg-secondary",
