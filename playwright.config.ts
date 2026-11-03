@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 const port = process.env.PORT || '3000';
 const baseURL = `http://localhost:${port}`;
 // API contract assertions run once; authz contains real guest navigation assertions.
-const apiSuites = ['**/api/crud.spec.ts', '**/api/mcp.spec.ts', '**/api/invites.spec.ts', '**/shopping/smoke.spec.ts', '**/*.api.spec.ts'];
+const apiSuites = ['**/api/crud.spec.ts', '**/api/mcp.spec.ts', '**/api/ai-settings.spec.ts', '**/api/invites.spec.ts', '**/shopping/smoke.spec.ts', '**/*.api.spec.ts'];
 // API fixtures create their own contexts; share the same worktree port.
 process.env.TEST_BASE_URL = baseURL;
 

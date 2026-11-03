@@ -1,10 +1,16 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { encryptSecret } from "./secret-box";
 import {
     analyzeReceiptImage,
     parseReceiptAIResponse,
     PROVIDER_TIMEOUT_MS,
     ReceiptAIError,
 } from "./receipt-ocr-ai";
+
+// Only the DB is faked: ai-settings and secret-box run for real, so these tests
+// cover the precedence and decryption the OCR actually gets.
+const { findMany } = vi.hoisted(() => ({ findMany: vi.fn() }));
+vi.mock("@/lib/db", () => ({ default: { aiProviderConfig: { findMany } } }));
 
 const RECEIPT = {
     store: "MERCADONA",
@@ -27,6 +33,11 @@ function geminiResponse(content: string): Response {
 function openRouterResponse(content: string): Response {
     return jsonResponse({ choices: [{ message: { content } }] });
 }
+
+beforeEach(() => {
+    findMany.mockReset();
+    findMany.mockResolvedValue([]);
+});
 
 afterEach(() => {
     vi.unstubAllEnvs();
@@ -242,6 +253,134 @@ describe("analyzeReceiptImage", () => {
     });
 });
 
+describe("analyzeReceiptImage with stored settings", () => {
+    const row = (provider: "GEMINI" | "OPENROUTER", apiKey: string | null, model: string | null = null) => ({
+        provider,
+        encryptedApiKey: apiKey === null ? null : encryptSecret(apiKey, provider.toLowerCase()),
+        model,
+    });
+
+    beforeEach(() => {
+        vi.stubEnv("JWT_SECRET", "test-jwt-secret");
+        vi.stubEnv("AI_SETTINGS_ENCRYPTION_KEY", "");
+        vi.stubEnv("GEMINI_API_KEY", "env-gemini-key");
+        vi.stubEnv("OPENROUTER_API_KEY", "env-openrouter-key");
+        vi.stubEnv("OPENROUTER_OCR_MODEL", "env/model");
+    });
+
+    it("prefers the stored Gemini key and model over env, with the model in the URL", async () => {
+        findMany.mockResolvedValue([row("GEMINI", "db-gemini-key", "gemini-2.5-pro")]);
+        const fetchMock = vi.fn().mockResolvedValue(geminiResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await expect(analyzeReceiptImage("base64", "image/jpeg")).resolves.toEqual(RECEIPT);
+
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent");
+        expect(init.headers["x-goog-api-key"]).toBe("db-gemini-key");
+    });
+
+    it("keeps the built-in Gemini model when none is stored", async () => {
+        const fetchMock = vi.fn().mockResolvedValue(geminiResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await analyzeReceiptImage("base64", "image/jpeg");
+
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent");
+        expect(init.headers["x-goog-api-key"]).toBe("env-gemini-key");
+    });
+
+    it("encodes the Gemini model so it cannot alter the URL path", async () => {
+        findMany.mockResolvedValue([row("GEMINI", null, "../evil model?x=1")]);
+        const fetchMock = vi.fn().mockResolvedValue(geminiResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await analyzeReceiptImage("base64", "image/jpeg");
+
+        expect(fetchMock.mock.calls[0][0]).toBe(
+            "https://generativelanguage.googleapis.com/v1beta/models/..%2Fevil%20model%3Fx%3D1:generateContent",
+        );
+    });
+
+    it("prefers the stored OpenRouter key and model, sending the model in the body", async () => {
+        vi.stubEnv("GEMINI_API_KEY", "");
+        findMany.mockResolvedValue([row("OPENROUTER", "db-openrouter-key", "anthropic/claude:free")]);
+        const fetchMock = vi.fn().mockResolvedValue(openRouterResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await analyzeReceiptImage("base64", "image/jpeg");
+
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
+        expect(init.headers.Authorization).toBe("Bearer db-openrouter-key");
+        expect(JSON.parse(init.body as string).model).toBe("anthropic/claude:free");
+    });
+
+    it("uses the env OpenRouter model when none is stored", async () => {
+        vi.stubEnv("GEMINI_API_KEY", "");
+        const fetchMock = vi.fn().mockResolvedValue(openRouterResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await analyzeReceiptImage("base64", "image/jpeg");
+
+        expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).model).toBe("env/model");
+    });
+
+    it("works with stored keys only, in the fallback order Gemini then OpenRouter", async () => {
+        vi.stubEnv("GEMINI_API_KEY", "");
+        vi.stubEnv("OPENROUTER_API_KEY", "");
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        findMany.mockResolvedValue([row("OPENROUTER", "db-openrouter-key"), row("GEMINI", "db-gemini-key")]);
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(jsonResponse({ error: "quota" }, 429))
+            .mockResolvedValueOnce(openRouterResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await expect(analyzeReceiptImage("base64", "image/jpeg")).resolves.toEqual(RECEIPT);
+
+        expect(fetchMock.mock.calls[0][1].headers["x-goog-api-key"]).toBe("db-gemini-key");
+        expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe("Bearer db-openrouter-key");
+    });
+
+    it("falls back to the env key when a stored key cannot be decrypted, logging no secret", async () => {
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        const stored = row("GEMINI", "db-gemini-key");
+        vi.stubEnv("JWT_SECRET", "rotated-jwt-secret");
+        findMany.mockResolvedValue([stored]);
+        const fetchMock = vi.fn().mockResolvedValue(geminiResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await expect(analyzeReceiptImage("base64", "image/jpeg")).resolves.toEqual(RECEIPT);
+
+        expect(fetchMock.mock.calls[0][1].headers["x-goog-api-key"]).toBe("env-gemini-key");
+        expect(warn).toHaveBeenCalledOnce();
+        expect(warn.mock.calls[0][0]).not.toContain(stored.encryptedApiKey);
+    });
+
+    it("falls back to env when the DB read fails", async () => {
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        findMany.mockRejectedValue(new Error("db down"));
+        const fetchMock = vi.fn().mockResolvedValue(geminiResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await expect(analyzeReceiptImage("base64", "image/jpeg")).resolves.toEqual(RECEIPT);
+
+        expect(fetchMock.mock.calls[0][1].headers["x-goog-api-key"]).toBe("env-gemini-key");
+    });
+
+    it("keeps the error message when no provider has a key anywhere", async () => {
+        vi.stubEnv("GEMINI_API_KEY", "");
+        vi.stubEnv("OPENROUTER_API_KEY", "");
+        const fetchMock = vi.fn();
+        vi.stubGlobal("fetch", fetchMock);
+
+        await expect(analyzeReceiptImage("base64", "image/jpeg"))
+            .rejects.toThrow(new ReceiptAIError("GEMINI_API_KEY or OPENROUTER_API_KEY must be configured"));
+        expect(fetchMock).not.toHaveBeenCalled();
+    });
+});
+
 describe("OCR test provider gate", () => {
     function configureTestProvider() {
         vi.stubEnv("OCR_TEST_PROVIDER_URL", "http://127.0.0.1:4567");
@@ -279,6 +418,32 @@ describe("OCR test provider gate", () => {
         vi.stubGlobal("fetch", fetchMock);
         await expect(analyzeReceiptImage("image", "image/png")).rejects.toThrow(ReceiptAIError);
         expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("never reads the DB while the seam is active, so a stored key cannot reach it", async () => {
+        configureTestProvider();
+        vi.spyOn(console, "warn").mockImplementation(() => undefined);
+        findMany.mockResolvedValue([{ provider: "GEMINI", encryptedApiKey: "stored", model: "stored-model" }]);
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(geminiResponse("invalid"))
+            .mockResolvedValueOnce(openRouterResponse(JSON.stringify(RECEIPT)));
+        vi.stubGlobal("fetch", fetchMock);
+
+        await expect(analyzeReceiptImage("image", "image/png")).resolves.toEqual(RECEIPT);
+
+        expect(findMany).not.toHaveBeenCalled();
+        expect(fetchMock.mock.calls[0][1].headers["x-goog-api-key"]).toBe("ocr-e2e-fake");
+        expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe("Bearer ocr-e2e-fake");
+    });
+
+    it("does not read the DB when the seam is misconfigured", async () => {
+        configureTestProvider();
+        vi.stubEnv("GEMINI_API_KEY", "real-secret");
+        vi.stubGlobal("fetch", vi.fn());
+
+        await expect(analyzeReceiptImage("image", "image/png")).rejects.toThrow(ReceiptAIError);
+
+        expect(findMany).not.toHaveBeenCalled();
     });
 
     it("uses the local Gemini response through the normal parser", async () => {

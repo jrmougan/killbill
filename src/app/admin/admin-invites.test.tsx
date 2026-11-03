@@ -32,6 +32,11 @@ const INVITES = [
 ];
 
 describe('AdminInvites', () => {
+    it('links to the AI keys and models screen', () => {
+        render(<AdminInvites invites={[]} />);
+        expect(screen.getByRole('link', { name: /IA de los tickets/ })).toHaveAttribute('href', '/admin/ai');
+    });
+
     it('an expired invite does not count as Disponible and cannot be copied', () => {
         render(<AdminInvites invites={INVITES} />);
         expect(screen.getByTestId('admin-available-count')).toHaveTextContent('1');

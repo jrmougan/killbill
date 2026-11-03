@@ -5,7 +5,7 @@ const { prisma, models } = vi.hoisted(() => {
         'split', 'expense', 'settlement', 'budget', 'shoppingListItem',
         'shoppingList', 'groupInvite', 'membership', 'expenseTag', 'tag',
         'account', 'ledgerTransaction', 'ledgerEntry', 'recurringSeries',
-        'receiptLineItem', 'category', 'inviteCode', 'user', 'couple',
+        'receiptLineItem', 'category', 'inviteCode', 'user', 'couple', 'aiProviderConfig',
     ];
     return {
         models,

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Plus, Trash2, UserCheck } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronRight, Plus, Sparkles, Trash2, UserCheck } from "lucide-react";
 import { EqCard, EqCta, EqHeader, EqLabel, EqToast, useEqToast } from "@/components/ui/eq";
 import { AuthError } from "@/components/auth/auth-shell";
 import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
@@ -94,6 +95,19 @@ export function AdminInvites({ invites }: { invites: AdminInvite[] }) {
             <EqHeader title="Administración" back="/settings" />
 
             <div className="px-5 flex flex-col gap-5">
+                <Link href="/admin/ai">
+                    <EqCard className="p-4 min-h-11 flex items-center gap-3">
+                        <span className="h-10 w-10 flex-none rounded-xl bg-[var(--accent-tint)] flex items-center justify-center text-primary">
+                            <Sparkles className="h-[18px] w-[18px]" aria-hidden="true" />
+                        </span>
+                        <span className="flex-1 min-w-0">
+                            <span className="block text-[15px] font-semibold">IA de los tickets</span>
+                            <span className="block text-xs text-muted-foreground">Claves de API y modelos</span>
+                        </span>
+                        <ChevronRight className="h-5 w-5 flex-none text-muted-foreground" aria-hidden="true" />
+                    </EqCard>
+                </Link>
+
                 <p className="text-sm text-muted-foreground leading-relaxed">
                     Enlaces para crear una cuenta en EQUIL. Cada enlace sirve una vez y caduca a los 7 días.
                 </p>

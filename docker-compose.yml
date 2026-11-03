@@ -14,8 +14,11 @@ services:
       - DATABASE_URL=mysql://killbill:${MYSQL_PASSWORD}@mysql:3306/killbill
       # Security
       - JWT_SECRET=${JWT_SECRET}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      # Opcional: cifra las claves guardadas en /admin/ai (si está vacía, usa JWT_SECRET).
+      - AI_SETTINGS_ENCRYPTION_KEY=${AI_SETTINGS_ENCRYPTION_KEY:-}
+      # Opcionales: una clave o modelo guardado en /admin/ai tiene prioridad sobre estos.
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENROUTER_OCR_MODEL=${OPENROUTER_OCR_MODEL:-xiaomi/mimo-v2.6-flash}
     networks:
       - mysql_network

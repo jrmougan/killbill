@@ -30,6 +30,8 @@ export async function POST() {
       // Remove even the seeded admin: scenarios create their own admin users.
       prisma.user.deleteMany(),
       prisma.couple.deleteMany(),
+      // Instance-wide OCR settings: a stored key must not leak between scenarios.
+      prisma.aiProviderConfig.deleteMany(),
     ]);
 
     return NextResponse.json({ success: true });
