@@ -126,7 +126,7 @@ export function CategoryPicker({
                             )}
                         >
                             <span className="text-xl leading-none">{cat.emoji}</span>
-                            <span className="text-[10px] font-medium text-muted-foreground text-center leading-tight px-0.5 truncate max-w-full">
+                            <span className="text-[10px] font-medium text-muted-foreground text-center leading-tight line-clamp-2 [overflow-wrap:anywhere] max-w-full">
                                 {cat.label}
                             </span>
                         </button>

@@ -126,23 +126,26 @@ export function AdminInvites({ invites }: { invites: AdminInvite[] }) {
                         <EqCard className="px-4">
                             <ul>
                                 {available.map((invite, i) => (
-                                    <li key={invite.id} className={rowCls(i)}>
-                                        <div className="flex-1 min-w-0">
+                                    <li key={invite.id} className={rowCls(i) + " flex-wrap"}>
+                                        <div className="flex-1 min-w-[6.5rem]">
                                             <div className="font-mono text-[15px] font-medium tracking-[0.08em]">{invite.code}</div>
-                                            <div className="text-xs text-muted-foreground whitespace-nowrap">
+                                            <div className="text-xs text-muted-foreground">
                                                 {invite.expiresAt ? `Caduca el ${dateFmt.format(new Date(invite.expiresAt))}` : "Sin caducidad"}
                                             </div>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => copyCode(invite.code, invite.id)}
-                                            aria-label={`Copiar enlace de registro ${invite.code}`}
-                                            className="h-11 flex-none flex items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-primary"
-                                        >
-                                            {copiedId === invite.id && <Check className="h-4 w-4" aria-hidden="true" />}
-                                            {copiedId === invite.id ? "Copiado" : "Copiar enlace"}
-                                        </button>
-                                        {voidButton(invite)}
+                                        {/* Below ~340px the actions drop under the code instead of overlapping it. */}
+                                        <div className="ml-auto flex flex-none items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => copyCode(invite.code, invite.id)}
+                                                aria-label={`Copiar enlace de registro ${invite.code}`}
+                                                className="h-11 flex-none flex items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-primary"
+                                            >
+                                                {copiedId === invite.id && <Check className="h-4 w-4" aria-hidden="true" />}
+                                                {copiedId === invite.id ? "Copiado" : "Copiar enlace"}
+                                            </button>
+                                            {voidButton(invite)}
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
@@ -184,8 +187,8 @@ export function AdminInvites({ invites }: { invites: AdminInvite[] }) {
                                             <UserCheck className="h-[18px] w-[18px]" aria-hidden="true" />
                                         </span>
                                         <div className="flex-1 min-w-0">
-                                            <div className="text-[15px] font-semibold truncate">{invite.usedBy?.name}</div>
-                                            <div className="text-xs text-muted-foreground truncate">{invite.usedBy?.email}</div>
+                                            <div className="text-[15px] font-semibold [overflow-wrap:anywhere]">{invite.usedBy?.name}</div>
+                                            <div className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{invite.usedBy?.email}</div>
                                         </div>
                                         <span className="font-mono text-xs text-muted-foreground">{invite.code}</span>
                                     </li>

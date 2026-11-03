@@ -74,7 +74,7 @@ export function MonthClient(props: MonthClientProps) {
         <Link
             href={monthHref(view, alt.scope)}
             aria-label={`Cambiar a ${alt.name}`}
-            className="-my-2.5 min-h-11 max-w-[55%] flex-none inline-flex items-center gap-1 rounded-full text-[13px] text-muted-foreground hover:text-foreground"
+            className="-my-2.5 min-h-11 max-w-[45%] flex-none inline-flex items-center gap-1 rounded-full text-[13px] text-muted-foreground hover:text-foreground"
         >
             <span className="truncate">{space.emoji} {space.name}</span>
             <ArrowLeftRight className="h-3 w-3 flex-none" aria-hidden />

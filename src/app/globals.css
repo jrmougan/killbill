@@ -135,6 +135,35 @@
 
 input::placeholder, textarea::placeholder { color: var(--placeholder); }
 
+/* iOS Safari zooms the page when a focused control computes below 16px, and it
+   stays zoomed, which reads as sideways overflow. Phones (and any phone-width
+   window) get a 16px floor; wider pointer-driven layouts keep their sizes.
+   - Deliberately UNLAYERED: Tailwind utilities live in @layer utilities, so this
+     beats text-sm / text-[13px] whatever their specificity. An inline style wins.
+   - Font sizes cannot be compared in CSS, so utilities above the floor are
+     exempted by class name (the 17-89px text-[NNpx] forms and text-lg upwards);
+     a larger control must use one of those forms or an inline style.
+   - In font-size, 1em is the PARENT's size, so a control inheriting a big size
+     (the amount field) keeps it. */
+@media (pointer: coarse), (max-width: 639px) {
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]), select, textarea):not([class*="text-[17"], [class*="text-[18"], [class*="text-[19"], [class*="text-[2"], [class*="text-[3"], [class*="text-[4"], [class*="text-[5"], [class*="text-[6"], [class*="text-[7"], [class*="text-[8"], [class*="text-lg"], [class*="text-xl"], [class*="text-2xl"], [class*="text-3xl"], [class*="text-4xl"], [class*="text-5xl"], [class*="text-6xl"]) {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* iOS native date/time fields keep an intrinsic min-width that ignores their
+   container. Base layer, so width utilities on the control still apply. */
+@layer base {
+  @media (pointer: coarse), (max-width: 639px) {
+    input:is([type="date"], [type="time"], [type="datetime-local"], [type="month"], [type="week"]) {
+      -webkit-appearance: none;
+      appearance: none;
+      min-width: 0;
+      max-width: 100%;
+    }
+  }
+}
+
 /* Schibsted Grotesk's tabular figures also widen the decimal comma ("30 , 00 €").
    The prototype uses proportional figures, so neutralise the utility app-wide. */
 .tabular-nums { font-variant-numeric: normal; }

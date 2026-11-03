@@ -177,28 +177,31 @@ export function MemberList({
                                     (m.avatar ?? "").trim() || m.name.charAt(0).toUpperCase()
                                 )}
                             </span>
-                            <span className="flex-1 min-w-0">
-                                <span className="flex min-w-0 text-[15px] font-semibold">
-                                    <span className="truncate">{m.name}</span>
-                                    {isSelf && <span className="flex-none whitespace-pre text-muted-foreground font-normal"> (tú)</span>}
+                            {/* The name keeps ≥ 5rem; a balance that doesn't fit beside it wraps below, never cut. */}
+                            <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3">
+                                <span className="flex-1 min-w-[5rem]">
+                                    <span className="block text-[15px] font-semibold [overflow-wrap:anywhere]">
+                                        {m.name}
+                                        {isSelf && <span className="whitespace-pre text-muted-foreground font-normal"> (tú)</span>}
+                                    </span>
+                                    <span className="block truncate text-[12.5px] text-muted-foreground">
+                                        {ROLE_LABEL[m.role] ?? "Miembro"}
+                                        {m.isGuest && m.role !== MembershipRole.GUEST && " · Invitado"}
+                                    </span>
                                 </span>
-                                <span className="block truncate text-[12.5px] text-muted-foreground">
-                                    {ROLE_LABEL[m.role] ?? "Miembro"}
-                                    {m.isGuest && m.role !== MembershipRole.GUEST && " · Invitado"}
-                                </span>
+                                {m.balanceCents !== undefined && (
+                                    <span
+                                        className={cn(
+                                            "ml-auto flex-none text-sm font-semibold tabular-nums",
+                                            open && cents > 0 && "text-[color:var(--positive)]",
+                                            open && cents < 0 && "text-[color:var(--negative)]",
+                                            !open && "text-muted-foreground",
+                                        )}
+                                    >
+                                        {!open ? "Al día" : `${cents > 0 ? "+" : "−"}${formatCurrency(Math.abs(cents))}`}
+                                    </span>
+                                )}
                             </span>
-                            {m.balanceCents !== undefined && (
-                                <span
-                                    className={cn(
-                                        "flex-none text-sm font-semibold tabular-nums",
-                                        open && cents > 0 && "text-[color:var(--positive)]",
-                                        open && cents < 0 && "text-[color:var(--negative)]",
-                                        !open && "text-muted-foreground",
-                                    )}
-                                >
-                                    {!open ? "Al día" : `${cents > 0 ? "+" : "−"}${formatCurrency(Math.abs(cents))}`}
-                                </span>
-                            )}
                             {canEdit(m) && (
                                 <button
                                     type="button"

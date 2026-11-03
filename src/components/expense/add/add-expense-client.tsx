@@ -290,7 +290,7 @@ export function ExpenseForm({
                                 onCycleSplit={cycleSplit}
                             />
                         )}
-                        <span aria-live="polite" data-testid="expense-preview" className="min-h-4 text-[12.5px] text-muted-foreground">{split.preview}</span>
+                        <span aria-live="polite" data-testid="expense-preview" className="min-h-4 max-w-full text-center text-[12.5px] text-muted-foreground [overflow-wrap:anywhere]">{split.preview}</span>
                         {linesMismatch && (
                             <div data-testid="lines-mismatch" className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-[14px] bg-[var(--track)] px-3 py-2 text-[12.5px] text-muted-foreground">
                                 <span className="flex-1">

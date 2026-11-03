@@ -98,7 +98,7 @@ export function ReceiptItemsEditor({
         <div className="space-y-2.5">
             {removed && (
                 <output data-testid="receipt-line-removed" className="flex items-center gap-2 rounded-[10px] bg-[var(--track)] pl-3 text-[13px]">
-                    <span className="min-w-0 flex-1 py-2">
+                    <span className="min-w-0 flex-1 py-2 [overflow-wrap:anywhere]">
                         {removed.last
                             ? <>Sin desglose: el importe se queda en <span className="font-semibold tabular-nums">{formatEuros(removed.totalCents / 100)}</span></>
                             : <>{removed.label} · el total baja a <span className="font-semibold tabular-nums">{formatEuros(removed.totalCents / 100)}</span></>}
@@ -133,7 +133,7 @@ export function ReceiptItemsEditor({
                                     <input
                                         aria-label={`Cantidad del producto ${idx + 1}`}
                                         type="text" inputMode="decimal"
-                                        className="bg-transparent text-xs w-7 text-right focus:outline-none text-muted-foreground"
+                                        className="bg-transparent text-xs leading-5 w-9 text-right focus:outline-none text-muted-foreground"
                                         value={item.quantityStr ?? formatAmountInput(item.quantity)}
                                         onChange={(e) => updateNumeric(idx, "quantity", e.target.value)}
                                     />
@@ -141,7 +141,7 @@ export function ReceiptItemsEditor({
                                     <input
                                         aria-label={`Precio del producto ${idx + 1}`}
                                         type="text" inputMode="decimal"
-                                        className="bg-transparent text-xs w-14 focus:outline-none text-muted-foreground"
+                                        className="bg-transparent text-xs leading-5 w-20 focus:outline-none text-muted-foreground"
                                         value={item.priceStr ?? formatAmountInput(item.price)}
                                         onChange={(e) => updateNumeric(idx, "price", e.target.value)}
                                         placeholder="0,00"
@@ -168,8 +168,8 @@ export function ReceiptItemsEditor({
             )}
             {items.length > 0 && assignable && (
                 <div className="text-xs px-3 py-2 bg-[var(--track)] rounded-[10px] space-y-1">
-                    <div className="flex justify-between font-semibold text-primary"><span>Tu parte</span><span className="tabular-nums">{formatEuros(myAmount)}</span></div>
-                    <div className="flex justify-between font-semibold text-muted-foreground"><span>{partnerName}</span><span className="tabular-nums">{formatEuros(partnerAmount)}</span></div>
+                    <div className="flex justify-between gap-3 font-semibold text-primary"><span>Tu parte</span><span className="flex-none tabular-nums">{formatEuros(myAmount)}</span></div>
+                    <div className="flex justify-between gap-3 font-semibold text-muted-foreground"><span className="min-w-0 [overflow-wrap:anywhere]">{partnerName}</span><span className="flex-none tabular-nums">{formatEuros(partnerAmount)}</span></div>
                 </div>
             )}
             <button type="button" onClick={add} className="-mb-2 inline-flex min-h-11 items-center gap-1.5 text-[13px] font-semibold text-primary">

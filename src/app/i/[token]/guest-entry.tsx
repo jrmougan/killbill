@@ -116,7 +116,12 @@ export function GuestEntry({
 
     if (!open) {
         return (
-            <EqCta variant="outline" onClick={() => setOpen(true)} aria-expanded={false}>
+            <EqCta
+                variant="outline"
+                onClick={() => setOpen(true)}
+                aria-expanded={false}
+                className="h-auto min-h-14 px-4 py-3 text-center leading-snug text-balance [overflow-wrap:anywhere]"
+            >
                 {mode === "recovery" ? `Entrar como ${guestName ?? "invitado"}` : "Entrar como invitado"}
             </EqCta>
         );
@@ -160,7 +165,7 @@ export function GuestEntry({
                 disabled={pending}
                 aria-busy={pending}
                 variant={confirmNeeded ? "ink" : "primary"}
-                className="h-auto min-h-14 px-4 py-3 leading-snug text-balance"
+                className="h-auto min-h-14 px-4 py-3 text-center leading-snug text-balance [overflow-wrap:anywhere]"
                 data-testid="guest-enter"
             >
                 {pending ? "Entrando…" : cta}

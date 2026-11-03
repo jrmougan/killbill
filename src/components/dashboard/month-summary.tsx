@@ -40,7 +40,7 @@ export function MonthSummary({
                     <span>Sin gastos todavía</span>
                 ) : (
                     slices.slice(0, 3).map((s) => (
-                        <span key={s.key}>
+                        <span key={s.key} className="min-w-0 [overflow-wrap:anywhere]">
                             {s.label} {s.pct}%
                         </span>
                     ))
