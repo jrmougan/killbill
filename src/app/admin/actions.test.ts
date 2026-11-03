@@ -43,6 +43,12 @@ describe("checkAdmin", () => {
         expect(findUnique).not.toHaveBeenCalled();
     });
 
+    it("rejects an admin's MCP token without touching the DB", async () => {
+        mockGetSession.mockResolvedValue({ userId: "u1", isAdmin: true, kind: "mcp" });
+        expect(await checkAdmin()).toEqual({ status: "forbidden" });
+        expect(findUnique).not.toHaveBeenCalled();
+    });
+
     it("a token of a deleted user is unauthenticated", async () => {
         findUnique.mockResolvedValue(null);
         expect(await checkAdmin()).toEqual({ status: "unauthenticated" });

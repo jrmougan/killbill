@@ -35,7 +35,8 @@ del sistema y el admin; el acceso local por defecto es
 `admin@killbill.app` / `password123`. Puedes configurar `SEED_ADMIN_EMAIL`,
 `SEED_ADMIN_PASSWORD` y `SEED_ADMIN_PIN` antes de la primera siembra.
 
-El OCR requiere `GEMINI_API_KEY` o `OPENROUTER_API_KEY` en `.env`. Las claves
+El OCR requiere una clave de Gemini o de OpenRouter, ya sea en `.env`
+(`GEMINI_API_KEY`, `OPENROUTER_API_KEY`) o guardada desde `/admin/ai`. Las claves
 quedan vacías inicialmente; el resto de la aplicación se puede desarrollar sin
 ellas. Si ya tienes `.env`, incorpora `PORT`, `COMPOSE_PROJECT_NAME` y los campos
 de `.env.example` que necesites; `setup` nunca lo sobrescribe. Mantén
@@ -129,6 +130,33 @@ Coolify un paso previo al despliegue (o un job one-shot con la misma imagen) que
 ejecute `cd /prisma-tools && ./node_modules/.bin/prisma migrate deploy`, y apunta
 el healthcheck de Coolify a `/api/health`. Mientras no exista ese paso, el `CMD`
 de la imagen sigue migrando al arrancar.
+
+### Claves y modelos de IA (OCR)
+
+Una persona administradora puede configurar las claves y los modelos de Gemini y
+OpenRouter en `/admin/ai`, para toda la instancia. Las variables de entorno siguen
+funcionando, así que un despliegue que solo las use no necesita ningún cambio. Por
+proveedor, lo guardado en la interfaz tiene prioridad, y al quitarlo se vuelve a lo
+siguiente de la lista:
+
+| Ajuste | Prioridad |
+| --- | --- |
+| Clave | Base de datos → `GEMINI_API_KEY` / `OPENROUTER_API_KEY` → sin clave |
+| Modelo de Gemini | Base de datos → `gemini-flash-latest` |
+| Modelo de OpenRouter | Base de datos → `OPENROUTER_OCR_MODEL` → `xiaomi/mimo-v2.6-flash` |
+
+El orden de los proveedores no cambia: primero Gemini y, si falla, OpenRouter.
+
+Las claves se guardan cifradas con AES-256-GCM y la interfaz solo muestra su origen
+y los 4 últimos caracteres. La clave de cifrado se deriva de
+`AI_SETTINGS_ENCRYPTION_KEY` (opcional) o, si no está definida, de `JWT_SECRET`.
+
+**Rotar ese secreto obliga a volver a introducir las claves.** Las que ya están
+guardadas dejan de poder descifrarse y `/admin/ai` avisa de cuáles hay que volver
+a guardar. Mientras tanto, el OCR usa las claves de las variables de entorno; si
+no hay ninguna, fallará hasta que las vuelvas a introducir. Si quieres
+rotar `JWT_SECRET` sin que esto ocurra, define antes
+`AI_SETTINGS_ENCRYPTION_KEY` y vuelve a guardar las claves.
 
 ### Subidas (tickets y avatares)
 

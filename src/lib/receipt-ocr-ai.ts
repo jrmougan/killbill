@@ -1,5 +1,4 @@
-const GEMINI_MODEL = "gemini-flash-latest";
-const DEFAULT_OPENROUTER_MODEL = "xiaomi/mimo-v2.6-flash";
+import { DEFAULT_MODELS, getAiRuntimeConfig } from "@/lib/ai-settings";
 
 /**
  * Per-provider deadline. A hung provider counts as a failure so the chain can
@@ -196,9 +195,24 @@ function testProviderBase(): string | null {
     return url.origin;
 }
 
-async function callGemini(apiKey: string, base64: string, mimeType: string, testBase: string | null): Promise<ReceiptAIResult> {
+type RuntimeConfig = Awaited<ReturnType<typeof getAiRuntimeConfig>>;
+
+// With the seam active the DB is never read: only the env fake credentials
+// checked above may reach the loopback server, never a real stored key.
+async function resolveRuntimeConfig(testBase: string | null): Promise<RuntimeConfig> {
+    if (!testBase) return getAiRuntimeConfig();
+    return {
+        gemini: { apiKey: process.env.GEMINI_API_KEY || null, model: DEFAULT_MODELS.gemini },
+        openrouter: {
+            apiKey: process.env.OPENROUTER_API_KEY || null,
+            model: process.env.OPENROUTER_OCR_MODEL || DEFAULT_MODELS.openrouter,
+        },
+    };
+}
+
+async function callGemini(apiKey: string, model: string, base64: string, mimeType: string, testBase: string | null): Promise<ReceiptAIResult> {
     const response = await fetch(
-        testBase ? `${testBase}/gemini` : `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+        testBase ? `${testBase}/gemini` : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
             method: "POST",
             ...(testBase ? { redirect: "error" as const } : {}),
@@ -230,8 +244,7 @@ async function callGemini(apiKey: string, base64: string, mimeType: string, test
     return parseReceiptAIResponse(text);
 }
 
-async function callOpenRouter(apiKey: string, base64: string, mimeType: string, testBase: string | null): Promise<ReceiptAIResult> {
-    const model = process.env.OPENROUTER_OCR_MODEL || DEFAULT_OPENROUTER_MODEL;
+async function callOpenRouter(apiKey: string, model: string, base64: string, mimeType: string, testBase: string | null): Promise<ReceiptAIResult> {
     const response = await fetch(testBase ? `${testBase}/openrouter` : "https://openrouter.ai/api/v1/chat/completions", {
         ...(testBase ? { redirect: "error" as const } : {}),
         method: "POST",
@@ -280,12 +293,13 @@ async function callOpenRouter(apiKey: string, base64: string, mimeType: string, 
 
 export async function analyzeReceiptImage(base64: string, mimeType: string): Promise<ReceiptAIResult> {
     const testBase = testProviderBase();
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const openRouterKey = process.env.OPENROUTER_API_KEY;
+    const { gemini, openrouter } = await resolveRuntimeConfig(testBase);
+    const geminiKey = gemini.apiKey;
+    const openRouterKey = openrouter.apiKey;
 
     if (geminiKey) {
         try {
-            return await callGemini(geminiKey, base64, mimeType, testBase);
+            return await callGemini(geminiKey, gemini.model, base64, mimeType, testBase);
         } catch (error) {
             console.warn(`Receipt OCR: Gemini failed${openRouterKey ? ", trying OpenRouter" : ""}: ${errorMessage(error)}`);
         }
@@ -293,7 +307,7 @@ export async function analyzeReceiptImage(base64: string, mimeType: string): Pro
 
     if (openRouterKey) {
         try {
-            return await callOpenRouter(openRouterKey, base64, mimeType, testBase);
+            return await callOpenRouter(openRouterKey, openrouter.model, base64, mimeType, testBase);
         } catch (error) {
             console.error(`Receipt OCR: OpenRouter failed: ${errorMessage(error)}`);
         }

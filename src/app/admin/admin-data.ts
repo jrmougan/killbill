@@ -15,14 +15,15 @@ export interface AdminInvite {
 /**
  * The caller when it is an admin, re-checked against the DB (`User.isAdmin`),
  * never trusted from the JWT claim — the same rule as /api/admin/invites.
- * Guest sessions are never admins.
+ * Only a regular browser session administers, the same rule as `auth: 'admin'`
+ * in route(): guest sessions and MCP tokens are rejected even if the user is an admin.
  */
 export type AdminCheck = { status: "ok"; userId: string } | { status: "unauthenticated" } | { status: "forbidden" };
 
 export async function checkAdmin(): Promise<AdminCheck> {
     const session = await getSession();
     if (!session?.userId) return { status: "unauthenticated" };
-    if (session.kind === "guest") return { status: "forbidden" };
+    if (session.kind !== undefined) return { status: "forbidden" };
     const user = await prisma.user.findUnique({
         where: { id: session.userId as string },
         select: { id: true, isAdmin: true },
