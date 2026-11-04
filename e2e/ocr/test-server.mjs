@@ -1,9 +1,14 @@
 import { spawn } from 'node:child_process';
 import { createProviderStub } from './provider-stub.mjs';
+import { nonLocalDatabaseReason } from '../../src/lib/test-db-guard.mjs';
 
 const mode = process.argv[2];
 if (!['dev', 'standalone'].includes(mode)) throw new Error('Expected dev or standalone');
 if (process.env.TEST_ROUTES_ENABLED !== 'true') throw new Error('E2E server requires TEST_ROUTES_ENABLED=true');
+// Next.js would load .env by itself: read it here so the check sees the same values.
+try { process.loadEnvFile(); } catch { /* no .env: CI passes real variables */ }
+const nonLocal = nonLocalDatabaseReason(process.env);
+if (nonLocal) throw new Error(`E2E wipes its database, refusing to start: ${nonLocal}`);
 const provider = createProviderStub();
 await new Promise((resolve, reject) => {
   provider.once('error', reject);
