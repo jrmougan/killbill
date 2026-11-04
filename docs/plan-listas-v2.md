@@ -1,3 +1,5 @@
+> **HISTÓRICO.** Ya mergeado. El contract se hizo con una migración nueva, nunca reescribiendo una aplicada. La reconciliación OCR→lista no se implementó ni está aprobada. Vigente: `docs/agents/shopping-lists.md`.
+
 # Plan REVISADO — Listas de la compra de Kill Bill
 
 > **Cambio de premisa:** los gastos nacen del OCR del ticket (`/api/ocr` → `Expense` + `ReceiptLineItem[]`). El puente lista→gasto se descarta por redundante. Este documento reescribe el plan de la feature en torno a la lista como **herramienta autónoma de planificación y coordinación de la compra física**.

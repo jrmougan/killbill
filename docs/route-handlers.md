@@ -2,7 +2,13 @@
 
 Kit tipado para los handlers de `src/app/api/**` (`src/lib/http/`). Centraliza la
 autenticación de sesión, el parseo con Zod y el mapeo de errores, para que cada
-ruta contenga solo su lógica. Piloto completo: `src/app/api/expenses/**`.
+ruta contenga solo su lógica. Convención de todas las rutas nuevas o modificadas. Solo `mcp`, `health`, `cron/*`,
+`test/*`, `auth/logout`, `invites/[token]/preview`, `setup` y el servidor de `/uploads` van a mano. Ejemplos:
+`src/app/api/expenses/**`.
+
+Forma: `export const POST = route({ auth, params, query, body, bodyOptions, errorMessage }, handler)`. Las primitivas Zod
+están en `src/lib/http/schemas.ts`; los esquemas de cuerpo por dominio y sus opciones compartidas, en
+`src/lib/<dominio>-schemas.ts`.
 
 ## API
 
@@ -18,7 +24,7 @@ import { jsonObject, id, idParams, cents, eurosToCents, eurosToCentsOrNull, isoD
 | Pieza | Qué hace |
 |---|---|
 | `route(options, handler)` | Devuelve el handler `(req, { params }) => Promise<Response>`. Orden: auth → `params` → `query` → `body` → handler; cualquier `throw` pasa por `toErrorResponse`. |
-| `options.auth` | `'public'` (ctx puede ser `null`), `'user'` (sesión registrada o MCP; invitado → 403), `'user-or-guest'` (cualquier sesión revalidada), `'admin'` (sesión de navegador + `User.isAdmin` leído de la BD; 401/403 "Acceso denegado"). |
+| `options.auth` | `'public'` (ctx puede ser `null`), `'user'` (sesión registrada o MCP; invitado → 403), `'user-or-guest'` (cualquier sesión revalidada), `'admin'` (solo sesión de navegador; invitado, MCP o usuario inexistente → 401 "No autorizado"; `User.isAdmin` leído de la BD, si es false → 403 "Acceso denegado"). |
 | `options.body` / `query` / `params` | Esquemas Zod. El handler recibe `{ req, ctx, body, query, params }` ya tipados. Sin esquema de `params`, llegan como `Record<string, string>`. |
 | `options.bodyOptions` | Las mismas opciones de `parseJson` (`invalidMessage`, `code`) para el cuerpo de `options.body`. |
 | `options.errorMessage` / `logLabel` | Mensaje del 500 inesperado (el histórico de la ruta) y etiqueta del `console.error`. |
@@ -38,29 +44,9 @@ Primitivas (`schemas.ts`), todas con mensaje configurable y envolviendo los vali
 `categoryKey` (no vacía; la existencia se comprueba con `resolveCategoryId`), `categoryHex`
 (`isValidCategoryHex`), `listQuantity` (`normalizeQuantity`), `intParam`/`paginationQuery` (laxos, nunca 400).
 
-## Antes / después
+## Ejemplo
 
 ```ts
-// ANTES
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-    try {
-        const { id } = await params;
-        const ctx = await getSessionCtx();
-        if (!ctx) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-        let body; try { body = await request.json(); } catch { return NextResponse.json({ error: 'Petición no válida' }, { status: 400 }); }
-        if (typeof body?.name !== 'string' || !body.name.trim()) return NextResponse.json({ error: 'Falta el nombre' }, { status: 400 });
-        const auth = await requireSpaceAccess(ctx, id);
-        if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
-        // ...
-        return NextResponse.json({ success: true });
-    } catch (e) {
-        if (e instanceof SettlementError) return NextResponse.json(e.toJSON(), { status: e.status });
-        console.error('Error X:', e);
-        return NextResponse.json({ error: 'Error al hacer X' }, { status: 500 });
-    }
-}
-
-// DESPUÉS
 const Body = jsonObject({ name: z.string({ error: 'Falta el nombre' }).refine((s) => s.trim().length > 0, 'Falta el nombre') });
 
 export const POST = route(
@@ -73,7 +59,7 @@ export const POST = route(
 );
 ```
 
-## Reglas de migración
+## Reglas
 
 1. **No cambies el contrato.** Mismos status, mismas formas JSON (`{ error, code? }`, campos extra como
    `maxAmountCents`) y los mismos mensajes en español: pásalos a los esquemas (`{ error: '…' }`, `.min(1, '…')`)
@@ -84,6 +70,8 @@ export const POST = route(
    (pertenencia de pagador/beneficiario, que el reparto sume, que la categoría exista) va en el handler
    **después** de autorizar. Si el orden 404/403 → 400 importa (no revelar nada a un extraño), no uses
    `options.body`: llama a `parseJson(req, Schema)` dentro del handler tras la autorización (ver `expenses/[id]/tags`).
+   Cada texto libre necesita un `max` de Zod no mayor que su columna (normalmente VARCHAR(191) para `String` de Prisma)
+   y el mismo `maxLength` en el input; si no, P2000 acaba en 500.
 3. **La autorización de espacio sigue explícita**: `requireSpace(ctx, groupId, { allowGuest, allowArchived, roles })`
    contra el grupo del recurso. `route()` solo sabe quién llama. Elige `auth` según el comportamiento previo con
    invitados (`'user'` si se les negaba con 403 antes de tocar nada; `'user-or-guest'` si el handler los enjaula).
@@ -93,14 +81,17 @@ export const POST = route(
    localmente y lanza el `HttpError` que corresponda.
 5. **Mantén intactos** `withSpaceLock`/`runLedgerTransaction`, los `assert*UnderLock` y los comentarios de diseño.
 6. **Esquemas compartidos** de un dominio en `src/lib/<dominio>-schemas.ts` (`expense-`, `list-`, `space-`,
-   `settlement-`, `budget-`, `category-schemas.ts`…), junto con sus opciones de parseo compartidas
-   (`SPACE_BODY_OPTIONS`, `BUDGET_BODY_OPTIONS`, `PERSONAL_LIST_ROUTE`); reutiliza validadores existentes con
+   `settlement-`, `budget-`, `category-`, `ai-settings-schemas.ts`…), junto con sus opciones compartidas: de parseo
+   (`SPACE_BODY_OPTIONS`, `BUDGET_BODY_OPTIONS`) o de la ruta entera (`PERSONAL_LIST_ROUTE`); reutiliza validadores existentes con
    `refine`/`transform`, no dupliques reglas. Un mensaje histórico de JSON inválido o un `code` en los 400 de
    validación se expresan con `bodyOptions` / `parseJson(…, opts)`, no con `try/catch` locales.
 7. **Exports**: `export const GET = route(...)`. No exportes métodos que la ruta no tenía (un GET ausente debe
    seguir siendo 405).
-8. Para respuestas no JSON (CSV, streams) o rutas con auth propia (`cron` con `x-cron-secret`, `mcp` con Bearer),
-   usa `auth: 'public'` y haz la comprobación explícita, o deja solo `toErrorResponse` en el `catch`.
+8. Respuestas no JSON: `route()` funciona igual, el handler devuelve cualquier `Response` (ver `export/route.ts`, CSV
+   con `auth: 'user'`). `auth: 'public'` es para rutas sin sesión obligatoria que aceptan `ctx` null (`invites/claim`,
+   `guest/upgrade`). Auth propia (`cron` con `x-cron-secret`, `mcp` con Bearer): esas rutas van a mano; no las migres sin
+   motivo. Si una ruta a mano necesita el mapeo de errores, usa `toErrorResponse` en su `catch` (`setup`,
+   `invites/[token]/preview`).
 
 ## Tests
 

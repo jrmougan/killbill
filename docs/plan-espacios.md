@@ -1,3 +1,5 @@
+> **HISTÓRICO (julio 2026).** "Estado actual" describe el código de entonces. Vigente: `docs/agents/spaces-auth.md` y `src/lib/space-policy.ts`. `Couple.code` es legado y no invita.
+
 # Plan de implementación — Funcionalidad "Espacios" de Kill Bill
 
 **Modos:** Individual · Pareja · Grupos · Grupos Efímeros (con invitados sin cuenta)

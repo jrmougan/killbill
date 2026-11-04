@@ -1,6 +1,6 @@
 # Phase 1 — Group + Membership (expand → migrate → contract, DATA-SAFE)
 
-> Status: **planning checklist** (no code changed by authoring this doc).
+> Status: **HISTÓRICO, ejecutado y superado** (User.coupleId eliminado en el contract de Fase 5; el rename Couple→Group no se hizo y no está planificado).
 > Prereq: Phase 0 (`20260704090000_phase0_hygiene_currency`) is applied.
 > Money is always integer minor units (cents). Live DB has ~146 expenses — every step is additive and reversible.
 

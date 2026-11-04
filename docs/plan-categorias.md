@@ -1,3 +1,5 @@
+> **HISTÓRICO, IMPLEMENTADO.** §1 describe el código previo. Vigente: `docs/agents/categories.md`.
+
 # Plan de implementación — Categorías personalizables en Kill Bill
 
 > Guía de implementación. Sintetiza el análisis del estado actual, el diseño ganador (Diseño A: categorías por Espacio + personales) y el impacto por vista. Fiel al código existente: no introduce ficheros que no aparezcan en el material.
