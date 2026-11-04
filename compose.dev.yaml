@@ -2,7 +2,7 @@
 # Project name, credentials and published port are generated per worktree by setup.
 services:
   db:
-    image: docker.io/library/mysql:8.0
+    image: docker.io/library/mysql:8.4
     command: ["--default-authentication-plugin=mysql_native_password"]
     environment:
       MYSQL_DATABASE: ${DATABASE_NAME:?Run mise run setup first}
