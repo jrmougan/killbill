@@ -1,3 +1,5 @@
+> **HISTÓRICO, SUPERADO.** El puente lista→gasto se descartó (plan-listas-v2, migración `remove_list_bridge_add_aisle`). Vigente: `docs/agents/shopping-lists.md`.
+
 # Plan de implementación: Listas de la compra vinculadas a grupos
 
 ## 1. Debate y alcance

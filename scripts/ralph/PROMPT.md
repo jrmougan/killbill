@@ -9,14 +9,17 @@ de git. Haz **una sola historia** por iteración, déjala verificada y commitead
 1. `scripts/ralph/progress.md` — empieza por **Patrones del código**; luego las últimas entradas.
 2. `scripts/ralph/prd.json` — el backlog.
 3. `docs/design/README.md` — **decisiones de producto que mandan sobre el mockup**
-   (sin códigos cortos de invitación, confirmación en dos pasos al liquidar, pasillos en las
+   (sin códigos cortos de invitación, confirmación en dos pasos al saldar, pasillos en las
    listas, el presupuesto pide importe, sin "Desconectar" MCP…).
 4. `AGENTS.md` — convenciones del repo (importes en céntimos, colores inline por `hex`,
-   mensajes de error de la API como contrato, nada de `getSession` en rutas…).
+   mensajes de error de la API como contrato, nada de `getSession` en rutas…) y, si la historia
+   toca esa zona, el doc que indique su sección «Read before touching».
 
 El diseño elegido es **"Mezcla · base 1a + espacios de 1b + ticket de 1c"** (opción 2a) y el
 resto de pantallas en su estilo (3a). Fuente: `docs/design/EQUIL Rediseño.dc.html`
-(HTML con estilos inline: úsalo para valores exactos de color, tamaño, radio y copy) y sus
+(HTML con estilos inline: úsalo para valores exactos de color, tamaño y radio. El copy NO: manda el
+Glosario de `docs/ux/plan-acciones-criticas.md` §1; p. ej. el mockup aún dice "Quedar en paz", retirado
+a favor de "Saldar deuda", y los ids de captura y PNG conservan ese nombre a propósito) y sus
 renders `scripts/ralph/design/<id>.png`. Las rondas 1a/1b/1c y la app antigua (0a) están
 descartadas: no las uses como referencia.
 
@@ -36,9 +39,6 @@ ficheros previstos (orientativo). Además de lo de abajo:
   y de la sección 6 del plan), incluido un paso opcional que pulse un botón para abrir una hoja
   antes de la captura, entrar como `userB` o usar otro escenario; y ampliar o crear escenarios
   en `src/app/api/test/seed/route.ts` (solo esa ruta de test).
-- Cambios aprobados por el usuario que salen de "solo UI": el texto de los mensajes de
-  `src/lib/space-policy.ts:107, 230 y 291` (CF-05; nunca códigos, status ni forma) y que `/close`
-  deje de llamar a settle-up y pase a SETTLING con PATCH (CF-16). Nada más de la API.
 - Al cambiar un texto que afirman los e2e, actualiza esos specs y ejecútalos (lista en la
   sección 4 del plan).
 
@@ -46,9 +46,6 @@ ficheros previstos (orientativo). Además de lo de abajo:
 
 `spec` trae cada hallazgo con su fallo concreto y el arreglo propuesto; ya fueron verificados,
 pero confírmalo en el código antes de cambiarlo. Escribe la tabla en `findings/<ID>.md`.
-Excepción permitida para "Borrar los tachados" (RV-03): un cambio **aditivo** y compatible en
-`…/[listId]/clear-checked` (p. ej. `ids` opcional en el cuerpo y/o `deleted` en la respuesta),
-con sus tests; sin cambiar status, errores ni el comportamiento sin `ids`.
 
 ## 2. Captura el estado actual
 
@@ -56,7 +53,9 @@ con sus tests; sin cambiar status, errores ni el comportamiento sin `ids`.
 SCREENS=<ids de la historia, separados por coma> mise run ux:capture
 ```
 
-- Arranca su propio servidor Next y **resetea la BD de test**: no lances `mise run dev` a la vez.
+- Arranca su propio servidor Next y **borra la BD configurada en `.env`** (la de desarrollo de este
+  worktree; no hay BD de test aparte): no lo lances si necesitas conservar esos datos, ni con
+  `mise run dev` en marcha.
 - Para historias transversales (`"screens": ["*"]`) captura todo (`mise run ux:capture`).
 - Si falla porque no hay BD: `mise run services:up && mise run db:migrate && mise run db:seed`
   (con `CONTAINER_ENGINE=podman` si no hay docker).
@@ -95,7 +94,8 @@ si un problema solo se ve con otros datos, puedes ampliar el escenario (solo esa
 - **Solo UI**: componentes, estilos, copy y accesibilidad. No cambies el modelo de datos, las
   migraciones, los contratos de la API (formas de error, estados, mensajes) ni la lógica de
   `finance.ts`/`splits.ts`. Si arreglarlo lo exige, o contradice `docs/design/README.md`,
-  márcalo `fuera de alcance` con el motivo y sigue.
+  márcalo `fuera de alcance` con el motivo y sigue. Una excepción a "solo UI" solo vale si la trae
+  el `spec` de la propia historia.
 - Sigue el estilo del código que tocas; reutiliza componentes de `src/components/ui/`.
   Colores dinámicos inline (nunca clases tailwind construidas en runtime). Sin dependencias nuevas.
 - Si cambias un `data-testid` o un texto que usan los e2e (`grep -rn` en `e2e/`), actualiza el spec.
@@ -105,7 +105,8 @@ si un problema solo se ve con otros datos, puedes ampliar el escenario (solo esa
 1. Vuelve a capturar las mismas pantallas y confirma visualmente cada corrección.
 2. `mise run check` debe pasar (lint + typecheck + unit).
 3. Si tocaste algo cubierto por e2e, ejecuta esos specs:
-   `mise run e2e -- e2e/<carpeta>/<spec> --project=mobile-chrome`.
+   `mise run e2e -- e2e/<carpeta>/<spec> --project=mobile-chrome` (los de `apiSuites` en
+   `playwright.config.ts` solo corren con `--project=api`; con otro proyecto se ignoran en silencio).
    Para cambios de layout ejecuta también `e2e/mobile/overflow.spec.ts`.
 
 Si algo no pasa y no sabes arreglarlo en esta iteración, revierte lo que lo rompe, deja la
