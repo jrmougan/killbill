@@ -62,7 +62,9 @@ de `.env.example` que necesites; `setup` nunca lo sobrescribe. Mantén
 
 Antes del primer e2e: `mise exec -- npx playwright install chromium --with-deps`.
 Los fixtures e2e **borran los datos de la base configurada**: ejecútalos en un
-checkout de pruebas con su propia `.env` y base local. Detén su servidor dev;
+checkout de pruebas con su propia `.env` y base local. El servidor de e2e y las
+rutas `/api/test/*` se niegan a usar un host que no sea local, aunque un túnel a
+otra base parecería local: no lo uses. Detén su servidor dev;
 Playwright arranca uno con las rutas de prueba habilitadas y usa el mismo `PORT`.
 CI levanta una MySQL 8.0 efímera con el mismo `compose.dev.yaml` (igual que
 producción) y usa los comandos mise del repositorio.

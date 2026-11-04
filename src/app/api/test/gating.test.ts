@@ -52,9 +52,35 @@ describe('test-only routes are gated by TEST_ROUTES_ENABLED', () => {
     });
 });
 
+describe('test-only routes refuse a non-local database', () => {
+    beforeEach(() => {
+        vi.stubEnv('TEST_ROUTES_ENABLED', 'true');
+        vi.stubEnv('DATABASE_HOST', 'mysql.example.com');
+    });
+
+    it('POST /api/test/reset deletes nothing', async () => {
+        const res = await resetPOST();
+        expect(res.status).toBe(403);
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        for (const model of models) {
+            expect(prisma[model].deleteMany).not.toHaveBeenCalled();
+        }
+    });
+
+    it('POST /api/test/seed creates nothing', async () => {
+        const res = await seedPOST(new Request('http://localhost/api/test/seed', {
+            method: 'POST',
+            body: JSON.stringify({ scenario: 'admin-with-invite' }),
+        }));
+        expect(res.status).toBe(403);
+    });
+});
+
 describe('test database reset', () => {
     beforeEach(() => {
         vi.stubEnv('TEST_ROUTES_ENABLED', 'true');
+        vi.stubEnv('DATABASE_HOST', '127.0.0.1');
+        vi.stubEnv('DATABASE_URL', 'mysql://u:p@127.0.0.1:3306/db');
     });
 
     it('deletes every scenario table in one transaction, preserving system categories', async () => {
