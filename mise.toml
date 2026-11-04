@@ -1,6 +1,6 @@
 [tools]
 node = "26.13.0" # Includes npm 11.20.0; keep Dockerfile aligned.
-"github:docker/compose" = "5.6.1"
+"github:docker/compose" = "5.7.0"
 
 [tasks.setup]
 description = "Prepare local env, install locked dependencies and generate Prisma"
