@@ -44,6 +44,12 @@ The prototype contradicts some existing product rules. These are the resolutions
   receiver. Confirm/reject there open the same review sheets as Inicio, and
   editing a pending payment shows "máx. {deuda}" and "X tendrá que confirmar
   el nuevo importe". The list of all payments is "Historial de pagos".
+- **Inicio, active card**: it stays green (owed to you, "Estáis al día", Personal)
+  except when you owe, when it turns terracotta (`--negative`). So the brand green
+  never means debt. Green and terracotta have almost the same luminance, so the
+  color only reinforces: the visible sign on the amount (`+` / `−`) and the
+  direction icon (arrow in, arrow out, check at zero) carry the meaning. This
+  overrides mockup 2a, where the card is always green.
 - **Add expense**: the numpad quick flow (equal / only me / only them) is the
   default; "Más opciones" exposes custom splits, tags, date and recurrence.
 - **Spaces**: Pareja→COUPLE, Piso→GROUP, Viaje→EPHEMERAL (only when

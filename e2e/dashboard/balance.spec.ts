@@ -31,6 +31,10 @@ test.describe('Dashboard - Balance', () => {
     const balanceText = await balance.textContent();
     // userA paid 100€ and split 50/50, so they are owed 50€ → positive balance
     expect(balanceText).toContain('+');
+
+    const active = page.getByTestId('space-card-active');
+    await expect(active).toHaveAttribute('data-tone', 'positive');
+    await expect(active).toContainText(/\+50,00\s€/);
   });
 
   test('userB has negative balance with couple-with-debt scenario', async ({ page }) => {
@@ -50,6 +54,12 @@ test.describe('Dashboard - Balance', () => {
     // Should be negative (either no prefix or with an amount that implies debt)
     const amount = parseFloat(balanceText?.replace('€', '').trim() || '0');
     expect(amount).toBeLessThan(0);
+
+    // The visible amount uses U+2212; the sr-only balance-amount keeps the ASCII hyphen.
+    const active = page.getByTestId('space-card-active');
+    await expect(active).toHaveAttribute('data-tone', 'negative');
+    await expect(active).toContainText('Le debes a');
+    await expect(active).toContainText(/−50,00\s€/);
   });
 
   test('pending settlement is visible on dashboard for receiver (userA)', async ({ page }) => {
