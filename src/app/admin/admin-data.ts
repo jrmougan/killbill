@@ -47,7 +47,7 @@ export async function listInvites(): Promise<AdminInvite[]> {
     }));
 }
 
-/** Random 8-character code, valid for 7 days (same as POST /api/admin/invites). */
+/** Random 8-character code, valid for 7 days. Shared by the admin panel and POST /api/admin/invites. */
 export async function createInviteFor(adminId: string) {
     return prisma.inviteCode.create({
         data: {
@@ -58,6 +58,13 @@ export async function createInviteFor(adminId: string) {
     });
 }
 
-export async function deleteInvite(id: string) {
-    await prisma.inviteCode.delete({ where: { id } });
+/**
+ * Void an invite that nobody has used yet; returns whether a row was deleted.
+ * The `usedById: null` guard is the point: a code consumed while the admin had
+ * the confirmation open stays as the "Usadas" record of who registered with it.
+ * Shared by the admin panel and DELETE /api/admin/invites.
+ */
+export async function deleteInvite(id: string): Promise<boolean> {
+    const { count } = await prisma.inviteCode.deleteMany({ where: { id, usedById: null } });
+    return count > 0;
 }

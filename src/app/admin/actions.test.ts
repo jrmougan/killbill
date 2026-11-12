@@ -3,14 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockGetSession = vi.fn();
 const findUnique = vi.fn();
 const create = vi.fn();
-const del = vi.fn();
+const deleteMany = vi.fn();
 const revalidatePath = vi.fn();
 
 vi.mock("@/lib/auth", () => ({ getSession: () => mockGetSession() }));
 vi.mock("@/lib/db", () => ({
     prisma: {
         user: { findUnique: (...a: unknown[]) => findUnique(...a) },
-        inviteCode: { create: (...a: unknown[]) => create(...a), delete: (...a: unknown[]) => del(...a) },
+        inviteCode: { create: (...a: unknown[]) => create(...a), deleteMany: (...a: unknown[]) => deleteMany(...a) },
     },
 }));
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidatePath(...a) }));
@@ -23,7 +23,7 @@ beforeEach(() => {
     mockGetSession.mockResolvedValue({ userId: "u1", isAdmin: true });
     findUnique.mockResolvedValue({ id: "u1", isAdmin: true });
     create.mockResolvedValue({ id: "i1" });
-    del.mockResolvedValue({});
+    deleteMany.mockResolvedValue({ count: 1 });
 });
 
 describe("checkAdmin", () => {
@@ -65,7 +65,7 @@ describe("admin Server Actions", () => {
         expect(await createInviteAction()).toEqual({ ok: false, error: "Acceso denegado" });
         expect(await deleteInviteAction("i1")).toEqual({ ok: false, error: "Acceso denegado" });
         expect(create).not.toHaveBeenCalled();
-        expect(del).not.toHaveBeenCalled();
+        expect(deleteMany).not.toHaveBeenCalled();
         expect(revalidatePath).not.toHaveBeenCalled();
     });
 
@@ -85,11 +85,31 @@ describe("admin Server Actions", () => {
         expect(revalidatePath).toHaveBeenCalledWith("/admin");
     });
 
-    it("an admin deletes an invite; a DB failure is reported", async () => {
+    it("an admin voids an invite only while nobody has used it", async () => {
         expect(await deleteInviteAction("i1")).toEqual({ ok: true });
-        expect(del).toHaveBeenCalledWith({ where: { id: "i1" } });
-        del.mockRejectedValue(new Error("P2025"));
+        expect(deleteMany).toHaveBeenCalledWith({ where: { id: "i1", usedById: null } });
+        expect(revalidatePath).toHaveBeenCalledWith("/admin");
+    });
+
+    it("an invite already used or voided is reported as gone and the list is refreshed", async () => {
+        deleteMany.mockResolvedValue({ count: 0 });
+        expect(await deleteInviteAction("i1")).toEqual({
+            ok: false,
+            error: "Esta invitación ya se había usado o anulado",
+            gone: true,
+        });
+        expect(revalidatePath).toHaveBeenCalledWith("/admin");
+    });
+
+    it("a DB failure while voiding is reported without revalidating", async () => {
+        deleteMany.mockRejectedValue(new Error("connection lost"));
         vi.spyOn(console, "error").mockImplementation(() => {});
         expect(await deleteInviteAction("i1")).toEqual({ ok: false, error: "No se pudo eliminar la invitación" });
+        expect(revalidatePath).not.toHaveBeenCalled();
+    });
+
+    it("an empty id is refused before touching the DB", async () => {
+        expect(await deleteInviteAction("")).toEqual({ ok: false, error: "No se pudo eliminar la invitación" });
+        expect(deleteMany).not.toHaveBeenCalled();
     });
 });

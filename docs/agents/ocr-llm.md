@@ -35,7 +35,7 @@ OCR needs at least one provider key, from the env or `/admin/ai`. Configure both
 
 ## LLM settings
 
-Instance admins set keys and models at `/admin/ai` (`GET`/`PATCH /api/admin/ai-settings`, `auth: 'admin'`). `AiProviderConfig` holds one row per `AiProvider` with the instance-wide encrypted key and model.
+Instance admins set keys and models at `/admin/ai` (`GET`/`PATCH /api/admin/ai-settings`, `auth: 'admin'`; model lists from `GET /api/admin/ai-settings/models`). `AiProviderConfig` holds one row per `AiProvider` with the instance-wide encrypted key and model.
 
 `getAiRuntimeConfig` (`ai-settings.ts`) resolves them on every OCR call, uncached, per provider:
 
@@ -47,11 +47,36 @@ Instance admins set keys and models at `/admin/ai` (`GET`/`PATCH /api/admin/ai-s
 - Keys are stored with `secret-box.ts` (AES-256-GCM), bound to the provider through the AAD.
 - The plaintext never leaves the server: responses and pages expose only source + last-4 hint (`AiSettingsView`).
 
+### Model selector
+
+The model field at `/admin/ai` is a combobox (`src/app/admin/ai/model-combobox.tsx`) over `GET /api/admin/ai-settings/models?provider=gemini|openrouter` (`auth: 'admin'`, `no-store`, 30 calls per minute per admin). It answers `{ provider, models: [{ id, label }] }`, where `id` is exactly what `PATCH` stores. The list loads on demand (focus or "Ver modelos"), and again after that provider's key is saved or removed. The field stays a text input, so an unlisted id can always be typed.
+
+`listVisionModels` (`src/lib/ai-models.ts`) calls the provider's own listing, on fixed hosts, and keeps only models that can read an image:
+
+| Provider | Request | Filter |
+| --- | --- | --- |
+| Gemini | `GET /v1beta/models?pageSize=1000` with the effective key in `x-goog-api-key`, following `nextPageToken` | `generateContent` + id `gemini-*` + not `GEMINI_NON_VISION_PATTERN` |
+| OpenRouter | `GET /api/v1/models?input_modalities=image&output_modalities=text`, **without credentials** (the endpoint is public) | image input, output exactly `["text"]`, `structured_outputs`, the chat endpoint, not `:batch` |
+
+- **The Gemini filter is a heuristic**: the API has no modality field, so non-vision families (TTS, live, image generation, embeddings…) are denied by id. A new family must be added to `GEMINI_NON_VISION_PATTERN` by hand.
+- OpenRouter models need `structured_outputs` because `callOpenRouter` sends a strict JSON schema with `require_parameters`.
+- Ids that `MODEL_PATTERNS` would refuse are dropped (`isValidModelId`), including OpenRouter's `~alias` ids.
+- A listing has one 10 s deadline shared by all its pages (at most 5), and refuses redirects. The key goes in a header, never in the URL.
+
+| Error | Status | `code` |
+| --- | --- | --- |
+| Gemini has no key (Google is not called) | 409 | `AI_KEY_MISSING` |
+| The provider refused the key (Gemini answers 400 `API_KEY_INVALID`, or 401/403) | 422 | `AI_KEY_REJECTED` |
+| The provider answered 429 | 503 | `AI_PROVIDER_RATE_LIMITED` |
+| Timeout, network failure, 5xx or an unreadable answer | 502 | `AI_PROVIDER_UNAVAILABLE` |
+
+A provider failure is never 401/403, which mean the admin's own session. Only the provider, the HTTP status and the error name are logged; the provider's error body is not read into the response.
+
 ## Failure modes
 
 - A stored key that cannot be decrypted (secret rotated) or a failed DB read logs a warning and falls back to env instead of crashing. OCR keeps working only if the env has a key; otherwise `/api/ocr` fails as with no provider configured.
 - The undecryptable case also sets `keyUndecryptable` in the view.
-- While `OCR_TEST_PROVIDER_URL` is active the DB is not read, so a stored key can never reach the loopback server.
+- While `OCR_TEST_PROVIDER_URL` is active the DB is not read, so a stored key can never reach the loopback server. This holds for OCR and for the model listing.
 
 ## Secret rotation
 

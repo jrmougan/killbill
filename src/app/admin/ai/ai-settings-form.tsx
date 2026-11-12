@@ -6,6 +6,7 @@ import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
 import { EqCard, EqCta, EqHeader, EqToast, useEqToast } from "@/components/ui/eq";
 import { Input } from "@/components/ui/input";
 import { useApiMutation } from "@/hooks/use-api-mutation";
+import { ModelCombobox, useModelList } from "./model-combobox";
 import type { AiProviderId, AiProviderView, AiSettingsView, KeySource, ModelSource } from "@/lib/ai-settings-schemas";
 
 const ENDPOINT = "/api/admin/ai-settings";
@@ -30,8 +31,12 @@ const MODEL_STATUS: Record<ModelSource, string> = {
 
 type Patch = { apiKey?: string | null; model?: string | null };
 
+// Google only lists models for a key; OpenRouter's list is public.
+const canListModels = (view: AiProviderView) => view.provider !== "gemini" || view.keySource !== "none";
+
 /**
- * Admin form for the OCR provider keys and models. The API answers each save with
+ * Admin form for the OCR provider keys and models. The model field is a combobox
+ * over the provider's vision models (`model-combobox.tsx`), loaded on demand. The API answers each save with
  * the whole view, which replaces the local state; a key is write-only, so the only
  * thing that ever comes back is its source and last-4 hint.
  */
@@ -74,6 +79,7 @@ function ProviderCard({
     // null = untouched: the input follows the saved value until the admin edits it.
     const [modelDraft, setModelDraft] = useState<string | null>(null);
     const [confirmingRemoval, setConfirmingRemoval] = useState(false);
+    const { list: modelList, load: loadModels, reset: resetModels, reloadIfRequested } = useModelList(view.provider);
     const uid = useId();
     const copy = PROVIDER_COPY[view.provider];
 
@@ -95,6 +101,13 @@ function ProviderCard({
         if (patch.apiKey !== undefined) setApiKey("");
         if (patch.model !== undefined) setModelDraft(null);
         onSaved(result.data);
+        // A list that was requested (even while this save was in flight) belongs to
+        // the previous key: drop it, and ask again if the provider can still list.
+        if (patch.apiKey !== undefined) {
+            const saved = result.data.providers.find((provider) => provider.provider === view.provider) ?? view;
+            if (canListModels(saved)) reloadIfRequested();
+            else resetModels();
+        }
         showToast(successMessage);
         return true;
     };
@@ -175,17 +188,17 @@ function ProviderCard({
                         <p className="text-[13px] text-muted-foreground [overflow-wrap:anywhere]">
                             En uso: <span className="font-mono">{view.model}</span> ({MODEL_STATUS[view.modelSource]})
                         </p>
-                        <Input
+                        <ModelCombobox
                             id={`${uid}-model`}
-                            type="text"
-                            autoComplete="off"
-                            autoCapitalize="none"
-                            autoCorrect="off"
-                            spellCheck={false}
                             // What an empty field resolves to.
                             placeholder={view.fallbackModel}
                             value={modelDraft ?? savedModel}
-                            onChange={(e) => setModelDraft(e.target.value)}
+                            onChange={setModelDraft}
+                            currentModel={view.model}
+                            fallbackModel={view.fallbackModel}
+                            canList={canListModels(view)}
+                            list={modelList}
+                            onLoad={() => void loadModels()}
                         />
                         {view.modelSource === "database" && (
                             <button
