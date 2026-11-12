@@ -7,10 +7,16 @@ import { EqCta } from "@/components/ui/eq";
 import { AuthShell, AuthField, AuthError } from "@/components/auth/auth-shell";
 import { registerAction } from "./actions";
 import type { AuthState } from "@/lib/auth-types";
+import { isAdminInviteCode } from "@/lib/admin-invite-code";
 
 function RegisterForm() {
     const searchParams = useSearchParams();
-    const urlCode = searchParams.get("code");
+    const code = searchParams.get("code");
+    // `?code=` is either a space invitation (long token: register AND join the
+    // space) or the admin registration code that /admin copies as a link (8 hex:
+    // only opens registration, joins nothing).
+    const adminCode = isAdminInviteCode(code) ? code.toUpperCase() : null;
+    const urlCode = adminCode ? null : code;
 
     // Server Action handles register + cookie + redirect in one server response
     // (no client cookie/cache race). Errors come back as state.
@@ -48,6 +54,7 @@ function RegisterForm() {
                         data-testid="register-invite-code"
                         label="Código de invitación"
                         name="inviteCode"
+                        defaultValue={adminCode ?? undefined}
                         required
                         maxLength={8}
                         autoCapitalize="characters"

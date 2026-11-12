@@ -30,6 +30,26 @@ export interface AiSettingsView {
     providers: AiProviderView[];
 }
 
+/** One vision-capable model a provider offers; `id` is exactly what PATCH stores. */
+export interface AiModelOption {
+    id: string;
+    label: string;
+}
+
+/** `GET /api/admin/ai-settings/models?provider=…` */
+export interface AiModelsView {
+    provider: AiProviderId;
+    models: AiModelOption[];
+}
+
+/** `code` of the model-listing errors (API contract, `docs/agents/ocr-llm.md`). The form only shows the message. */
+export const AI_MODELS_ERROR_CODES = {
+    keyMissing: "AI_KEY_MISSING",
+    keyRejected: "AI_KEY_REJECTED",
+    rateLimited: "AI_PROVIDER_RATE_LIMITED",
+    unavailable: "AI_PROVIDER_UNAVAILABLE",
+} as const;
+
 const API_KEY_MESSAGE = "La clave de API debe tener entre 8 y 512 caracteres, sin espacios";
 const MODEL_MESSAGE = "El nombre del modelo no es válido";
 
@@ -41,6 +61,15 @@ const MODEL_PATTERNS: Record<AiProviderId, RegExp> = {
     gemini: /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/,
     openrouter: /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/,
 };
+
+/** Whether PATCH would accept this id as the provider's model. */
+export function isValidModelId(provider: AiProviderId, id: string): boolean {
+    return MODEL_PATTERNS[provider].test(id);
+}
+
+export const AiModelsQuery = z.object({
+    provider: z.enum(AI_PROVIDERS, { error: "Proveedor no válido" }),
+});
 
 /** undefined = leave unchanged, null = clear. At least one of apiKey/model is required. */
 export const UpdateAiSettingsBody = jsonObject({
@@ -58,7 +87,7 @@ export const UpdateAiSettingsBody = jsonObject({
     if (body.apiKey === undefined && body.model === undefined) {
         ctx.addIssue({ code: "custom", message: "Indica una clave de API o un modelo" });
     }
-    if (typeof body.model === "string" && !MODEL_PATTERNS[body.provider].test(body.model)) {
+    if (typeof body.model === "string" && !isValidModelId(body.provider, body.model)) {
         ctx.addIssue({ code: "custom", path: ["model"], message: MODEL_MESSAGE });
     }
 });

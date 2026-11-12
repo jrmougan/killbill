@@ -149,6 +149,14 @@ siguiente de la lista:
 
 El orden de los proveedores no cambia: primero Gemini y, si falla, OpenRouter.
 
+El campo «Modelo» propone los modelos de cada proveedor que aceptan imágenes. La
+lista se pide al proveedor desde el servidor al abrir el campo: la de Gemini usa la
+clave configurada (sin clave no hay lista) y la de OpenRouter es pública y se pide
+sin clave. Se puede filtrar escribiendo, y también guardar un identificador que no
+esté en la lista: si el proveedor no responde o rechaza la clave, el campo sigue
+funcionando como texto libre. En Gemini el filtro de modelos con visión es
+aproximado, porque su API no indica qué modelos aceptan imágenes.
+
 Las claves se guardan cifradas con AES-256-GCM y la interfaz solo muestra su origen
 y los 4 últimos caracteres. La clave de cifrado se deriva de
 `AI_SETTINGS_ENCRYPTION_KEY` (opcional) o, si no está definida, de `JWT_SECRET`.

@@ -173,7 +173,7 @@ export function parseReceiptAIResponse(text: string): ReceiptAIResult {
 
 // A server-owned, loopback-only seam for E2E provider HTTP responses. Never
 // enabled by request headers/body; misconfiguration fails before any network call.
-function testProviderBase(): string | null {
+export function testProviderBase(): string | null {
     const configured = process.env.OCR_TEST_PROVIDER_URL;
     if (!configured) return null;
     if (process.env.TEST_ROUTES_ENABLED !== "true") {

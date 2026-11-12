@@ -4,6 +4,7 @@ import { resetDb, seedScenario } from '../fixtures/db.fixture';
 import { loginAs, createAuthenticatedContext } from '../fixtures/auth.fixture';
 
 const SETTINGS_URL = '/api/admin/ai-settings';
+const MODELS_URL = '/api/admin/ai-settings/models';
 const PROVIDERS = ['gemini', 'openrouter'] as const;
 // Never a real credential; the test server's env fake ("ocr-e2e-fake") has a different hint.
 const PLAINTEXT_KEY = 'e2e-ai-settings-plaintext-W9xZ';
@@ -142,5 +143,60 @@ test.describe('API Admin - Configuración de claves y modelos de IA', () => {
     expect(patchRes.status(), 'PATCH anónimo').toBe(401);
 
     expect(await readSettings(context.request)).toEqual(before);
+  });
+
+  // The lists come from the loopback provider stub (e2e/ocr/provider-stub.mjs),
+  // always with the env fake key: a key saved here never reaches it.
+  test('6. Lista solo los modelos con visión de cada proveedor, sin exponer la clave', async ({ context }) => {
+    const api = context.request;
+    const saved = await api.patch(SETTINGS_URL, { data: { provider: 'gemini', apiKey: PLAINTEXT_KEY } });
+    expect(saved.status()).toBe(200);
+
+    const geminiRes = await api.get(`${MODELS_URL}?provider=gemini`);
+    expect(geminiRes.status(), 'GET modelos de gemini').toBe(200);
+    expectNoPlaintext(geminiRes, await geminiRes.text());
+    // Two pages merged; embedding, TTS, image and non-gemini models are dropped.
+    expect(await geminiRes.json()).toEqual({
+      provider: 'gemini',
+      models: [
+        { id: 'gemini-flash-latest', label: 'Gemini Flash Latest' },
+        { id: 'gemini-e2e-pro', label: 'Gemini E2E Pro' },
+        { id: 'gemini-e2e-flash', label: 'Gemini E2E Flash' },
+      ],
+    });
+
+    const routerRes = await api.get(`${MODELS_URL}?provider=openrouter`);
+    expect(routerRes.status(), 'GET modelos de openrouter').toBe(200);
+    expectNoPlaintext(routerRes, await routerRes.text());
+    // Text-only, image output, no structured outputs, :batch and ~alias are dropped.
+    expect(await routerRes.json()).toEqual({
+      provider: 'openrouter',
+      models: [
+        { id: 'e2e/vision-flash', label: 'E2E: Vision Flash' },
+        { id: 'xiaomi/mimo-v2.6-flash', label: 'Xiaomi: MiMo V2.6 Flash' },
+      ],
+    });
+  });
+
+  test('7. Un proveedor desconocido da 400 al listar modelos', async ({ context }) => {
+    for (const query of ['', '?provider=openai']) {
+      const res = await context.request.get(`${MODELS_URL}${query}`);
+      expect(res.status(), `GET modelos ${query}`).toBe(400);
+      expect((await res.json()).error).toBe('Proveedor no válido');
+      expect(res.headers()['cache-control']).toContain('no-store');
+    }
+  });
+
+  test('8. Solo administración puede listar modelos', async ({ request, newContext }) => {
+    const anonymous = await request.get(`${MODELS_URL}?provider=openrouter`);
+    expect(anonymous.status(), 'GET modelos anónimo').toBe(401);
+
+    const seed = await seedScenario(request, 'couple-no-expenses');
+    const userContext = await createAuthenticatedContext(newContext, {
+      email: seed.userA!.email,
+      password: seed.userA!.password,
+    });
+    const res = await userContext.request.get(`${MODELS_URL}?provider=openrouter`);
+    expect(res.status(), 'GET modelos como no admin').toBe(403);
   });
 });

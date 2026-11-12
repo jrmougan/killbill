@@ -14,7 +14,7 @@ están en `src/lib/http/schemas.ts`; los esquemas de cuerpo por dominio y sus op
 
 ```ts
 import { route, HttpError, badRequest, unauthorized, forbidden, notFound, conflict,
-         parseJson, parseQuery, validate, readJson, requireSpace, enforceRateLimit,
+         parseJson, parseQuery, validate, readJson, requireSpace, enforceRateLimit, noStore,
          toErrorResponse } from '@/lib/http';
 import { jsonObject, id, idParams, cents, eurosToCents, eurosToCentsOrNull, isoDay,
          expenseDate, recurringInterval, categoryKey, categoryHex, listQuantity,
@@ -36,6 +36,7 @@ import { jsonObject, id, idParams, cents, eurosToCents, eurosToCentsOrNull, isoD
 | `validate(schema, value, { code? })` | `safeParse` con mensajes por defecto en español (locale `es` por parseo, no global: MCP no cambia) y 400 `{ error, code?, issues }` si falla. `code` es un string fijo o una función `(issues) => string \| undefined` (p. ej. `INVALID_AMOUNT` si el primer issue es `amount`; ver `BUDGET_BODY_OPTIONS`). Úsalo en vez de `schema.parse()`. |
 | `requireSpace(ctx, groupId, opts)` | `requireSpaceAccess` que lanza su denegación tal cual (status, mensaje, `code` p. ej. 409 `SPACE_NOT_WRITABLE`). Devuelve `SpaceAccessOk`. |
 | `enforceRateLimit(key, limit, windowMs, message?)` | 429 "Demasiadas solicitudes…" con `Retry-After`. |
+| `noStore(handler)` | Envuelve el resultado de `route()` y pone `Cache-Control: no-store` en todas las respuestas, también las de error. |
 
 Primitivas (`schemas.ts`), todas con mensaje configurable y envolviendo los validadores existentes:
 `jsonObject(shape, msg='Petición no válida')` (objeto; claves desconocidas se descartan), `id()`/`idParams`,

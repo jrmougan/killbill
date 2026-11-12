@@ -22,7 +22,7 @@ Read before touching `e2e/`, Playwright fixtures or test routes. The definition 
 - **Fixture**: import `test` and `expect` from `e2e/fixtures/test.fixture.ts`. The auto `pageErrorGuard` fails a test on any uncaught browser error.
 - **Extra sessions**: use the `newContext` fixture, never `browser.newContext`. There is no login API route; use `createAuthenticatedContext(newContext, user)` (`e2e/fixtures/auth.fixture.ts`) and its `ctx.request`.
 - **Clocks**: the server runs `TZ=UTC`, the browser Europe/Madrid, on purpose, to catch inconsistent dates at hydration.
-- **Server**: `e2e/ocr/test-server.mjs` runs `dev` locally and `standalone` in CI, so a build-only bug may pass locally. It also starts the loopback OCR provider, which only works with `TEST_ROUTES_ENABLED=true`, loopback and test credentials.
+- **Server**: `e2e/ocr/test-server.mjs` runs `dev` locally and `standalone` in CI, so a build-only bug may pass locally. It also starts the loopback OCR provider, which only works with `TEST_ROUTES_ENABLED=true`, loopback and test credentials. The stub (`e2e/ocr/provider-stub.mjs`) answers `POST /gemini` and `POST /openrouter` (OCR) and `GET /gemini/models` and `GET /openrouter/models` (the `/admin/ai` model selector); under e2e the listing always uses the env fake key, whatever the admin saved.
 - **Mobile layout**: new screens go in `e2e/mobile/overflow.spec.ts`; see `docs/agents/ui-patterns.md`.
 
 ## Commands
