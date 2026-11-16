@@ -4,6 +4,10 @@ services:
   db:
     image: docker.io/library/mysql:8.0
     command: ["--default-authentication-plugin=mysql_native_password"]
+    # Rootless Podman through its API socket gives containers oom_score_adj=200 unless
+    # it is set explicitly, and then exec (and the healthcheck) fail with "crun: write to
+    # /proc/self/oom_score_adj: Permission denied". Harmless under Docker.
+    oom_score_adj: 200
     environment:
       MYSQL_DATABASE: ${DATABASE_NAME:?Run mise run setup first}
       MYSQL_USER: ${DATABASE_USER:?Run mise run setup first}
