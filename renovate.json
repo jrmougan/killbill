@@ -52,6 +52,33 @@
       ],
       "groupName": "devDependencies patches",
       "automerge": true
+    },
+    {
+      "description": "MySQL server: track LTS only (block Innovation releases such as 9.x/26.x) and keep it out of the minor/patch group. allowedVersions can't be combined with matchUpdateTypes, so approval lives in the next rule.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "mysql",
+        "docker.io/library/mysql"
+      ],
+      "allowedVersions": "<9",
+      "groupName": "mysql"
+    },
+    {
+      "description": "MySQL server: the 8.0 -> 8.4 move needs a prod migration window, so major/minor updates wait for dashboard approval.",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "mysql",
+        "docker.io/library/mysql"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor"
+      ],
+      "dependencyDashboardApproval": true
     }
   ]
 }
