@@ -227,7 +227,7 @@ export function TagsClient({ initialTags, hasGroup, personalParam = false }: Tag
                                         className="h-3 w-3 rounded-full flex-shrink-0"
                                         style={{ backgroundColor: tag.color }}
                                     />
-                                    <span className="min-w-0 truncate text-[13px] font-semibold text-foreground" title={tag.name}>{tag.name}</span>
+                                    <span className="min-w-0 [overflow-wrap:anywhere] text-[13px] font-semibold text-foreground" title={tag.name}>{tag.name}</span>
                                     {tag.personal && (
                                         <span className="text-[11px] text-muted-foreground">Personal</span>
                                     )}

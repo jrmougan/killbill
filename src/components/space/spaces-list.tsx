@@ -66,7 +66,7 @@ export function SpacesList({ rows, activeKey }: { rows: SpaceRowData[]; activeKe
                             <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3">
                                 <span className="flex-1 min-w-[7rem]" aria-hidden="true">
                                     <span className="block text-[15px] font-semibold truncate">{r.name}</span>
-                                    <span className="block text-[12.5px] text-muted-foreground truncate">{r.sub}</span>
+                                    <span className="block text-[12.5px] text-muted-foreground [overflow-wrap:anywhere]">{r.sub}</span>
                                 </span>
                                 {r.bal && (
                                     <span

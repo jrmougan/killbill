@@ -1,8 +1,15 @@
-# EQUIL Prototipo (claude.ai/design)
+# EQUIL: design sources and product decisions
 
-`EQUIL Prototipo.dc.html` is the source prototype for the EQUIL redesign
-(project `a458c65f-b975-4c3e-bfb0-981943f748db`). It is a reference only — it
-needs the design runtime (`support.js`) to render and is not shipped.
+Precedence when sources disagree:
+
+1. This file's decisions, and the Glossary in `docs/ux/plan-acciones-criticas.md` §1 for copy.
+2. `EQUIL Rediseño.dc.html` for visuals (2a/3a; render with `mise run ux:design`).
+3. `EQUIL Prototipo.dc.html`, historical reference only (project
+   `a458c65f-b975-4c3e-bfb0-981943f748db`, claude.ai/design). It needs the design runtime
+   (`support.js`) to render and is not shipped.
+
+The mockups still say "Quedar en paz": do not copy it. Capture ids and PNG names
+(`quedar-en-paz`, `2a-quedar-en-paz-ticket`) keep the old name on purpose.
 
 ## Product decisions taken when implementing it
 
@@ -11,7 +18,8 @@ The prototype contradicts some existing product rules. These are the resolutions
 - **Lists → expense**: "Terminar y apuntar gasto" is a *shortcut without link*:
   it clears the checked items (`clear-checked`) and opens the add-expense flow
   prefilled with the list name as concept. No `linkedExpenseId`, no prices —
-  the money still comes from OCR / manual entry.
+  the money still comes from OCR / manual entry. Mechanics:
+  `docs/agents/shopping-lists.md`.
 - **Invites**: no short codes. The "Invitar" card creates and shares a secure
   `/i/[token]` link (Web Share API / copy); "Unirme" accepts a pasted link.
 - **Settle** ("Saldar deuda"): two-step confirmation is kept. A headline says
@@ -36,6 +44,12 @@ The prototype contradicts some existing product rules. These are the resolutions
   receiver. Confirm/reject there open the same review sheets as Inicio, and
   editing a pending payment shows "máx. {deuda}" and "X tendrá que confirmar
   el nuevo importe". The list of all payments is "Historial de pagos".
+- **Inicio, active card**: it stays green (owed to you, "Estáis al día", Personal)
+  except when you owe, when it turns terracotta (`--negative`). So the brand green
+  never means debt. Green and terracotta have almost the same luminance, so the
+  color only reinforces: the visible sign on the amount (`+` / `−`) and the
+  direction icon (arrow in, arrow out, check at zero) carry the meaning. This
+  overrides mockup 2a, where the card is always green.
 - **Add expense**: the numpad quick flow (equal / only me / only them) is the
   default; "Más opciones" exposes custom splits, tags, date and recurrence.
 - **Spaces**: Pareja→COUPLE, Piso→GROUP, Viaje→EPHEMERAL (only when

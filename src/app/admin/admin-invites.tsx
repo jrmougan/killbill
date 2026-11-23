@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Plus, Trash2, UserCheck } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronRight, Plus, Sparkles, Trash2, UserCheck } from "lucide-react";
 import { EqCard, EqCta, EqHeader, EqLabel, EqToast, useEqToast } from "@/components/ui/eq";
 import { AuthError } from "@/components/auth/auth-shell";
 import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
+import { Input } from "@/components/ui/input";
 import { createInviteAction, deleteInviteAction } from "./actions";
 import type { AdminInvite } from "./admin-data";
 
@@ -25,6 +27,9 @@ export function AdminInvites({ invites }: { invites: AdminInvite[] }) {
     const [pendingVoid, setPendingVoid] = useState<AdminInvite | null>(null);
     const [voidError, setVoidError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
+    // Set when the clipboard is unavailable (plain-HTTP LAN, in-app webviews):
+    // the row then shows the link itself so it can be copied by hand.
+    const [manualLink, setManualLink] = useState<{ id: string; url: string } | null>(null);
     const [toast, showToast] = useEqToast();
 
     const createInvite = () =>
@@ -52,6 +57,11 @@ export function AdminInvites({ invites }: { invites: AdminInvite[] }) {
                 setPendingVoid(null);
                 setError(null);
                 showToast("Invitación anulada");
+            } else if (res?.gone) {
+                // Used or voided meanwhile: retrying cannot work, and the action
+                // has already refreshed the list.
+                setPendingVoid(null);
+                setError(res.error);
             } else {
                 setVoidError("No se pudo anular la invitación. Inténtalo de nuevo.");
             }
@@ -64,9 +74,12 @@ export function AdminInvites({ invites }: { invites: AdminInvite[] }) {
             await navigator.clipboard.writeText(url);
             setCopiedId(id);
             setTimeout(() => setCopiedId(null), 2000);
+            setError(null);
+            setManualLink(null);
             showToast("Enlace de registro copiado");
         } catch {
             setError("No se pudo copiar el enlace");
+            setManualLink({ id, url });
         }
     };
 
@@ -94,6 +107,19 @@ export function AdminInvites({ invites }: { invites: AdminInvite[] }) {
             <EqHeader title="Administración" back="/settings" />
 
             <div className="px-5 flex flex-col gap-5">
+                <Link href="/admin/ai" className="block rounded-[18px]">
+                    <EqCard className="p-4 min-h-11 flex items-center gap-3">
+                        <span className="h-10 w-10 flex-none rounded-xl bg-[var(--accent-tint)] flex items-center justify-center text-primary">
+                            <Sparkles className="h-[18px] w-[18px]" aria-hidden="true" />
+                        </span>
+                        <span className="flex-1 min-w-0">
+                            <span className="block text-[15px] font-semibold">IA de los tickets</span>
+                            <span className="block text-xs text-muted-foreground">Claves de API y modelos</span>
+                        </span>
+                        <ChevronRight className="h-5 w-5 flex-none text-muted-foreground" aria-hidden="true" />
+                    </EqCard>
+                </Link>
+
                 <p className="text-sm text-muted-foreground leading-relaxed">
                     Enlaces para crear una cuenta en EQUIL. Cada enlace sirve una vez y caduca a los 7 días.
                 </p>
@@ -126,23 +152,41 @@ export function AdminInvites({ invites }: { invites: AdminInvite[] }) {
                         <EqCard className="px-4">
                             <ul>
                                 {available.map((invite, i) => (
-                                    <li key={invite.id} className={rowCls(i)}>
-                                        <div className="flex-1 min-w-0">
+                                    <li key={invite.id} className={rowCls(i) + " flex-wrap"}>
+                                        <div className="flex-1 min-w-[6.5rem]">
                                             <div className="font-mono text-[15px] font-medium tracking-[0.08em]">{invite.code}</div>
-                                            <div className="text-xs text-muted-foreground whitespace-nowrap">
+                                            <div className="text-xs text-muted-foreground">
                                                 {invite.expiresAt ? `Caduca el ${dateFmt.format(new Date(invite.expiresAt))}` : "Sin caducidad"}
                                             </div>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => copyCode(invite.code, invite.id)}
-                                            aria-label={`Copiar enlace de registro ${invite.code}`}
-                                            className="h-11 flex-none flex items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-primary"
-                                        >
-                                            {copiedId === invite.id && <Check className="h-4 w-4" aria-hidden="true" />}
-                                            {copiedId === invite.id ? "Copiado" : "Copiar enlace"}
-                                        </button>
-                                        {voidButton(invite)}
+                                        {/* Below ~340px the actions drop under the code instead of overlapping it. */}
+                                        <div className="ml-auto flex flex-none items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => copyCode(invite.code, invite.id)}
+                                                aria-label={`Copiar enlace de registro ${invite.code}`}
+                                                className="h-11 flex-none flex items-center gap-1.5 rounded-xl px-2 text-sm font-semibold text-primary"
+                                            >
+                                                {copiedId === invite.id && <Check className="h-4 w-4" aria-hidden="true" />}
+                                                {copiedId === invite.id ? "Copiado" : "Copiar enlace"}
+                                            </button>
+                                            {voidButton(invite)}
+                                        </div>
+                                        {manualLink?.id === invite.id && (
+                                            <label
+                                                htmlFor={`manual-link-${invite.id}`}
+                                                className="basis-full flex flex-col gap-1.5 pb-1 text-xs font-semibold text-muted-foreground"
+                                            >
+                                                Copia el enlace a mano
+                                                <Input
+                                                    id={`manual-link-${invite.id}`}
+                                                    readOnly
+                                                    value={manualLink.url}
+                                                    onFocus={(e) => e.currentTarget.select()}
+                                                    className="min-w-0 font-mono text-[13px] font-normal"
+                                                />
+                                            </label>
+                                        )}
                                     </li>
                                 ))}
                             </ul>
@@ -184,8 +228,8 @@ export function AdminInvites({ invites }: { invites: AdminInvite[] }) {
                                             <UserCheck className="h-[18px] w-[18px]" aria-hidden="true" />
                                         </span>
                                         <div className="flex-1 min-w-0">
-                                            <div className="text-[15px] font-semibold truncate">{invite.usedBy?.name}</div>
-                                            <div className="text-xs text-muted-foreground truncate">{invite.usedBy?.email}</div>
+                                            <div className="text-[15px] font-semibold [overflow-wrap:anywhere]">{invite.usedBy?.name}</div>
+                                            <div className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{invite.usedBy?.email}</div>
                                         </div>
                                         <span className="font-mono text-xs text-muted-foreground">{invite.code}</span>
                                     </li>

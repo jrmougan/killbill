@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
-import { route } from "@/lib/http";
+import { conflict, notFound, route } from "@/lib/http";
+import { createInviteFor, deleteInvite } from "@/app/admin/admin-data";
 import { id, jsonObject } from "@/lib/http/schemas";
 
 export const dynamic = 'force-dynamic';
@@ -33,27 +33,21 @@ export const GET = route(
 export const POST = route(
     { auth: 'admin', errorMessage: "Error al crear invitación", logLabel: "Error creating invite:" },
     async ({ ctx }) => {
-        // Generate random 8-character code
-        const code = randomBytes(4).toString("hex").toUpperCase();
-
-        const invite = await prisma.inviteCode.create({
-            data: {
-                code,
-                createdById: ctx.userId,
-                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-            },
-        });
-
-        return NextResponse.json(invite);
+        // Random 8-character code, valid for 7 days: the same helper as the admin panel.
+        return NextResponse.json(await createInviteFor(ctx.userId));
     },
 );
 
-// DELETE: Delete an invite code
+// DELETE: Void an invite code nobody has used. Same rule as the admin panel
+// (`deleteInvite`): a used code stays as the record of who registered with it
+// (409 INVITE_USED); an id that does not exist is a 404, not a 500.
 export const DELETE = route(
     { auth: 'admin', body: DeleteBody, errorMessage: "Error al eliminar invitación", logLabel: "Error deleting invite:" },
     async ({ body: { id } }) => {
-        await prisma.inviteCode.delete({ where: { id } });
+        if (await deleteInvite(id)) return NextResponse.json({ success: true });
 
-        return NextResponse.json({ success: true });
+        const invite = await prisma.inviteCode.findUnique({ where: { id }, select: { id: true } });
+        if (!invite) throw notFound("Invitación no encontrada");
+        throw conflict("Esta invitación ya se ha usado y no se puede anular", "INVITE_USED");
     },
 );

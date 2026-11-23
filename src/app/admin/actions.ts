@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { checkAdmin, createInviteFor, deleteInvite } from "./admin-data";
 
-export type AdminActionResult = { ok: true } | { ok: false; error: string };
+/** `gone`: the invite was already used or voided, so there is nothing left to retry. */
+export type AdminActionResult = { ok: true } | { ok: false; error: string; gone?: true };
 
 const DENIED: AdminActionResult = { ok: false, error: "Acceso denegado" };
 
@@ -21,17 +22,23 @@ export async function createInviteAction(): Promise<AdminActionResult> {
     return { ok: true };
 }
 
-/** Delete a registration invite. Admin-only, re-checked against the DB on every call. */
+/**
+ * Void an unused registration invite. Admin-only, re-checked against the DB on
+ * every call. An invite that was used or voided meanwhile is not an error to
+ * retry: the list is revalidated and the result says `gone`.
+ */
 export async function deleteInviteAction(id: string): Promise<AdminActionResult> {
     const admin = await checkAdmin();
     if (admin.status !== "ok") return DENIED;
     if (typeof id !== "string" || !id) return { ok: false, error: "No se pudo eliminar la invitación" };
+    let deleted: boolean;
     try {
-        await deleteInvite(id);
+        deleted = await deleteInvite(id);
     } catch (error) {
         console.error("Error deleting invite:", error);
         return { ok: false, error: "No se pudo eliminar la invitación" };
     }
     revalidatePath("/admin");
+    if (!deleted) return { ok: false, error: "Esta invitación ya se había usado o anulado", gone: true };
     return { ok: true };
 }

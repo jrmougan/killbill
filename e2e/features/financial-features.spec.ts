@@ -129,7 +129,8 @@ test.describe('Financial feature UI journeys', () => {
     await expect(page.getByTestId('balance-amount')).toHaveText(/\+18,51\s*€/);
     const personalExpenseId = await createExpense(page, 'Diario privado QA', '12.35', 'Secreto QA', true);
     await expect(page.getByText('Diario privado QA', { exact: true })).toBeVisible();
-    await expect(page.getByText('Personal este mes', { exact: true }).locator('..')).toContainText(/12,35\s*€/);
+    await expect(page.getByTestId('space-card-active')).toContainText('Personal este mes');
+    await expect(page.getByTestId('space-card-active')).toContainText(/12,35\s*€/);
     await expectBalances(context.request, groupId, { [userA.id]: 1851, [userB.id]: -1851 });
     const sharedResponse = await context.request.get('/api/expenses?scope=shared');
     expect(sharedResponse.ok()).toBe(true);
@@ -158,7 +159,8 @@ test.describe('Financial feature UI journeys', () => {
     await expect(memberPage.getByText('Secreto QA', { exact: true })).toHaveCount(0);
     await memberPage.goto('/dashboard?scope=personal');
     await expect(memberPage.getByText('Diario privado QA', { exact: true })).toHaveCount(0);
-    await expect(memberPage.getByText('Personal este mes', { exact: true }).locator('..')).toContainText(/0,00\s*€/);
+    await expect(memberPage.getByTestId('space-card-active')).toContainText('Personal este mes');
+    await expect(memberPage.getByTestId('space-card-active')).toContainText(/0,00\s*€/);
 
     const outsiderSeed = await seedScenario(request, 'solo-user');
     const outsiderContext = await createAuthenticatedContext(newContext, credentials(outsiderSeed.user));
@@ -200,7 +202,8 @@ test.describe('Financial feature UI journeys', () => {
       await expect(page.getByText('Pan banco QA', { exact: true })).toBeVisible();
       await expect(page.getByText('Fruta banco QA', { exact: true })).toBeVisible();
       await page.goto('/dashboard?scope=personal');
-      await expect(page.getByText('Personal este mes', { exact: true }).locator('..')).toContainText(/37,35\s*€/);
+      await expect(page.getByTestId('space-card-active')).toContainText('Personal este mes');
+      await expect(page.getByTestId('space-card-active')).toContainText(/37,35\s*€/);
       await expect(page.getByText('Compra excluida QA', { exact: true })).toHaveCount(0);
       await expect(page.getByText('Nómina QA', { exact: true })).toHaveCount(0);
     }
@@ -219,7 +222,8 @@ test.describe('Financial feature UI journeys', () => {
     const memberContext = await createAuthenticatedContext(newContext, userB);
     const memberPage = await memberContext.newPage();
     await memberPage.goto('/dashboard?scope=personal');
-    await expect(memberPage.getByText('Personal este mes', { exact: true }).locator('..')).toContainText(/0,00\s*€/);
+    await expect(memberPage.getByTestId('space-card-active')).toContainText('Personal este mes');
+    await expect(memberPage.getByTestId('space-card-active')).toContainText(/0,00\s*€/);
     await expect(memberPage.getByText('Pan banco QA', { exact: true })).toHaveCount(0);
     await expect(memberPage.getByText('Fruta banco QA', { exact: true })).toHaveCount(0);
     await memberPage.goto('/dashboard?scope=comun');

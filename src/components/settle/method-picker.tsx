@@ -22,7 +22,8 @@ export function MethodPicker({
     return (
         <fieldset className="flex flex-col gap-2" disabled={disabled}>
             <legend className="text-xs font-semibold text-muted-foreground mb-2">{label}</legend>
-            <div className="grid grid-cols-3 gap-2 text-[13px] font-semibold">
+            {/* Below 350px equal tiles are narrower than "Transferencia" plus its padding. */}
+            <div className="grid grid-cols-3 max-[349px]:grid-cols-[1fr_auto_1fr] gap-2 text-[13px] font-semibold">
                 {SETTLE_METHODS.map((m) => {
                     const selected = m.value === value;
                     return (

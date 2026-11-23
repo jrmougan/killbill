@@ -125,7 +125,7 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
             </SettleHeader>
 
             <div className="flex-1 flex flex-col gap-6 px-5 pt-6 pb-8">
-                <section className="flex flex-col items-center gap-2 text-center" data-testid="settlement-summary">
+                <section className="flex flex-col items-center gap-2 text-center [overflow-wrap:anywhere]" data-testid="settlement-summary">
                     <span className="text-[15px] text-muted-foreground">{headline}</span>
                     <span className="text-[length:clamp(30px,11vw,44px)] font-bold tracking-[-0.03em] tabular-nums leading-none" data-testid="settlement-amount">
                         {amount}
@@ -205,8 +205,8 @@ export default async function SettlementDetailPage({ params }: SettlementDetailP
 function DetailRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
     return (
         <div className={`flex justify-between gap-3 py-3.5 text-[15px] ${last ? "" : "border-b border-[color:var(--line-2)]"}`}>
-            <span className="text-muted-foreground">{label}</span>
-            <span className="font-semibold text-right truncate">{value}</span>
+            <span className="flex-none text-muted-foreground">{label}</span>
+            <span className="min-w-0 font-semibold text-right [overflow-wrap:anywhere]">{value}</span>
         </div>
     );
 }

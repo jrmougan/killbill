@@ -214,7 +214,7 @@ export function BudgetView({
                         {overNote && (
                             <span
                                 data-testid="budget-over-note"
-                                className="flex items-center gap-1.5 text-[13px] font-semibold text-[color:var(--negative)]"
+                                className="flex items-center gap-1.5 text-[13px] font-semibold text-[color:var(--negative)] [overflow-wrap:anywhere]"
                             >
                                 <AlertTriangle className="h-3.5 w-3.5 flex-none" aria-hidden />
                                 {overNote}
@@ -232,14 +232,15 @@ export function BudgetView({
                                 const stateText = STATE_LABEL[state];
                                 const inner = (
                                     <>
-                                        <span className="flex w-full items-center justify-between gap-3 text-sm">
+                                        {/* Wraps: at 320px two long amounts would leave no room to read the category. */}
+                                        <span className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-sm">
                                             <span className="flex items-center gap-1.5 font-semibold min-w-0">
                                                 <CategoryGlyph category={cat} />
-                                                <span className="truncate">{cat.label}</span>
+                                                <span className="min-w-0 [overflow-wrap:anywhere]">{cat.label}</span>
                                             </span>
                                             <span
                                                 className={cn(
-                                                    "flex-none tabular-nums",
+                                                    "ml-auto flex-none tabular-nums",
                                                     state === "over" ? "text-[color:var(--negative)] font-semibold" : "text-muted-foreground",
                                                 )}
                                             >

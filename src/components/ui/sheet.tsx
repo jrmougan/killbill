@@ -93,9 +93,9 @@ export function Sheet({
                 // A click on the dialog box itself (not its content) is the backdrop.
                 if (dismissible && e.target === e.currentTarget) onCloseRef.current();
             }}
-            className="eq-in fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-md max-h-[90vh] overflow-y-auto overflow-x-hidden rounded-t-[24px] bg-card p-0 text-foreground backdrop:bg-black/35"
+            className="eq-in fixed inset-x-0 bottom-0 top-auto m-0 mx-auto w-full max-w-md max-h-[90dvh] overflow-y-auto overflow-x-hidden rounded-t-[24px] bg-card p-0 text-foreground backdrop:bg-black/35"
         >
-            <div className="px-5 pt-4 pb-[calc(20px+env(safe-area-inset-bottom))]">
+            <div className="px-5 pt-4 pb-[calc(20px+env(safe-area-inset-bottom))] [overflow-wrap:break-word]">
                 <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-[var(--ink-4)]" aria-hidden />
                 <div className="flex items-center gap-2 mb-4">
                     {title ? (
@@ -129,14 +129,14 @@ export function SheetField({
 }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
     const id = useId();
     return (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1.5">
             <label htmlFor={id} className="text-xs font-semibold text-muted-foreground pl-1">
                 {label}
             </label>
             <input
                 id={id}
                 {...props}
-                className="h-12 rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 text-[15px] outline-none focus:border-[color:var(--accent-border)] disabled:opacity-60"
+                className="h-12 w-full min-w-0 rounded-[14px] border border-[color:var(--line)] bg-card px-3.5 text-[15px] outline-none focus:border-[color:var(--accent-border)] disabled:opacity-60"
             />
         </div>
     );

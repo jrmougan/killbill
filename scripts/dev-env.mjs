@@ -1,10 +1,32 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
+import { readEnvFile, updateEnvFile } from './env-file.mjs';
+import { SHARED_REPLICA } from '../src/lib/test-db-guard.mjs';
 
 // Never replace an existing environment, including one prepared by a developer.
+// Only add the WORKTREE_DATABASE_* keys a .env from before the shared replica lacks:
+// until then DATABASE_* always described this worktree's own MySQL.
 if (existsSync('.env')) {
-  console.log('Keeping existing .env.');
+  const env = readEnvFile('.env');
+  if (env.WORKTREE_DATABASE_PORT) {
+    console.log('Keeping existing .env.');
+    process.exit(0);
+  }
+  if (Number(env.DATABASE_PORT) === SHARED_REPLICA.port) {
+    throw new Error('.env has no WORKTREE_DATABASE_* and DATABASE_* points at the shared replica: fix it by hand (see .env.example).');
+  }
+  for (const key of ['DATABASE_PORT', 'DATABASE_USER', 'DATABASE_PASSWORD', 'DATABASE_NAME']) {
+    if (!env[key]) throw new Error(`Missing ${key} in .env: cannot derive WORKTREE_${key}.`);
+  }
+  updateEnvFile('.env', {
+    DATABASE_TARGET: env.DATABASE_TARGET || 'worktree',
+    WORKTREE_DATABASE_PORT: env.DATABASE_PORT,
+    WORKTREE_DATABASE_USER: env.DATABASE_USER,
+    WORKTREE_DATABASE_PASSWORD: env.DATABASE_PASSWORD,
+    WORKTREE_DATABASE_NAME: env.DATABASE_NAME,
+  });
+  console.log('Kept .env and added WORKTREE_DATABASE_* (this worktree\'s own MySQL).');
   process.exit(0);
 }
 
@@ -36,6 +58,11 @@ const values = {
   DATABASE_NAME: 'killbill',
   DATABASE_PORT: dbPort,
   DATABASE_URL: `mysql://killbill:${password}@127.0.0.1:${dbPort}/killbill`,
+  DATABASE_TARGET: 'worktree',
+  WORKTREE_DATABASE_PORT: dbPort,
+  WORKTREE_DATABASE_USER: 'killbill',
+  WORKTREE_DATABASE_PASSWORD: password,
+  WORKTREE_DATABASE_NAME: 'killbill',
   MYSQL_ROOT_PASSWORD: randomBytes(24).toString('hex'),
   JWT_SECRET: randomBytes(32).toString('hex'),
 };
@@ -47,4 +74,4 @@ for (const [key, value] of Object.entries(values)) {
 }
 writeFileSync('.env', template, { flag: 'wx', mode: 0o600 });
 console.log(`Created .env for ${values.COMPOSE_PROJECT_NAME}. App: http://localhost:${port}; MySQL: 127.0.0.1:${dbPort}.`);
-console.log('Next: mise run services:up, mise run db:migrate, mise run db:seed, mise run dev.');
+console.log('Next: mise run services:up, mise run db:migrate, mise run db:seed (or mise run db:replica:use-shared), mise run dev.');

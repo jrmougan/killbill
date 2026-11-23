@@ -577,7 +577,7 @@ export function ListsHub({ groupId, groupStatus = null, groupLists, personalList
             )}
 
             {selected && !archived && (
-                <div className="fixed inset-x-0 z-30 sm:max-w-md sm:mx-auto bottom-[calc(74px+env(safe-area-inset-bottom))] px-5 pt-3 pb-3 bg-gradient-to-t from-background via-background to-transparent">
+                <div className="fixed inset-x-0 z-30 sm:max-w-md sm:mx-auto bottom-[calc(74px+env(safe-area-inset-bottom))] px-5 pt-6 pb-3 bg-gradient-to-t from-background via-background via-80% to-transparent">
                     {/* The effect of the shortcut, said before tapping it (it deletes the checked items). */}
                     <p id="finish-effect" data-testid="finish-effect" className="pb-1.5 text-center text-[12.5px] text-muted-foreground">
                         {done.length === 0

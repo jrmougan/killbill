@@ -1,3 +1,4 @@
+import { testRoutesRefusal } from '@/lib/test-routes-guard';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
@@ -87,6 +88,11 @@ function creds(user: { email: string; id: string }, password: string) {
 export async function POST(request: Request) {
   if (process.env.TEST_ROUTES_ENABLED !== 'true') {
     return new NextResponse(null, { status: 404 });
+  }
+
+  const refusal = await testRoutesRefusal();
+  if (refusal) {
+    return NextResponse.json({ error: `Test routes refused: ${refusal}` }, { status: 403 });
   }
 
   try {

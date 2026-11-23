@@ -24,7 +24,7 @@ export function AuthShell({
     return (
         <div
             className={cn(
-                "min-h-dvh flex flex-col eq-in px-6 pt-12 pb-[calc(34px+env(safe-area-inset-bottom))]",
+                "min-h-dvh flex flex-col eq-in px-6 pt-12 pb-[calc(34px+env(safe-area-inset-bottom))] [overflow-wrap:break-word]",
                 className,
             )}
         >

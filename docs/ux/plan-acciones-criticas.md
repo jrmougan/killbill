@@ -1,3 +1,5 @@
+> §1-2 vigentes; §3-8 plan ejecutado (CF-01…CF-28).
+
 # Plan final: acciones críticas más claras y paso de "Quedar en paz" a "Saldar deuda"
 
 Esta versión recoge todas las observaciones altas y medias de la revisión. Cambios respecto al borrador:

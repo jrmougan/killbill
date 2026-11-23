@@ -88,6 +88,12 @@ enum LedgerTxnKind {
   SETTLEMENT
 }
 
+// Proveedores LLM del OCR de tickets (orden de fallback en receipt-ocr-ai.ts).
+enum AiProvider {
+  GEMINI
+  OPENROUTER
+}
+
 enum MembershipStatus {
   ACTIVE
   LEFT
@@ -758,4 +764,16 @@ model ShoppingListItem {
 
   @@index([listId])
   @@index([checkedById])
+}
+
+// Configuración de IA de la instancia (solo admin), una fila por proveedor.
+// Precedencia: valor en BD > variable de entorno > por defecto (src/lib/ai-settings.ts).
+// `encryptedApiKey` va cifrada con AES-256-GCM (src/lib/secret-box.ts): el texto
+// plano nunca se almacena ni sale del servidor.
+model AiProviderConfig {
+  provider        AiProvider @id
+  encryptedApiKey String?    @db.Text
+  model           String?    @db.VarChar(128)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 }

@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { testRoutesRefusal } from '@/lib/test-routes-guard';
 
 export async function POST() {
   if (process.env.TEST_ROUTES_ENABLED !== 'true') {
     return new NextResponse(null, { status: 404 });
+  }
+
+  const refusal = await testRoutesRefusal();
+  if (refusal) {
+    return NextResponse.json({ error: `Test routes refused: ${refusal}` }, { status: 403 });
   }
 
   try {
@@ -30,6 +36,8 @@ export async function POST() {
       // Remove even the seeded admin: scenarios create their own admin users.
       prisma.user.deleteMany(),
       prisma.couple.deleteMany(),
+      // Instance-wide OCR settings: a stored key must not leak between scenarios.
+      prisma.aiProviderConfig.deleteMany(),
     ]);
 
     return NextResponse.json({ success: true });

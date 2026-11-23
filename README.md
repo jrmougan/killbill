@@ -6,7 +6,7 @@ con autenticación JWT y lectura de tickets mediante OCR.
 ## Desarrollo local
 
 Requisitos: [mise](https://mise.jdx.dev/getting-started.html) y Docker (Podman es opcional).
-`mise.toml` fija Node 26.13.0 (incluye npm 11.20.0) y Compose 5.6.1.
+`mise.toml` fija Node 26.13.1 (incluye npm 11.20.0) y Compose 5.8.0.
 
 ```bash
 mise trust
@@ -35,7 +35,18 @@ del sistema y el admin; el acceso local por defecto es
 `admin@killbill.app` / `password123`. Puedes configurar `SEED_ADMIN_EMAIL`,
 `SEED_ADMIN_PASSWORD` y `SEED_ADMIN_PIN` antes de la primera siembra.
 
-El OCR requiere `GEMINI_API_KEY` o `OPENROUTER_API_KEY` en `.env`. Las claves
+Para desarrollar con datos reales **anonimizados** de producción hay una
+**réplica compartida** por máquina (contenedor Podman `prod-replica-killbill`,
+`127.0.0.1:23308`). `mise run setup` la arranca y apunta la app a ella sin cargar
+datos; `mise run db:replica:refresh` la vuelve a sacar de producción (solo
+lectura allí). El login queda en `admin@example.invalid` / `password`. Para una
+rama con migraciones nuevas, `mise run db:replica:local` carga la copia en la base
+propia del worktree. Los tests y el e2e usan **siempre** la base propia del
+worktree, nunca la réplica. Detalles, caché y avisos:
+[docs/prod-replica.md](docs/prod-replica.md).
+
+El OCR requiere una clave de Gemini o de OpenRouter, ya sea en `.env`
+(`GEMINI_API_KEY`, `OPENROUTER_API_KEY`) o guardada desde `/admin/ai`. Las claves
 quedan vacías inicialmente; el resto de la aplicación se puede desarrollar sin
 ellas. Si ya tienes `.env`, incorpora `PORT`, `COMPOSE_PROJECT_NAME` y los campos
 de `.env.example` que necesites; `setup` nunca lo sobrescribe. Mantén
@@ -45,23 +56,30 @@ de `.env.example` que necesites; `setup` nunca lo sobrescribe. Mantén
 
 | Comando | Acción |
 | --- | --- |
-| `mise run setup` | Preparar entorno, dependencias y cliente Prisma |
+| `mise run setup` | Preparar entorno, dependencias y cliente Prisma; apuntar la app a la réplica compartida |
 | `mise run dev` | Arrancar Next.js en el puerto de `.env` |
 | `mise run check` | Prisma generate, oxlint, typecheck y tests unitarios sin watch |
 | `mise run typecheck` | `next typegen` + `tsc` de la app y de `e2e/` |
 | `mise run test` | Tests unitarios sin watch |
 | `mise run lint` | Lint con oxlint |
 | `mise run build` | Generar Prisma y compilar producción |
-| `mise run services:up` | Arrancar MySQL y esperar a que esté listo |
+| `mise run services:up` | Arrancar la MySQL propia del worktree y esperar a que esté lista |
 | `mise run services:status` | Consultar los servicios de este checkout |
 | `mise run services:down` | Detener servicios conservando los datos |
-| `mise run db:migrate` | Aplicar migraciones existentes |
-| `mise run db:seed` | Sembrar categorías y admin |
-| `mise run e2e` | Ejecutar Playwright |
+| `mise run db:migrate` | Aplicar migraciones existentes a la base propia del worktree |
+| `mise run db:seed` | Sembrar categorías y admin en la base propia del worktree |
+| `mise run db:replica:up` / `db:replica:down` | Arrancar o parar la réplica compartida (`down -- --purge` la borra) |
+| `mise run db:replica:refresh` | Volver a sacar la réplica de producción (solo lectura allí) y recargar la compartida |
+| `mise run db:replica:use-shared` | Apuntar la app a la réplica compartida |
+| `mise run db:replica:local` | Cargar la réplica en la base propia del worktree (ramas con migraciones) |
+| `mise run e2e` | Ejecutar Playwright contra la base propia del worktree |
 
 Antes del primer e2e: `mise exec -- npx playwright install chromium --with-deps`.
-Los fixtures e2e **borran los datos de la base configurada**: ejecútalos en un
-checkout de pruebas con su propia `.env` y base local. Detén su servidor dev;
+Los fixtures e2e **borran los datos de su base**, que siempre es la MySQL propia
+del worktree (`WORKTREE_DATABASE_*` de `.env`), aunque la app apunte a la réplica
+compartida. El servidor de e2e y las rutas `/api/test/*` se niegan a usar un host
+que no sea local o la réplica compartida, aunque un túnel a otra base parecería
+local: no lo uses. Detén su servidor dev;
 Playwright arranca uno con las rutas de prueba habilitadas y usa el mismo `PORT`.
 CI levanta una MySQL 8.0 efímera con el mismo `compose.dev.yaml` (igual que
 producción) y usa los comandos mise del repositorio.
@@ -136,6 +154,41 @@ Coolify un paso previo al despliegue (o un job one-shot con la misma imagen) que
 ejecute `cd /prisma-tools && ./node_modules/.bin/prisma migrate deploy`, y apunta
 el healthcheck de Coolify a `/api/health`. Mientras no exista ese paso, el `CMD`
 de la imagen sigue migrando al arrancar.
+
+### Claves y modelos de IA (OCR)
+
+Una persona administradora puede configurar las claves y los modelos de Gemini y
+OpenRouter en `/admin/ai`, para toda la instancia. Las variables de entorno siguen
+funcionando, así que un despliegue que solo las use no necesita ningún cambio. Por
+proveedor, lo guardado en la interfaz tiene prioridad, y al quitarlo se vuelve a lo
+siguiente de la lista:
+
+| Ajuste | Prioridad |
+| --- | --- |
+| Clave | Base de datos → `GEMINI_API_KEY` / `OPENROUTER_API_KEY` → sin clave |
+| Modelo de Gemini | Base de datos → `gemini-flash-latest` |
+| Modelo de OpenRouter | Base de datos → `OPENROUTER_OCR_MODEL` → `xiaomi/mimo-v2.6-flash` |
+
+El orden de los proveedores no cambia: primero Gemini y, si falla, OpenRouter.
+
+El campo «Modelo» propone los modelos de cada proveedor que aceptan imágenes. La
+lista se pide al proveedor desde el servidor al abrir el campo: la de Gemini usa la
+clave configurada (sin clave no hay lista) y la de OpenRouter es pública y se pide
+sin clave. Se puede filtrar escribiendo, y también guardar un identificador que no
+esté en la lista: si el proveedor no responde o rechaza la clave, el campo sigue
+funcionando como texto libre. En Gemini el filtro de modelos con visión es
+aproximado, porque su API no indica qué modelos aceptan imágenes.
+
+Las claves se guardan cifradas con AES-256-GCM y la interfaz solo muestra su origen
+y los 4 últimos caracteres. La clave de cifrado se deriva de
+`AI_SETTINGS_ENCRYPTION_KEY` (opcional) o, si no está definida, de `JWT_SECRET`.
+
+**Rotar ese secreto obliga a volver a introducir las claves.** Las que ya están
+guardadas dejan de poder descifrarse y `/admin/ai` avisa de cuáles hay que volver
+a guardar. Mientras tanto, el OCR usa las claves de las variables de entorno; si
+no hay ninguna, fallará hasta que las vuelvas a introducir. Si quieres
+rotar `JWT_SECRET` sin que esto ocurra, define antes
+`AI_SETTINGS_ENCRYPTION_KEY` y vuelve a guardar las claves.
 
 ### Subidas (tickets y avatares)
 

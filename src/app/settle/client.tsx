@@ -349,12 +349,12 @@ export function SettleClient({ space, me, isGuest, canArchive, memberCount, part
             <div className="flex-1 flex flex-col gap-[22px] pb-6">
                 {isGuest && <div className="px-5 pt-3"><GuestBanner /></div>}
                 {archived && (
-                    <p className="mx-5 mt-3 rounded-[14px] bg-[var(--track)] px-4 py-3 text-[13px] text-muted-foreground" data-testid="settle-archived">
+                    <p className="mx-5 mt-3 rounded-[14px] bg-[var(--track)] px-4 py-3 text-[13px] text-muted-foreground [overflow-wrap:anywhere]" data-testid="settle-archived">
                         {space.name} está archivado: solo lectura.
                     </p>
                 )}
 
-                <div className="px-5 pt-3 flex flex-col gap-1" data-testid="settle-summary">
+                <div className="px-5 pt-3 flex flex-col gap-1 [overflow-wrap:anywhere]" data-testid="settle-summary">
                     <p className="text-[24px] font-bold tracking-[-0.02em] leading-tight text-balance">{headline}</p>
                     {transferLine && <p className="text-[15px] text-muted-foreground" data-testid="settle-summary-transfer">{transferLine}</p>}
                 </div>
@@ -484,11 +484,11 @@ export function SettleClient({ space, me, isGuest, canArchive, memberCount, part
 // ---- layout pieces ---------------------------------------------------------
 
 /** The CTAs carry a name and an amount: let a long one wrap instead of clipping. */
-const CTA_WRAP = "h-auto min-h-14 px-5 py-3 text-center leading-snug text-balance";
+const CTA_WRAP = "h-auto min-h-14 px-5 py-3 text-center leading-snug text-balance [overflow-wrap:anywhere]";
 
 /** EqCta "outline" look on a real link. */
 const OUTLINE_LINK = "w-full h-14 rounded-[18px] text-base font-semibold flex items-center justify-center bg-card border border-[color:var(--line)] text-foreground";
-const TEXT_LINK = "min-h-11 px-2 text-sm font-semibold text-primary inline-flex items-center";
+const TEXT_LINK = "min-h-11 px-2 text-sm font-semibold text-primary inline-flex items-center text-center [overflow-wrap:anywhere]";
 
 function TextLink({ href, children }: { href: string; children: React.ReactNode }) {
     return <Link href={href} className={TEXT_LINK}>{children}</Link>;
@@ -522,7 +522,7 @@ function Centered({
     children?: React.ReactNode;
 }) {
     return (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 py-10 text-center" data-testid={testId}>
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 py-10 text-center [overflow-wrap:anywhere]" data-testid={testId}>
             <div
                 aria-hidden
                 className={cn(
@@ -555,7 +555,8 @@ function TransferPicker({
 }) {
     return (
         <div className="px-5">
-        <fieldset className="flex flex-col gap-2" disabled={disabled} data-testid="settle-transfers">
+        {/* min-w-0: a fieldset defaults to min-width:min-content, so a long name would widen it past the screen. */}
+        <fieldset className="min-w-0 flex flex-col gap-2" disabled={disabled} data-testid="settle-transfers">
             <legend className="text-xs font-semibold text-muted-foreground mb-2">¿Qué deuda quieres saldar?</legend>
             {transfers.map((tr, i) => {
                 const active = i === selected;
@@ -565,7 +566,7 @@ function TransferPicker({
                     <label
                         key={`${tr.direction}-${tr.userId}`}
                         className={cn(
-                            "relative h-14 rounded-[14px] bg-card px-4 flex items-center justify-between gap-3 text-[15px] cursor-pointer transition-colors",
+                            "relative min-h-14 rounded-[14px] bg-card px-4 py-2 flex items-center justify-between gap-3 text-[15px] cursor-pointer transition-colors",
                             "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2",
                             active ? "border-2 border-primary" : "border border-[color:var(--line)]"
                         )}
@@ -579,10 +580,10 @@ function TransferPicker({
                             aria-label={`${text}: ${formatCurrency(tr.amount)}`}
                             className="absolute inset-0 m-0 h-full w-full cursor-pointer appearance-none opacity-0"
                         />
-                        <span className="font-semibold truncate">{text}</span>
+                        <span className="min-w-0 font-semibold [overflow-wrap:anywhere]">{text}</span>
                         <span
                             className={cn(
-                                "font-semibold tabular-nums",
+                                "flex-none font-semibold tabular-nums",
                                 tr.direction === "pay" ? "text-[color:var(--negative)]" : "text-[color:var(--positive)]"
                             )}
                         >
@@ -604,7 +605,7 @@ function OutgoingPending({ name, amount, href, onAsk }: { name: string; amount: 
                 <div aria-hidden className="h-10 w-10 flex-none rounded-[12px] bg-[var(--accent-tint)] text-primary flex items-center justify-center">
                     <Clock className="h-[18px] w-[18px]" />
                 </div>
-                <p className="text-[15px] font-semibold leading-snug">Falta que {name} confirme {formatCurrency(amount)}</p>
+                <p className="min-w-0 text-[15px] font-semibold leading-snug [overflow-wrap:anywhere]">Falta que {name} confirme {formatCurrency(amount)}</p>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-x-3 -mb-1.5">
                 <Link href={href} className={cn(TEXT_LINK, "px-0")}>Ver el pago pendiente</Link>

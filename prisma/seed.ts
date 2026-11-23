@@ -1,6 +1,7 @@
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../src/generated/prisma/client';
 import bcrypt from 'bcryptjs';
+import { sharedReplicaReason, worktreeDatabaseEnv } from '../src/lib/test-db-guard.mjs';
 
 // Carga .env si existe (Node 24); en CI/contenedor las variables ya vienen del entorno.
 try {
@@ -8,6 +9,11 @@ try {
 } catch {
     // Sin .env: usar el entorno tal cual.
 }
+// En local siembra la MySQL del worktree, nunca la réplica compartida de prod
+// (docs/prod-replica.md); en CI/contenedor no hay WORKTREE_DATABASE_* y no cambia nada.
+Object.assign(process.env, worktreeDatabaseEnv(process.env));
+const replica = sharedReplicaReason(process.env);
+if (replica) throw new Error(`El seed no escribe en la réplica compartida (${replica}).`);
 
 // Parse DATABASE_URL to get connection details
 function parseDbUrl(url: string) {

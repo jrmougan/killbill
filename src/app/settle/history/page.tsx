@@ -55,7 +55,7 @@ export default async function SettlementHistoryPage({ searchParams }: { searchPa
                         <Clock className="h-7 w-7" />
                     </div>
                     <p className="text-[17px] font-semibold">Aún no hay pagos</p>
-                    <p className="text-sm text-muted-foreground">Cuando alguien salde una deuda en {spaceName}, aparecerá aquí.</p>
+                    <p className="max-w-full text-sm text-muted-foreground [overflow-wrap:anywhere]">Cuando alguien salde una deuda en {spaceName}, aparecerá aquí.</p>
                 </div>
             ) : (
                 <div className="flex flex-col gap-6 px-5 pt-6">
@@ -89,8 +89,8 @@ export default async function SettlementHistoryPage({ searchParams }: { searchPa
                                             sub={
                                                 // Wraps instead of truncating: the long chip would hide "Falta que X lo confirme".
                                                 <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 whitespace-normal">
-                                                    <SettlementStatusChip status={s.status} side={fromMe ? "payer" : "receiver"} className="px-2 py-0 text-[11px] flex-none" />
-                                                    <span>
+                                                    <SettlementStatusChip status={s.status} side={fromMe ? "payer" : "receiver"} className="max-w-full px-2 py-0 text-[11px]" />
+                                                    <span className="min-w-0 [overflow-wrap:anywhere]">
                                                         {detail}
                                                     </span>
                                                 </span>

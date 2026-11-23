@@ -142,11 +142,11 @@ export function CriticalActionSheet({
                         aria-describedby={reasonShown ? `${testId ?? "confirm-sheet"}-reason` : undefined}
                         data-testid={confirmTestId}
                         className={cn(
-                            "h-14 rounded-[18px] text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50 aria-disabled:opacity-50 active:scale-[0.98]",
+                            "min-h-14 rounded-[18px] px-4 py-2 text-center text-base font-semibold [overflow-wrap:anywhere] flex items-center justify-center gap-2 disabled:opacity-50 aria-disabled:opacity-50 active:scale-[0.98]",
                             danger ? "bg-destructive text-white" : "bg-primary text-primary-foreground",
                         )}
                     >
-                        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                        {busy && <Loader2 className="h-4 w-4 flex-none animate-spin" aria-hidden="true" />}
                         {confirmLabel}
                     </button>
                     <span className="sr-only" aria-live="polite">

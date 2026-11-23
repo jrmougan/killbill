@@ -1,16 +1,23 @@
 # Local development only. Production remains in docker-compose.yml.
 # Project name, credentials and published port are generated per worktree by setup.
+# `db` is this worktree's own MySQL (WORKTREE_DATABASE_*): tests and e2e always use
+# it. The shared anonymized prod replica is NOT here: it is one Podman container per
+# machine, managed by scripts/replica/db-replica.sh (docs/prod-replica.md).
 services:
   db:
     image: docker.io/library/mysql:8.0
     command: ["--default-authentication-plugin=mysql_native_password"]
+    # Rootless Podman through its API socket gives containers oom_score_adj=200 unless
+    # it is set explicitly, and then exec (and the healthcheck) fail with "crun: write to
+    # /proc/self/oom_score_adj: Permission denied". Harmless under Docker.
+    oom_score_adj: 200
     environment:
-      MYSQL_DATABASE: ${DATABASE_NAME:?Run mise run setup first}
-      MYSQL_USER: ${DATABASE_USER:?Run mise run setup first}
-      MYSQL_PASSWORD: ${DATABASE_PASSWORD:?Run mise run setup first}
+      MYSQL_DATABASE: ${WORKTREE_DATABASE_NAME:?Run mise run setup first}
+      MYSQL_USER: ${WORKTREE_DATABASE_USER:?Run mise run setup first}
+      MYSQL_PASSWORD: ${WORKTREE_DATABASE_PASSWORD:?Run mise run setup first}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Run mise run setup first}
     ports:
-      - "127.0.0.1:${DATABASE_PORT:?Run mise run setup first}:3306"
+      - "127.0.0.1:${WORKTREE_DATABASE_PORT:?Run mise run setup first}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
@@ -18,6 +25,29 @@ services:
       interval: 3s
       timeout: 5s
       retries: 30
+      start_period: 20s
+
+  # Scratch MySQL used only by `mise run db:replica:refresh` (docs/prod-replica.md).
+  # Raw production rows are loaded and anonymized here, with the datadir and tmpdir
+  # on tmpfs (RAM) and no binlog: InnoDB keeps old record versions in .ibd pages,
+  # undo, redo and binlog, so anonymizing on a disk-backed datadir would leave real
+  # data on disk (neither the shared replica's volume nor this worktree's may see raw
+  # rows). Only the "replica" profile starts it; the script removes it.
+  replica-scratch:
+    profiles: ["replica"]
+    image: docker.io/library/mysql:8.0
+    command: ["--disable-log-bin", "--innodb-doublewrite=OFF"]
+    oom_score_adj: 200
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Run mise run setup first}
+    tmpfs:
+      - /var/lib/mysql:size=2g
+      - /tmp:size=512m
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql --protocol=TCP -h 127.0.0.1 -uroot -e 'SELECT 1'"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
       start_period: 20s
 
 volumes:

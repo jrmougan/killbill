@@ -5,7 +5,7 @@ const { prisma, models } = vi.hoisted(() => {
         'split', 'expense', 'settlement', 'budget', 'shoppingListItem',
         'shoppingList', 'groupInvite', 'membership', 'expenseTag', 'tag',
         'account', 'ledgerTransaction', 'ledgerEntry', 'recurringSeries',
-        'receiptLineItem', 'category', 'inviteCode', 'user', 'couple',
+        'receiptLineItem', 'category', 'inviteCode', 'user', 'couple', 'aiProviderConfig',
     ];
     return {
         models,
@@ -14,8 +14,11 @@ const { prisma, models } = vi.hoisted(() => {
                 deleteMany: vi.fn(() => ({ model })),
             }])),
             $transaction: vi.fn(),
+            // SELECT @@hostname of the connected MySQL (test-routes-guard.ts).
+            $queryRaw: vi.fn(async () => [{ host: 'worktree-mysql' }]),
         } as Record<string, { deleteMany: ReturnType<typeof vi.fn> }> & {
             $transaction: ReturnType<typeof vi.fn>;
+            $queryRaw: ReturnType<typeof vi.fn>;
         },
     };
 });
@@ -52,9 +55,75 @@ describe('test-only routes are gated by TEST_ROUTES_ENABLED', () => {
     });
 });
 
+describe('test-only routes refuse a non-local database', () => {
+    beforeEach(() => {
+        vi.stubEnv('TEST_ROUTES_ENABLED', 'true');
+        vi.stubEnv('DATABASE_HOST', 'mysql.example.com');
+    });
+
+    it('POST /api/test/reset deletes nothing', async () => {
+        const res = await resetPOST();
+        expect(res.status).toBe(403);
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        for (const model of models) {
+            expect(prisma[model].deleteMany).not.toHaveBeenCalled();
+        }
+    });
+
+    it('POST /api/test/seed creates nothing', async () => {
+        const res = await seedPOST(new Request('http://localhost/api/test/seed', {
+            method: 'POST',
+            body: JSON.stringify({ scenario: 'admin-with-invite' }),
+        }));
+        expect(res.status).toBe(403);
+    });
+});
+
+describe('test-only routes refuse the shared prod replica', () => {
+    const expectNothingDeleted = () => {
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+        for (const model of models) {
+            expect(prisma[model].deleteMany).not.toHaveBeenCalled();
+        }
+    };
+
+    beforeEach(() => {
+        vi.stubEnv('TEST_ROUTES_ENABLED', 'true');
+        vi.stubEnv('DATABASE_HOST', '127.0.0.1');
+    });
+
+    it('refuses the replica port before querying the server', async () => {
+        vi.stubEnv('DATABASE_PORT', '23308');
+        const res = await resetPOST();
+        expect(res.status).toBe(403);
+        expect(prisma.$queryRaw).not.toHaveBeenCalled();
+        expectNothingDeleted();
+    });
+
+    it('refuses a server whose hostname is the replica container, whatever the port', async () => {
+        vi.stubEnv('DATABASE_PORT', '3306');
+        prisma.$queryRaw.mockResolvedValueOnce([{ host: 'prod-replica-killbill' }]);
+        const res = await resetPOST();
+        expect(res.status).toBe(403);
+        expect(await res.json()).toEqual({ error: 'Test routes refused: the MySQL server is the shared replica' });
+        expectNothingDeleted();
+    });
+
+    it('refuses to seed the replica', async () => {
+        prisma.$queryRaw.mockResolvedValueOnce([{ host: 'prod-replica-killbill' }]);
+        const res = await seedPOST(new Request('http://localhost/api/test/seed', {
+            method: 'POST',
+            body: JSON.stringify({ scenario: 'admin-with-invite' }),
+        }));
+        expect(res.status).toBe(403);
+    });
+});
+
 describe('test database reset', () => {
     beforeEach(() => {
         vi.stubEnv('TEST_ROUTES_ENABLED', 'true');
+        vi.stubEnv('DATABASE_HOST', '127.0.0.1');
+        vi.stubEnv('DATABASE_URL', 'mysql://u:p@127.0.0.1:3306/db');
     });
 
     it('deletes every scenario table in one transaction, preserving system categories', async () => {

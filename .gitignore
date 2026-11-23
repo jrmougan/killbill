@@ -58,3 +58,12 @@ tsc_output*
 # Ralph UX loop screenshots and iteration logs (scripts/ralph)
 /scripts/ralph/shots/
 /scripts/ralph/logs/
+
+# Database dumps (prod replica cache lives outside the repo; never commit a dump)
+*.sql.gz
+*.sql.bz2
+*.sql.xz
+*.sql.zst
+*.dump
+*.dump.gz
+/dumps/

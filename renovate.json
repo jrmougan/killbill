@@ -7,15 +7,32 @@
   "schedule": [
     "before 6am on monday"
   ],
+  "updateNotScheduled": false,
+  "rebaseWhen": "conflicted",
   "prConcurrentLimit": 5,
   "packageRules": [
     {
-      "description": "Minor/patch updates of everything not covered by a dedicated group below",
+      "description": "One weekly PR with every non-major update (all managers) not covered by a dedicated group below",
       "matchUpdateTypes": [
         "minor",
-        "patch"
+        "patch",
+        "pin",
+        "pinDigest",
+        "digest"
       ],
       "groupName": "minor and patch updates"
+    },
+    {
+      "description": "Stay on MySQL 8.0.x: production runs 8.0 and 8.4 removed --default-authentication-plugin (docs/agents/deployment.md)",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "mysql",
+        "library/mysql",
+        "docker.io/library/mysql"
+      ],
+      "allowedVersions": "/^8\\.0(\\.\\d+)?$/"
     },
     {
       "description": "Next.js and React move together (React types included)",
@@ -52,33 +69,6 @@
       ],
       "groupName": "devDependencies patches",
       "automerge": true
-    },
-    {
-      "description": "MySQL server: track LTS only (block Innovation releases such as 9.x/26.x) and keep it out of the minor/patch group. allowedVersions can't be combined with matchUpdateTypes, so approval lives in the next rule.",
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "mysql",
-        "docker.io/library/mysql"
-      ],
-      "allowedVersions": "<9",
-      "groupName": "mysql"
-    },
-    {
-      "description": "MySQL server: the 8.0 -> 8.4 move needs a prod migration window, so major/minor updates wait for dashboard approval.",
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "mysql",
-        "docker.io/library/mysql"
-      ],
-      "matchUpdateTypes": [
-        "major",
-        "minor"
-      ],
-      "dependencyDashboardApproval": true
     }
   ]
 }

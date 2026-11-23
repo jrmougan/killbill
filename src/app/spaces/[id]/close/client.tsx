@@ -395,7 +395,7 @@ function CloseRow({ item, viewerId, settleHref }: { item: CloseItem; viewerId: s
         <li data-testid={testId} data-status={item.kind === "pending" ? "PENDING" : "OPEN"} className="flex items-center gap-3 px-4 py-3">
             <span className="flex-1 min-w-0">
                 <span className="block text-[15px] break-words">{title}</span>
-                <span className="block text-[12.5px] text-muted-foreground">{next}</span>
+                <span className="block text-[12.5px] text-muted-foreground [overflow-wrap:anywhere]">{next}</span>
             </span>
             <span
                 data-testid="close-amount"

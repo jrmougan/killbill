@@ -26,7 +26,8 @@ function Kpi({
             <div data-testid={testId} className="text-[13px] min-[360px]:text-[15px] font-bold tracking-[-0.01em] tabular-nums break-words">
                 {value}
             </div>
-            {sub && <div className="text-[11px] text-muted-foreground truncate">{sub}</div>}
+            {/* Wraps, not truncates: `sub` can carry an amount ("media 1.234.567,89 €"). */}
+            {sub && <div className="text-[11px] text-muted-foreground [overflow-wrap:anywhere]">{sub}</div>}
         </div>
     );
 }
@@ -36,10 +37,19 @@ function formatCompact(cents: number) {
     return `${Math.round(cents / 100).toLocaleString("es-ES")} €`;
 }
 
+/**
+ * Longest bar label that stays above its own bar at 320px, where bar centres are
+ * about 43px apart and 11px text takes about 5.7px per character: "9.999 €" fits
+ * beside its neighbour, "12.345 €" would collide with it.
+ */
+const MAX_LABEL_ON_BAR = 7;
+
 /** 6-month bars: total (light) with "tu parte" nested inside (shared scope). */
 function MonthBars({ months }: { months: MonthAnalysis["months"] }) {
     const shared = months.some((m) => m.myShare !== null);
     const max = Math.max(...months.map((m) => m.total), 1);
+    // Amounts too wide for a bar column move to their own row, complete and in full.
+    const labelsInRow = months.slice(-2).some((m) => formatCompact(m.total).length > MAX_LABEL_ON_BAR);
     const describe = (m: MonthAnalysis["months"][number]) =>
         `${m.label}: ${formatCurrency(m.total)}${m.myShare !== null ? `, tu parte ${formatCurrency(m.myShare)}` : ""}`;
     return (
@@ -54,6 +64,21 @@ function MonthBars({ months }: { months: MonthAnalysis["months"] }) {
                     </span>
                 </div>
             )}
+            {labelsInRow && (
+                <div className="flex flex-wrap justify-end gap-x-3 gap-y-0.5 text-[11px] leading-tight tabular-nums" aria-hidden>
+                    {months.slice(-2).map((m, i, shown) => {
+                        const isCurrent = i === shown.length - 1;
+                        return (
+                            <span
+                                key={`${m.label}-${i}`}
+                                className={cn("whitespace-nowrap", isCurrent ? "font-bold text-foreground" : "text-muted-foreground")}
+                            >
+                                {m.label} <span data-testid={isCurrent ? "bar-current" : "bar-prev"}>{formatCompact(m.total)}</span>
+                            </span>
+                        );
+                    })}
+                </div>
+            )}
             <div className="h-[140px] flex items-end gap-2.5" aria-hidden>
                 {months.map((m, i) => {
                     const isCurrent = i === months.length - 1;
@@ -66,7 +91,7 @@ function MonthBars({ months }: { months: MonthAnalysis["months"] }) {
                             title={describe(m)}
                             className="relative flex-1 min-w-0 h-full flex flex-col items-center justify-end gap-1"
                         >
-                            {(isCurrent || isPrev) && (
+                            {!labelsInRow && (isCurrent || isPrev) && (
                                 <span
                                     data-testid={isCurrent ? "bar-current" : "bar-prev"}
                                     className={cn(
@@ -291,7 +316,7 @@ export function AnalysisView({
                                 <span className="w-6 text-[17px] flex justify-center">
                                     <CategoryGlyph category={c} />
                                 </span>
-                                <span className="flex-1 min-w-0 truncate text-sm font-semibold">{c.label}</span>
+                                <span className="flex-1 min-w-0 [overflow-wrap:anywhere] text-sm font-semibold">{c.label}</span>
                                 <span className="w-10 text-right text-[13px] text-muted-foreground tabular-nums">
                                     {sharePercent(c.amount, total)}%
                                 </span>

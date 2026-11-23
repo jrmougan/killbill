@@ -109,8 +109,8 @@ function LinkRow({
         <>
             <Icon className="h-[19px] w-[19px] flex-none text-muted-foreground" />
             <span className="flex-1 min-w-0">
-                <span className="block text-[15px] truncate">{label}</span>
-                {sub && <span className="block text-xs text-muted-foreground truncate">{sub}</span>}
+                <span className="block text-[15px] [overflow-wrap:anywhere]">{label}</span>
+                {sub && <span className="block text-xs text-muted-foreground [overflow-wrap:anywhere]">{sub}</span>}
             </span>
             <ChevronRight className="h-[17px] w-[17px] flex-none text-[color:var(--ink-4)]" />
         </>
@@ -227,7 +227,7 @@ export function SettingsClient({ user, groups, activeGroupId, personalParam = fa
                     <Avatar value={user.avatar} name={user.name} size={56} />
                     <div className="flex-1 min-w-0">
                         <p className="text-[17px] font-semibold truncate">{user.name}</p>
-                        {user.email && <p className="text-[13px] text-muted-foreground truncate">{user.email}</p>}
+                        {user.email && <p className="text-[13px] text-muted-foreground [overflow-wrap:anywhere]">{user.email}</p>}
                     </div>
                     <button
                         type="button"

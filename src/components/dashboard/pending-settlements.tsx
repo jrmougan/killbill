@@ -139,7 +139,7 @@ export function PendingSettlements({ settlements, settling = false, myName, bala
                                             </span>
                                         </span>
                                     </Link>
-                                    <div className="flex gap-2">
+                                    <div className="flex flex-wrap gap-2">
                                         <button
                                             type="button"
                                             className="h-11 flex-1 whitespace-nowrap rounded-xl bg-primary px-3.5 text-sm font-semibold text-primary-foreground flex items-center justify-center disabled:opacity-50 active:scale-[0.97]"
@@ -150,7 +150,7 @@ export function PendingSettlements({ settlements, settling = false, myName, bala
                                         </button>
                                         <button
                                             type="button"
-                                            className="h-11 flex-none whitespace-nowrap rounded-xl px-3 text-sm font-semibold text-[color:var(--negative-ink)] flex items-center justify-center disabled:opacity-50 active:scale-[0.97]"
+                                            className="mx-auto h-11 flex-none whitespace-nowrap rounded-xl px-3 text-sm font-semibold text-[color:var(--negative-ink)] flex items-center justify-center disabled:opacity-50 active:scale-[0.97]"
                                             onClick={() => open(s, "REJECTED")}
                                             disabled={busy}
                                         >

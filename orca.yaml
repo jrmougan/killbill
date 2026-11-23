@@ -1,0 +1,14 @@
+# Orca: preparación de cada worktree nuevo (docs/prod-replica.md). No carga datos:
+# `mise run setup` arranca la réplica compartida de producción (anonimizada,
+# 127.0.0.1:23308) y apunta la app a ella. Sin réplica ni caché, avisa y la app usa
+# la base propia del worktree, que siempre queda vacía y migrada (tests y e2e la
+# usan a ella, nunca a la réplica). Nada aquí debe impedir usar el worktree.
+scripts:
+  setup: |
+    set -eu
+    mise trust --yes
+    mise install
+    mise run setup
+    mise run services:up || echo "AVISO: no ha arrancado la MySQL propia del worktree (mise run services:up)." >&2
+    mise run db:migrate || echo "AVISO: no se ha podido migrar la base propia del worktree (mise run db:migrate)." >&2
+    exit 0

@@ -69,7 +69,7 @@ export function BudgetSheet({
                 <div className="flex items-center gap-2.5">
                     <h2 id={titleId} className="flex-1 text-lg font-bold flex items-center gap-2 min-w-0">
                         <CategoryGlyph category={category} />
-                        <span className="truncate">{category.label}</span>
+                        <span className="min-w-0 [overflow-wrap:anywhere]">{category.label}</span>
                     </h2>
                     <button
                         type="button"
@@ -122,7 +122,7 @@ export function BudgetSheet({
                             className="m-0 min-w-0 border-0 flex flex-col gap-3 rounded-[14px] bg-[var(--negative-tint)] p-3.5"
                         >
                             <legend className="sr-only">Confirmar eliminación</legend>
-                            <p id={`${inputId}-confirm`} className="text-sm">
+                            <p id={`${inputId}-confirm`} className="text-sm [overflow-wrap:anywhere]">
                                 ¿Eliminar el presupuesto de <strong>{category.label}</strong>? Dejarás de ver su límite
                                 este mes; tus gastos no cambian.
                             </p>
