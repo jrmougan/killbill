@@ -35,6 +35,13 @@ del sistema y el admin; el acceso local por defecto es
 `admin@killbill.app` / `password123`. Puedes configurar `SEED_ADMIN_EMAIL`,
 `SEED_ADMIN_PASSWORD` y `SEED_ADMIN_PIN` antes de la primera siembra.
 
+Para trabajar con datos reales **anonimizados** de producción:
+`mise run db:replica` recrea la base local desde la caché de la réplica (o la
+descarga con `ssh coolify-new` si no existe) y `mise run db:replica:refresh` la
+vuelve a sacar de producción. El login queda en `admin@example.invalid` /
+`password`. Los worktrees de Orca lo hacen solos (`orca.yaml`). Detalles, caché
+y avisos: [docs/prod-replica.md](docs/prod-replica.md).
+
 El OCR requiere una clave de Gemini o de OpenRouter, ya sea en `.env`
 (`GEMINI_API_KEY`, `OPENROUTER_API_KEY`) o guardada desde `/admin/ai`. Las claves
 quedan vacías inicialmente; el resto de la aplicación se puede desarrollar sin
@@ -58,6 +65,8 @@ de `.env.example` que necesites; `setup` nunca lo sobrescribe. Mantén
 | `mise run services:down` | Detener servicios conservando los datos |
 | `mise run db:migrate` | Aplicar migraciones existentes |
 | `mise run db:seed` | Sembrar categorías y admin |
+| `mise run db:replica` | Recrear la BD local desde la réplica anonimizada de producción |
+| `mise run db:replica:refresh` | Volver a sacar la réplica de producción (solo lectura allí) |
 | `mise run e2e` | Ejecutar Playwright |
 
 Antes del primer e2e: `mise exec -- npx playwright install chromium --with-deps`.

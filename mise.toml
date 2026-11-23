@@ -68,3 +68,11 @@ run = "npm run db:migrate"
 [tasks."db:seed"]
 description = "Seed system categories and the admin account"
 run = "npm run db:seed"
+
+[tasks."db:replica"]
+description = "Recreate the local DB from the anonymized production replica cache (refresh if absent), then migrate"
+run = "bash scripts/replica/db-replica.sh load"
+
+[tasks."db:replica:refresh"]
+description = "Stream production into the local DB, anonymize, verify, cache it and migrate (read-only on prod)"
+run = "bash scripts/replica/db-replica.sh refresh"

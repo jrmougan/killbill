@@ -1,0 +1,16 @@
+# Orca: preparación de cada worktree nuevo (docs/prod-replica.md).
+# Si la réplica falla (sin red, sin ssh a producción), avisa y deja la BD vacía y
+# migrada para que el worktree siga siendo usable.
+scripts:
+  setup: |
+    set -eu
+    mise trust --yes
+    mise install
+    mise run setup
+    mise run services:up
+    if ! mise run db:replica; then
+      echo "AVISO: no se ha podido cargar la réplica de producción; la BD queda vacía." >&2
+      echo "AVISO: reinténtalo con 'mise run db:replica' cuando haya acceso a ssh coolify-new." >&2
+      mise run db:migrate || echo "AVISO: tampoco se han podido aplicar las migraciones." >&2
+    fi
+    exit 0

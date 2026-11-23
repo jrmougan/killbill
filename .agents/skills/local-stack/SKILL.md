@@ -8,7 +8,7 @@ description: Boot this app locally, inspect the local database or run e2e. Use w
 Commands are in `AGENTS.md`; e2e traps are in `docs/agents/testing.md`.
 
 1. **Port**: `grep '^PORT=' .env`. Never read the whole `.env`; it holds secrets.
-2. **Boot**: `mise run setup` once per worktree, then `mise run services:up`, `mise run db:migrate`, `mise run db:seed`, `mise run dev`. Local admin credentials: `README.md`, "Desarrollo local".
+2. **Boot**: `mise run setup` once per worktree, then `mise run services:up`, `mise run db:migrate`, `mise run db:seed`, `mise run dev`. Local admin credentials: `README.md`, "Desarrollo local". For anonymized production data, `mise run db:replica` instead of migrate + seed (login `admin@example.invalid` / `password`; `docs/prod-replica.md`).
 3. **Browsers**: `mise exec -- npx playwright install chromium`. Add `--with-deps` only if system libraries are missing, since it can need sudo.
 4. **E2E wipes the database in `.env`**. Stop `mise run dev` first; Playwright starts its own server. Ask before running it if local data matters. Run one area with `mise run e2e -- e2e/<dir>`; API suites need `--project=api`.
 5. **Scenario data**: scenarios are in `src/app/api/test/seed/route.ts`, and `/api/test/*` only answers with `TEST_ROUTES_ENABLED=true`, as under Playwright.
