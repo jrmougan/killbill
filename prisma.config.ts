@@ -16,6 +16,7 @@ try {
 // copia solo este fichero a /prisma-tools. Misma lógica y puerto que
 // src/lib/test-db-guard.mjs (worktreeDatabaseEnv, SHARED_REPLICA); un test lo comprueba.
 const SHARED_REPLICA_PORT = 23308
+const SHARED_REPLICA_USER = 'killbill_replica'
 const env = process.env
 if (env.WORKTREE_DATABASE_PORT) {
     const { WORKTREE_DATABASE_PORT: port, WORKTREE_DATABASE_USER: user, WORKTREE_DATABASE_PASSWORD: password, WORKTREE_DATABASE_NAME: name } = env
@@ -30,14 +31,14 @@ if (env.WORKTREE_DATABASE_PORT) {
         DATABASE_URL: `mysql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@127.0.0.1:${port}/${name}`,
     })
 }
-let urlPort: number | undefined
+let url: URL | undefined
 try {
-    urlPort = env.DATABASE_URL ? Number(new URL(env.DATABASE_URL).port) : undefined
+    url = env.DATABASE_URL ? new URL(env.DATABASE_URL) : undefined
 } catch {
     // Prisma informará de la URL mal formada.
 }
-if (urlPort === SHARED_REPLICA_PORT) {
-    throw new Error('La CLI de Prisma no trabaja contra la réplica compartida (puerto 23308). Usa mise run db:replica:local.')
+if (url && (Number(url.port) === SHARED_REPLICA_PORT || decodeURIComponent(url.username) === SHARED_REPLICA_USER)) {
+    throw new Error('La CLI de Prisma no trabaja contra la réplica compartida (puerto 23308, usuario killbill_replica). Usa mise run db:replica:local.')
 }
 
 export default defineConfig({

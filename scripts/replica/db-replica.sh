@@ -81,6 +81,8 @@ compose() { node --env-file=.env scripts/dev-compose.mjs --profile replica "$@";
 
 TMP_FILES=()
 TMP_DIRS=()
+ON_ERROR_FN=''
+ON_ERROR_DB=''
 SCRATCH_UP=0
 stop_scratch() {
   [ "$SCRATCH_UP" = 1 ] || return 0
@@ -89,6 +91,8 @@ stop_scratch() {
   compose rm --stop --force "$SCRATCH" >/dev/null 2>&1 || log "AVISO: no se pudo borrar el contenedor $SCRATCH."
 }
 cleanup() {
+  # Ctrl-C (o TERM) a mitad de una carga: como ante un error, la base queda vacía.
+  [ -z "$ON_ERROR_FN" ] || on_error
   [ ${#TMP_FILES[@]} -eq 0 ] || rm -f -- "${TMP_FILES[@]}"
   [ ${#TMP_DIRS[@]} -eq 0 ] || rm -rf -- "${TMP_DIRS[@]}"
   stop_scratch
@@ -152,8 +156,6 @@ recreate_db() { # <mysql_fn> <db>
 }
 
 # Ante un fallo a mitad de una carga, la base destino queda vacía (sin datos a medias).
-ON_ERROR_FN=''
-ON_ERROR_DB=''
 on_error() {
   if [ -n "$ON_ERROR_FN" ] && [ "$BASH_SUBSHELL" = 0 ]; then
     local fn=$ON_ERROR_FN db=$ON_ERROR_DB
@@ -271,8 +273,12 @@ replica_up() {
   wait_replica
 }
 
+# Un fallo de la consulta no cuenta como "vacía": eso recrearía la base de todos.
 replica_has_data() {
-  [ "$(replica_mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$REPLICA_DB' AND table_name='_prisma_migrations'")" = 1 ]
+  local n
+  n=$(replica_mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$REPLICA_DB' AND table_name='_prisma_migrations'") \
+    || die "No se puede consultar la réplica $REPLICA_NAME; no se toca."
+  [ "$n" = 1 ]
 }
 
 check_cache() { # comprueba el sha256 de latest.sql.gz y dice de cuándo es
@@ -444,7 +450,7 @@ connect() {
     point_env worktree
     return 0
   fi
-  if bash "$0" use-shared; then return 0; fi
+  if bash "$ROOT/scripts/replica/db-replica.sh" use-shared; then return 0; fi
   log 'AVISO: no se ha podido usar la réplica compartida: la app usa la base propia del worktree (vacía).'
   point_env worktree
 }
@@ -455,11 +461,12 @@ load_local() {
   db=$(env_get WORKTREE_DATABASE_NAME)
   [[ $db =~ ^[A-Za-z0-9_]+$ ]] || die "WORKTREE_DATABASE_NAME no válido en .env: '$db' (ejecuta mise run setup)."
   [[ $db != *_testing ]] || die 'WORKTREE_DATABASE_NAME apunta a una base _testing: no se toca.'
+  # Antes de un posible refresh: no leer producción si no se va a poder cargar.
+  check_services
   if [ ! -f "$CACHE_DIR/latest.sql.gz" ]; then
-    log "No hay caché en $CACHE_DIR/latest.sql.gz: se hace un refresh desde producción."
+    log "No hay caché en $CACHE_DIR/latest.sql.gz: se hace un refresh desde producción (recarga también la réplica compartida)."
     refresh
   fi
-  check_services
   check_cache
   ON_ERROR_FN=local_mysql ON_ERROR_DB=$db
   recreate_db local_mysql "$db"

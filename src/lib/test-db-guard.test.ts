@@ -100,7 +100,9 @@ describe('worktreeDatabaseEnv', () => {
 });
 
 describe('prisma.config.ts', () => {
-    it('inlines the same replica port (it cannot import this module in the image)', () => {
-        expect(readFileSync('prisma.config.ts', 'utf8')).toContain(`SHARED_REPLICA_PORT = ${SHARED_REPLICA.port}`);
+    it('inlines the same replica port and user (it cannot import this module in the image)', () => {
+        const config = readFileSync('prisma.config.ts', 'utf8');
+        expect(config).toContain(`SHARED_REPLICA_PORT = ${SHARED_REPLICA.port}`);
+        expect(config).toContain(`SHARED_REPLICA_USER = '${SHARED_REPLICA.user}'`);
     });
 });

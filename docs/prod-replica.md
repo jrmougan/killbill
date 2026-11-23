@@ -23,7 +23,7 @@ El modelo es **mixto**:
 | `mise run db:replica:up` | Crea la réplica compartida (la primera vez, con credenciales nuevas) o la arranca. Idempotente. No carga datos. |
 | `mise run db:replica:refresh` | Vuelca producción a una MySQL efímera en RAM, anonimiza, verifica, guarda la caché y **recarga la réplica compartida** desde ella (recrea su base) con las migraciones de `main`. Manual. |
 | `mise run db:replica:use-shared` | Apunta la app (`.env`) a la réplica compartida. Si está vacía, carga la caché una vez. |
-| `mise run db:replica:local` | Carga la caché en la base **propia** del worktree, aplica las migraciones de la rama y apunta la app allí. Sin caché, hace antes un refresh. |
+| `mise run db:replica:local` | Carga la caché en la base **propia** del worktree, aplica las migraciones de la rama y apunta la app allí. Sin caché, hace antes un refresh (que también recarga la réplica compartida). |
 | `mise run db:replica:down` | Para la réplica; el volumen se conserva. `mise run db:replica:down -- --purge` borra además contenedor, volumen y `credentials.env` (la caché no). |
 
 `mise run setup` (y por tanto `orca.yaml`) **no carga datos**: al final ejecuta
@@ -62,7 +62,8 @@ usuarios y espacios). Por eso:
 - `prisma.config.ts` hace lo mismo para toda la CLI de Prisma (`migrate deploy`,
   `migrate dev`, `migrate reset`, `db push`, `studio`): las migraciones de una rama
   nunca llegan a la réplica de todos.
-- Guardas que abortan: `src/lib/test-db-guard.mjs` (`sharedReplicaReason`)
+- Guardas que abortan: `prisma.config.ts` (puerto y usuario de `DATABASE_URL`) y
+  `src/lib/test-db-guard.mjs` (`sharedReplicaReason`)
   rechaza el puerto `23308` y el usuario `killbill_replica` en `DATABASE_PORT`,
   `DATABASE_USER` o `DATABASE_URL`; `/api/test/reset` y `/api/test/seed`
   preguntan además `SELECT @@hostname` y se niegan si es `prod-replica-killbill`
@@ -118,8 +119,10 @@ volumen de la réplica ni el del worktree reciben otra cosa que la caché ya
 anonimizada. Si interrumpes un refresh, `mise run services:down` también borra un
 `replica-scratch` que haya quedado vivo.
 
-Un fallo a mitad de una carga deja vacía la base destino (réplica o worktree),
-nunca a medias. Un cerrojo (`flock` sobre `.lock` en el directorio de la caché)
+Un fallo o un Ctrl-C a mitad de una carga deja vacía la base destino (réplica o
+worktree), nunca a medias; el siguiente `mise run setup` vuelve a cargar la caché.
+Si la réplica no responde a la consulta de si tiene datos, `setup` no la recarga
+(deja la app en la base propia). Un cerrojo (`flock` sobre `.lock` en el directorio de la caché)
 evita que dos worktrees creen o carguen la réplica a la vez.
 
 Variables para pruebas: `REPLICA_SSH_HOST` (por defecto `coolify-new`) y
