@@ -8,12 +8,12 @@ description: Boot this app locally, inspect the local database or run e2e. Use w
 Commands are in `AGENTS.md`; e2e traps are in `docs/agents/testing.md`.
 
 1. **Port**: `grep '^PORT=' .env`. Never read the whole `.env`; it holds secrets.
-2. **Boot**: `mise run setup` once per worktree, then `mise run services:up`, `mise run db:migrate`, `mise run db:seed`, `mise run dev`. Local admin credentials: `README.md`, "Desarrollo local". For anonymized production data, `mise run db:replica` instead of migrate + seed (login `admin@example.invalid` / `password`; `docs/prod-replica.md`).
+2. **Boot**: `mise run setup` once per worktree, then `mise run services:up`, `mise run db:migrate`, `mise run dev`. `setup` points the app at the shared anonymized prod replica (`127.0.0.1:23308`, login `admin@example.invalid` / `password`) when it exists; check `grep '^DATABASE_TARGET=' .env` (`shared`, `worktree` or `local`). With `worktree`, `mise run db:seed` for the local admin (`README.md`, "Desarrollo local"). Branch with new migrations: `mise run db:replica:local`; back: `mise run db:replica:use-shared` (`docs/prod-replica.md`).
 3. **Browsers**: `mise exec -- npx playwright install chromium`. Add `--with-deps` only if system libraries are missing, since it can need sudo.
-4. **E2E wipes the database in `.env`**. Stop `mise run dev` first; Playwright starts its own server. Ask before running it if local data matters. Run one area with `mise run e2e -- e2e/<dir>`; API suites need `--project=api`.
+4. **E2E wipes this worktree's own MySQL** (`WORKTREE_DATABASE_*`), never the shared replica (guards abort). Stop `mise run dev` first; Playwright starts its own server. It also wipes a `db:replica:local` copy. Run one area with `mise run e2e -- e2e/<dir>`; API suites need `--project=api`.
 5. **Scenario data**: scenarios are in `src/app/api/test/seed/route.ts`, and `/api/test/*` only answers with `TEST_ROUTES_ENABLED=true`, as under Playwright.
-6. **Screens at phone size**: `SCREENS=a,b mise run ux:capture`. It also wipes the database.
-7. **Read-only query**, `SELECT` only (the host has no `mysql` client). Verify on first use:
+6. **Screens at phone size**: `SCREENS=a,b mise run ux:capture`. It also wipes the worktree's own database.
+7. **Read-only query**, `SELECT` only (the host has no `mysql` client). Worktree DB below; the shared replica: `podman exec prod-replica-killbill sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u"$MYSQL_USER" "$MYSQL_DATABASE" -e "SELECT ..."'`. Verify on first use:
 
    ```bash
    mise exec -- node --env-file=.env scripts/dev-compose.mjs exec -T db sh -c 'MYSQL_PWD=$MYSQL_PASSWORD mysql -u$MYSQL_USER $MYSQL_DATABASE -e "SELECT ..."'

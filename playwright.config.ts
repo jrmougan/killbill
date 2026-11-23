@@ -1,4 +1,14 @@
 import { defineConfig, devices } from '@playwright/test';
+import { testDatabaseRefusal, worktreeDatabaseEnv } from './src/lib/test-db-guard.mjs';
+
+// The suite (and ux:capture) resets its database: it always runs against this
+// worktree's own MySQL (WORKTREE_DATABASE_* from .env), even when .env points the
+// app at the shared prod replica, and aborts if it still resolves to the replica.
+// Runner, workers and the web server all inherit these DATABASE_* values.
+try { process.loadEnvFile(); } catch { /* no .env: CI passes real variables */ }
+Object.assign(process.env, worktreeDatabaseEnv(process.env));
+const dbRefusal = testDatabaseRefusal(process.env);
+if (dbRefusal) throw new Error(`E2E resets its database, refusing to run: ${dbRefusal}`);
 
 const port = process.env.PORT || '3000';
 const baseURL = `http://localhost:${port}`;

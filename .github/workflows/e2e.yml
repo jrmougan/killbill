@@ -19,6 +19,11 @@ jobs:
       DATABASE_PASSWORD: test_password
       DATABASE_NAME: killbill_test
       DATABASE_PORT: "3306"
+      # compose.dev.yaml publishes this MySQL from WORKTREE_DATABASE_*; same database.
+      WORKTREE_DATABASE_PORT: "3306"
+      WORKTREE_DATABASE_USER: killbill_test
+      WORKTREE_DATABASE_PASSWORD: test_password
+      WORKTREE_DATABASE_NAME: killbill_test
       # Consumed by compose.dev.yaml (same MySQL 8.0 service as local dev).
       COMPOSE_PROJECT_NAME: killbill-ci
       MYSQL_ROOT_PASSWORD: test_root

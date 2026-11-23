@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { nonLocalDatabaseReason } from '@/lib/test-db-guard.mjs';
+import { testRoutesRefusal } from '@/lib/test-routes-guard';
 
 export async function POST() {
   if (process.env.TEST_ROUTES_ENABLED !== 'true') {
     return new NextResponse(null, { status: 404 });
   }
 
-  const nonLocal = nonLocalDatabaseReason(process.env);
-  if (nonLocal) {
-    return NextResponse.json({ error: `Test routes refused: ${nonLocal}` }, { status: 403 });
+  const refusal = await testRoutesRefusal();
+  if (refusal) {
+    return NextResponse.json({ error: `Test routes refused: ${refusal}` }, { status: 403 });
   }
 
   try {

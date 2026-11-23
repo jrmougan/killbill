@@ -35,12 +35,15 @@ del sistema y el admin; el acceso local por defecto es
 `admin@killbill.app` / `password123`. Puedes configurar `SEED_ADMIN_EMAIL`,
 `SEED_ADMIN_PASSWORD` y `SEED_ADMIN_PIN` antes de la primera siembra.
 
-Para trabajar con datos reales **anonimizados** de producción:
-`mise run db:replica` recrea la base local desde la caché de la réplica (o la
-descarga con `ssh coolify-new` si no existe) y `mise run db:replica:refresh` la
-vuelve a sacar de producción. El login queda en `admin@example.invalid` /
-`password`. Los worktrees de Orca lo hacen solos (`orca.yaml`). Detalles, caché
-y avisos: [docs/prod-replica.md](docs/prod-replica.md).
+Para desarrollar con datos reales **anonimizados** de producción hay una
+**réplica compartida** por máquina (contenedor Podman `prod-replica-killbill`,
+`127.0.0.1:23308`). `mise run setup` la arranca y apunta la app a ella sin cargar
+datos; `mise run db:replica:refresh` la vuelve a sacar de producción (solo
+lectura allí). El login queda en `admin@example.invalid` / `password`. Para una
+rama con migraciones nuevas, `mise run db:replica:local` carga la copia en la base
+propia del worktree. Los tests y el e2e usan **siempre** la base propia del
+worktree, nunca la réplica. Detalles, caché y avisos:
+[docs/prod-replica.md](docs/prod-replica.md).
 
 El OCR requiere una clave de Gemini o de OpenRouter, ya sea en `.env`
 (`GEMINI_API_KEY`, `OPENROUTER_API_KEY`) o guardada desde `/admin/ai`. Las claves
@@ -53,27 +56,30 @@ de `.env.example` que necesites; `setup` nunca lo sobrescribe. Mantén
 
 | Comando | Acción |
 | --- | --- |
-| `mise run setup` | Preparar entorno, dependencias y cliente Prisma |
+| `mise run setup` | Preparar entorno, dependencias y cliente Prisma; apuntar la app a la réplica compartida |
 | `mise run dev` | Arrancar Next.js en el puerto de `.env` |
 | `mise run check` | Prisma generate, oxlint, typecheck y tests unitarios sin watch |
 | `mise run typecheck` | `next typegen` + `tsc` de la app y de `e2e/` |
 | `mise run test` | Tests unitarios sin watch |
 | `mise run lint` | Lint con oxlint |
 | `mise run build` | Generar Prisma y compilar producción |
-| `mise run services:up` | Arrancar MySQL y esperar a que esté listo |
+| `mise run services:up` | Arrancar la MySQL propia del worktree y esperar a que esté lista |
 | `mise run services:status` | Consultar los servicios de este checkout |
 | `mise run services:down` | Detener servicios conservando los datos |
-| `mise run db:migrate` | Aplicar migraciones existentes |
-| `mise run db:seed` | Sembrar categorías y admin |
-| `mise run db:replica` | Recrear la BD local desde la réplica anonimizada de producción |
-| `mise run db:replica:refresh` | Volver a sacar la réplica de producción (solo lectura allí) |
-| `mise run e2e` | Ejecutar Playwright |
+| `mise run db:migrate` | Aplicar migraciones existentes a la base propia del worktree |
+| `mise run db:seed` | Sembrar categorías y admin en la base propia del worktree |
+| `mise run db:replica:up` / `db:replica:down` | Arrancar o parar la réplica compartida (`down -- --purge` la borra) |
+| `mise run db:replica:refresh` | Volver a sacar la réplica de producción (solo lectura allí) y recargar la compartida |
+| `mise run db:replica:use-shared` | Apuntar la app a la réplica compartida |
+| `mise run db:replica:local` | Cargar la réplica en la base propia del worktree (ramas con migraciones) |
+| `mise run e2e` | Ejecutar Playwright contra la base propia del worktree |
 
 Antes del primer e2e: `mise exec -- npx playwright install chromium --with-deps`.
-Los fixtures e2e **borran los datos de la base configurada**: ejecútalos en un
-checkout de pruebas con su propia `.env` y base local. El servidor de e2e y las
-rutas `/api/test/*` se niegan a usar un host que no sea local, aunque un túnel a
-otra base parecería local: no lo uses. Detén su servidor dev;
+Los fixtures e2e **borran los datos de su base**, que siempre es la MySQL propia
+del worktree (`WORKTREE_DATABASE_*` de `.env`), aunque la app apunte a la réplica
+compartida. El servidor de e2e y las rutas `/api/test/*` se niegan a usar un host
+que no sea local o la réplica compartida, aunque un túnel a otra base parecería
+local: no lo uses. Detén su servidor dev;
 Playwright arranca uno con las rutas de prueba habilitadas y usa el mismo `PORT`.
 CI levanta una MySQL 8.0 efímera con el mismo `compose.dev.yaml` (igual que
 producción) y usa los comandos mise del repositorio.
