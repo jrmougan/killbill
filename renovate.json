@@ -7,15 +7,32 @@
   "schedule": [
     "before 6am on monday"
   ],
+  "updateNotScheduled": false,
+  "rebaseWhen": "conflicted",
   "prConcurrentLimit": 5,
   "packageRules": [
     {
-      "description": "Minor/patch updates of everything not covered by a dedicated group below",
+      "description": "One weekly PR with every non-major update (all managers) not covered by a dedicated group below",
       "matchUpdateTypes": [
         "minor",
-        "patch"
+        "patch",
+        "pin",
+        "pinDigest",
+        "digest"
       ],
       "groupName": "minor and patch updates"
+    },
+    {
+      "description": "Stay on MySQL 8.0.x: production runs 8.0 and 8.4 removed --default-authentication-plugin (docs/agents/deployment.md)",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "mysql",
+        "library/mysql",
+        "docker.io/library/mysql"
+      ],
+      "allowedVersions": "/^8\\.0(\\.\\d+)?$/"
     },
     {
       "description": "Next.js and React move together (React types included)",

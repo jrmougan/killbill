@@ -41,9 +41,9 @@ Plain HTTP calls with `x-cron-secret: $CRON_SECRET`. Without `CRON_SECRET` both 
 
 ## Dependency pins
 
-These look like oversights and Renovate keeps proposing them:
+These look like oversights. Renovate opens its PRs once a week (Monday before 6am UTC, one grouped PR for non-major updates) and does not touch them between runs unless they conflict:
 
-- Stay on MySQL 8.0. 8.4 removed `--default-authentication-plugin`, used by `compose.dev.yaml` and e2e, and production runs 8.0.
+- Stay on MySQL 8.0. 8.4 removed `--default-authentication-plugin`, used by `compose.dev.yaml` and e2e, and production runs 8.0. `renovate.json` only allows 8.0.x for the MySQL image.
 - `prisma`, `@prisma/client` and `@prisma/adapter-mariadb` move together (`renovate.json`; the `Dockerfile` pins `/prisma-tools` from the lockfile).
 - Node lives in `mise.toml` and `Dockerfile`; change both.
 
