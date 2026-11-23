@@ -9,7 +9,7 @@ MySQL local de `compose.dev.yaml`. Seguimiento: jrmougan/personal-infra-manager#
 | Comando | Qué hace |
 | --- | --- |
 | `mise run db:replica` | Recrea la BD local (`DATABASE_NAME` de `.env`) desde la caché anonimizada y aplica las migraciones de la rama. Sin caché, hace un `refresh`. |
-| `mise run db:replica:refresh` | Vuelca producción en streaming, la carga, anonimiza, verifica, guarda la caché y migra. |
+| `mise run db:replica:refresh` | Vuelca producción en streaming a una MySQL efímera en RAM, anonimiza, verifica, guarda la caché y la carga en la BD del worktree. |
 
 Los dos exigen `mise run services:up` y **borran la BD local del worktree**
 (drop/create); no tocan otras bases. Al final ejecutan `prisma migrate deploy`
@@ -37,15 +37,29 @@ Sin Docker instalado, `scripts/dev-compose.mjs` usa Podman automáticamente
    esquema `killbill` como root, con `MYSQL_ROOT_PASSWORD` de su propio entorno
    (el usuario `killbill` no sirve, issue #340 del repo de infra). La contraseña
    no sale del VPS. **En producción solo se lee**: el volcado y `SELECT COUNT(*)`.
-2. El volcado pasa por una tubería, quitando los `DEFINER`, directo a la MySQL
-   local: los datos reales nunca se escriben en disco. Un volcado cortado (sin
+2. El volcado pasa por una tubería, quitando los `DEFINER`, a una MySQL
+   **efímera** (`replica-scratch` en `compose.dev.yaml`, perfil `replica`) con el
+   datadir y `/tmp` en tmpfs (RAM) y sin binlog. Un volcado cortado (sin
    `-- Dump completed`) se rechaza.
-3. Compara el número de filas de cada tabla entre producción y la copia local
+3. Compara el número de filas de cada tabla entre producción y la copia efímera
    (solo avisa si difieren: producción puede cambiar entre el volcado y el recuento).
-4. Aplica `scripts/replica/anonymize.sql` y comprueba con
-   `scripts/replica/verify.sql`. Si alguna comprobación no da 0, **deja la BD
-   vacía y aborta** sin guardar caché.
-5. Vuelca la BD ya anonimizada a la caché y migra.
+4. Aplica `scripts/replica/anonymize.sql` en la copia efímera y comprueba con
+   `scripts/replica/verify.sql`. Si alguna comprobación no da 0, **aborta sin
+   guardar caché y deja vacía la BD del worktree**.
+5. Vuelca la copia ya anonimizada a la caché, borra el contenedor efímero (con él
+   desaparecen los datos crudos) y carga la caché en la BD del worktree como
+   `db:replica`: verifica otra vez y migra.
+
+Por qué el contenedor efímero: si se anonimizara con `UPDATE` en la MySQL del
+worktree, los valores reales seguirían en su volumen (versiones viejas de los
+registros en las páginas `.ibd`, undo, redo y binlog) aunque la tabla ya no los
+muestre. La BD del worktree solo recibe datos ya anonimizados. Si interrumpes un
+refresh, `mise run services:down` también borra un `replica-scratch` que haya
+quedado vivo.
+
+Variables para pruebas: `REPLICA_SSH_HOST` (por defecto `coolify-new`) y
+`REPLICA_CACHE_DIR`. No cambies `XDG_DATA_HOME` para probar: Podman guarda ahí
+sus contenedores y dejaría de ver la MySQL del worktree.
 
 ## Qué se anonimiza
 
@@ -98,3 +112,6 @@ todos los worktrees de la máquina:
   `CRON_SECRET` y el OCR no llama a ningún proveedor sin clave. No pongas en
   `.env` claves ni secretos de producción.
 - Los tickets y avatares subidos no se replican: la réplica es solo la BD.
+- El refresh necesita RAM para la copia efímera (tmpfs de hasta 2 GB; hoy la
+  base ocupa unos pocos MB). Si el host tiene swap en disco, el kernel podría
+  paginar parte de ella.

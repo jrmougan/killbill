@@ -53,7 +53,8 @@ run = "node --env-file=.env scripts/dev-compose.mjs up --detach --wait --wait-ti
 
 [tasks."services:down"]
 description = "Stop local services, retaining database data"
-run = "node --env-file=.env scripts/dev-compose.mjs down"
+# --profile replica also removes a leftover db:replica:refresh scratch container.
+run = "node --env-file=.env scripts/dev-compose.mjs --profile replica down"
 
 [tasks."services:status"]
 run = "node --env-file=.env scripts/dev-compose.mjs ps"
@@ -74,5 +75,5 @@ description = "Recreate the local DB from the anonymized production replica cach
 run = "bash scripts/replica/db-replica.sh load"
 
 [tasks."db:replica:refresh"]
-description = "Stream production into the local DB, anonymize, verify, cache it and migrate (read-only on prod)"
+description = "Stream production into a RAM-only scratch MySQL, anonymize, verify, cache it, then load it and migrate (read-only on prod)"
 run = "bash scripts/replica/db-replica.sh refresh"

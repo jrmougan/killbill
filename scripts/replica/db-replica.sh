@@ -2,14 +2,19 @@
 # Réplica local anonimizada de la base de producción (docs/prod-replica.md).
 #
 #   db-replica.sh load     Carga la caché anonimizada; si no hay caché, hace refresh.
-#   db-replica.sh refresh  Vuelca producción en streaming, anonimiza, verifica y
-#                          guarda la caché.
+#   db-replica.sh refresh  Vuelca producción en streaming a una MySQL efímera en
+#                          RAM, anonimiza, verifica, guarda la caché y la carga.
 #
 # Las dos recrean desde cero la BD de este worktree (DATABASE_NAME de .env) y
 # acaban con `prisma migrate deploy`. En producción solo se lee: mysqldump y
 # SELECT COUNT(*) dentro del contenedor, con la contraseña de root de su propio
-# entorno, que nunca sale del VPS. Los datos sin anonimizar no se escriben en
-# disco: van de ssh a la MySQL local por una tubería.
+# entorno, que nunca sale del VPS.
+#
+# Los datos sin anonimizar no se escriben en disco: van de ssh, por una tubería,
+# al servicio `replica-scratch` de compose.dev.yaml, que tiene el datadir y el
+# tmpdir en tmpfs y sin binlog. Anonimizar en la MySQL del worktree no vale:
+# InnoDB conserva versiones viejas de los registros en las páginas .ibd, el undo,
+# el redo y el binlog. La BD del worktree solo recibe el volcado ya anonimizado.
 set -Eeuo pipefail
 umask 077
 cd "$(dirname "$0")/../.."
@@ -18,10 +23,12 @@ APP=killbill
 PROD_SSH_HOST=${REPLICA_SSH_HOST:-coolify-new}
 PROD_LABEL=mysql-database-w10cwycdwgjebrdedi1oxxgr
 PROD_SCHEMA=killbill
-CACHE_DIR=${XDG_DATA_HOME:-$HOME/.local/share}/prod-replicas/$APP
+# REPLICA_CACHE_DIR solo para pruebas: XDG_DATA_HOME también mueve el almacén de Podman.
+CACHE_DIR=${REPLICA_CACHE_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/prod-replicas/$APP}
 KEEP=3
 ANONYMIZE_SQL=scripts/replica/anonymize.sql
 VERIFY_SQL=scripts/replica/verify.sql
+SCRATCH=replica-scratch
 
 log() { printf '[db:replica] %s\n' "$*" >&2; }
 die() { log "ERROR: $*"; exit 1; }
@@ -31,18 +38,33 @@ DB_NAME=$(node -e 'process.loadEnvFile(); process.stdout.write(process.env.DATAB
 [[ $DB_NAME =~ ^[A-Za-z0-9_]+$ ]] || die "DATABASE_NAME no válido en .env: '$DB_NAME'."
 [[ $DB_NAME != *_testing ]] || die 'DATABASE_NAME apunta a una base _testing: no se toca.'
 
-TMP_FILES=()
-cleanup() { [ ${#TMP_FILES[@]} -eq 0 ] || rm -f -- "${TMP_FILES[@]}"; }
-trap cleanup EXIT
+compose() { node --env-file=.env scripts/dev-compose.mjs --profile replica "$@"; }
 
-compose() { node --env-file=.env scripts/dev-compose.mjs "$@"; }
-# mysql/mysqldump como root DENTRO del contenedor local (el host no tiene cliente).
-local_mysql() {
-  compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 "$@"' sh "$@"
+TMP_FILES=()
+SCRATCH_UP=0
+stop_scratch() {
+  [ "$SCRATCH_UP" = 1 ] || return 0
+  SCRATCH_UP=0
+  # tmpfs: al borrar el contenedor desaparecen los datos crudos.
+  compose rm --stop --force "$SCRATCH" >/dev/null 2>&1 || log "AVISO: no se pudo borrar el contenedor $SCRATCH."
 }
-local_dump() {
-  compose exec -T db sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --routines --triggers --events --no-tablespaces --set-gtid-purged=OFF "$1"' sh "$1"
+cleanup() {
+  [ ${#TMP_FILES[@]} -eq 0 ] || rm -f -- "${TMP_FILES[@]}"
+  stop_scratch
 }
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+# mysql/mysqldump como root DENTRO de un contenedor local (el host no tiene cliente).
+svc_mysql() {
+  local svc=$1; shift
+  compose exec -T "$svc" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --default-character-set=utf8mb4 "$@"' sh "$@"
+}
+svc_dump() {
+  compose exec -T "$1" sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -uroot --single-transaction --routines --triggers --events --no-tablespaces --set-gtid-purged=OFF "$1"' sh "$2"
+}
+local_mysql() { svc_mysql db "$@"; }
+scratch_mysql() { svc_mysql "$SCRATCH" "$@"; }
 
 # Comando remoto: localiza el contenedor por etiqueta (exactamente uno) y ejecuta
 # dentro el cliente indicado. Solo lectura; no crea ficheros en el VPS.
@@ -72,12 +94,13 @@ check_services() {
     || die 'La MySQL local no responde: ejecuta mise run services:up.'
 }
 
-recreate_db() {
-  log "Recreando la base local '$DB_NAME' desde cero."
-  local_mysql -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
+recreate_db() { # [mysql_fn] [db]
+  local fn=${1:-local_mysql} db=${2:-$DB_NAME}
+  log "Recreando la base '$db' ($fn) desde cero."
+  "$fn" -e "DROP DATABASE IF EXISTS \`$db\`; CREATE DATABASE \`$db\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"
 }
 
-# Ante cualquier fallo tras empezar a cargar, la BD queda vacía (sin datos a medias).
+# Ante cualquier fallo tras empezar, la BD del worktree queda vacía (sin datos a medias).
 EMPTY_ON_ERROR=0
 on_error() {
   if [ "$EMPTY_ON_ERROR" = 1 ] && [ "$BASH_SUBSHELL" = 0 ]; then
@@ -88,17 +111,18 @@ on_error() {
 }
 trap on_error ERR
 
-table_counts() { # tabla<TAB>filas de la BD local, orden alfabético
+table_counts() { # <mysql_fn> <db> -> tabla<TAB>filas, orden alfabético (vía "$@" restante)
+  local fn=$1 db=$2; shift 2
   local tables q=''
-  tables=$(local_mysql -N -e "SELECT table_name FROM information_schema.tables WHERE table_schema='$DB_NAME' AND table_type='BASE TABLE' ORDER BY 1")
+  tables=$("$fn" -N -e "SELECT table_name FROM information_schema.tables WHERE table_schema='$db' AND table_type='BASE TABLE' ORDER BY 1")
   for t in $tables; do q+="${q:+ UNION ALL }SELECT '$t', COUNT(*) FROM \`$t\`"; done
   [ -n "$q" ] || return 0
   printf '%s;\n' "$q" | "$@"
 }
 
-verify() {
+verify() { # <mysql_fn> <db>
   local out failed
-  out=$(local_mysql -N "$DB_NAME" < "$VERIFY_SQL")
+  out=$("$1" -N "$2" < "$VERIFY_SQL")
   failed=$(printf '%s\n' "$out" | awk -F'\t' '$2 != 0 { print "  - " $1 ": " $2 }')
   if [ -n "$failed" ]; then
     log 'La verificación de anonimización ha fallado (comprobación: filas):'
@@ -113,7 +137,7 @@ migrate() {
   npm run --silent db:migrate
 }
 
-write_cache() {
+write_cache() { # vuelca la base ya anonimizada del contenedor efímero a la caché
   mkdir -p "$CACHE_DIR"
   chmod 700 "$CACHE_DIR"
   local ts tmp tmp_meta sha last_mig counts_json
@@ -121,11 +145,11 @@ write_cache() {
   tmp=$(mktemp "$CACHE_DIR/.dump.XXXXXX"); TMP_FILES+=("$tmp")
   tmp_meta=$(mktemp "$CACHE_DIR/.meta.XXXXXX"); TMP_FILES+=("$tmp_meta")
   chmod 600 "$tmp" "$tmp_meta"
-  local_dump "$DB_NAME" | gzip -n > "$tmp"
+  svc_dump "$SCRATCH" "$PROD_SCHEMA" | gzip -n > "$tmp"
   gzip -t "$tmp"
   sha=$(sha256sum "$tmp" | cut -d' ' -f1)
-  last_mig=$(local_mysql -N "$DB_NAME" -e 'SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL ORDER BY migration_name DESC LIMIT 1')
-  counts_json=$(table_counts local_mysql -N "$DB_NAME" | node -e '
+  last_mig=$(scratch_mysql -N "$PROD_SCHEMA" -e 'SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL ORDER BY migration_name DESC LIMIT 1')
+  counts_json=$(table_counts scratch_mysql "$PROD_SCHEMA" scratch_mysql -N "$PROD_SCHEMA" | node -e '
     const rows = require("fs").readFileSync(0, "utf8").trim().split("\n").filter(Boolean);
     process.stdout.write(JSON.stringify(Object.fromEntries(rows.map((r) => { const [t, n] = r.split("\t"); return [t, Number(n)]; }))));')
   TS=$ts SHA=$sha LAST_MIG=$last_mig COUNTS=$counts_json ANON_SHA=$(sha256sum "$ANONYMIZE_SQL" | cut -d' ' -f1) \
@@ -165,35 +189,35 @@ refresh() {
   command -v ssh >/dev/null || die 'Falta ssh.'
   EMPTY_ON_ERROR=1
   recreate_db
+  log "Arrancando la MySQL efímera en RAM ($SCRATCH)."
+  SCRATCH_UP=1
+  compose up --detach --wait --wait-timeout 180 "$SCRATCH" >&2
+  recreate_db scratch_mysql "$PROD_SCHEMA"
   log "Volcando producción ($PROD_SSH_HOST, $PROD_LABEL, esquema $PROD_SCHEMA) en streaming."
-  prod "$PROD_DUMP" < /dev/null | filter_dump | local_mysql "$DB_NAME"
+  prod "$PROD_DUMP" < /dev/null | filter_dump | scratch_mysql "$PROD_SCHEMA"
 
-  log 'Recuento de filas: producción frente a la copia local (antes de anonimizar).'
-  local local_counts prod_counts
-  local_counts=$(table_counts local_mysql -N "$DB_NAME")
-  prod_counts=$(table_counts prod "$PROD_QUERY")
+  log 'Recuento de filas: producción frente a la copia efímera (antes de anonimizar).'
+  local scratch_counts prod_counts
+  scratch_counts=$(table_counts scratch_mysql "$PROD_SCHEMA" scratch_mysql -N "$PROD_SCHEMA")
+  prod_counts=$(table_counts scratch_mysql "$PROD_SCHEMA" prod "$PROD_QUERY")
   LC_ALL=C join -t $'\t' -a1 -a2 -e '?' -o 0,1.2,2.2 \
-    <(printf '%s\n' "$prod_counts" | LC_ALL=C sort) <(printf '%s\n' "$local_counts" | LC_ALL=C sort) \
+    <(printf '%s\n' "$prod_counts" | LC_ALL=C sort) <(printf '%s\n' "$scratch_counts" | LC_ALL=C sort) \
     | awk -F'\t' 'BEGIN { printf "  %-22s %8s %8s\n", "tabla", "prod", "local" }
                   { printf "  %-22s %8s %8s%s\n", $1, $2, $3, ($2 == $3 ? "" : "  <- DISTINTO"); if ($2 != $3) bad = 1 }
                   END { if (bad) print "[db:replica] AVISO: hay recuentos distintos; producción puede haber cambiado durante el volcado." > "/dev/stderr" }' >&2
 
   log 'Anonimizando.'
-  local_mysql "$DB_NAME" < "$ANONYMIZE_SQL"
-  verify
-  EMPTY_ON_ERROR=0
+  scratch_mysql "$PROD_SCHEMA" < "$ANONYMIZE_SQL"
+  verify scratch_mysql "$PROD_SCHEMA"
   write_cache
-  migrate
+  stop_scratch
+  EMPTY_ON_ERROR=0
+  load_cache
   log 'Réplica lista (desde producción).'
 }
 
-load() {
+load_cache() {
   local latest=$CACHE_DIR/latest.sql.gz meta=$CACHE_DIR/latest.meta.json
-  if [ ! -f "$latest" ]; then
-    log "No hay caché en $latest: se hace un refresh desde producción."
-    refresh
-    return
-  fi
   check_services
   if [ -f "$meta" ]; then
     local want got
@@ -205,9 +229,18 @@ load() {
   EMPTY_ON_ERROR=1
   recreate_db
   gzip -dc "$latest" | filter_dump | local_mysql "$DB_NAME"
-  verify
+  verify local_mysql "$DB_NAME"
   EMPTY_ON_ERROR=0
   migrate
+}
+
+load() {
+  if [ ! -f "$CACHE_DIR/latest.sql.gz" ]; then
+    log "No hay caché en $CACHE_DIR/latest.sql.gz: se hace un refresh desde producción."
+    refresh
+    return
+  fi
+  load_cache
   log 'Réplica lista (desde la caché).'
 }
 

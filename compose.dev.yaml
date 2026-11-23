@@ -24,5 +24,27 @@ services:
       retries: 30
       start_period: 20s
 
+  # Scratch MySQL used only by `mise run db:replica:refresh` (docs/prod-replica.md).
+  # Raw production rows are loaded and anonymized here, with the datadir and tmpdir
+  # on tmpfs (RAM) and no binlog: InnoDB keeps old record versions in .ibd pages,
+  # undo, redo and binlog, so anonymizing on a disk-backed datadir would leave real
+  # data on disk. Only the "replica" profile starts it; the script removes it.
+  replica-scratch:
+    profiles: ["replica"]
+    image: docker.io/library/mysql:8.0
+    command: ["--disable-log-bin", "--innodb-doublewrite=OFF"]
+    oom_score_adj: 200
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Run mise run setup first}
+    tmpfs:
+      - /var/lib/mysql:size=2g
+      - /tmp:size=512m
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql --protocol=TCP -h 127.0.0.1 -uroot -e 'SELECT 1'"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
 volumes:
   mysql_data:
