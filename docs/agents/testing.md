@@ -15,7 +15,7 @@ Read before touching `e2e/`, Playwright fixtures or test routes. The definition 
 
 ## Traps
 
-- **E2E wipes the database in `.env`.** There is no separate test DB, and `/api/test/reset` deletes every user and space. The e2e server and `/api/test/reset`/`seed` refuse a non-local `DATABASE_HOST` or `DATABASE_URL` host (`src/lib/test-db-guard.mjs`), but a tunnel or forwarded port still looks local: never point them at another database that way.
+- **E2E wipes the worktree's own MySQL.** `/api/test/reset` deletes every user and space. `playwright.config.ts`, `e2e/ocr/test-server.mjs` and `scripts/worktree-db.mjs` replace `DATABASE_*` with `WORKTREE_DATABASE_*` from `.env`, so e2e never uses the shared prod replica the app may point at (`docs/prod-replica.md`). The e2e server and `/api/test/reset`/`seed` refuse a non-local `DATABASE_HOST` or `DATABASE_URL` host and the replica (port 23308, user `killbill_replica`, server `@@hostname` `prod-replica-killbill`; `src/lib/test-db-guard.mjs`, `src/lib/test-routes-guard.ts`), but a tunnel to another server still looks local: never point them at another database that way.
 - **Stop `mise run dev` first**: `reuseExistingServer: false`, and Playwright uses the same `PORT`.
 - **Project routing**: `apiSuites` in `playwright.config.ts` (`api/crud`, `api/mcp`, `api/ai-settings`, `api/invites`, `shopping/smoke`, `*.api.spec.ts`) run only in the `api` project. `--project=mobile-chrome` ignores them silently. A new API suite outside `*.api.spec.ts` must be added to that list.
 - **Flaky tests fail CI**: `failOnFlakyTests` under CI (guarded by `e2e/fixtures/config.test.ts`), with 2 retries that do not rescue a flake. Fix the wait instead (6ada52e, 4818a7d).

@@ -3,8 +3,10 @@ node = "26.13.1" # Includes npm 11.20.0; keep Dockerfile aligned.
 "github:docker/compose" = "5.8.0"
 
 [tasks.setup]
-description = "Prepare local env, install locked dependencies and generate Prisma"
-run = ["node scripts/dev-env.mjs", "npm ci", "npm run db:generate"]
+description = "Prepare local env, install locked dependencies, generate Prisma and point the app at the shared prod replica (no data load)"
+# The last step never fails: without replica or cache it warns and keeps the
+# worktree's own MySQL (docs/prod-replica.md).
+run = ["node scripts/dev-env.mjs", "npm ci", "npm run db:generate", "bash scripts/replica/db-replica.sh connect"]
 
 [tasks.dev]
 description = "Start Next.js using this worktree's PORT"
@@ -32,28 +34,29 @@ description = "Generate route types and typecheck the app and the e2e suite"
 run = "npm run typecheck"
 
 [tasks.e2e]
-description = "Run Playwright against the configured database (fixtures reset it)"
-run = "node --env-file-if-exists=.env node_modules/@playwright/test/cli.js test"
+description = "Run Playwright against this worktree's own MySQL, never the shared replica (fixtures reset it)"
+run = "node scripts/worktree-db.mjs node node_modules/@playwright/test/cli.js test"
 
 [tasks."ux:design"]
 description = "Render the chosen EQUIL mockups to scripts/ralph/design/*.png"
 run = "node scripts/ralph/render-design.mjs"
 
 [tasks."ux:capture"]
-description = "Screenshot the app per screen into scripts/ralph/shots (SCREENS=a,b to filter; resets the DB, stop dev first)"
-run = "node --env-file-if-exists=.env node_modules/@playwright/test/cli.js test -c scripts/ralph/playwright.ux.config.ts"
+description = "Screenshot the app per screen into scripts/ralph/shots (SCREENS=a,b to filter; resets the worktree's own DB, stop dev first)"
+run = "node scripts/worktree-db.mjs node node_modules/@playwright/test/cli.js test -c scripts/ralph/playwright.ux.config.ts"
 
 [tasks.ralph]
 description = "Run the Ralph UX/UI loop (scripts/ralph/README.md); usage: mise run ralph -- [max-iterations]"
 run = "bash scripts/ralph/ralph.sh"
 
 [tasks."services:up"]
-description = "Start the isolated local MySQL service and wait until healthy"
+description = "Start this worktree's own MySQL and wait until healthy (the shared replica: db:replica:up)"
 run = "node --env-file=.env scripts/dev-compose.mjs up --detach --wait --wait-timeout 120"
 
 [tasks."services:down"]
 description = "Stop local services, retaining database data"
-run = "node --env-file=.env scripts/dev-compose.mjs down"
+# --profile replica also removes a leftover db:replica:refresh scratch container.
+run = "node --env-file=.env scripts/dev-compose.mjs --profile replica down"
 
 [tasks."services:status"]
 run = "node --env-file=.env scripts/dev-compose.mjs ps"
@@ -62,9 +65,31 @@ run = "node --env-file=.env scripts/dev-compose.mjs ps"
 run = "npm run db:generate"
 
 [tasks."db:migrate"]
-description = "Apply committed migrations to the configured database"
-run = "npm run db:migrate"
+description = "Apply committed migrations to this worktree's own MySQL (never the shared replica)"
+run = "node scripts/worktree-db.mjs npm run db:migrate"
 
 [tasks."db:seed"]
-description = "Seed system categories and the admin account"
-run = "npm run db:seed"
+description = "Seed system categories and the admin account in this worktree's own MySQL"
+run = "node scripts/worktree-db.mjs npm run db:seed"
+
+# Shared anonymized prod replica (docs/prod-replica.md): one Podman container per
+# machine, prod-replica-killbill on 127.0.0.1:23308, used by every worktree.
+[tasks."db:replica:up"]
+description = "Create (first time) or start the shared prod replica container; loads no data"
+run = "bash scripts/replica/db-replica.sh up"
+
+[tasks."db:replica:down"]
+description = "Stop the shared prod replica (keeps its volume; -- --purge also deletes container, volume and credentials)"
+run = "bash scripts/replica/db-replica.sh down"
+
+[tasks."db:replica:refresh"]
+description = "Stream prod into a RAM-only scratch MySQL, anonymize, verify, cache, then reload the shared replica with main's migrations (read-only on prod)"
+run = "bash scripts/replica/db-replica.sh refresh"
+
+[tasks."db:replica:use-shared"]
+description = "Point the app (.env) at the shared replica, loading the cache once if it is empty"
+run = "bash scripts/replica/db-replica.sh use-shared"
+
+[tasks."db:replica:local"]
+description = "Load the anonymized cache into this worktree's own MySQL, apply the branch's migrations and point the app there"
+run = "bash scripts/replica/db-replica.sh local"

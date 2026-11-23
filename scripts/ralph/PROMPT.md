@@ -53,8 +53,9 @@ pero confírmalo en el código antes de cambiarlo. Escribe la tabla en `findings
 SCREENS=<ids de la historia, separados por coma> mise run ux:capture
 ```
 
-- Arranca su propio servidor Next y **borra la BD configurada en `.env`** (la de desarrollo de este
-  worktree; no hay BD de test aparte): no lo lances si necesitas conservar esos datos, ni con
+- Arranca su propio servidor Next y **borra la MySQL propia del worktree** (`WORKTREE_DATABASE_*`
+  de `.env`; nunca la réplica compartida de producción, `docs/prod-replica.md`), también una copia
+  de `mise run db:replica:local`: no lo lances si necesitas conservar esos datos, ni con
   `mise run dev` en marcha.
 - Para historias transversales (`"screens": ["*"]`) captura todo (`mise run ux:capture`).
 - Si falla porque no hay BD: `mise run services:up && mise run db:migrate && mise run db:seed`

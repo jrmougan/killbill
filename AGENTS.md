@@ -23,10 +23,10 @@ Use the versions pinned in `mise.toml`.
 
 ```bash
 mise trust && mise install
-mise run setup          # Create .env if absent, npm ci, Prisma generate; no DB writes
+mise run setup          # .env, npm ci, Prisma generate; app -> shared replica
 mise run services:up    # Local MySQL (CONTAINER_ENGINE=podman optional)
 mise run services:status
-mise run db:migrate     # Apply committed migrations
+mise run db:migrate     # Apply committed migrations (own DB)
 mise run db:seed        # Seed system categories and admin
 mise run dev            # Next.js on the PORT in .env
 mise run check          # Prisma generate, oxlint, typecheck (app + e2e), unit tests
@@ -36,7 +36,7 @@ mise exec -- npx vitest run src/lib/finance.test.ts  # One file
 mise run typecheck
 mise run build
 mise exec -- npx playwright install chromium --with-deps  # Before first e2e
-mise run e2e            # Own server; RESETS the database in .env; stop dev first
+mise run e2e            # Own server; RESETS the worktree's own DB; stop dev
 mise run e2e -- e2e/<dir>      # Or: -- --project=api
 mise exec -- npx prisma migrate dev  # NEW migration; interactive (agents: prisma-migration skill)
 mise run services:down  # Keep the DB volume

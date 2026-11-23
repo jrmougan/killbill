@@ -7,6 +7,7 @@
 | Doc | What |
 | --- | --- |
 | `route-handlers.md` | API route convention (`route()`) |
+| `prod-replica.md` | Shared anonymized replica of the production DB (`db:replica:*`); tests never use it |
 | `agents/` | Subsystem detail for coding agents; `AGENTS.md` says when to read each |
 | `design/README.md` | EQUIL design sources and product decisions |
 | `ux/plan-acciones-criticas.md` | §1 copy glossary and §2 critical-action pattern are current; §3-8 are an executed plan |
