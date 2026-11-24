@@ -115,8 +115,10 @@ export async function refreshGuestToken(payload: JWTPayload): Promise<string | n
 /**
  * Sign an MCP access token — a longer-lived JWT (default 90 days) carrying
  * `kind: 'mcp'` so it can be distinguished from browser session tokens.
- * Issued by POST /api/me/mcp-token for use as a Bearer credential by external
- * agent clients (e.g. Hermes Agent). Carries the user's `tv` (revoked by
+ * Issued by POST /api/me/mcp-token until issue #60 (it now creates an access
+ * token instead); only the test route /api/test/legacy-mcp-jwt still signs it.
+ * The ones already issued stay valid as Bearer (mcp-auth.ts) until #61 retires
+ * them. Carries the user's `tv` (revoked by
  * bumping User.tokenVersion) and a unique `jti` so individual tokens can be
  * told apart in logs / a future per-token denylist.
  */

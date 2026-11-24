@@ -27,6 +27,7 @@ vi.mock('@/lib/db', () => ({ prisma }));
 
 import { POST as seedPOST } from './seed/route';
 import { POST as resetPOST } from './reset/route';
+import { POST as legacyMcpJwtPOST } from './legacy-mcp-jwt/route';
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -53,6 +54,13 @@ describe('test-only routes are gated by TEST_ROUTES_ENABLED', () => {
             expect(prisma[model].deleteMany).not.toHaveBeenCalled();
         }
     });
+
+    it.each([undefined, '', 'false', 'TRUE'])('POST /api/test/legacy-mcp-jwt returns 404 for flag %s', async (flag) => {
+        vi.stubEnv('TEST_ROUTES_ENABLED', flag);
+        const res = await legacyMcpJwtPOST();
+        expect(res.status).toBe(404);
+        expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    });
 });
 
 describe('test-only routes refuse a non-local database', () => {
@@ -68,6 +76,11 @@ describe('test-only routes refuse a non-local database', () => {
         for (const model of models) {
             expect(prisma[model].deleteMany).not.toHaveBeenCalled();
         }
+    });
+
+    it('POST /api/test/legacy-mcp-jwt signs nothing', async () => {
+        const res = await legacyMcpJwtPOST();
+        expect(res.status).toBe(403);
     });
 
     it('POST /api/test/seed creates nothing', async () => {

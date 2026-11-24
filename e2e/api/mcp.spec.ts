@@ -54,11 +54,34 @@ async function issueToken(api: APIRequestContext, name: string, expiresInDays: 3
   };
 }
 
-/** Issue the legacy 90-day MCP JWT (what "Conectar Hermes Agent" still emits). */
+/**
+ * Sign a legacy 90-day `kind:'mcp'` JWT for the logged-in user (test-only route).
+ * "Conectar Hermes Agent" emitted it until #60; the ones already issued must keep
+ * working as Bearer until #61 retires them.
+ */
 async function issueLegacyJwt(api: APIRequestContext) {
+  const res = await api.post('/api/test/legacy-mcp-jwt');
+  expect(res.status(), 'POST /api/test/legacy-mcp-jwt').toBe(201);
+  const { token } = (await res.json()) as { token: string };
+  expect(token.startsWith('eyJ'), 'JWT compacto').toBe(true);
+  return token;
+}
+
+/** "Conectar Hermes Agent": POST /api/me/mcp-token → access token «Hermes Agent». */
+async function connectHermes(api: APIRequestContext) {
   const res = await api.post('/api/me/mcp-token');
   expect(res.status(), 'POST /api/me/mcp-token').toBe(201);
-  return ((await res.json()) as { token: string }).token;
+  expect(res.headers()['cache-control']).toContain('no-store');
+  return (await res.json()) as {
+    token: string;
+    id: string;
+    name: string;
+    prefix: string;
+    expiresAt: string;
+    expiresInDays: number;
+    status: string;
+    replaced: number;
+  };
 }
 
 async function sessionCookie(context: BrowserContext): Promise<string> {
@@ -78,14 +101,16 @@ test.describe('API MCP - Smoke y autenticación Bearer', () => {
     await loginAs(page, { email: seed.user!.email, password: seed.user!.password! });
     const api = context.request;
 
-    // Emisión de token MCP para agente externo (kind: 'mcp', 90 días)
-    const tokenRes = await api.post('/api/me/mcp-token');
-    expect(tokenRes.status(), 'generar token MCP con sesión de usuario').toBe(201);
-    const tokenBody = await tokenRes.json();
-    expect(typeof tokenBody.token).toBe('string');
-    expect(tokenBody.token.length).toBeGreaterThan(20);
+    // "Conectar Hermes Agent": token de acceso opaco «Hermes Agent» de 90 días
+    const tokenBody = await connectHermes(api);
+    expect(tokenBody.token).toMatch(/^kb_[A-Za-z0-9_-]{43}$/);
+    expect(tokenBody.name).toBe('Hermes Agent');
+    expect(tokenBody.status).toBe('active');
+    expect(tokenBody.replaced).toBe(0);
     expect(tokenBody.expiresInDays).toBe(90);
-    expect(tokenBody.expiresAt).toBeTruthy();
+    const days = (new Date(tokenBody.expiresAt).getTime() - Date.now()) / 86_400_000;
+    expect(days).toBeGreaterThan(89);
+    expect(days).toBeLessThanOrEqual(90);
 
     const mcpToken = tokenBody.token as string;
     const mcpHeaders = {
@@ -446,5 +471,44 @@ test.describe('API MCP - Tokens de acceso opacos (kb_…) junto al JWT de 90 dí
     expect((await api.post('/api/me/tokens', { data: { name: 'Sin duración' } })).status()).toBe(400);
     expect((await api.post('/api/me/tokens', { data: { name: 'Mala', expiresInDays: 7 } })).status()).toBe(400);
     expect((await api.post('/api/me/tokens', { data: { name: '  ', expiresInDays: 30 } })).status()).toBe(400);
+  });
+
+  test('11. Reconectar Hermes revoca solo el token «Hermes Agent» anterior; los demás tokens y el JWT antiguo siguen valiendo', async ({
+    page,
+    context,
+    request,
+  }) => {
+    const seed = await seedScenario(request, 'solo-user');
+    await loginAs(page, { email: seed.user!.email, password: seed.user!.password! });
+    const api = context.request;
+
+    const other = await issueToken(api, 'Otro cliente', 30);
+    const legacyJwt = await issueLegacyJwt(api);
+    const first = await connectHermes(api);
+    expect((await mcpInitialize(request, first.token)).status(), 'primer token Hermes').toBe(200);
+
+    const second = await connectHermes(api);
+    expect(second.token).not.toBe(first.token);
+    expect(second.replaced).toBe(1);
+    expect((await mcpInitialize(request, first.token)).status(), 'token Hermes anterior revocado').toBe(401);
+    expect((await mcpInitialize(request, second.token)).status(), 'token Hermes nuevo').toBe(200);
+    expect((await mcpInitialize(request, other.token)).status(), 'otro token intacto').toBe(200);
+    expect((await mcpInitialize(request, legacyJwt)).status(), 'JWT de 90 días ya emitido intacto').toBe(200);
+
+    const { tokens } = (await (await api.get('/api/me/tokens')).json()) as {
+      tokens: Array<{ id: string; name: string; status: string }>;
+    };
+    expect(tokens.filter((t) => t.name === 'Hermes Agent' && t.status === 'active').map((t) => t.id)).toEqual([second.id]);
+    expect(tokens.find((t) => t.id === first.id)?.status).toBe('revoked');
+    expect(tokens.find((t) => t.id === other.id)?.status).toBe('active');
+
+    // Revoked individually like any other access token.
+    expect((await api.delete(`/api/me/tokens/${second.id}`)).status()).toBe(200);
+    expect((await mcpInitialize(request, second.token)).status(), 'token Hermes revocado desde la lista').toBe(401);
+    expect((await mcpInitialize(request, legacyJwt)).status()).toBe(200);
+
+    // A token cannot reconnect Hermes on its own behalf.
+    const mcpCall = await request.post('/api/me/mcp-token', { headers: { Authorization: `Bearer ${other.token}` } });
+    expect(mcpCall.status(), 'Bearer en /api/me/mcp-token').toBe(401);
   });
 });

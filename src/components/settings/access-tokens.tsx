@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * "Tokens de acceso" (Ajustes → Conexiones, under the Hermes Agent row): opaque, revocable bearer
- * tokens for any MCP client. Contract:
+ * tokens for any MCP client, Hermes Agent's included (POST /api/me/mcp-token creates the
+ * «Hermes Agent» one). Contract:
  *   GET    /api/me/tokens        → { tokens: AccessTokenSummary[] }
  *   POST   /api/me/tokens        { name, expiresInDays: 30|90|365|null } → 201 { token, ...summary }
  *   DELETE /api/me/tokens/[id]   → { success: true }
@@ -90,7 +91,7 @@ type View = { kind: "list" } | { kind: "create" } | { kind: "created"; token: Cr
  * Settings row + its sheets. Rendered as a single wrapper element so it slots
  * into a hairline-divided `Section` like any other row.
  */
-export function AccessTokensSettings({ rowClassName }: { rowClassName: string }) {
+export function AccessTokensSettings({ rowClassName, reloadKey = 0 }: { rowClassName: string; reloadKey?: number }) {
     const [view, setView] = useState<View | null>(null);
     const [tokens, setTokens] = useState<AccessTokenItem[] | null>(null);
     const [loading, setLoading] = useState(false);
@@ -126,10 +127,11 @@ export function AccessTokensSettings({ rowClassName }: { rowClassName: string })
 
     useEffect(() => {
         // Initial load feeds the row subtitle ("N activos"); the sheet reloads on open.
+        // `reloadKey` changes when a token is created elsewhere (Conectar Hermes Agent).
         // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount for the row subtitle
         void load();
         return () => loadRef.current?.abort();
-    }, [load]);
+    }, [load, reloadKey]);
 
     const openList = () => {
         setView({ kind: "list" });

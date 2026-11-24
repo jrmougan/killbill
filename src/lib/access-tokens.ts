@@ -153,6 +153,31 @@ export async function createAccessToken(
     return { token, summary: toSummary(row, now) };
 }
 
+/** Name and lifetime of the token behind "Conectar Hermes Agent" (POST /api/me/mcp-token). */
+export const HERMES_TOKEN_NAME = "Hermes Agent";
+export const HERMES_TOKEN_DAYS = 90;
+
+/**
+ * Create a token named `name` and then revoke the caller's OTHER active tokens
+ * with that same name, so reconnecting a client (e.g. Hermes Agent) replaces
+ * its token instead of piling up orphans. Created first: if the create fails
+ * (409 TOKEN_LIMIT…) the previous token keeps working. The name is the only
+ * link: a token the user named the same way by hand is replaced too.
+ * `replaced` = how many tokens were revoked.
+ */
+export async function replaceNamedAccessToken(
+    userId: string,
+    input: { name: string; expiresInDays: AccessTokenDuration },
+): Promise<{ token: string; summary: AccessTokenSummary; replaced: number }> {
+    const created = await createAccessToken(userId, input);
+    const now = new Date();
+    const { count } = await prisma.accessToken.updateMany({
+        where: { ...activeTokensWhere(userId, now), name: created.summary.name, id: { not: created.summary.id } },
+        data: { revokedAt: now },
+    });
+    return { ...created, replaced: count };
+}
+
 /** Every token of `userId` (incl. revoked/expired), newest first. */
 export async function listAccessTokens(userId: string): Promise<AccessTokenSummary[]> {
     const rows = await prisma.accessToken.findMany({

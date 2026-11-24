@@ -9,7 +9,8 @@ import { isTokenVersionCurrent } from "@/lib/token-version";
  * - `kb_…` — an opaque access token (access-tokens.ts), resolved against the
  *   AccessToken table (sha256 lookup): it must exist, not be revoked or expired,
  *   and belong to a registered (non-guest) user.
- * - anything else — the 90-day JWT issued by POST /api/me/mcp-token, validated
+ * - anything else — the legacy 90-day JWT that POST /api/me/mcp-token issued
+ *   until issue #60 (it now creates a `kb_…` token; retirement: #61), validated
  *   with the same `JWT_SECRET` and `verifyToken` used for browser sessions. Only
  *   `kind: 'mcp'` is accepted; browser and guest tokens are rejected. Its `tv`
  *   claim must still equal User.tokenVersion (one PK lookup), and a deleted

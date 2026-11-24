@@ -15,7 +15,7 @@ function LoginForm() {
     const signedOut = searchParams.get("signedOut");
     const signedOutNote =
         signedOut === "all"
-            ? "Has cerrado la sesión en todos tus dispositivos. Los tokens de Hermes y otros clientes MCP ya no funcionan."
+            ? "Has cerrado la sesión en todos tus dispositivos y se han revocado tus tokens de acceso, también el de Hermes Agent."
             : signedOut === "1"
               ? "Has cerrado la sesión."
               : null;

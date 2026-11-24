@@ -7,24 +7,25 @@ Read before touching `src/mcp/**` or `src/app/api/mcp/`. The app exposes an MCP 
 - Served by the existing Next.js standalone process: no second process, no Docker changes.
 - **Auth**: `Authorization: Bearer <credential>`, validated on every request in `src/lib/mcp-auth.ts` (`validateBearerToken`), which picks the branch by format:
   - `kb_…` is an opaque access token, resolved by `resolveAccessToken` (`src/lib/access-tokens.ts`). A malformed `kb_…` is a 401 and is never tried as a JWT.
-  - Anything else is the 90-day JWT. Only `kind:'mcp'` is accepted; browser-session and guest JWTs get 401, even though they share `JWT_SECRET`.
+  - Anything else is the legacy 90-day JWT. Only `kind:'mcp'` is accepted; browser-session and guest JWTs get 401, even though they share `JWT_SECRET`.
 - **Stateless**: every POST builds a fresh `McpServer` (`src/mcp/server.ts`, `createServer`) and transport bound to that request's bearer, and tears them down after responding. There is no session map and `Mcp-Session-Id` is ignored. GET/DELETE → 405 (401 without a valid bearer).
 - **Transport**: `WebStandardStreamableHTTPServerTransport` (Web-standard `Request`/`Response`, native to route handlers).
-- **Reuse**: each server wraps a `kind:'mcp'` JWT in an `InternalApiClient` (`src/mcp/internal-client.ts`), which injects it as the `session_token` cookie on internal HTTP calls to the existing API routes. Every tool therefore reuses the full authorization stack (`requireSpaceAccess`, role gates, space policy) with no duplication. With the 90-day JWT that cookie is the caller's own token; with an opaque token the route mints a 5-minute internal JWT per request (`signInternalMcpToken`, claims `tv` + `tid` = the `AccessToken` id), so the opaque token is never forwarded and never works as a cookie. The internal JWT is rejected as a Bearer.
+- **Reuse**: each server wraps a `kind:'mcp'` JWT in an `InternalApiClient` (`src/mcp/internal-client.ts`), which injects it as the `session_token` cookie on internal HTTP calls to the existing API routes. Every tool therefore reuses the full authorization stack (`requireSpaceAccess`, role gates, space policy) with no duplication. With the legacy 90-day JWT that cookie is the caller's own token; with an opaque token the route mints a 5-minute internal JWT per request (`signInternalMcpToken`, claims `tv` + `tid` = the `AccessToken` id), so the opaque token is never forwarded and never works as a cookie. The internal JWT is rejected as a Bearer.
 - `auth:'admin'` routes reject MCP sessions, and so do the token routes below: a token cannot list, mint or revoke tokens.
 
 ## Credentials
 
-Two credentials coexist. Do not remove the JWT until its retirement is decided in its own issue.
+The app issues only access tokens. The legacy 90-day JWT is no longer issued (since #60) but the ones already out there are still accepted as Bearer until they expire; do not remove that branch of `mcp-auth.ts` until its retirement (#61).
 
-| | Access token (`kb_…`) | 90-day JWT |
+| | Access token (`kb_…`) | Legacy 90-day JWT |
 | --- | --- | --- |
-| Issued by | `POST /api/me/tokens` `{ name, expiresInDays: 30 \| 90 \| 365 \| null }` | `POST /api/me/mcp-token` (`signMcpToken`), TTL `MCP_TOKEN_TTL_DAYS` |
-| UI (Ajustes → Conexiones) | "Tokens de acceso" (`src/components/settings/access-tokens.tsx`) | "Hermes Agent" → "Conectar" |
+| Issued by | `POST /api/me/tokens` `{ name, expiresInDays: 30 \| 90 \| 365 \| null }`, and `POST /api/me/mcp-token` (Hermes, below) | Nobody since #60 (`signMcpToken`; e2e mints it with `POST /api/test/legacy-mcp-jwt`) |
+| UI (Ajustes → Conexiones) | "Tokens de acceso" (`src/components/settings/access-tokens.tsx`) and "Hermes Agent" → "Conectar" | None |
 | Stored | `AccessToken` row: sha256 (`tokenHash`) and a visible prefix; plaintext shown once | Nothing (stateless) |
 | Revoke one | `DELETE /api/me/tokens/[id]` (`revokedAt`) | Not possible |
 | Revoke all | `bumpTokenVersion` sets `revokedAt` on every active row, in the transaction that bumps `tv` | Stale `tv`; see `docs/agents/spaces-auth.md` |
 
+- **"Conectar Hermes Agent"** calls `POST /api/me/mcp-token`, which creates an access token named «Hermes Agent» expiring in 90 days (`HERMES_TOKEN_NAME`/`HERMES_TOKEN_DAYS`, fixed; `MCP_TOKEN_TTL_DAYS` is no longer read) through `replaceNamedAccessToken`: the new token is created first and then every other active token of the caller named «Hermes Agent» is revoked, so reconnecting never leaves orphans (`replaced` in the response counts them). The name is the only link, so a token the user named «Hermes Agent» by hand is replaced too. The response keeps the historical `{ token, expiresInDays, expiresAt }` plus the token summary. It shares the creation rate limit and the 20-token cap (409 `TOKEN_LIMIT`, nothing revoked) with `POST /api/me/tokens`.
 - All three token routes and `POST /api/me/mcp-token` require a regular browser session: guests and MCP sessions get 403.
 - `GET /api/me/tokens` lists every token of the caller with its status (`active`, `expired`, `revoked`), never the plaintext.
 - Limits: 20 active tokens per user (409 `TOKEN_LIMIT`) and 10 creations per hour. `lastUsedAt` is written at most once per hour, fire-and-forget.
@@ -64,12 +65,12 @@ Any client that takes the common `mcpServers` JSON (the token sheet shows this f
 }
 ```
 
-Hermes Agent, `~/.hermes/config.yaml` (either credential works as the Bearer):
+Hermes Agent, `~/.hermes/config.yaml` (the "Conectar" sheet shows this filled in; a legacy JWT already configured keeps working until it expires):
 
 ```yaml
 mcp_servers:
   killbill:
     url: "https://finanzas.mougan.es/api/mcp"
     headers:
-      Authorization: "Bearer <jwt from POST /api/me/mcp-token>"
+      Authorization: "Bearer kb_<token from Ajustes → Conexiones → Hermes Agent → Conectar>"
 ```
