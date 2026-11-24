@@ -16,7 +16,8 @@ import { createServer } from "@/mcp/server";
  *     (5 min) internal `kind: 'mcp'` JWT for that request only, which the tools
  *     forward as the `session_token` cookie. The opaque token is never forwarded
  *     and never works as a cookie.
- *   - the 90-day `kind: 'mcp'` JWT of POST /api/me/mcp-token: forwarded as is.
+ *   - the legacy 90-day `kind: 'mcp'` JWT that POST /api/me/mcp-token issued
+ *     until issue #60 (no longer emitted; still accepted): forwarded as is.
  *
  * Every POST builds a fresh McpServer + transport bound to the bearer of that
  * very request and tears both down once the response is produced. There is no

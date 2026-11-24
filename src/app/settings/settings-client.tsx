@@ -132,14 +132,15 @@ export function SettingsClient({ user, groups, activeGroupId, personalParam = fa
     const personal = usePersonalMode(personalParam) || groups.length === 0;
     const activeGroup = groups.find((g) => g.id === activeGroupId) ?? groups.find((g) => g.isActive) ?? groups[0];
 
-    // MCP token (shown once). Generating again just issues another 90-day token;
-    // all of them (and every session) are revoked with "Cerrar sesión en todos los
-    // dispositivos" (POST /api/me/sessions/revoke).
+    // Hermes Agent token (shown once): POST /api/me/mcp-token creates a 90-day access
+    // token (kb_…) named «Hermes Agent» and revokes the previous one, so it is listed
+    // and revocable in "Tokens de acceso" (refreshed through `tokensReload`).
     const [mcpToken, setMcpToken] = useState<McpToken | null>(null);
     const [mcpBusy, setMcpBusy] = useState(false);
     const [mcpError, setMcpError] = useState<string | null>(null);
     const [mcpCopied, setMcpCopied] = useState(false);
     const [mcpIssued, setMcpIssued] = useState(false);
+    const [tokensReload, setTokensReload] = useState(0);
     // Closing the token sheet before copying asks once ("¿Cerrar sin copiar?").
     const [mcpLeaving, setMcpLeaving] = useState(false);
     const mcpRequestRef = useRef<AbortController | null>(null);
@@ -190,6 +191,7 @@ export function SettingsClient({ user, groups, activeGroupId, personalParam = fa
             }
             setMcpToken({ value: data.token, expiresAt: data.expiresAt, expiresInDays: data.expiresInDays });
             setMcpIssued(true);
+            setTokensReload((n) => n + 1);
         } catch {
             if (mcpRequestRef.current !== controller) return;
             setMcpError("Error de conexión. Inténtalo de nuevo.");
@@ -290,7 +292,7 @@ export function SettingsClient({ user, groups, activeGroupId, personalParam = fa
                         </button>
                     </div>
                     {/* Named, individually revocable tokens for any MCP client (issue #58). */}
-                    <AccessTokensSettings rowClassName={rowCls} />
+                    <AccessTokensSettings rowClassName={rowCls} reloadKey={tokensReload} />
                 </Section>
 
                 <Section label="Cuenta">
@@ -330,15 +332,15 @@ export function SettingsClient({ user, groups, activeGroupId, personalParam = fa
                 <Sheet title={mcpIssued ? "¿Generar otro token?" : "Conectar Hermes Agent"} onClose={() => setSheet(null)}>
                     <div className="flex flex-col gap-3">
                         <p className="text-sm text-muted-foreground">
-                            Se generará un token de acceso MCP para que Hermes Agent use tu cuenta. Es válido durante 90 días y
+                            Se creará el token de acceso «Hermes Agent» para que Hermes use tu cuenta. Es válido durante 90 días y
                             se muestra una sola vez.
                         </p>
                         <div className="flex items-start gap-2 rounded-[14px] bg-[var(--negative-tint)] px-3 py-2.5 text-xs">
                             <ShieldAlert className="h-4 w-4 flex-none text-destructive mt-px" />
                             <span>
-                                Cerrar la ventana no lo invalida
-                                {mcpIssued ? " y el token anterior seguirá funcionando" : ""}: para revocarlo usa «Cerrar sesión
-                                en todos los dispositivos». Genéralo solo si vas a configurarlo ahora.
+                                Si ya tenías un token «Hermes Agent», se revocará y Hermes dejará de funcionar hasta que pongas el
+                                nuevo. Genéralo solo si vas a configurarlo ahora; puedes revocarlo cuando quieras en «Tokens de
+                                acceso».
                             </span>
                         </div>
                         <div className="flex gap-2.5 pt-1">
@@ -384,20 +386,9 @@ export function SettingsClient({ user, groups, activeGroupId, personalParam = fa
                                 <ShieldAlert className="h-4 w-4 flex-none text-destructive mt-px" />
                                 <span>
                                     Trátalo como una contraseña: da acceso a tu cuenta durante {mcpToken.expiresInDays} días.
-                                    Generar otro <strong>no</strong> desactiva este. Si crees que alguien lo tiene, usa «Cerrar
-                                    sesión en todos los dispositivos».
+                                    Generar otro lo revoca. Si crees que alguien lo tiene, revócalo en «Tokens de acceso».
                                 </span>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    closeMcp();
-                                    setSheet("revoke");
-                                }}
-                                className="-mt-1 min-h-11 flex items-center justify-center text-sm font-semibold text-[color:var(--negative-ink)]"
-                            >
-                                Cerrar sesión en todos los dispositivos
-                            </button>
                             {mcpLeaving ? (
                                 <div
                                     role="alert"
@@ -511,7 +502,8 @@ function ProfileSheet({ user, onClose, onSaved }: { user: UserData; onClose: () 
 
 /**
  * Confirm + POST /api/me/sessions/revoke: invalidates every session cookie and
- * MCP JWT and revokes every access token of the account (this device included), then hard-navigates to
+ * legacy MCP JWT and revokes every access token of the account (Hermes Agent's
+ * included; this device too), then hard-navigates to
  * /login?signedOut=all (the login page explains what happened).
  */
 function RevokeSessionsSheet({ onClose }: { onClose: () => void }) {
@@ -543,7 +535,7 @@ function RevokeSessionsSheet({ onClose }: { onClose: () => void }) {
             testId="revoke-sessions-sheet"
             consequences={[
                 "Se cerrará la sesión en todos tus dispositivos, también en este.",
-                "Dejarán de funcionar los tokens de Hermes Agent y todos tus tokens de acceso de otros clientes MCP.",
+                "Se revocarán todos tus tokens de acceso, también el de Hermes Agent.",
                 "Tendrás que volver a iniciar sesión.",
             ]}
             confirmLabel={busy ? "Cerrando sesiones…" : "Cerrar todas las sesiones"}

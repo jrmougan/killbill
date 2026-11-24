@@ -153,6 +153,44 @@ export async function createAccessToken(
     return { token, summary: toSummary(row, now) };
 }
 
+/** Name and lifetime of the token behind "Conectar Hermes Agent" (POST /api/me/mcp-token). */
+export const HERMES_TOKEN_NAME = "Hermes Agent";
+export const HERMES_TOKEN_DAYS = 90;
+
+/**
+ * Create a token named `name` and then revoke the caller's previous active
+ * tokens with exactly that name, so reconnecting a client (e.g. Hermes Agent)
+ * replaces its token instead of piling up orphans. Created first: if the create
+ * fails (409 TOKEN_LIMIT…) the previous token keeps working. The name is the
+ * only link: a token the user named the same way by hand is replaced too.
+ * `replaced` = how many tokens were revoked.
+ *
+ * The tokens to revoke are snapshotted BEFORE creating and revoked by id: two
+ * concurrent reconnects then both leave their new token active (worst case one
+ * extra, listed and revocable) instead of revoking each other's and leaving
+ * the user with none. The name is compared in JS because the column's
+ * collation (utf8mb4_unicode_ci) ignores case, accents and trailing spaces.
+ */
+export async function replaceNamedAccessToken(
+    userId: string,
+    input: { name: string; expiresInDays: AccessTokenDuration },
+): Promise<{ token: string; summary: AccessTokenSummary; replaced: number }> {
+    const name = input.name.trim();
+    const previous = await prisma.accessToken.findMany({
+        where: { ...activeTokensWhere(userId), name },
+        select: { id: true, name: true },
+    });
+    const ids = previous.filter((t) => t.name === name).map((t) => t.id);
+
+    const created = await createAccessToken(userId, { ...input, name });
+    if (ids.length === 0) return { ...created, replaced: 0 };
+    const { count } = await prisma.accessToken.updateMany({
+        where: { userId, id: { in: ids }, revokedAt: null },
+        data: { revokedAt: new Date() },
+    });
+    return { ...created, replaced: count };
+}
+
 /** Every token of `userId` (incl. revoked/expired), newest first. */
 export async function listAccessTokens(userId: string): Promise<AccessTokenSummary[]> {
     const rows = await prisma.accessToken.findMany({

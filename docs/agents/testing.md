@@ -27,4 +27,4 @@ Read before touching `e2e/`, Playwright fixtures or test routes. The definition 
 
 ## Commands
 
-Listed in `AGENTS.md`. `mise run typecheck` is `next typegen`, `tsc` (app) and `tsc -p tsconfig.e2e.json`; `mise run build` is Prisma generate plus the production build; `mise run services:up` waits for MySQL readiness. To seed a scenario, inspect `src/app/api/test/seed/route.ts` (for example `couple-with-debt`, `space-settling`, `ephemeral-with-guest`, `ux-showcase`).
+Listed in `AGENTS.md`. `mise run typecheck` is `next typegen`, `tsc` (app) and `tsc -p tsconfig.e2e.json`; `mise run build` is Prisma generate plus the production build; `mise run services:up` waits for MySQL readiness. To seed a scenario, inspect `src/app/api/test/seed/route.ts` (for example `couple-with-debt`, `space-settling`, `ephemeral-with-guest`, `ux-showcase`). `POST /api/test/legacy-mcp-jwt` signs, for the logged-in browser session, the legacy 90-day MCP JWT the app no longer issues, so e2e keeps covering it (`docs/agents/mcp.md`).

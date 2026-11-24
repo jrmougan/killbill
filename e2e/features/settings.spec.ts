@@ -6,7 +6,7 @@ test.describe('Ajustes', () => {
   test.beforeEach(async ({ request }) => { await resetDb(request); });
   test.afterEach(async ({ request }) => { await resetDb(request); });
 
-  test('Hermes: confirm before issuing; the token sheet only closes explicitly', async ({ page, request }) => {
+  test('Hermes: confirm before issuing; the token sheet only closes explicitly; it is a listed, revocable access token', async ({ page, request }) => {
     const seed = await seedScenario(request, 'couple-with-debt');
     await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password! });
     await page.goto('/settings');
@@ -17,8 +17,9 @@ test.describe('Ajustes', () => {
     await page.getByRole('button', { name: 'Conectar' }).click();
     const confirm = page.getByRole('dialog', { name: 'Conectar Hermes Agent' });
     await expect(confirm).toContainText('90 días');
-    // MCP tokens are revocable via User.tokenVersion ("cerrar sesión en todos los dispositivos").
-    await expect(confirm).toContainText('Cerrar sesión en todos los dispositivos');
+    // The Hermes token is an access token: revoked on its own from "Tokens de acceso".
+    await expect(confirm).toContainText('Tokens de acceso');
+    await expect(confirm).toContainText('Si ya tenías un token «Hermes Agent», se revocará');
     await confirm.getByRole('button', { name: 'Cancelar' }).click();
     await expect(confirm).toHaveCount(0);
     expect(issued).toBe(0);
@@ -34,7 +35,11 @@ test.describe('Ajustes', () => {
     await page.mouse.click(5, 5);
     await expect(tokenSheet).toBeVisible();
     await expect(tokenSheet.getByRole('button', { name: 'Cerrar', exact: true })).toHaveCount(0);
-    await expect(tokenSheet).toContainText('Generar otro no desactiva este');
+    await expect(tokenSheet).toContainText('Generar otro lo revoca');
+    const firstToken = (await tokenSheet.locator('code').textContent())?.trim() ?? '';
+    expect(firstToken).toMatch(/^kb_[A-Za-z0-9_-]{43}$/);
+    await expect(tokenSheet.locator('pre')).toContainText(`Bearer ${firstToken}`);
+    await expect(tokenSheet.getByRole('button', { name: 'Cerrar sesión en todos los dispositivos' })).toHaveCount(0);
     // Not copied yet: closing asks first ("Volver" keeps the token on screen).
     await tokenSheet.getByRole('button', { name: 'He guardado el token' }).click();
     await tokenSheet.getByRole('button', { name: 'Volver' }).click();
@@ -42,6 +47,48 @@ test.describe('Ajustes', () => {
     await tokenSheet.getByRole('button', { name: 'He guardado el token' }).click();
     await tokenSheet.getByRole('button', { name: 'Cerrar sin copiar' }).click();
     await expect(tokenSheet).toHaveCount(0);
+
+    // It is listed in "Tokens de acceso" as «Hermes Agent», active, 90 days.
+    const connections = page.getByRole('region', { name: 'Conexiones' });
+    const summary = connections.getByTestId('access-tokens-summary');
+    await expect(summary).toHaveText('1 activo');
+    await connections.getByRole('button', { name: /Tokens de acceso/ }).click();
+    const list = page.getByRole('dialog', { name: 'Tokens de acceso' });
+    const hermesRows = list.getByTestId('access-token-row').filter({ hasText: 'Hermes Agent' });
+    await expect(hermesRows).toHaveCount(1);
+    await expect(hermesRows.first()).toHaveAttribute('data-status', 'active');
+    await expect(hermesRows.first()).toContainText(firstToken.slice(0, 11));
+    await expect(hermesRows.first()).toContainText('Caduca el');
+    await list.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    await expect(list).toHaveCount(0);
+
+    // Reconnecting replaces it: the old one is revoked, still exactly one active.
+    await connections.getByRole('button', { name: 'Nuevo token' }).click();
+    const again = page.getByRole('dialog', { name: '¿Generar otro token?' });
+    await again.getByRole('button', { name: 'Generar token' }).click();
+    await expect(tokenSheet).toBeVisible();
+    expect(issued).toBe(2);
+    const secondToken = (await tokenSheet.locator('code').textContent())?.trim() ?? '';
+    expect(secondToken).toMatch(/^kb_[A-Za-z0-9_-]{43}$/);
+    expect(secondToken).not.toBe(firstToken);
+    await tokenSheet.getByRole('button', { name: 'He guardado el token' }).click();
+    await tokenSheet.getByRole('button', { name: 'Cerrar sin copiar' }).click();
+    await expect(summary).toHaveText('1 activo');
+    await connections.getByRole('button', { name: /Tokens de acceso/ }).click();
+    await expect(hermesRows).toHaveCount(2);
+    await expect(hermesRows.filter({ hasText: secondToken.slice(0, 11) })).toHaveAttribute('data-status', 'active');
+    await expect(hermesRows.filter({ hasText: firstToken.slice(0, 11) })).toHaveAttribute('data-status', 'revoked');
+
+    // Revoked individually from the list, like any other token.
+    await hermesRows.filter({ hasText: secondToken.slice(0, 11) }).getByRole('button', { name: 'Revocar Hermes Agent' }).click();
+    await page.getByRole('dialog', { name: '¿Revocar «Hermes Agent»?' }).getByRole('button', { name: 'Revocar', exact: true }).click();
+    await expect(hermesRows.filter({ hasText: secondToken.slice(0, 11) })).toHaveAttribute('data-status', 'revoked');
+    await expect(summary).toHaveText('Conecta un agente o cliente MCP');
+    const mcp = await request.post('/api/mcp', {
+      headers: { Authorization: `Bearer ${secondToken}`, Accept: 'application/json, text/event-stream' },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+    });
+    expect(mcp.status()).toBe(401);
   });
 
   test('Tokens de acceso: create a never-expiring token, show it once (not dismissible), list it and revoke it', async ({ page, request }) => {
@@ -124,12 +171,16 @@ test.describe('Ajustes', () => {
     await expect(summary).toHaveText('1 activo');
   });
 
-  test('cerrar sesión en todos los dispositivos: hoja danger, vuelve al login con aviso y el token MCP deja de valer', async ({ page, request }) => {
+  test('cerrar sesión en todos los dispositivos: hoja danger, vuelve al login con aviso y los tokens MCP dejan de valer', async ({ page, request }) => {
     const seed = await seedScenario(request, 'couple-with-debt');
     await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password! });
     const issued = await page.request.post('/api/me/mcp-token');
     expect(issued.ok()).toBe(true);
-    const { token } = await issued.json();
+    const { token: hermes } = await issued.json();
+    // A legacy 90-day JWT issued before #60 (no longer emitted by the app).
+    const legacy = await page.request.post('/api/test/legacy-mcp-jwt');
+    expect(legacy.status()).toBe(201);
+    const { token } = await legacy.json();
     const created = await page.request.post('/api/me/tokens', { data: { name: 'Agente', expiresInDays: null } });
     expect(created.status()).toBe(201);
     const { token: opaque } = await created.json();
@@ -145,6 +196,12 @@ test.describe('Ajustes', () => {
 
     await expect(page).toHaveURL(/\/login\?signedOut=all/);
     await expect(page.getByRole('status')).toContainText('todos tus dispositivos');
+    await expect(page.getByRole('status')).toContainText('también el de Hermes Agent');
+    const mcpHermes = await request.post('/api/mcp', {
+      headers: { Authorization: `Bearer ${hermes}`, Accept: 'application/json, text/event-stream' },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+    });
+    expect(mcpHermes.status()).toBe(401);
     const mcp = await request.post('/api/mcp', {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json, text/event-stream' },
       data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
