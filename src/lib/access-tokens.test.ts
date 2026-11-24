@@ -75,28 +75,51 @@ describe("replaceNamedAccessToken", () => {
         );
     });
 
-    it("creates the token first, then revokes the user's other active tokens with the same name", async () => {
+    it("creates the token first, then revokes the user's previous active tokens with that exact name", async () => {
+        db.accessToken.findMany.mockResolvedValue([
+            { id: "old-1", name: "Hermes Agent" },
+            { id: "old-2", name: "Hermes Agent" },
+            // Same row under the case/accent-insensitive collation, but typed by hand: kept.
+            { id: "hand", name: "hermes agent" },
+        ]);
         db.accessToken.updateMany.mockResolvedValue({ count: 2 });
         const { token, summary, replaced } = await replaceNamedAccessToken("u1", { name: "Hermes Agent", expiresInDays: 90 });
         expect(token).toMatch(/^kb_/);
         expect(summary).toMatchObject({ id: "new", name: "Hermes Agent", status: "active" });
         expect(replaced).toBe(2);
-        expect(db.accessToken.create.mock.invocationCallOrder[0]).toBeLessThan(
-            db.accessToken.updateMany.mock.invocationCallOrder[0],
-        );
-        expect(db.accessToken.updateMany).toHaveBeenCalledWith({
+        // Snapshot → create → revoke.
+        expect(db.accessToken.findMany).toHaveBeenCalledWith({
             where: {
                 userId: "u1",
                 revokedAt: null,
                 OR: [{ expiresAt: null }, { expiresAt: { gt: NOW } }],
                 name: "Hermes Agent",
-                id: { not: "new" },
             },
+            select: { id: true, name: true },
+        });
+        expect(db.accessToken.findMany.mock.invocationCallOrder[0]).toBeLessThan(
+            db.accessToken.create.mock.invocationCallOrder[0],
+        );
+        expect(db.accessToken.create.mock.invocationCallOrder[0]).toBeLessThan(
+            db.accessToken.updateMany.mock.invocationCallOrder[0],
+        );
+        // Only the snapshotted ids: a token created concurrently (another reconnect) is never revoked here.
+        expect(db.accessToken.updateMany).toHaveBeenCalledWith({
+            where: { userId: "u1", id: { in: ["old-1", "old-2"] }, revokedAt: null },
             data: { revokedAt: NOW },
         });
     });
 
+    it("revokes nothing when there was no previous token with that name", async () => {
+        db.accessToken.findMany.mockResolvedValue([]);
+        const { replaced } = await replaceNamedAccessToken("u1", { name: "Hermes Agent", expiresInDays: 90 });
+        expect(replaced).toBe(0);
+        expect(db.accessToken.create).toHaveBeenCalledTimes(1);
+        expect(db.accessToken.updateMany).not.toHaveBeenCalled();
+    });
+
     it("revokes nothing when the create fails (409 TOKEN_LIMIT)", async () => {
+        db.accessToken.findMany.mockResolvedValue([{ id: "old-1", name: "Hermes Agent" }]);
         db.accessToken.count.mockResolvedValue(MAX_ACTIVE_TOKENS_PER_USER);
         await expect(
             replaceNamedAccessToken("u1", { name: "Hermes Agent", expiresInDays: 90 }),
