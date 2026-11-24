@@ -55,7 +55,7 @@ Every write whose validity depends on a space's status, roster or balances runs 
 `src/lib/auth.ts` manages the session and cookie; `src/lib/jwt.ts` signs and verifies tokens.
 
 - Registered sessions are **not** refreshed per request: fixed 7 days from login. Only guest JWTs slide, in the proxy.
-- Each JWT carries `tv` = `User.tokenVersion`. `getSession` rejects a stale `tv`, and `POST /api/me/sessions/revoke` bumps it ("cerrar sesión en todos los dispositivos"), which also kills MCP tokens.
+- Each JWT carries `tv` = `User.tokenVersion`. `getSession` rejects a stale `tv`, and `POST /api/me/sessions/revoke` bumps it ("cerrar sesión en todos los dispositivos"), which also kills MCP JWTs and, in the same transaction, revokes every opaque access token (`AccessToken.revokedAt`; see `docs/agents/mcp.md`).
 - Route handlers (enforced by oxlint under `src/app/api/**`) and guest pages that read or write space data use `getSessionCtx`.
 - Raw `getSession` remains only where a JWT-level read is enough (landing, `/i/[token]`, bottom nav, member-only pages the proxy already bars to guests). It does not revalidate guests against the DB.
 - Login is rate-limited per IP **and** per email. The client IP is `X-Real-Ip` or the **last** `X-Forwarded-For` hop (`getClientIp`, assumes Traefik is the only ingress).

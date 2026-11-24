@@ -5,15 +5,30 @@ Read before touching `src/mcp/**` or `src/app/api/mcp/`. The app exposes an MCP 
 ## Architecture
 
 - Served by the existing Next.js standalone process: no second process, no Docker changes.
-- **Auth**: `Authorization: Bearer <jwt>`, validated in `src/lib/mcp-auth.ts` (`validateBearerToken`). Only tokens with `kind:'mcp'` are accepted; browser-session and guest JWTs get 401, even though they share `JWT_SECRET`.
+- **Auth**: `Authorization: Bearer <credential>`, validated on every request in `src/lib/mcp-auth.ts` (`validateBearerToken`), which picks the branch by format:
+  - `kb_…` is an opaque access token, resolved by `resolveAccessToken` (`src/lib/access-tokens.ts`). A malformed `kb_…` is a 401 and is never tried as a JWT.
+  - Anything else is the 90-day JWT. Only `kind:'mcp'` is accepted; browser-session and guest JWTs get 401, even though they share `JWT_SECRET`.
 - **Stateless**: every POST builds a fresh `McpServer` (`src/mcp/server.ts`, `createServer`) and transport bound to that request's bearer, and tears them down after responding. There is no session map and `Mcp-Session-Id` is ignored. GET/DELETE → 405 (401 without a valid bearer).
 - **Transport**: `WebStandardStreamableHTTPServerTransport` (Web-standard `Request`/`Response`, native to route handlers).
-- **Reuse**: each server wraps the raw JWT in an `InternalApiClient` (`src/mcp/internal-client.ts`), which injects it as the `session_token` cookie on internal HTTP calls to the existing API routes. Every tool therefore reuses the full authorization stack (`requireSpaceAccess`, role gates, space policy) with no duplication.
-- MCP tokens carry `tv`, so revoking sessions invalidates them; see `docs/agents/spaces-auth.md`. `auth:'admin'` routes reject MCP tokens.
+- **Reuse**: each server wraps a `kind:'mcp'` JWT in an `InternalApiClient` (`src/mcp/internal-client.ts`), which injects it as the `session_token` cookie on internal HTTP calls to the existing API routes. Every tool therefore reuses the full authorization stack (`requireSpaceAccess`, role gates, space policy) with no duplication. With the 90-day JWT that cookie is the caller's own token; with an opaque token the route mints a 5-minute internal JWT per request (`signInternalMcpToken`, claims `tv` + `tid` = the `AccessToken` id), so the opaque token is never forwarded and never works as a cookie. The internal JWT is rejected as a Bearer.
+- `auth:'admin'` routes reject MCP sessions, and so do the token routes below: a token cannot list, mint or revoke tokens.
 
-## Token issuance
+## Credentials
 
-`POST /api/me/mcp-token` (requires normal session cookie auth) issues a 90-day JWT with `kind:'mcp'` (`signMcpToken` in `jwt.ts`). TTL: `MCP_TOKEN_TTL_DAYS`.
+Two credentials coexist. Do not remove the JWT until its retirement is decided in its own issue.
+
+| | Access token (`kb_…`) | 90-day JWT |
+| --- | --- | --- |
+| Issued by | `POST /api/me/tokens` `{ name, expiresInDays: 30 \| 90 \| 365 \| null }` | `POST /api/me/mcp-token` (`signMcpToken`), TTL `MCP_TOKEN_TTL_DAYS` |
+| UI (Ajustes → Conexiones) | "Tokens de acceso" (`src/components/settings/access-tokens.tsx`) | "Hermes Agent" → "Conectar" |
+| Stored | `AccessToken` row: sha256 (`tokenHash`) and a visible prefix; plaintext shown once | Nothing (stateless) |
+| Revoke one | `DELETE /api/me/tokens/[id]` (`revokedAt`) | Not possible |
+| Revoke all | `bumpTokenVersion` sets `revokedAt` on every active row, in the transaction that bumps `tv` | Stale `tv`; see `docs/agents/spaces-auth.md` |
+
+- All three token routes and `POST /api/me/mcp-token` require a regular browser session: guests and MCP sessions get 403.
+- `GET /api/me/tokens` lists every token of the caller with its status (`active`, `expired`, `revoked`), never the plaintext.
+- Limits: 20 active tokens per user (409 `TOKEN_LIMIT`) and 10 creations per hour. `lastUsedAt` is written at most once per hour, fire-and-forget.
+- `AccessTokenError` is a domain error registered in `DOMAIN_ERROR_NAMES` (`src/lib/http/errors.ts`).
 
 ## Tools
 
@@ -36,7 +51,20 @@ A route or vocabulary change must be carried to the tools by hand. Nothing fails
 
 ## Client config
 
-Hermes Agent, `~/.hermes/config.yaml`:
+Any client that takes the common `mcpServers` JSON (the token sheet shows this filled in):
+
+```json
+{
+  "mcpServers": {
+    "killbill": {
+      "url": "https://finanzas.mougan.es/api/mcp",
+      "headers": { "Authorization": "Bearer kb_<token from Ajustes → Tokens de acceso>" }
+    }
+  }
+}
+```
+
+Hermes Agent, `~/.hermes/config.yaml` (either credential works as the Bearer):
 
 ```yaml
 mcp_servers:

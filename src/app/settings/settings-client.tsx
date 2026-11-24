@@ -22,6 +22,7 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
 import { Sheet, SheetField } from "@/components/ui/sheet";
 import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
+import { AccessTokensSettings } from "@/components/settings/access-tokens";
 import { usePersonalMode } from "./personal-mode";
 import { withPersonal } from "./personal-scope";
 import { cn } from "@/lib/utils";
@@ -288,6 +289,8 @@ export function SettingsClient({ user, groups, activeGroupId, personalParam = fa
                             {mcpIssued ? "Nuevo token" : "Conectar"}
                         </button>
                     </div>
+                    {/* Named, individually revocable tokens for any MCP client (issue #58). */}
+                    <AccessTokensSettings rowClassName={rowCls} />
                 </Section>
 
                 <Section label="Cuenta">
@@ -301,7 +304,7 @@ export function SettingsClient({ user, groups, activeGroupId, personalParam = fa
                         <MonitorSmartphone className="h-[19px] w-[19px] flex-none" />
                         <span className="flex-1 min-w-0">
                             <span className="block text-[15px] font-semibold">Cerrar sesión en todos los dispositivos</span>
-                            <span className="block text-xs text-muted-foreground">También desconecta Hermes y otros clientes MCP</span>
+                            <span className="block text-xs text-muted-foreground">También revoca tus tokens de acceso y desconecta Hermes</span>
                         </span>
                     </button>
                 </Section>
@@ -508,7 +511,7 @@ function ProfileSheet({ user, onClose, onSaved }: { user: UserData; onClose: () 
 
 /**
  * Confirm + POST /api/me/sessions/revoke: invalidates every session cookie and
- * MCP token of the account (this device included), then hard-navigates to
+ * MCP JWT and revokes every access token of the account (this device included), then hard-navigates to
  * /login?signedOut=all (the login page explains what happened).
  */
 function RevokeSessionsSheet({ onClose }: { onClose: () => void }) {
@@ -540,7 +543,7 @@ function RevokeSessionsSheet({ onClose }: { onClose: () => void }) {
             testId="revoke-sessions-sheet"
             consequences={[
                 "Se cerrará la sesión en todos tus dispositivos, también en este.",
-                "Dejarán de funcionar los tokens de Hermes Agent y otros clientes MCP que hayas generado.",
+                "Dejarán de funcionar los tokens de Hermes Agent y todos tus tokens de acceso de otros clientes MCP.",
                 "Tendrás que volver a iniciar sesión.",
             ]}
             confirmLabel={busy ? "Cerrando sesiones…" : "Cerrar todas las sesiones"}

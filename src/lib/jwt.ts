@@ -129,6 +129,38 @@ export async function signMcpToken(payload: SessionClaims, ttlDays = 90): Promis
         .sign(getKey());
 }
 
+/** Lifetime of the internal JWT minted per /api/mcp request (see signInternalMcpToken). */
+export const INTERNAL_MCP_TOKEN_SECONDS = 5 * 60;
+
+/**
+ * Claims of the short-lived internal MCP JWT. `tid` is the AccessToken id the
+ * external caller authenticated with (for logs / traceability).
+ */
+export type InternalMcpClaims = {
+    userId: string;
+    email?: string | null;
+    isAdmin?: boolean;
+    tv: number;
+    tid: string;
+};
+
+/**
+ * Sign the INTERNAL JWT of one MCP request authenticated with an opaque access
+ * token (`kb_…`, see access-tokens.ts). Once /api/mcp has validated the token,
+ * this mints a 5-minute `kind: 'mcp'` JWT that the InternalApiClient sends as
+ * the `session_token` cookie to the existing API routes, so the opaque token is
+ * never forwarded. It never leaves the server process. It carries the user's
+ * current `tv` (so getSession's revocation check still applies) and a unique `jti`.
+ */
+export async function signInternalMcpToken(claims: InternalMcpClaims): Promise<string> {
+    return await new SignJWT({ ...claims, kind: 'mcp' })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setJti(crypto.randomUUID())
+        .setIssuedAt()
+        .setExpirationTime(`${INTERNAL_MCP_TOKEN_SECONDS}s`)
+        .sign(getKey());
+}
+
 export async function verifyToken(token: string) {
     try {
         const { payload } = await jwtVerify(token, getKey(), {

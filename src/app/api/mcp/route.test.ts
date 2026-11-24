@@ -7,13 +7,28 @@ vi.stubGlobal("fetch", mockFetch);
 vi.mock("@/lib/mcp-auth", () => ({
   validateBearerToken: vi.fn(async (request: Request) => {
     const auth = request.headers.get("authorization");
-    if (auth === "Bearer token-a") return { userId: "user-a" };
-    if (auth === "Bearer token-b") return { userId: "user-b" };
+    // Legacy 90-day MCP JWTs: forwarded as they are.
+    if (auth === "Bearer token-a") return { credential: "jwt", userId: "user-a" };
+    if (auth === "Bearer token-b") return { credential: "jwt", userId: "user-b" };
+    // Opaque access tokens: swapped for a per-request internal JWT.
+    if (auth === "Bearer kb_opaque-a") {
+      return { credential: "access-token", userId: "user-a", email: "a@x.es", isAdmin: false, tokenId: "tok-a", tokenVersion: 2 };
+    }
+    if (auth === "Bearer kb_opaque-b") {
+      return { credential: "access-token", userId: "user-b", tokenId: "tok-b", tokenVersion: 0 };
+    }
     return null;
   }),
+  getBearerToken: (request: Request) => {
+    const auth = request.headers.get("authorization");
+    return auth?.startsWith("Bearer ") ? auth.slice("Bearer ".length).trim() || null : null;
+  },
 }));
 
 import { DELETE, GET, POST } from "./route";
+import { verifyToken } from "@/lib/jwt";
+
+process.env.JWT_SECRET = "test-secret-for-vitest";
 
 let nextId = 1;
 
@@ -84,6 +99,25 @@ describe("/api/mcp (stateless)", () => {
     );
     const cookies = mockFetch.mock.calls.map((c) => (c[1] as RequestInit & { headers: Record<string, string> }).headers.Cookie);
     expect(cookies).toEqual(["session_token=token-a", "session_token=token-b"]);
+  });
+
+  it("never forwards an opaque access token: each call carries a fresh internal JWT of ITS bearer", async () => {
+    await POST(rpc("tools/call", { name: "list_spaces", arguments: {} }, "kb_opaque-a"));
+    await POST(
+      rpc("tools/call", { name: "list_spaces", arguments: {} }, "kb_opaque-b", { "mcp-session-id": "session-of-a" }),
+    );
+    const cookies = mockFetch.mock.calls.map((c) => (c[1] as RequestInit & { headers: Record<string, string> }).headers.Cookie);
+    expect(cookies).toHaveLength(2);
+    const payloads = await Promise.all(
+      cookies.map((c) => {
+        expect(c).toMatch(/^session_token=/);
+        expect(c).not.toContain("kb_");
+        return verifyToken(c.slice("session_token=".length));
+      }),
+    );
+    expect(payloads[0]).toMatchObject({ userId: "user-a", email: "a@x.es", isAdmin: false, tv: 2, tid: "tok-a", kind: "mcp" });
+    expect(payloads[1]).toMatchObject({ userId: "user-b", tv: 0, tid: "tok-b", kind: "mcp" });
+    expect((payloads[0]!.exp as number) - (payloads[0]!.iat as number)).toBe(300);
   });
 
   it("answers GET and DELETE with 405 (no SSE stream, no sessions)", async () => {

@@ -44,18 +44,102 @@ test.describe('Ajustes', () => {
     await expect(tokenSheet).toHaveCount(0);
   });
 
+  test('Tokens de acceso: create a never-expiring token, show it once (not dismissible), list it and revoke it', async ({ page, request }) => {
+    const seed = await seedScenario(request, 'couple-with-debt');
+    await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password! });
+    await page.goto('/settings');
+
+    let issued = 0;
+    page.on('request', (r) => { if (r.url().endsWith('/api/me/tokens') && r.method() === 'POST') issued += 1; });
+
+    // The row lives in "Conexiones", under the untouched Hermes Agent row.
+    const connections = page.getByRole('region', { name: 'Conexiones' });
+    await expect(connections.getByRole('button', { name: 'Conectar', exact: true })).toBeVisible();
+    const summary = connections.getByTestId('access-tokens-summary');
+    await expect(summary).toHaveText('Conecta un agente o cliente MCP');
+    await connections.getByRole('button', { name: /Tokens de acceso/ }).click();
+    const list = page.getByRole('dialog', { name: 'Tokens de acceso' });
+    await expect(list).toContainText('Aún no has creado ningún token');
+    await list.getByRole('button', { name: 'Nuevo token' }).click();
+
+    const create = page.getByRole('dialog', { name: 'Nuevo token' });
+    await expect(create.getByRole('radio', { name: '90 días' })).toBeChecked();
+    await expect(create.getByTestId('token-no-expiry-warning')).toHaveCount(0);
+    await create.getByLabel('Nombre').fill('Agente e2e');
+    await create.locator('label', { hasText: 'Sin caducidad' }).click();
+    await expect(create.getByRole('radio', { name: 'Sin caducidad' })).toBeChecked();
+    await expect(create.getByTestId('token-no-expiry-warning')).toContainText('No caducará nunca');
+    expect(issued).toBe(0);
+    await create.getByRole('button', { name: 'Generar token' }).click();
+
+    const tokenSheet = page.getByRole('dialog', { name: 'Guarda tu token ahora' });
+    await expect(tokenSheet).toBeVisible();
+    expect(issued).toBe(1);
+    await expect(tokenSheet.getByTestId('access-token-value')).toHaveText(/^kb_[A-Za-z0-9_-]{43}$/);
+    await expect(tokenSheet).toContainText('No caduca.');
+    await expect(tokenSheet.getByTestId('access-token-config')).toContainText('/api/mcp');
+    await expect(tokenSheet.getByRole('button', { name: 'Copiar token' })).toBeVisible();
+    // Escape and a backdrop tap do not lose the one-time token.
+    await page.keyboard.press('Escape');
+    await expect(tokenSheet).toBeVisible();
+    await page.mouse.click(5, 5);
+    await expect(tokenSheet).toBeVisible();
+    await expect(tokenSheet.getByRole('button', { name: 'Cerrar', exact: true })).toHaveCount(0);
+    await tokenSheet.getByRole('button', { name: 'He guardado el token' }).click();
+    await expect(tokenSheet).toHaveCount(0);
+
+    // Back on the list: the token is active, never expires, and the plaintext is gone.
+    await expect(list).toBeVisible();
+    const row = list.getByTestId('access-token-row').filter({ hasText: 'Agente e2e' });
+    await expect(row).toHaveAttribute('data-status', 'active');
+    await expect(row).toContainText('Sin caducidad');
+    await expect(row).toContainText('Sin usar');
+    await expect(list.getByText(/^kb_[A-Za-z0-9_-]{43}$/)).toHaveCount(0);
+    await expect(summary).toHaveText('1 activo');
+
+    // A second token (default 90 days) must survive the revocation of the first.
+    await list.getByRole('button', { name: 'Nuevo token' }).click();
+    await create.getByLabel('Nombre').fill('Otro agente');
+    await create.getByRole('button', { name: 'Generar token' }).click();
+    await expect(tokenSheet).toContainText('Caduca el');
+    await tokenSheet.getByRole('button', { name: 'He guardado el token' }).click();
+    const other = list.getByTestId('access-token-row').filter({ hasText: 'Otro agente' });
+    await expect(other).toHaveAttribute('data-status', 'active');
+    await expect(other).toContainText('Caduca el');
+    await expect(summary).toHaveText('2 activos');
+
+    // Revoke with confirmation (Cancelar first leaves it active).
+    await row.getByRole('button', { name: 'Revocar Agente e2e' }).click();
+    const confirm = page.getByRole('dialog', { name: '¿Revocar «Agente e2e»?' });
+    await confirm.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(row).toHaveAttribute('data-status', 'active');
+    await row.getByRole('button', { name: 'Revocar Agente e2e' }).click();
+    await confirm.getByRole('button', { name: 'Revocar', exact: true }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(row).toHaveAttribute('data-status', 'revoked');
+    await expect(row).toContainText('Revocado');
+    await expect(row.getByRole('button', { name: /Revocar/ })).toHaveCount(0);
+    await expect(other).toHaveAttribute('data-status', 'active');
+    await expect(summary).toHaveText('1 activo');
+  });
+
   test('cerrar sesión en todos los dispositivos: hoja danger, vuelve al login con aviso y el token MCP deja de valer', async ({ page, request }) => {
     const seed = await seedScenario(request, 'couple-with-debt');
     await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password! });
     const issued = await page.request.post('/api/me/mcp-token');
     expect(issued.ok()).toBe(true);
     const { token } = await issued.json();
+    const created = await page.request.post('/api/me/tokens', { data: { name: 'Agente', expiresInDays: null } });
+    expect(created.status()).toBe(201);
+    const { token: opaque } = await created.json();
     await page.goto('/settings');
 
     const account = page.getByRole('region', { name: 'Cuenta' });
     await account.getByRole('button', { name: /^Cerrar sesión en todos los dispositivos/ }).click();
     const sheet = page.getByRole('alertdialog', { name: '¿Cerrar sesión en todos los dispositivos?' });
     await expect(sheet).toContainText('Hermes Agent');
+    await expect(sheet).toContainText('tokens de acceso');
     await expect(sheet.getByTestId('confirm-sheet-confirm')).toHaveText('Cerrar todas las sesiones');
     await sheet.getByTestId('confirm-sheet-confirm').click();
 
@@ -66,6 +150,12 @@ test.describe('Ajustes', () => {
       data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
     });
     expect(mcp.status()).toBe(401);
+    // The opaque access token (even one without expiry) is revoked in the same action.
+    const mcpOpaque = await request.post('/api/mcp', {
+      headers: { Authorization: `Bearer ${opaque}`, Accept: 'application/json, text/event-stream' },
+      data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+    });
+    expect(mcpOpaque.status()).toBe(401);
   });
 
   test('cerrar sesión lleva al login con aviso', async ({ page, request }) => {

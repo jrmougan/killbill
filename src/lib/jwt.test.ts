@@ -9,6 +9,8 @@ import {
     signGuestToken,
     refreshGuestToken,
     signMcpToken,
+    signInternalMcpToken,
+    INTERNAL_MCP_TOKEN_SECONDS,
     tokenVersionOf,
     GUEST_SESSION_SECONDS,
 } from './jwt';
@@ -140,6 +142,21 @@ describe('token version (revocation) claims', () => {
         const payload = await verifyToken(await signToken({ userId: 'u1', tv: 4 }));
         expect(payload?.tv).toBe(4);
         expect(tokenVersionOf(payload!)).toBe(4);
+    });
+
+    it('internal MCP tokens carry kind, tv, tid, a unique jti and a 5-minute exp', async () => {
+        const claims = { userId: 'u1', email: 'a@b.c', isAdmin: false, tv: 1, tid: 'tok1' };
+        const a = await verifyToken(await signInternalMcpToken(claims));
+        const b = await verifyToken(await signInternalMcpToken(claims));
+        expect(a?.kind).toBe('mcp');
+        expect(a?.userId).toBe('u1');
+        expect(a?.email).toBe('a@b.c');
+        expect(a?.tv).toBe(1);
+        expect(a?.tid).toBe('tok1');
+        expect(typeof a?.jti).toBe('string');
+        expect(a?.jti).not.toBe(b?.jti);
+        expect((a!.exp as number) - (a!.iat as number)).toBe(INTERNAL_MCP_TOKEN_SECONDS);
+        expect(INTERNAL_MCP_TOKEN_SECONDS).toBe(300);
     });
 
     it('MCP tokens carry kind, tv and a unique jti', async () => {
