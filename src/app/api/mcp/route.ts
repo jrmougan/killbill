@@ -1,5 +1,6 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { validateBearerToken } from "@/lib/mcp-auth";
+import { signInternalMcpToken } from "@/lib/jwt";
+import { getBearerToken, validateBearerToken } from "@/lib/mcp-auth";
 import { createServer } from "@/mcp/server";
 
 /**
@@ -9,7 +10,13 @@ import { createServer } from "@/mcp/server";
  *   GET    /api/mcp   — 405: no server→client SSE stream is offered
  *   DELETE /api/mcp   — 405: there are no sessions to terminate
  *
- * Auth: `Authorization: Bearer <jwt>` (kind 'mcp') validated on EVERY request.
+ * Auth: `Authorization: Bearer <credential>` validated on EVERY request. Two
+ * credentials are accepted (see mcp-auth.ts):
+ *   - `kb_…` opaque access token: once validated, the route mints a short-lived
+ *     (5 min) internal `kind: 'mcp'` JWT for that request only, which the tools
+ *     forward as the `session_token` cookie. The opaque token is never forwarded
+ *     and never works as a cookie.
+ *   - the 90-day `kind: 'mcp'` JWT of POST /api/me/mcp-token: forwarded as is.
  *
  * Every POST builds a fresh McpServer + transport bound to the bearer of that
  * very request and tears both down once the response is produced. There is no
@@ -31,18 +38,22 @@ function methodNotAllowed(): Response {
   );
 }
 
-function getRawToken(request: Request): string | null {
-  const auth = request.headers.get("authorization");
-  if (!auth?.startsWith("Bearer ")) return null;
-  return auth.slice("Bearer ".length).trim() || null;
-}
-
 export async function POST(request: Request) {
   const identity = await validateBearerToken(request);
-  const rawToken = getRawToken(request);
+  const rawToken = getBearerToken(request);
   if (!identity || !rawToken) return unauthorized();
 
-  const server = createServer(rawToken);
+  const sessionJwt =
+    identity.credential === "access-token"
+      ? await signInternalMcpToken({
+          userId: identity.userId,
+          email: identity.email ?? null,
+          isAdmin: identity.isAdmin === true,
+          tv: identity.tokenVersion,
+          tid: identity.tokenId,
+        })
+      : rawToken;
+  const server = createServer(sessionJwt);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     // Plain JSON responses: the promise resolves only once every response is

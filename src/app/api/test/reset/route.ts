@@ -33,6 +33,8 @@ export async function POST() {
       // CI seeds system categories once; custom categories belong to scenarios.
       prisma.category.deleteMany({ where: { isSystem: false } }),
       prisma.inviteCode.deleteMany(),
+      // Cascades with User anyway; explicit so the list stays one line per model.
+      prisma.accessToken.deleteMany(),
       // Remove even the seeded admin: scenarios create their own admin users.
       prisma.user.deleteMany(),
       prisma.couple.deleteMany(),
