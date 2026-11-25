@@ -1,4 +1,4 @@
-name: Unit Tests & Lint
+name: Unit Tests, Typecheck & Lint
 
 on:
   # Runs on PRs (gate) and is called by deploy.yml on push to main (workflow_call).
@@ -13,27 +13,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Install development tools
+        uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
         with:
-          node-version: 20
-          cache: npm
+          version: 2026.11.12
 
       - name: Install dependencies
-        run: npm ci
+        run: mise exec -- npm ci
 
-      # Reports known vulnerabilities but never fails the build.
-      - name: Security audit (non-blocking)
-        run: npm audit --audit-level=high || true
+      # Blocks on critical advisories in production dependencies. Highs are
+      # reported (see the audit output) but don't fail the gate yet.
+      - name: Security audit (runtime deps, critical blocks)
+        run: mise exec -- npm audit --omit=dev --audit-level=critical
 
       - name: Generate Prisma client
-        run: ./node_modules/.bin/prisma generate
+        run: mise run db:generate
+
+      # next typegen + tsc for the app, then tsc for e2e/ + playwright.config.ts.
+      - name: Typecheck
+        run: mise run typecheck
 
       - name: Run unit tests
-        run: npx vitest run
+        run: mise run test
 
       # Lint is clean (0 problems) and now gates the pipeline to keep it that way.
       - name: Lint
-        run: npm run lint
+        run: mise run lint

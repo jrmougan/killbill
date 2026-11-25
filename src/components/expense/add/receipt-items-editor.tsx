@@ -1,0 +1,180 @@
+"use client";
+
+import { useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { ReceiptItem } from "@/types";
+import { formatEuros, formatAmountInput, parseAmountInput } from "@/lib/currency";
+import { receiptLinesCents } from "./form-payload";
+
+// ReceiptItem with a stable client-side id used as the React key for editable rows.
+// quantityStr/priceStr hold the raw text being typed so es-ES users can enter a
+// comma decimal (e.g. "2,5") without it collapsing on every keystroke.
+export type EditableReceiptItem = ReceiptItem & { _uid: string; quantityStr?: string; priceStr?: string };
+
+let uidCounter = 0;
+export const withUid = (item: ReceiptItem): EditableReceiptItem => ({ ...item, _uid: `item-${++uidCounter}` });
+
+/**
+ * Editable receipt line items ("Desglose de ticket"). For a 2-member space each
+ * line can be assigned ½ / Yo / {partner}; those assignments override the split
+ * (ITEMIZED). The parent owns the array and re-syncs the total. Deleting a
+ * line leaves a local "Deshacer" row (the result is identical: no API call).
+ */
+export function ReceiptItemsEditor({
+    items,
+    onChange,
+    userId,
+    partner,
+    assignable,
+    emptyHint,
+}: {
+    items: EditableReceiptItem[];
+    onChange: (items: EditableReceiptItem[]) => void;
+    userId: string;
+    partner: { id: string; name: string } | null;
+    assignable: boolean;
+    /** Shown when there are no lines and per-person assignment is unavailable. */
+    emptyHint?: string;
+}) {
+    const partnerName = partner?.name ?? "otra persona";
+    // Last deleted line, kept until the next add/delete so it can be undone in place.
+    const [removed, setRemoved] = useState<{ item: EditableReceiptItem; index: number; label: string; totalCents: number; last: boolean } | null>(null);
+
+    const update = (index: number, patch: Partial<EditableReceiptItem>) => {
+        const next = [...items];
+        next[index] = { ...next[index], ...patch };
+        onChange(next);
+    };
+
+    const updateNumeric = (index: number, field: "quantity" | "price", raw: string) => {
+        const sanitized = raw.replace(/[^0-9.,]/g, "");
+        const item = { ...items[index] };
+        if (field === "quantity") {
+            item.quantityStr = sanitized;
+            item.quantity = Math.max(0, parseAmountInput(sanitized));
+        } else {
+            item.priceStr = sanitized;
+            item.price = Math.max(0, parseAmountInput(sanitized));
+        }
+        item.total = Number((item.quantity * item.price).toFixed(2));
+        const next = [...items];
+        next[index] = item;
+        onChange(next);
+    };
+
+    const add = () => {
+        setRemoved(null);
+        onChange([...items, withUid({ description: "", quantity: 1, price: 0, total: 0, assignedTo: null })]);
+    };
+    const remove = (index: number) => {
+        const next = items.filter((_, i) => i !== index);
+        const name = items[index].description.trim();
+        setRemoved({
+            item: items[index],
+            index,
+            label: name ? `Línea «${name}» eliminada` : "Línea eliminada",
+            // With no lines left the form keeps the last total (see `withItems`).
+            totalCents: receiptLinesCents(next.length > 0 ? next : items),
+            last: next.length === 0,
+        });
+        onChange(next);
+    };
+    const undo = () => {
+        if (!removed) return;
+        const next = [...items];
+        next.splice(Math.min(removed.index, next.length), 0, removed.item);
+        setRemoved(null);
+        onChange(next);
+    };
+
+    const myAmount = items.reduce((acc, it) => acc + (it.assignedTo === null ? it.total / 2 : it.assignedTo === userId ? it.total : 0), 0);
+    const partnerAmount = items.reduce((acc, it) => acc + (it.assignedTo === null ? it.total / 2 : it.assignedTo === partner?.id ? it.total : 0), 0);
+
+    const seg = (on: boolean) =>
+        cn("flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors", on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary");
+
+    return (
+        <div className="space-y-2.5">
+            {removed && (
+                <output data-testid="receipt-line-removed" className="flex items-center gap-2 rounded-[10px] bg-[var(--track)] pl-3 text-[13px]">
+                    <span className="min-w-0 flex-1 py-2 [overflow-wrap:anywhere]">
+                        {removed.last
+                            ? <>Sin desglose: el importe se queda en <span className="font-semibold tabular-nums">{formatEuros(removed.totalCents / 100)}</span></>
+                            : <>{removed.label} · el total baja a <span className="font-semibold tabular-nums">{formatEuros(removed.totalCents / 100)}</span></>}
+                    </span>
+                    <button type="button" onClick={undo} className="flex min-h-11 shrink-0 items-center px-3 font-semibold text-primary">Deshacer</button>
+                </output>
+            )}
+            {items.length === 0 ? (removed ? null :
+                <p className="text-[13px] text-muted-foreground">
+                    {assignable
+                        ? "Escanea un ticket o añade productos para repartir por persona."
+                        : emptyHint ?? "Escanea un ticket o añade productos para guardar el desglose."}
+                </p>
+            ) : (
+                <div className="rounded-[14px] border border-[color:var(--line)] bg-card divide-y divide-[color:var(--line-2)] overflow-hidden">
+                    {items.map((item, idx) => (
+                        // Two rows so the name keeps the width on narrow phones: name + total
+                        // on top; qty × price, the ½/Yo/partner selector and delete below.
+                        <div key={item._uid} className="space-y-1 p-2">
+                            <div className="flex items-center gap-2">
+                                <input
+                                    aria-label={`Descripción del producto ${idx + 1}`}
+                                    className="bg-transparent text-sm flex-1 focus:outline-none font-medium min-w-0 px-1"
+                                    value={item.description}
+                                    onChange={(e) => update(idx, { description: e.target.value })}
+                                    placeholder="Producto…"
+                                />
+                                <div className="shrink-0 text-xs font-medium text-right tabular-nums whitespace-nowrap">{formatEuros(item.total)}</div>
+                            </div>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-1 pl-1">
+                                    <input
+                                        aria-label={`Cantidad del producto ${idx + 1}`}
+                                        type="text" inputMode="decimal"
+                                        className="bg-transparent text-xs leading-5 w-9 text-right focus:outline-none text-muted-foreground"
+                                        value={item.quantityStr ?? formatAmountInput(item.quantity)}
+                                        onChange={(e) => updateNumeric(idx, "quantity", e.target.value)}
+                                    />
+                                    <span className="text-xs text-muted-foreground">×</span>
+                                    <input
+                                        aria-label={`Precio del producto ${idx + 1}`}
+                                        type="text" inputMode="decimal"
+                                        className="bg-transparent text-xs leading-5 w-20 focus:outline-none text-muted-foreground"
+                                        value={item.priceStr ?? formatAmountInput(item.price)}
+                                        onChange={(e) => updateNumeric(idx, "price", e.target.value)}
+                                        placeholder="0,00"
+                                    />
+                                </div>
+                                <div className="ml-auto flex shrink-0 items-center gap-2">
+                                    {assignable && (
+                                        <div className="flex shrink-0 items-center rounded-lg overflow-hidden border border-[color:var(--line)] text-[11px] font-bold">
+                                            <button type="button" onClick={() => update(idx, { assignedTo: null })} aria-pressed={item.assignedTo === null} aria-label="Compartido 50/50" className={seg(item.assignedTo === null)}>½</button>
+                                            <button type="button" onClick={() => update(idx, { assignedTo: userId })} aria-pressed={item.assignedTo === userId} aria-label="Solo mío" className={cn(seg(item.assignedTo === userId), "border-l border-[color:var(--line)]")}>Yo</button>
+                                            <button type="button" onClick={() => update(idx, { assignedTo: partner?.id ?? null })} aria-pressed={!!partner && item.assignedTo === partner.id} aria-label={`Solo ${partnerName}`} className={cn(seg(!!partner && item.assignedTo === partner.id), "border-l border-[color:var(--line)]")}>
+                                                {partner?.name?.charAt(0).toUpperCase() ?? "P"}
+                                            </button>
+                                        </div>
+                                    )}
+                                    <button type="button" onClick={() => remove(idx)} aria-label={`Eliminar producto ${idx + 1}`} className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive">
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+            {items.length > 0 && assignable && (
+                <div className="text-xs px-3 py-2 bg-[var(--track)] rounded-[10px] space-y-1">
+                    <div className="flex justify-between gap-3 font-semibold text-primary"><span>Tu parte</span><span className="flex-none tabular-nums">{formatEuros(myAmount)}</span></div>
+                    <div className="flex justify-between gap-3 font-semibold text-muted-foreground"><span className="min-w-0 [overflow-wrap:anywhere]">{partnerName}</span><span className="flex-none tabular-nums">{formatEuros(partnerAmount)}</span></div>
+                </div>
+            )}
+            <button type="button" onClick={add} className="-mb-2 inline-flex min-h-11 items-center gap-1.5 text-[13px] font-semibold text-primary">
+                <Plus className="h-4 w-4" /> Añadir producto
+            </button>
+        </div>
+    );
+}

@@ -1,27 +1,25 @@
 import Link from "next/link";
-import { Compass, ArrowRight } from "lucide-react";
 
+/** 404 (EQUIL). Plain, calm copy; one way out. */
 export default function NotFound() {
-  return (
-    <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6 text-center">
-      <div className="glass-card p-8 rounded-2xl border border-[color:var(--line)] bg-card max-w-[320px] w-full space-y-6">
-        <div className="h-14 w-14 mx-auto rounded-2xl bg-[var(--accent-tint)] flex items-center justify-center">
-          <Compass className="h-7 w-7 text-primary" />
+    return (
+        <div className="min-h-dvh flex flex-col eq-in px-6 pt-12 pb-[calc(34px+env(safe-area-inset-bottom))]">
+            <span className="text-[15px] font-extrabold tracking-[0.14em] text-primary">EQUIL</span>
+            <p className="mt-6 font-mono text-sm text-muted-foreground">Error 404</p>
+            <h1 className="mt-1.5 text-[32px] font-bold tracking-[-0.03em] leading-[1.08] text-pretty">
+                Esta página no existe
+            </h1>
+            <p className="mt-3 text-[15px] text-muted-foreground leading-[1.45] text-pretty">
+                Puede que el enlace esté mal escrito o que la página ya no esté disponible.
+            </p>
+            <div className="mt-auto pt-10">
+                <Link
+                    href="/dashboard"
+                    className="w-full h-14 rounded-[18px] bg-primary text-primary-foreground text-base font-semibold flex items-center justify-center transition-transform active:scale-[0.98]"
+                >
+                    Volver a Inicio
+                </Link>
+            </div>
         </div>
-        <div className="space-y-2">
-          <h1 className="text-5xl font-black tracking-tighter text-foreground">
-            404
-          </h1>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            No hemos encontrado la página que buscas.
-          </p>
-        </div>
-        <Link href="/dashboard">
-          <button className="w-full h-12 bg-primary text-white rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-primary/90 transition-all active:scale-95 shadow-[0_12px_28px_-8px_rgba(189,93,58,0.35)]">
-            Volver al inicio <ArrowRight className="h-4 w-4" />
-          </button>
-        </Link>
-      </div>
-    </div>
-  );
+    );
 }

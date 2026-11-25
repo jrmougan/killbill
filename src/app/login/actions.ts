@@ -25,31 +25,37 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
     // Rate limit by client IP: 10 attempts / 5 minutes.
     const ip = getClientIp(await headers());
     if (!rateLimit(`login:${ip}`, 10, 5 * 60 * 1000).allowed) {
-        return { error: 'Demasiados intentos. Inténtalo de nuevo más tarde.' };
+        return { error: 'Demasiados intentos. Inténtalo de nuevo en unos minutos.', email };
     }
 
     if (!email || !password) {
-        return { error: 'Email y contraseña obligatorios' };
+        return { error: 'Escribe tu email y tu contraseña.', email };
     }
 
+    // Per-account limit as well (10 attempts / 15 minutes per email): a password
+    // guess spread across many IPs still hits the same bucket.
+    if (!rateLimit(`login-account:${email.toLowerCase()}`, 10, 15 * 60 * 1000).allowed) {
+        return { error: 'Demasiados intentos. Inténtalo de nuevo en unos minutos.', email };
+    }
+
+    let firstRun = false;
     try {
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user || !user.password) {
-            return { error: 'Credenciales incorrectas' };
+            return { error: 'El email o la contraseña no son correctos.', email };
         }
 
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
-            return { error: 'Credenciales incorrectas' };
+            return { error: 'El email o la contraseña no son correctos.', email };
         }
 
         // SECURITY (Fase 2): login NEVER auto-joins a group. The old `?code=`
         // silent auto-join let a shared link drop the victim into someone else's
-        // group without consent. Now the code is carried through and, after
-        // authentication, the user is redirected to the explicit consent screen
-        // `/i/[token]` where they choose to join. Old `/login?code=X` links keep
-        // working because that redirect handles both GroupInvite tokens and the
-        // legacy classic `Couple.code`.
+        // group without consent. Now the invite token is carried through and,
+        // after authentication, the user is redirected to the explicit consent
+        // screen `/i/[token]` where they choose to join. (Legacy 6-hex
+        // `Couple.code` values no longer resolve there: no short codes.)
 
         // Set session (JWT). Cookie write + redirect happen in the same server
         // response, so the middleware sees the cookie on the /dashboard request.
@@ -57,14 +63,26 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
             userId: user.id,
             email: user.email,
             isAdmin: user.isAdmin,
+            tv: user.tokenVersion,
         });
 
         const cookieStore = await cookies();
         cookieStore.set('session_token', token, SESSION_COOKIE);
         cookieStore.delete('user_id'); // clear old insecure cookie if present
+
+        // Onboarding (IE-09): an account with no space ever (no membership row in
+        // any status) and no expense of its own has never used the app — offer
+        // the optional `/welcome` instead of an empty Inicio.
+        if (!inviteCode) {
+            const [memberships, expenses] = await Promise.all([
+                prisma.membership.count({ where: { userId: user.id } }),
+                prisma.expense.count({ where: { OR: [{ paidById: user.id }, { ownerId: user.id }] } }),
+            ]);
+            firstRun = memberships === 0 && expenses === 0;
+        }
     } catch (error) {
         console.error('Login Error:', error);
-        return { error: 'Algo salió mal. Inténtalo de nuevo.' };
+        return { error: 'No hemos podido entrar. Inténtalo de nuevo.', email };
     }
 
     // redirect() throws NEXT_REDIRECT and must live OUTSIDE the try/catch so it
@@ -74,5 +92,5 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
     if (inviteCode) {
         redirect(`/i/${encodeURIComponent(inviteCode)}`);
     }
-    redirect('/dashboard');
+    redirect(firstRun ? '/welcome' : '/dashboard');
 }

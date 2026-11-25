@@ -1,5 +1,11 @@
-const GEMINI_MODEL = "gemini-flash-latest";
-const DEFAULT_OPENROUTER_MODEL = "qwen/qwen3-vl-235b-a22b-instruct";
+import { DEFAULT_MODELS, getAiRuntimeConfig } from "@/lib/ai-settings";
+
+/**
+ * Per-provider deadline. A hung provider counts as a failure so the chain can
+ * fall back to the next one (Gemini → OpenRouter) instead of hanging the
+ * request; the worst case stays bounded at ~2× this value.
+ */
+export const PROVIDER_TIMEOUT_MS = 30_000;
 
 const RECEIPT_PROMPT = `Analiza este ticket de compra y extrae los productos en JSON.
 
@@ -43,6 +49,20 @@ const RECEIPT_SCHEMA = {
     additionalProperties: false,
 } as const;
 
+// Gemini's responseSchema only accepts an OpenAPI subset and rejects
+// additionalProperties with HTTP 400; OpenRouter's strict mode requires it.
+function withoutAdditionalProperties(schema: unknown): unknown {
+    if (Array.isArray(schema)) return schema.map(withoutAdditionalProperties);
+    if (!schema || typeof schema !== "object") return schema;
+    return Object.fromEntries(
+        Object.entries(schema)
+            .filter(([key]) => key !== "additionalProperties")
+            .map(([key, value]) => [key, withoutAdditionalProperties(value)]),
+    );
+}
+
+const GEMINI_RECEIPT_SCHEMA = withoutAdditionalProperties(RECEIPT_SCHEMA);
+
 export interface ReceiptAIItem {
     description: string;
     quantity: number;
@@ -74,6 +94,12 @@ function stripMarkdownFence(text: string): string {
     else if (json.startsWith("```")) json = json.slice(3);
     if (json.endsWith("```")) json = json.slice(0, -3);
     return json.trim();
+}
+
+async function httpError(provider: string, response: Response): Promise<Error> {
+    const body = await response.text().catch(() => "");
+    const detail = body.replace(/\s+/g, " ").trim().slice(0, 300);
+    return new Error(`${provider} HTTP ${response.status}${detail ? `: ${detail}` : ""}`);
 }
 
 function tryParseJSON(text: string): unknown | null {
@@ -137,15 +163,62 @@ export function parseReceiptAIResponse(text: string): ReceiptAIResult {
 
     const receipt = toReceiptResult(parsed);
     if (!receipt) throw new ReceiptAIError("La respuesta del modelo no contiene un ticket válido.");
+    // Some models return the total but skip the line items; treat that as a
+    // failure so the next provider gets a chance instead of losing the breakdown.
+    if (receipt.items.length === 0 && receipt.total > 0) {
+        throw new ReceiptAIError("La respuesta del modelo tiene total pero ninguna línea.");
+    }
     return receipt;
 }
 
-async function callGemini(apiKey: string, base64: string, mimeType: string): Promise<ReceiptAIResult> {
+// A server-owned, loopback-only seam for E2E provider HTTP responses. Never
+// enabled by request headers/body; misconfiguration fails before any network call.
+export function testProviderBase(): string | null {
+    const configured = process.env.OCR_TEST_PROVIDER_URL;
+    if (!configured) return null;
+    if (process.env.TEST_ROUTES_ENABLED !== "true") {
+        throw new ReceiptAIError("OCR test provider requires test routes.");
+    }
+    let url: URL;
+    try {
+        url = new URL(configured);
+    } catch {
+        throw new ReceiptAIError("Invalid OCR test provider URL.");
+    }
+    if (url.protocol !== "http:" || url.hostname !== "127.0.0.1" ||
+        !url.port || url.pathname !== "/" || url.username || url.password || url.search || url.hash) {
+        throw new ReceiptAIError("OCR test provider must use an explicit loopback port.");
+    }
+    if (process.env.GEMINI_API_KEY !== "ocr-e2e-fake" || process.env.OPENROUTER_API_KEY !== "ocr-e2e-fake") {
+        throw new ReceiptAIError("OCR test provider requires fake credentials.");
+    }
+    return url.origin;
+}
+
+type RuntimeConfig = Awaited<ReturnType<typeof getAiRuntimeConfig>>;
+
+// With the seam active the DB is never read: only the env fake credentials
+// checked above may reach the loopback server, never a real stored key.
+async function resolveRuntimeConfig(testBase: string | null): Promise<RuntimeConfig> {
+    if (!testBase) return getAiRuntimeConfig();
+    return {
+        gemini: { apiKey: process.env.GEMINI_API_KEY || null, model: DEFAULT_MODELS.gemini },
+        openrouter: {
+            apiKey: process.env.OPENROUTER_API_KEY || null,
+            model: process.env.OPENROUTER_OCR_MODEL || DEFAULT_MODELS.openrouter,
+        },
+    };
+}
+
+async function callGemini(apiKey: string, model: string, base64: string, mimeType: string, testBase: string | null): Promise<ReceiptAIResult> {
     const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+        testBase ? `${testBase}/gemini` : `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            ...(testBase ? { redirect: "error" as const } : {}),
+            // Key in a header, never in the URL (URLs end up in proxy/access logs).
+            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+            signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
             body: JSON.stringify({
                 contents: [{
                     parts: [
@@ -157,13 +230,13 @@ async function callGemini(apiKey: string, base64: string, mimeType: string): Pro
                     temperature: 0.1,
                     maxOutputTokens: 8192,
                     responseMimeType: "application/json",
-                    responseSchema: RECEIPT_SCHEMA,
+                    responseSchema: GEMINI_RECEIPT_SCHEMA,
                 },
             }),
         },
     );
 
-    if (!response.ok) throw new Error(`Gemini HTTP ${response.status}`);
+    if (!response.ok) throw await httpError("Gemini", response);
 
     const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -171,10 +244,11 @@ async function callGemini(apiKey: string, base64: string, mimeType: string): Pro
     return parseReceiptAIResponse(text);
 }
 
-async function callOpenRouter(apiKey: string, base64: string, mimeType: string): Promise<ReceiptAIResult> {
-    const model = process.env.OPENROUTER_OCR_MODEL || DEFAULT_OPENROUTER_MODEL;
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+async function callOpenRouter(apiKey: string, model: string, base64: string, mimeType: string, testBase: string | null): Promise<ReceiptAIResult> {
+    const response = await fetch(testBase ? `${testBase}/openrouter` : "https://openrouter.ai/api/v1/chat/completions", {
+        ...(testBase ? { redirect: "error" as const } : {}),
         method: "POST",
+        signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
         headers: {
             Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
@@ -209,7 +283,7 @@ async function callOpenRouter(apiKey: string, base64: string, mimeType: string):
         }),
     });
 
-    if (!response.ok) throw new Error(`OpenRouter HTTP ${response.status}`);
+    if (!response.ok) throw await httpError("OpenRouter", response);
 
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content;
@@ -218,12 +292,14 @@ async function callOpenRouter(apiKey: string, base64: string, mimeType: string):
 }
 
 export async function analyzeReceiptImage(base64: string, mimeType: string): Promise<ReceiptAIResult> {
-    const geminiKey = process.env.GEMINI_API_KEY;
-    const openRouterKey = process.env.OPENROUTER_API_KEY;
+    const testBase = testProviderBase();
+    const { gemini, openrouter } = await resolveRuntimeConfig(testBase);
+    const geminiKey = gemini.apiKey;
+    const openRouterKey = openrouter.apiKey;
 
     if (geminiKey) {
         try {
-            return await callGemini(geminiKey, base64, mimeType);
+            return await callGemini(geminiKey, gemini.model, base64, mimeType, testBase);
         } catch (error) {
             console.warn(`Receipt OCR: Gemini failed${openRouterKey ? ", trying OpenRouter" : ""}: ${errorMessage(error)}`);
         }
@@ -231,7 +307,7 @@ export async function analyzeReceiptImage(base64: string, mimeType: string): Pro
 
     if (openRouterKey) {
         try {
-            return await callOpenRouter(openRouterKey, base64, mimeType);
+            return await callOpenRouter(openRouterKey, openrouter.model, base64, mimeType, testBase);
         } catch (error) {
             console.error(`Receipt OCR: OpenRouter failed: ${errorMessage(error)}`);
         }

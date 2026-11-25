@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
-import type { User } from "@/generated/prisma/client";
 import type { SpaceType, SpaceStatus, MembershipRole } from "@/generated/prisma/enums";
 
 /** Cookie holding the user's currently-active group (multi-group support, F4). */
@@ -14,17 +13,39 @@ export const ACTIVE_GROUP_COOKIE = "active_group";
 export const MAX_GROUP_MEMBERS = 20;
 
 /**
- * Returns the ACTIVE members of a group (a.k.a. couple) via the Membership layer.
+ * Public projection of a group member. This is the ONLY shape getGroupMembers
+ * returns: it is serialized straight into API responses (GET /api/couple,
+ * balance, ...) and RSC props, so it must never carry secrets (password hash,
+ * pin) or contact data (email). If a caller ever needs more, add a separate,
+ * explicitly-named function instead of widening this select.
+ */
+export const PUBLIC_MEMBER_SELECT = {
+    id: true,
+    name: true,
+    avatar: true,
+    isGuest: true,
+} as const;
+
+export type PublicMember = {
+    id: string;
+    name: string;
+    avatar: string | null;
+    isGuest: boolean;
+};
+
+/**
+ * Returns the ACTIVE members of a group (a.k.a. couple) via the Membership layer,
+ * as the safe public projection (`PUBLIC_MEMBER_SELECT`).
  *
  * Ordered by joinedAt asc, then userId asc — the backfill set joinedAt = User.createdAt,
  * so this reproduces the previous `couple.members` ordering. That ordering is
  * load-bearing: the deterministic remainder-cent allocation in finance.ts /
  * splits.ts depends on member order, so it must not drift.
  */
-export async function getGroupMembers(groupId: string): Promise<User[]> {
+export async function getGroupMembers(groupId: string): Promise<PublicMember[]> {
     const memberships = await prisma.membership.findMany({
         where: { groupId, status: "ACTIVE" },
-        include: { user: true },
+        select: { user: { select: PUBLIC_MEMBER_SELECT } },
         orderBy: [{ joinedAt: "asc" }, { userId: "asc" }],
     });
     return memberships.map((m) => m.user);
@@ -60,7 +81,6 @@ export async function getUserGroups(
 ): Promise<{
     id: string;
     name: string | null;
-    code: string;
     memberCount: number;
     type: SpaceType;
     status: SpaceStatus;
@@ -75,7 +95,6 @@ export async function getUserGroups(
                 select: {
                     id: true,
                     name: true,
-                    code: true,
                     type: true,
                     status: true,
                     expiresAt: true,
@@ -88,7 +107,6 @@ export async function getUserGroups(
     return memberships.map((m) => ({
         id: m.group.id,
         name: m.group.name,
-        code: m.group.code,
         memberCount: m.group._count.memberships,
         type: m.group.type,
         status: m.group.status,

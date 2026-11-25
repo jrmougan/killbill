@@ -1,29 +1,40 @@
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/auth";
+import { getSessionCtx } from "@/lib/authz";
 import { getActiveGroup, getGroupMembers } from "@/lib/membership";
 import { redirect } from "next/navigation";
-import { toEuros } from "@/lib/currency";
 import { receiptItemsView, RECEIPT_LINES_SELECT } from "@/lib/receipt-read";
 import { categoryKeyOf, categoryMetaMap, CATEGORY_REF_SELECT } from "@/lib/category-read";
 import { getEffectiveCategories } from "@/lib/category-db";
 import { NEUTRAL_CATEGORY_META } from "@/components/category/category-badge";
-import { EditExpenseClient } from "./client";
+import { APP_TZ } from "@/lib/home-format";
+import { ExpenseForm, type AddSpace } from "@/components/expense/add/add-expense-client";
+import { PERSONAL_SPACE } from "@/components/expenses/space-meta";
 
+export const dynamic = "force-dynamic";
+
+/** YYYY-MM-DD of an instant in the app timezone (the day the user sees). */
+function dayInAppTz(d: Date): string {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: APP_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+
+/**
+ * Editar gasto (G-11/T-07): the same numpad form as "Añadir gasto", hydrated
+ * from the expense. Its space is fixed; date, amount, concept, category,
+ * payer, split, receipt, tags, recurrence and notes are editable.
+ */
 export default async function EditExpensePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
-    const session = await getSession();
+    // getSessionCtx: a guest is revalidated against its Membership (expelled/archived → login).
+    const session = await getSessionCtx();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
 
-    // Phase 4 selector switch: the caller's group comes from the Membership
-    // layer (the expense's own couple.members include remains until the gated
-    // User.coupleId / Couple.members contract drop).
-    const [expense, groupId] = await Promise.all([
+    const [expense, activeGroupId] = await Promise.all([
         prisma.expense.findUnique({
             where: { id },
             include: {
-                splits: true,
-                tags: { include: { tag: true } },
+                splits: { select: { userId: true, amount: true } },
+                tags: { select: { tagId: true } },
                 series: true,
                 ...RECEIPT_LINES_SELECT,
                 ...CATEGORY_REF_SELECT,
@@ -34,93 +45,68 @@ export default async function EditExpensePage({ params }: { params: Promise<{ id
 
     if (!expense) redirect("/dashboard");
 
-    // Phase 5 (WS1): couple membership comes from the Membership layer, not the
-    // expense.couple.members reverse relation.
     const members = expense.coupleId ? await getGroupMembers(expense.coupleId) : [];
 
-    // Personal expenses are editable only by their owner; shared ones by couple members.
-    const isMember = members.some((m) => m.id === userId);
-    const canEdit = expense.visibility === "PERSONAL" ? expense.ownerId === userId : isMember;
+    // Personal expenses are editable only by their owner; shared ones by members.
+    const isPersonal = expense.visibility === "PERSONAL";
+    const canEdit = isPersonal ? expense.ownerId === userId : members.some((m) => m.id === userId);
     if (!canEdit) redirect("/dashboard");
 
-    // A SETTLING/ARCHIVED space is read-only — editing is blocked (Fase 1).
+    // A SETTLING/ARCHIVED space is read-only — editing is blocked.
     const space = expense.coupleId
-        ? await prisma.couple.findUnique({ where: { id: expense.coupleId }, select: { type: true, status: true } })
+        ? await prisma.couple.findUnique({ where: { id: expense.coupleId }, select: { id: true, name: true, type: true, status: true } })
         : null;
     if (space && space.status !== "ACTIVE") redirect(`/expense/${id}`);
 
-    const allTags = groupId
-        ? await prisma.tag.findMany({ where: { coupleId: groupId } })
+    // Tags of the EXPENSE's scope (G-07): the space's tags for a shared expense,
+    // the owner's personal tags for a personal one — never the active space's.
+    const tags = await prisma.tag.findMany({
+        where: isPersonal ? { ownerId: userId, coupleId: null } : { coupleId: expense.coupleId! },
+        select: { id: true, name: true, color: true, coupleId: true, ownerId: true },
+        orderBy: { name: "asc" },
+    });
+
+    const spaces: AddSpace[] = space && !isPersonal
+        ? [{
+            id: space.id,
+            name: space.name || "Espacio",
+            type: space.type,
+            members: members.map((m) => ({ id: m.id, name: m.name, avatar: m.avatar })),
+        }]
         : [];
 
-    const partner = members.find((m) => m.id !== userId) ?? null;
+    const isTemplate = !!(expense.seriesId && expense.series?.templateId === expense.id);
 
-    // DB-driven metadata for the CURRENT category, resolved in the expense's own
-    // context (personal → owner scope; shared → group scope). Passed so the
-    // picker can force-include it even if the custom category was later deleted.
-    const isPersonalExpense = expense.visibility === "PERSONAL";
-    const catScope = isPersonalExpense
-        ? { ownerId: userId }
-        : expense.coupleId
-            ? { groupId: expense.coupleId }
-            : {};
-    const catMap = categoryMetaMap(await getEffectiveCategories(catScope));
+    // Display meta of the CURRENT category, resolved in the expense's own context.
+    const catMap = categoryMetaMap(await getEffectiveCategories(isPersonal ? { ownerId: userId } : { groupId: expense.coupleId! }));
     const currentKey = categoryKeyOf(expense);
-    const initialCategoryMeta = catMap[currentKey] ?? catMap.other ?? { ...NEUTRAL_CATEGORY_META, key: currentKey };
-
-    // Detect initial split mode from current splits
-    let initialSplitMode: "shared" | "solo" | "custom" = "shared";
-    let initialMyPercent = 50;
-
-    if (expense.splits.length === 1) {
-        initialSplitMode = "solo";
-        // A single split owned by the current user is a fully-mine expense (100%).
-        const onlySplit = expense.splits[0];
-        if (onlySplit.userId === userId && expense.amount > 0) {
-            initialMyPercent = 100;
-        }
-    } else if (expense.splits.length === 2) {
-        const [s1, s2] = expense.splits;
-        const isEqual = Math.abs(s1.amount - s2.amount) <= 1;
-        if (isEqual) {
-            initialSplitMode = "shared";
-        } else {
-            initialSplitMode = "custom";
-            const mySplit = expense.splits.find((s) => s.userId === userId);
-            const partnerSplit = expense.splits.find((s) => s.userId !== userId);
-            if (mySplit && expense.amount > 0) {
-                initialMyPercent = Math.round((mySplit.amount / expense.amount) * 100);
-            } else if (partnerSplit && expense.amount > 0) {
-                initialMyPercent = 100 - Math.round((partnerSplit.amount / expense.amount) * 100);
-            }
-        }
-    }
+    const currentMeta = catMap[currentKey] ?? { ...NEUTRAL_CATEGORY_META, label: currentKey };
 
     return (
-        <EditExpenseClient
-            expenseId={id}
+        <ExpenseForm
             userId={userId}
-            partner={partner ? { id: partner.id, name: partner.name } : null}
-            members={members.map((m) => ({ id: m.id, name: m.name }))}
-            initialPaidById={expense.paidById}
-            initialAmount={toEuros(expense.amount)}
-            initialDescription={expense.description}
-            initialCategory={categoryKeyOf(expense)}
-            initialSplitMode={initialSplitMode}
-            initialMyPercent={initialMyPercent}
-            initialSplitStrategy={expense.splitStrategy ?? null}
-            initialSplits={expense.splits.map((s) => ({ userId: s.userId, amount: s.amount }))}
-            spaceType={space?.type ?? null}
-            initialReceiptItems={receiptItemsView(expense.lineItems)}
-            initialReceiptUrl={expense.receiptUrl ?? null}
-            initialNotes={expense.notes ?? ""}
-            initialIsRecurring={!!(expense.seriesId && expense.series?.templateId === expense.id && expense.series?.isActive)}
-            initialRecurringInterval={(expense.series?.interval as "weekly" | "monthly" | "yearly") ?? "monthly"}
-            initialTagIds={expense.tags.map((t) => t.tagId)}
-            allTags={allTags}
-            isPersonal={isPersonalExpense}
-            groupId={expense.coupleId ?? null}
-            initialCategoryMeta={initialCategoryMeta}
+            spaces={spaces}
+            allowPersonal={isPersonal}
+            activeGroupId={activeGroupId}
+            initialSpace={isPersonal || !space ? PERSONAL_SPACE : space.id}
+            tags={tags}
+            initial={{
+                expenseId: expense.id,
+                amountCents: expense.amount,
+                description: expense.description,
+                category: currentKey,
+                categoryMeta: { key: currentKey, label: currentMeta.label, emoji: currentMeta.emoji },
+                date: dayInAppTz(expense.date),
+                notes: expense.notes ?? "",
+                tagIds: expense.tags.map((t) => t.tagId),
+                isRecurring: isTemplate && !!expense.series?.isActive,
+                recurringInterval: (expense.series?.interval as "weekly" | "monthly" | "yearly") ?? "monthly",
+                paidById: expense.paidById,
+                splitStrategy: expense.splitStrategy ?? null,
+                splits: expense.splits,
+                receiptItems: receiptItemsView(expense.lineItems),
+                receiptUrl: expense.receiptUrl ?? null,
+            }}
         />
     );
 }

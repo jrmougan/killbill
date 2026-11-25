@@ -1,4 +1,5 @@
-import { test, expect, request as playwrightRequest } from '@playwright/test';
+import { test, expect } from '../fixtures/test.fixture';
+import { request as playwrightRequest } from '@playwright/test';
 import { seedScenario, resetDb } from '../fixtures/db.fixture';
 import { loginAs } from '../fixtures/auth.fixture';
 
@@ -53,13 +54,13 @@ test.describe('Personal expenses — privacy & sharing', () => {
     expect(body).not.toContain('Personal Expense');
   });
 
-  test('owner can share a personal expense; re-sharing 409; non-owner 403', async ({ page, browser }) => {
+  test('owner can share a personal expense; re-sharing 409; non-owner 403', async ({ page, newContext }) => {
     await resetDb(apiContext);
     const data = await seedScenario(apiContext, 'couple-with-personal-expense');
     const personalId = data.personalExpenseId as string;
 
     // Non-owner (userB) is forbidden.
-    const ctxB = await browser.newContext();
+    const ctxB = await newContext();
     const pageB = await ctxB.newPage();
     await loginAs(pageB, data.userB as { email: string; password: string });
     const forbidden = await pageB.request.post(`/api/expenses/${personalId}/share`);

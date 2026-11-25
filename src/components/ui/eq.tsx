@@ -1,0 +1,341 @@
+"use client";
+
+// EQUIL design primitives (rediseño "EQUIL Prototipo"). Shared by every screen
+// so spacing/radii/colours stay consistent; screen-specific layout lives in
+// each page. Colours come from the tokens in globals.css — never hardcode hex.
+
+import Link from "next/link";
+import { ArrowLeft, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import React from "react";
+
+/** White rounded card with a soft hairline (18px radius). */
+export function EqCard({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+    return (
+        <div
+            className={cn("bg-card rounded-[18px] border border-[color:var(--line-2)]", className)}
+            {...props}
+        />
+    );
+}
+
+/** Small muted section label ("Recientes", "Por categoría"…). */
+export function EqLabel({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
+    return <span className={cn("text-xs font-semibold text-muted-foreground", className)} {...props} />;
+}
+
+// 44×44 touch area around the 24px icon; the negative margin keeps the layout of a 24px box.
+const BACK_CLASS = "-m-2.5 h-11 w-11 flex-none flex items-center justify-center";
+
+/**
+ * Screen header. `back` renders an arrow (href or onClick) before the title;
+ * `meta` is the right-aligned context (usually the active space "🏠 Casa").
+ */
+export function EqHeader({
+    title,
+    meta,
+    back,
+    onBack,
+    close,
+    wrapActions = false,
+    className,
+    children,
+}: {
+    title?: React.ReactNode;
+    meta?: React.ReactNode;
+    back?: string;
+    onBack?: () => void;
+    close?: boolean;
+    /** Drop wide `children` to a right-aligned line of their own instead of breaking a title word to fit beside them. */
+    wrapActions?: boolean;
+    className?: string;
+    children?: React.ReactNode;
+}) {
+    const Icon = close ? X : ArrowLeft;
+    const backEl = back ? (
+        <Link href={back} aria-label={close ? "Cerrar" : "Volver"} className={BACK_CLASS}>
+            <Icon className="h-6 w-6" />
+        </Link>
+    ) : onBack ? (
+        <button type="button" onClick={onBack} aria-label={close ? "Cerrar" : "Volver"} className={BACK_CLASS}>
+            <Icon className="h-6 w-6" />
+        </button>
+    ) : null;
+    return (
+        <header className={cn("px-5 pt-1 flex items-center gap-2.5", wrapActions && "flex-wrap justify-end", className)}>
+            {backEl}
+            {title !== undefined && (
+                <h1
+                    className={cn(
+                        "text-2xl font-bold tracking-[-0.02em] flex-1",
+                        // break-word keeps the longest word as min-content, so it decides when the actions wrap; the cap (back icon + gap) keeps the title beside the back icon.
+                        wrapActions ? "max-w-[calc(100%-2.125rem)] [overflow-wrap:break-word]" : "min-w-0 [overflow-wrap:anywhere]",
+                    )}
+                >
+                    {title}
+                </h1>
+            )}
+            {children}
+            {/* The meta (often a space name) truncates, capped so a one-word title still fits at 320px. */}
+            {meta !== undefined && <span className="text-[13px] text-muted-foreground min-w-0 max-w-[45%] truncate">{meta}</span>}
+        </header>
+    );
+}
+
+/** Pill chip. `tone="ink"` = filter chips (black when selected), `"accent"` = green selection, `"add"` = dashed. */
+export function EqChip({
+    selected,
+    tone = "ink",
+    touch = false,
+    className,
+    children,
+    ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    selected?: boolean;
+    tone?: "ink" | "accent" | "add";
+    /** Pads the button to a 44px-tall touch target around the same-looking pill. */
+    touch?: boolean;
+}) {
+    const pill = cn(
+        "flex-none max-w-full [overflow-wrap:anywhere] rounded-full px-3 py-[7px] text-[13px] font-semibold border transition-colors",
+        tone === "add" && "border-dashed border-[color:var(--line-strong)] hover:bg-card",
+        tone === "ink" && (selected ? "bg-foreground text-white border-foreground" : "bg-card text-foreground border-[color:var(--line)]"),
+        tone === "accent" && (selected ? "bg-primary text-white border-primary" : "bg-card text-foreground border-[color:var(--line)]"),
+        className
+    );
+    return (
+        <button
+            type="button"
+            aria-pressed={tone === "add" ? undefined : !!selected}
+            className={touch ? "group flex-none min-w-0 max-w-full min-h-11 flex items-center outline-none" : pill}
+            {...props}
+        >
+            {touch ? <span className={cn("block", pill, "group-focus-visible:ring-2 group-focus-visible:ring-ring")}>{children}</span> : children}
+        </button>
+    );
+}
+
+/** Two-or-more option segmented control (Presupuestos | Análisis). */
+export function EqSegmented<T extends string>({
+    value,
+    options,
+    onChange,
+    className,
+}: {
+    value: T;
+    options: { value: T; label: React.ReactNode }[];
+    onChange: (v: T) => void;
+    className?: string;
+}) {
+    return (
+        <div
+            role="tablist"
+            tabIndex={-1}
+            className={cn("flex rounded-xl bg-[var(--track)] p-[3px] text-sm font-semibold", className)}
+            onKeyDown={(e) => {
+                // WAI-ARIA tabs: arrows move the selection, Home/End jump to the ends.
+                const i = options.findIndex((o) => o.value === value);
+                const next =
+                    e.key === "ArrowRight" ? (i + 1) % options.length
+                    : e.key === "ArrowLeft" ? (i - 1 + options.length) % options.length
+                    : e.key === "Home" ? 0
+                    : e.key === "End" ? options.length - 1
+                    : -1;
+                if (next < 0) return;
+                e.preventDefault();
+                onChange(options[next].value);
+                const tabs = e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+                tabs[next]?.focus();
+            }}
+        >
+            {options.map((o) => {
+                const active = o.value === value;
+                return (
+                    <button
+                        key={o.value}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        tabIndex={active ? 0 : -1}
+                        onClick={() => onChange(o.value)}
+                        className={cn(
+                            "flex-1 min-h-11 rounded-[10px] py-2 text-center transition-colors",
+                            active ? "bg-card text-foreground" : "text-muted-foreground"
+                        )}
+                    >
+                        {o.label}
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
+
+/** Big 56px call-to-action. `variant="ink"` = black (secondary flows), `"outline"` = white. */
+export const EqCta = React.forwardRef<
+    HTMLButtonElement,
+    React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "ink" | "outline" }
+>(({ variant = "primary", className, ...props }, ref) => (
+    <button
+        ref={ref}
+        type="button"
+        className={cn(
+            "w-full h-14 rounded-[18px] text-base font-semibold flex items-center justify-center gap-2 transition-transform active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100",
+            variant === "primary" && "bg-primary text-primary-foreground",
+            variant === "ink" && "bg-foreground text-white",
+            variant === "outline" && "bg-card border border-[color:var(--line)] text-foreground",
+            className
+        )}
+        {...props}
+    />
+));
+EqCta.displayName = "EqCta";
+
+/**
+ * Expense / settlement row: 40px icon tile, title + subtitle, amount on the
+ * right. Used by Inicio (Recientes) and Gastos.
+ */
+export function EqRow({
+    icon,
+    iconTint,
+    title,
+    sub,
+    amount,
+    amountClassName,
+    href,
+    onClick,
+}: {
+    icon: React.ReactNode;
+    iconTint?: boolean;
+    title: React.ReactNode;
+    sub?: React.ReactNode;
+    amount: React.ReactNode;
+    amountClassName?: string;
+    href?: string;
+    onClick?: () => void;
+}) {
+    const inner = (
+        <>
+            <span
+                className={cn(
+                    "h-10 w-10 flex-none rounded-xl border border-[color:var(--line-2)] flex items-center justify-center text-lg text-primary",
+                    iconTint ? "bg-[var(--accent-tint)]" : "bg-card"
+                )}
+            >
+                {icon}
+            </span>
+            <div className="flex-1 min-w-0 text-left">
+                <div className="text-[15px] font-semibold truncate">{title}</div>
+                {sub && <div className="text-[12.5px] text-muted-foreground truncate">{sub}</div>}
+            </div>
+            <span className={cn("text-[15px] font-semibold tabular-nums", amountClassName)}>{amount}</span>
+        </>
+    );
+    const cls = "flex items-center gap-3 py-2.5 w-full";
+    if (href) return <Link href={href} className={cls}>{inner}</Link>;
+    if (onClick) return <button type="button" onClick={onClick} className={cls}>{inner}</button>;
+    return <div className={cls}>{inner}</div>;
+}
+
+/**
+ * Empty state: what is missing, what to do, and (optionally) the action as a
+ * 44px pill — a link (`href`) or a button (`onClick`). Without an action it is
+ * just the explanation (e.g. a read-only space).
+ */
+export function EqEmpty({
+    title,
+    hint,
+    action,
+    href,
+    onClick,
+    testId,
+}: {
+    title: string;
+    hint?: React.ReactNode;
+    action?: string;
+    href?: string;
+    onClick?: () => void;
+    testId?: string;
+}) {
+    const cls =
+        "mt-3 min-h-11 inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-tint)] border border-[color:var(--accent-border)] px-4 text-sm font-semibold text-primary active:scale-[0.97] transition-transform";
+    return (
+        <div data-testid={testId} className="flex flex-col items-center gap-1 py-8 text-center">
+            <p className="text-[15px] font-semibold text-foreground">{title}</p>
+            {hint && <p className="max-w-[30ch] text-[13px] leading-snug text-muted-foreground">{hint}</p>}
+            {action && href && <Link href={href} className={cls}>{action}</Link>}
+            {action && !href && onClick && (
+                <button type="button" onClick={onClick} className={cls}>{action}</button>
+            )}
+        </div>
+    );
+}
+
+/** Optional toast button: a callback ("Deshacer") or a link ("Ver qué falta"). */
+export type EqToastAction = { label: string; onAction: () => void; href?: never } | { label: string; href: string; onAction?: never };
+
+/** Time the empty live region gets to be registered before its text arrives. */
+const TOAST_ANNOUNCE_DELAY_MS = 150;
+
+/**
+ * Ephemeral bottom toast (dark pill above the nav). Render conditionally.
+ * The `<output>` live region mounts empty and is filled a moment later:
+ * screen readers ignore a live region that enters the tree already filled.
+ */
+export function EqToast({ children, action, className }: { children: React.ReactNode; action?: EqToastAction | null; className?: string }) {
+    const [ready, setReady] = React.useState(false);
+    React.useEffect(() => {
+        const t = setTimeout(() => setReady(true), TOAST_ANNOUNCE_DELAY_MS);
+        return () => clearTimeout(t);
+    }, []);
+    // 44 px tap target that does not grow the pill (negative vertical margin).
+    const actionCls = "-my-2.5 -mr-1.5 min-h-11 flex flex-none items-center px-1.5 font-semibold text-[color:var(--accent-tint)] underline-offset-2 hover:underline";
+    return (
+        <output
+            className={cn(
+                "fixed left-1/2 bottom-[104px] -translate-x-1/2 z-50 w-max max-w-[calc(100vw-2rem)] [overflow-wrap:anywhere] rounded-[14px] bg-foreground px-4 py-[11px] text-sm font-medium text-white shadow-[0_10px_24px_-8px_rgba(0,0,0,0.4)]",
+                ready ? "eq-in" : "opacity-0",
+                action && "flex items-center gap-3",
+                className,
+            )}
+        >
+            {ready && (
+                <>
+                    {action ? <span className="min-w-0">{children}</span> : children}
+                    {action?.href && (
+                        <Link href={action.href} className={actionCls}>
+                            {action.label}
+                        </Link>
+                    )}
+                    {action?.onAction && (
+                        <button type="button" onClick={action.onAction} className={actionCls}>
+                            {action.label}
+                        </button>
+                    )}
+                </>
+            )}
+        </output>
+    );
+}
+
+/**
+ * Hook: `const [toast, show, action] = useEqToast()` →
+ * `{toast && <EqToast action={action}>{toast}</EqToast>}`. `show(m, action)`
+ * keeps a toast with an action on screen for at least 5 s so it can be reached;
+ * tapping a callback action dismisses it.
+ */
+export function useEqToast(ms = 2000): [string | null, (m: string, action?: EqToastAction) => void, EqToastAction | null] {
+    const [state, setState] = React.useState<{ msg: string; action: EqToastAction | null } | null>(null);
+    const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    React.useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+    const show = React.useCallback((m: string, action?: EqToastAction) => {
+        if (timer.current) clearTimeout(timer.current);
+        // Tapping a callback action also dismisses the toast.
+        const wrapped: EqToastAction | null = action?.onAction
+            ? { label: action.label, onAction: () => { if (timer.current) clearTimeout(timer.current); setState(null); action.onAction(); } }
+            : action ?? null;
+        setState({ msg: m, action: wrapped });
+        timer.current = setTimeout(() => setState(null), action ? Math.max(ms, 5000) : ms);
+    }, [ms]);
+    return [state?.msg ?? null, show, state?.action ?? null];
+}

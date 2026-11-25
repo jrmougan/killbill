@@ -1,11 +1,18 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { WelcomeClient } from "./welcome-client";
+import { prisma } from "@/lib/db";
+import { ephemeralSpacesEnabled } from "@/lib/flags";
+import { madridToday } from "@/lib/space-policy";
+import { CreateSpaceFlow } from "@/components/space/create-space-flow";
 
 /**
- * Optional first-run onboarding (Fase 3). Presents the three ways to use EQUIL —
- * solo, a new shared space, or joining via an invite link — and is always
- * skippable. Not a wall: nothing here is required to reach the dashboard.
+ * Onboarding (prototype `is.welcome`): pick who you share expenses with, or
+ * paste an invite link. Never a wall — "Solo yo" opens the personal context
+ * without creating anything. Reached after registering and from the Inicio
+ * welcome card of a brand-new account.
+ *
+ * Works with zero spaces (first run, no back arrow) and for someone who already
+ * has spaces (create mode, back to Inicio).
  *
  * A guest session never onboards (it is caged to its space), so it is bounced to
  * its dashboard; anonymous visitors go to login.
@@ -17,5 +24,15 @@ export default async function WelcomePage() {
     if (!session?.userId) redirect("/login");
     if (session.kind === "guest") redirect("/dashboard");
 
-    return <WelcomeClient />;
+    const hasSpaces =
+        (await prisma.membership.count({ where: { userId: session.userId as string, status: "ACTIVE" } })) > 0;
+
+    return (
+        <CreateSpaceFlow
+            mode={hasSpaces ? "create" : "onboard"}
+            backHref={hasSpaces ? "/dashboard" : undefined}
+            ephemeralEnabled={ephemeralSpacesEnabled()}
+            today={madridToday()}
+        />
+    );
 }

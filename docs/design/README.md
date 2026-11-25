@@ -1,0 +1,73 @@
+# EQUIL: design sources and product decisions
+
+Precedence when sources disagree:
+
+1. This file's decisions, and the Glossary in `docs/ux/plan-acciones-criticas.md` §1 for copy.
+2. `EQUIL Rediseño.dc.html` for visuals (2a/3a; render with `mise run ux:design`).
+3. `EQUIL Prototipo.dc.html`, historical reference only (project
+   `a458c65f-b975-4c3e-bfb0-981943f748db`, claude.ai/design). It needs the design runtime
+   (`support.js`) to render and is not shipped.
+
+The mockups still say "Quedar en paz": do not copy it. Capture ids and PNG names
+(`quedar-en-paz`, `2a-quedar-en-paz-ticket`) keep the old name on purpose.
+
+## Product decisions taken when implementing it
+
+The prototype contradicts some existing product rules. These are the resolutions:
+
+- **Lists → expense**: "Terminar y apuntar gasto" is a *shortcut without link*:
+  it clears the checked items (`clear-checked`) and opens the add-expense flow
+  prefilled with the list name as concept. No `linkedExpenseId`, no prices —
+  the money still comes from OCR / manual entry. Mechanics:
+  `docs/agents/shopping-lists.md`.
+- **Invites**: no short codes. The "Invitar" card creates and shares a secure
+  `/i/[token]` link (Web Share API / copy); "Unirme" accepts a pasted link.
+- **Settle** ("Saldar deuda"): two-step confirmation is kept. A headline says
+  who owes whom ("Lucía te debe 79,30 €" / "Le debes 79,30 € a Álvaro"; in a
+  group "Debes 7,50 € en total" + "Le pagas 7,50 € a Marta"), and the CTAs carry
+  the person and the amount of the chosen transfer. "Ya le he pagado {importe}
+  a {nombre}" creates a PENDING settlement ("Falta que X confirme que lo ha recibido");
+  "{nombre} ya me ha pagado {importe}" (creditor) confirms immediately, and an
+  incoming pending one is confirmed with "Sí, he recibido {importe} de {nombre}".
+  No tap on /settle writes by itself: every CTA opens a review sheet (debtor:
+  "Antes de marcarlo como pagado" + "EQUIL no envía dinero…"; creditor: "¿Has
+  recibido {importe} de {nombre}?", no undo), with the amount editable for a
+  partial payment up to the transfer ("máx. {importe}"). Reminders use the share sheet (no
+  push infra): "Recordarle la deuda" is creditor-only, and the debtor of a
+  pending payment gets "Pedirle que lo confirme" instead. "Deuda saldada" is
+  shown only right after a confirmed payment that leaves the balance at 0;
+  opening /settle with nothing owed says "Estáis al día" / "Ya estás al día".
+  The payment detail (/settle/[id]) speaks in the present while PENDING ("Pago
+  a X · por confirmar" / "X dice que te ha pagado", chip "Pendiente de
+  confirmar") and in the past only once CONFIRMED; a REJECTED payment reads "No
+  recibido" to the payer (with "Saldar deuda") and "Rechazado" to the
+  receiver. Confirm/reject there open the same review sheets as Inicio, and
+  editing a pending payment shows "máx. {deuda}" and "X tendrá que confirmar
+  el nuevo importe". The list of all payments is "Historial de pagos".
+- **Inicio, active card**: it stays green (owed to you, "Estáis al día", Personal)
+  except when you owe, when it turns terracotta (`--negative`). So the brand green
+  never means debt. Green and terracotta have almost the same luminance, so the
+  color only reinforces: the visible sign on the amount (`+` / `−`) and the
+  direction icon (arrow in, arrow out, check at zero) carry the meaning. This
+  overrides mockup 2a, where the card is always green.
+- **Add expense**: the numpad quick flow (equal / only me / only them) is the
+  default; "Más opciones" exposes custom splits, tags, date and recurrence.
+- **Spaces**: Pareja→COUPLE, Piso→GROUP, Viaje→EPHEMERAL (only when
+  `EPHEMERAL_SPACES_ENABLED`, otherwise GROUP), Solo yo→INDIVIDUAL.
+- **Budgets**: tapping an unbudgeted category asks for the amount (the
+  prototype's fixed 100 € is a demo shortcut).
+- **MCP (Hermes Agent)**: "Conectar" issues a 90-day token (copy once); there is
+  no per-token "Desconectar" for it: it is revoked together with the sessions by
+  "Cerrar sesión en todos los dispositivos" (bumps `User.tokenVersion`).
+- **MCP (Tokens de acceso)**: below Hermes in "Conexiones". Named tokens for any
+  MCP client, with a chosen expiry (30/90/365 days or none), shown once and
+  revocable one by one from the list; the global sign-out revokes them too.
+- **Shopping aisles** are kept (grouping/ordering) even though the prototype
+  shows a flat list.
+
+## Chosen direction
+
+`EQUIL Rediseño.dc.html` holds the canvas trimmed to the chosen path: **"Mezcla · base 1a +
+espacios de 1b + ticket de 1c"** (2a: Inicio, Añadir gasto, Saldar deuda) and the remaining
+screens in that style (3a). The discarded directions (1a/1b/1c) and the old-app reference (0a)
+were removed. The Ralph UX loop in `scripts/ralph/` audits the app against it.

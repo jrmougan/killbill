@@ -170,11 +170,30 @@ describe("createItemForScope", () => {
         expect(err.code).toBe("INVALID_AISLE");
     });
 
-    it("rejects a non-integer quantity with 400", async () => {
+    it("accepts a decimal quantity (number or es-ES text) for weighed goods", async () => {
         mList.findUnique.mockResolvedValue(groupList);
-        const err = await expectError(() => createItemForScope(GROUP, "l1", { name: "leche", quantity: 1.5 }));
-        expect(err.status).toBe(400);
-        expect(err.code).toBe("INVALID_QUANTITY");
+        mItem.aggregate.mockResolvedValue({ _max: { sortOrder: 0 } });
+        mItem.create.mockResolvedValue({ id: "i1" });
+        await createItemForScope(GROUP, "l1", { name: "patatas", quantity: 1.5 });
+        expect(mItem.create.mock.calls[0][0].data.quantity).toBe(1.5);
+        await createItemForScope(GROUP, "l1", { name: "patatas", quantity: "0,25" });
+        expect(mItem.create.mock.calls[1][0].data.quantity).toBe(0.25);
+    });
+
+    it("rejects garbage, non-positive and over-max quantities with an explicit 400", async () => {
+        mList.findUnique.mockResolvedValue(groupList);
+        for (const [quantity, msg] of [
+            ["abc", /número mayor que 0/],
+            [-1, /número mayor que 0/],
+            [Number.NaN, /número mayor que 0/],
+            [200000, /máxima es 100\.000/],
+            [1.2345, /3 decimales/],
+        ] as const) {
+            const err = await expectError(() => createItemForScope(GROUP, "l1", { name: "leche", quantity }));
+            expect(err.status).toBe(400);
+            expect(err.code).toBe("INVALID_QUANTITY");
+            expect(err.message).toMatch(msg);
+        }
     });
 });
 
@@ -265,6 +284,29 @@ describe("clearCheckedForScope — vaciar comprados", () => {
         mItem.deleteMany.mockResolvedValue({ count: 0 });
         const res = await clearCheckedForScope(GROUP, "l1");
         expect(res).toEqual({ cleared: 0 });
+    });
+
+    it("with ids deletes only those still checked (not one ticked after the last poll)", async () => {
+        mList.findUnique.mockResolvedValue(groupList);
+        mItem.deleteMany.mockResolvedValue({ count: 2 });
+        const res = await clearCheckedForScope(GROUP, "l1", ["i1", "i2", "i3"]);
+        expect(res).toEqual({ cleared: 2 });
+        expect(mItem.deleteMany).toHaveBeenCalledWith({ where: { listId: "l1", checked: true, id: { in: ["i1", "i2", "i3"] } } });
+    });
+
+    it("treats ids: null like no ids (every checked item)", async () => {
+        mList.findUnique.mockResolvedValue(groupList);
+        mItem.deleteMany.mockResolvedValue({ count: 1 });
+        await clearCheckedForScope(GROUP, "l1", null);
+        expect(mItem.deleteMany).toHaveBeenCalledWith({ where: { listId: "l1", checked: true } });
+    });
+
+    it.each([["not an array", "i1"], ["a non-string id", ["i1", 2]]])("400 INVALID_IDS for %s (no delete)", async (_, ids) => {
+        mList.findUnique.mockResolvedValue(groupList);
+        const err = await expectError(() => clearCheckedForScope(GROUP, "l1", ids));
+        expect(err.status).toBe(400);
+        expect(err.code).toBe("INVALID_IDS");
+        expect(mItem.deleteMany).not.toHaveBeenCalled();
     });
 
     it("403s when the list belongs to another scope (no delete)", async () => {

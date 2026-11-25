@@ -1,59 +1,50 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth";
-import { signMcpToken } from "@/lib/jwt";
+import { HERMES_TOKEN_DAYS, HERMES_TOKEN_NAME, replaceNamedAccessToken } from "@/lib/access-tokens";
+import { enforceRateLimit, forbidden, route } from "@/lib/http";
 
 /**
- * Issue a long-lived Bearer JWT for MCP clients (e.g. Hermes Agent).
+ * "Conectar Hermes Agent" (Ajustes → Conexiones): issue the Bearer credential
+ * for Hermes Agent on POST /api/mcp.
  *
- * The caller must be authenticated via the normal browser session cookie.
- * The returned token carries `kind: 'mcp'` and a 90-day expiry (configurable
- * via MCP_TOKEN_TTL_DAYS). It is used as `Authorization: Bearer <token>` when
- * connecting to POST /api/mcp.
+ * It creates an opaque access token (`kb_…`, access-tokens.ts) named
+ * «Hermes Agent» that expires in 90 days, so it shows up in "Tokens de acceso"
+ * and can be revoked on its own. Reconnecting revokes the caller's previous
+ * active «Hermes Agent» token(s) once the new one exists (`replaced` = how
+ * many), so reconnecting never piles up orphan tokens.
+ *
+ * Until issue #60 this route signed a 90-day `kind: 'mcp'` JWT; those JWTs are
+ * still accepted as Bearer by mcp-auth.ts until they expire or the user closes
+ * every session (their retirement is issue #61), but none is issued any more.
+ *
+ * Response (201, no-store): `{ token, expiresInDays, expiresAt, replaced,
+ * ...AccessTokenSummary }` — `token`, `expiresInDays` and `expiresAt` keep the
+ * historical shape.
  */
 
-const DEFAULT_TTL_DAYS = 90;
-const MAX_TTL_DAYS = 365;
+const NO_STORE = { "Cache-Control": "private, no-store" };
+// Same budget (and key) as POST /api/me/tokens: both create access tokens.
+const CREATE_LIMIT = 10;
+const CREATE_WINDOW_MS = 60 * 60 * 1000;
 
-function getMcpTokenTtlDays(value: string | undefined): number {
-  if (!value || !/^\d+$/.test(value)) return DEFAULT_TTL_DAYS;
+// 'user-or-guest' + the explicit kind check: guests AND MCP tokens get the same
+// historical 403 message (route 'user' would let an MCP token through).
+export const POST = route(
+  { auth: "user-or-guest", errorMessage: "No se pudo generar el token", logLabel: "Error al generar el token MCP:" },
+  async ({ ctx }) => {
+    // Only a regular browser session may mint MCP tokens (not a guest, and not an
+    // MCP token forwarded as cookie — a token must not be able to extend itself).
+    if (ctx.kind !== undefined) throw forbidden("Acción no permitida con este tipo de sesión");
+    enforceRateLimit(`access-token:${ctx.userId}`, CREATE_LIMIT, CREATE_WINDOW_MS);
 
-  const ttlDays = Number(value);
-  return ttlDays > 0 && ttlDays <= MAX_TTL_DAYS ? ttlDays : DEFAULT_TTL_DAYS;
-}
-
-export async function POST() {
-  const session = await getSession();
-  if (!session?.userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (session.kind !== undefined) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const ttlDays = getMcpTokenTtlDays(process.env.MCP_TOKEN_TTL_DAYS);
-
-  try {
-    const token = await signMcpToken(
-      {
-        userId: session.userId,
-        email: session.email,
-        isAdmin: session.isAdmin,
-      },
-      ttlDays,
-    );
+    // AccessTokenError (409 TOKEN_LIMIT) is mapped by toErrorResponse.
+    const { token, summary, replaced } = await replaceNamedAccessToken(ctx.userId, {
+      name: HERMES_TOKEN_NAME,
+      expiresInDays: HERMES_TOKEN_DAYS,
+    });
 
     return NextResponse.json(
-      {
-        token,
-        expiresInDays: ttlDays,
-        expiresAt: new Date(Date.now() + ttlDays * 86_400_000).toISOString(),
-      },
-      {
-        status: 201,
-        headers: { "Cache-Control": "private, no-store" },
-      },
+      { token, ...summary, expiresInDays: HERMES_TOKEN_DAYS, replaced },
+      { status: 201, headers: NO_STORE },
     );
-  } catch {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}
+  },
+);

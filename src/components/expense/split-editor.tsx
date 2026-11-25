@@ -229,7 +229,7 @@ export function SplitEditor({
     totalCents: number;
     value: SplitValue;
     onChange: (v: SplitValue) => void;
-    /** COUPLE spaces highlight the "Mitad y mitad" preset. */
+    /** COUPLE spaces label the equal preset "A medias" (as the quick split). */
     isCouple?: boolean;
     className?: string;
 }) {
@@ -243,7 +243,7 @@ export function SplitEditor({
     };
 
     return (
-        <fieldset className={cn("space-y-3 border-0 p-0 m-0", className)}>
+        <fieldset className={cn("min-w-0 space-y-3 border-0 p-0 m-0", className)}>
             <legend className="text-[11px] font-semibold tracking-wide uppercase text-muted-foreground p-0">
                 ¿Cómo se divide?
             </legend>
@@ -260,15 +260,15 @@ export function SplitEditor({
                             onClick={() => setMode(key)}
                             aria-pressed={sel}
                             className={cn(
-                                "flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-semibold transition-all active:scale-[0.98]",
+                                "flex min-h-11 items-center gap-1.5 px-2 py-2.5 rounded-xl border text-[13px] font-semibold min-[360px]:gap-2 min-[360px]:px-3 min-[360px]:text-sm transition-all active:scale-[0.98]",
                                 sel
                                     ? "bg-[var(--accent-tint)] border-[color:var(--accent-border)] text-foreground"
                                     : "bg-card border-[color:var(--line)] text-muted-foreground hover:bg-secondary",
                             )}
                         >
                             <Icon className="h-4 w-4 shrink-0 text-primary" />
-                            <span className="truncate text-left">
-                                {highlight && key === "equal" ? "Mitad y mitad" : label}
+                            <span className="min-w-0 text-left leading-tight">
+                                {highlight && key === "equal" ? "A medias" : label}
                             </span>
                         </button>
                     );
@@ -279,14 +279,14 @@ export function SplitEditor({
             {value.mode === "equal" && (
                 <div className="rounded-xl bg-secondary p-4 space-y-1.5 animate-in fade-in duration-200">
                     {members.map((m) => (
-                        <div key={m.id} className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground truncate">{nameOf(m)}</span>
-                            <span className="font-mono font-semibold text-foreground">
+                        <div key={m.id} className="flex items-center justify-between gap-3 text-sm">
+                            <span className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">{nameOf(m)}</span>
+                            <span className="flex-none font-semibold text-foreground">
                                 {formatEuros((result.shares[m.id] ?? 0) / 100)}
                             </span>
                         </div>
                     ))}
-                    <p className="text-[11px] text-muted-foreground/70 pt-1">
+                    <p className="text-[11px] text-muted-foreground pt-1">
                         Entre {members.length} {members.length === 1 ? "persona" : "personas"}.
                     </p>
                 </div>
@@ -297,10 +297,10 @@ export function SplitEditor({
                 <div className="rounded-xl bg-secondary p-4 space-y-2 animate-in fade-in duration-200">
                     {members.map((m) => (
                         <div key={m.id} className="flex items-center justify-between gap-3">
-                            <label htmlFor={`split-amount-${m.id}`} className="text-sm text-muted-foreground truncate">
+                            <label htmlFor={`split-amount-${m.id}`} className="min-w-0 flex-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">
                                 {nameOf(m)}
                             </label>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex shrink-0 items-center gap-1.5">
                                 <input
                                     id={`split-amount-${m.id}`}
                                     type="text"
@@ -310,7 +310,7 @@ export function SplitEditor({
                                         onChange({ ...value, amounts: { ...value.amounts, [m.id]: e.target.value } })
                                     }
                                     placeholder="0,00"
-                                    className="w-24 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:outline-none focus:border-[color:var(--accent-border)]"
+                                    className="w-28 tabular-nums bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-right focus:outline-none focus:border-[color:var(--accent-border)]"
                                 />
                                 <span className="text-sm text-muted-foreground">€</span>
                             </div>
@@ -331,11 +331,12 @@ export function SplitEditor({
             {value.mode === "percent" && (
                 <div className="rounded-xl bg-secondary p-4 space-y-2 animate-in fade-in duration-200">
                     {members.map((m) => (
-                        <div key={m.id} className="flex items-center justify-between gap-3">
-                            <label htmlFor={`split-pct-${m.id}`} className="text-sm text-muted-foreground truncate">
+                        <div key={m.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                            {/* The 6rem basis sends the input group to its own line when the name would get under ~4 letters (320px). */}
+                            <label htmlFor={`split-pct-${m.id}`} className="min-w-0 flex-[1_1_6rem] text-sm text-muted-foreground [overflow-wrap:anywhere]">
                                 {nameOf(m)}
                             </label>
-                            <div className="flex items-center gap-1.5">
+                            <div className="ml-auto flex shrink-0 items-center gap-1.5">
                                 <input
                                     id={`split-pct-${m.id}`}
                                     type="number"
@@ -355,7 +356,7 @@ export function SplitEditor({
                                     className="w-16 bg-card border border-[color:var(--line)] rounded-lg px-2 py-1.5 text-sm font-bold text-center focus:outline-none focus:border-[color:var(--accent-border)]"
                                 />
                                 <span className="text-sm text-muted-foreground">%</span>
-                                <span className="w-16 text-right text-xs font-mono text-muted-foreground">
+                                <span className="min-w-16 whitespace-nowrap text-right text-xs text-muted-foreground">
                                     {formatEuros((result.shares[m.id] ?? 0) / 100)}
                                 </span>
                             </div>
@@ -388,7 +389,7 @@ export function SplitEditor({
                                     onClick={() => onChange({ ...value, beneficiaryId: m.id })}
                                     aria-pressed={sel}
                                     className={cn(
-                                        "px-3 py-2 rounded-xl text-sm font-semibold border transition-all active:scale-[0.98]",
+                                        "max-w-full [overflow-wrap:anywhere] px-3 py-2 rounded-xl text-sm font-semibold border transition-all active:scale-[0.98]",
                                         sel
                                             ? "bg-primary text-white border-primary shadow"
                                             : "bg-card border-[color:var(--line)] text-muted-foreground hover:bg-secondary",

@@ -1,112 +1,242 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowLeft, Users, ShoppingCart, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { MembershipStatus } from "@/generated/prisma/enums";
-import { spaceTypeMeta, spaceStatusMeta } from "@/lib/space-ui";
+import { getGroupBalances } from "@/lib/ledger-read";
+import { resolveMyDebts } from "@/lib/finance";
+import { ephemeralSpacesEnabled } from "@/lib/flags";
+import { capFor, hasOpenBalance, settleUrlFor } from "@/lib/space-policy";
+import { MembershipStatus, SpaceStatus, SpaceType } from "@/generated/prisma/enums";
+import { closeItemCount, openDebtCount } from "@/lib/close-plan";
+import { archiveBlockReason, spaceTypeMeta, spaceStatusMeta } from "@/lib/space-ui";
 import { SpaceStatusBanner } from "@/components/space/space-status-banner";
 import { MemberList, type SpaceMember } from "@/components/space/member-list";
 import { InviteManager } from "@/components/space/invite-manager";
-import { SpaceActions } from "./actions-client";
+import { inviteConfigFor } from "@/components/space/invite-eligibility";
+import { RenameSpace } from "@/components/space/rename-space";
+import { LeaveSpace } from "@/components/space/leave-space";
+import { ArchiveSpaceAction, ConvertToGroupInline, SpaceActions } from "./actions-client";
 
 export const dynamic = "force-dynamic";
 
+/** Why a manager can't create an invite link right now. */
+function noInviteReason(type: SpaceType, status: SpaceStatus, memberCount: number, ephemeralOn: boolean): string {
+    if (status === SpaceStatus.ARCHIVED) return "El espacio está archivado: no admite personas nuevas.";
+    if (status === SpaceStatus.SETTLING) return "Estáis cerrando cuentas: no se admiten personas nuevas.";
+    if (type === SpaceType.EPHEMERAL && !ephemeralOn) return "Los enlaces para invitados no están disponibles.";
+    if (memberCount >= capFor(type)) {
+        return type === SpaceType.COUPLE
+            ? "La pareja está completa. Conviértela en grupo para invitar a más personas."
+            : "El espacio está completo.";
+    }
+    return "Ahora mismo no se pueden crear enlaces.";
+}
+
+/** Members can't mint links: tell them who can (instead of hiding invitations silently). */
+function memberInviteHint(members: SpaceMember[], fullCouple: boolean): string {
+    const owner = members.find((m) => m.role === "OWNER");
+    const who = owner ? owner.name.trim().split(/\s+/)[0] : null;
+    if (fullCouple) {
+        return who
+            ? `La pareja está completa. Solo ${who} puede convertirla en grupo para invitar a más personas.`
+            : "La pareja está completa. Solo quien administra el espacio puede convertirla en grupo.";
+    }
+    return who
+        ? `Solo quien administra el espacio puede invitar. Pídele un enlace a ${who}.`
+        : "Solo quien administra el espacio puede invitar.";
+}
+
+/**
+ * Space management (EQUIL): members with roles and balances, invite links,
+ * lifecycle, rename and leave. Authorized against THIS space's Membership (not
+ * the active-space cookie). Guests are caged to Inicio/Gastos/Saldar, so they are
+ * sent back to their dashboard instead of seeing dead links here.
+ */
 export default async function SpaceManagePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
     const session = await getSession();
     if (!session?.userId) redirect("/login");
+    if (session.kind === "guest") redirect("/dashboard");
     const userId = session.userId as string;
 
-    // Authorize against the RESOURCE's group: the caller must be an ACTIVE member.
     const [space, myMembership] = await Promise.all([
-        prisma.couple.findUnique({ where: { id } }),
+        prisma.couple.findUnique({
+            where: { id },
+            select: { id: true, name: true, type: true, status: true, expiresAt: true },
+        }),
         prisma.membership.findUnique({ where: { groupId_userId: { groupId: id, userId } } }),
     ]);
-    if (!space) redirect("/settings");
-    if (!myMembership || myMembership.status !== MembershipStatus.ACTIVE) redirect("/settings");
+    if (!space) redirect("/spaces");
+    if (!myMembership || myMembership.status !== MembershipStatus.ACTIVE) redirect("/spaces");
+    if (myMembership.role === "GUEST") redirect("/dashboard");
 
-    const roster = await prisma.membership.findMany({
-        where: { groupId: id, status: MembershipStatus.ACTIVE },
-        include: { user: true },
-        orderBy: [{ joinedAt: "asc" }, { userId: "asc" }],
-    });
+    const [roster, balances, pending, myPending] = await Promise.all([
+        prisma.membership.findMany({
+            where: { groupId: id, status: MembershipStatus.ACTIVE },
+            include: { user: { select: { id: true, name: true, avatar: true, isGuest: true } } },
+            orderBy: [{ joinedAt: "asc" }, { userId: "asc" }],
+        }),
+        getGroupBalances(id),
+        prisma.settlement.findMany({
+            where: { coupleId: id, status: "PENDING" },
+            select: { fromUserId: true, toUserId: true, amount: true },
+        }),
+        prisma.settlement.findFirst({
+            where: { coupleId: id, status: "PENDING", fromUserId: userId },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, amount: true, method: true, toUser: { select: { name: true } } },
+        }),
+    ]);
 
+    // What I settle with each member in the simplified plan (the same matching
+    // /settle and /close use): they owe me (+) or I owe them (−).
+    const iOwe = resolveMyDebts(balances, userId);
+    const pairWith = (uid: string) => (resolveMyDebts(balances, uid)[userId] ?? 0) - (iOwe[uid] ?? 0);
     const members: SpaceMember[] = roster.map((m) => ({
         id: m.user.id,
         name: m.user.name,
         avatar: m.user.avatar ?? null,
         role: m.role,
         isGuest: m.user.isGuest,
+        balanceCents: balances[m.user.id] ?? 0,
+        pairCents: m.user.id === userId ? 0 : pairWith(m.user.id),
     }));
 
     const typeMeta = spaceTypeMeta(space.type);
     const statusMeta = spaceStatusMeta(space.status);
     const canManage = myMembership.role === "OWNER" || myMembership.role === "ADMIN";
+    const archived = space.status === SpaceStatus.ARCHIVED;
+    const displayName = space.name ?? typeMeta.label;
+    const ephemeralOn = ephemeralSpacesEnabled();
+    const invite = inviteConfigFor(
+        { type: space.type, status: space.status, role: myMembership.role, memberCount: members.length },
+        ephemeralOn,
+    );
+    const fullCouple = space.type === SpaceType.COUPLE && space.status === SpaceStatus.ACTIVE && members.length >= capFor(space.type);
+    const settleHref = settleUrlFor(space.id);
+    // Same rule as the archive guard of the API (it still answers 409 if this goes stale).
+    // Archive: same predicate as the API guard; banner: the same "Faltan N" as /close.
+    const openDebts = openDebtCount(balances);
+    const showArchive = canManage && space.status === SpaceStatus.SETTLING;
+    // "Salir": the first sheet already knows my debt, who sees it and whether I'm the last owner.
+    const nameOf = new Map(roster.map((m) => [m.user.id, m.user.name]));
+    const creditors = Object.entries(iOwe)
+        .filter(([uid, c]) => hasOpenBalance(c) && nameOf.has(uid))
+        .map(([uid]) => nameOf.get(uid) as string);
+    const ownerCount = roster.filter((m) => m.role === "OWNER").length;
 
     return (
-        <div className="flex flex-col min-h-screen p-4 space-y-6 max-w-md mx-auto pb-24">
-            <header className="flex items-center gap-3 pt-2">
-                <Link href="/settings">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full hover:bg-secondary">
-                        <ArrowLeft className="h-5 w-5" />
-                    </Button>
+        <div className="min-h-screen pb-28 eq-in">
+            <header className="px-5 pt-3 flex items-center">
+                <Link href="/spaces" aria-label="Volver a Espacios" className="-ml-2.5 h-11 w-11 flex items-center justify-center">
+                    <ArrowLeft className="h-6 w-6" aria-hidden="true" />
                 </Link>
-                <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-10 h-10 rounded-[12px] bg-secondary flex items-center justify-center text-[20px] shrink-0">
-                        {typeMeta.emoji}
-                    </span>
-                    <div className="min-w-0">
-                        <h1 className="text-lg font-bold text-foreground truncate">{space.name ?? typeMeta.label}</h1>
-                        <p className="text-[12px] text-muted-foreground">
-                            {typeMeta.label} · {statusMeta.label}
-                        </p>
-                    </div>
-                </div>
             </header>
 
-            <SpaceStatusBanner
-                spaceId={space.id}
-                type={space.type}
-                status={space.status}
-                expiresAt={space.expiresAt}
-                canManage={canManage}
-            />
-
-            <section className="space-y-3">
-                <div className="flex items-center gap-2 px-1">
-                    <Users className="h-4 w-4 text-primary" />
-                    <h2 className="text-[13px] font-bold uppercase tracking-wider text-muted-foreground">
-                        Miembros ({members.length})
-                    </h2>
-                </div>
-                <MemberList spaceId={space.id} members={members} currentUserId={userId} myRole={myMembership.role} />
-            </section>
-
-            <section className="space-y-3">
-                <h2 className="text-[13px] font-bold uppercase tracking-wider text-muted-foreground px-1">Invitaciones</h2>
-                <InviteManager spaceId={space.id} type={space.type} status={space.status} initialCode={space.code} canManage={canManage} />
-            </section>
-
-            <section className="space-y-3">
-                <h2 className="text-[13px] font-bold uppercase tracking-wider text-muted-foreground px-1">Listas</h2>
-                <Link
-                    href="/lists"
-                    className="flex items-center gap-3 w-full h-14 px-4 bg-card border border-[color:var(--line)] rounded-xl hover:bg-secondary transition-colors"
+            <div className="px-5 pt-2 flex items-center gap-3">
+                <span
+                    aria-hidden="true"
+                    className="h-14 w-14 flex-none rounded-[18px] bg-[var(--accent-tint)] flex items-center justify-center text-[26px]"
                 >
-                    <ShoppingCart className="h-5 w-5 text-muted-foreground" />
-                    <span className="font-medium text-sm text-foreground flex-1">Listas de la compra</span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </Link>
-            </section>
+                    {typeMeta.emoji}
+                </span>
+                <div className="flex-1 min-w-0">
+                    <h1 className="text-2xl font-bold tracking-[-0.02em] break-words">{displayName}</h1>
+                    <p data-testid="space-header-status" data-status={space.status} className="text-[13px] text-muted-foreground">
+                        {typeMeta.label} · {statusMeta.label}
+                    </p>
+                </div>
+                {canManage && !archived && <RenameSpace spaceId={space.id} name={displayName} />}
+            </div>
 
-            {canManage && (
-                <section className="space-y-3">
-                    <h2 className="text-[13px] font-bold uppercase tracking-wider text-muted-foreground px-1">Gestión</h2>
-                    <SpaceActions spaceId={space.id} type={space.type} status={space.status} />
+            <div className="px-5 pt-5 flex flex-col gap-6">
+                <SpaceStatusBanner
+                    spaceId={space.id}
+                    type={space.type}
+                    status={space.status}
+                    expiresAt={space.expiresAt}
+                    canManage={canManage}
+                    settleHref={settleHref}
+                    openDebts={closeItemCount(balances, pending)}
+                    myBalanceOpen={hasOpenBalance(balances[userId] ?? 0)}
+                />
+
+                <section aria-labelledby="members-title" className="flex flex-col gap-2">
+                    <h2 id="members-title" className="text-xs font-semibold text-muted-foreground">Miembros ({members.length})</h2>
+                    <MemberList
+                        spaceId={space.id}
+                        spaceName={displayName}
+                        members={members}
+                        currentUserId={userId}
+                        myRole={myMembership.role}
+                        readOnly={archived}
+                    />
                 </section>
-            )}
+
+                {canManage ? (
+                    <section aria-labelledby="invites-title" className="flex flex-col gap-2">
+                        <h2 id="invites-title" className="text-xs font-semibold text-muted-foreground">Invitaciones</h2>
+                        <InviteManager
+                            spaceId={space.id}
+                            kind={invite?.kind ?? null}
+                            maxUsesCap={invite?.maxUses ?? 1}
+                            reason={noInviteReason(space.type, space.status, members.length, ephemeralOn)}
+                            reasonAction={
+                                space.status === SpaceStatus.ACTIVE && (
+                                    <ConvertToGroupInline spaceId={space.id} spaceName={displayName} visible={fullCouple} />
+                                )
+                            }
+                        />
+                    </section>
+                ) : (
+                    !archived && (
+                        <section aria-labelledby="invites-title" className="flex flex-col gap-2">
+                            <h2 id="invites-title" className="text-xs font-semibold text-muted-foreground">Invitaciones</h2>
+                            <p className="text-[13px] text-muted-foreground">{memberInviteHint(members, fullCouple)}</p>
+                        </section>
+                    )
+                )}
+
+                {canManage && !archived && (
+                    <section aria-labelledby="manage-title" className="flex flex-col gap-2">
+                        <h2 id="manage-title" className="text-xs font-semibold text-muted-foreground">Gestión</h2>
+                        <SpaceActions
+                            spaceId={space.id}
+                            spaceName={displayName}
+                            type={space.type}
+                            status={space.status}
+                            settleHref={settleHref}
+                        />
+                    </section>
+                )}
+
+                <section aria-labelledby="danger-title" className="mt-4 flex flex-col gap-2">
+                    <h2 id="danger-title" className="text-xs font-semibold text-muted-foreground">Zona de peligro</h2>
+                    {showArchive && (
+                        <ArchiveSpaceAction
+                            spaceId={space.id}
+                            spaceName={displayName}
+                            blockReason={archiveBlockReason(pending.length, openDebts)}
+                        />
+                    )}
+                    <LeaveSpace
+                        spaceId={space.id}
+                        userId={userId}
+                        spaceName={displayName}
+                        balanceCents={balances[userId] ?? 0}
+                        creditors={creditors}
+                        pendingPayment={
+                            myPending
+                                ? { id: myPending.id, toName: myPending.toUser.name, amountCents: myPending.amount, method: myPending.method }
+                                : null
+                        }
+                        lastOwner={myMembership.role === "OWNER" && ownerCount <= 1 && roster.length > 1}
+                        lastPerson={roster.length === 1}
+                        settleHref={settleHref}
+                    />
+                </section>
+            </div>
         </div>
     );
 }

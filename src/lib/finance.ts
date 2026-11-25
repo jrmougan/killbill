@@ -75,26 +75,28 @@ export function getMyDebts(
  * Resolve which creditors `currentUserId` owes, from a PRECOMPUTED net-balance
  * map (cents). Pure and output-preserving — feed it calculateBalances OR the
  * ledger-sourced getGroupBalances (they are proven equal by reconcile-ledger.ts).
- * Positive result = I owe them. Greedy debtor→creditor matching with a 1-cent
- * dead-band so sub-cent noise reads as settled.
+ * Positive result = I owe them. Greedy debtor→creditor matching. Balances are
+ * integer cents, so any non-zero cent is a real debt (same threshold as
+ * home-format.normalizeCents, which Inicio/Espacios use: 1 cent is shown and
+ * must be settleable).
  */
 export function resolveMyDebts(
     balances: Record<string, number>,
     currentUserId: string
 ): Record<string, number> {
     const debtors = Object.entries(balances)
-        .filter(([_, amount]) => amount < -1) // Less than -1 cent
+        .filter(([_, amount]) => amount <= -1) // owes at least 1 cent
         .sort((a, b) => a[1] - b[1]); // Most debt first (most negative)
 
     const creditors = Object.entries(balances)
-        .filter(([_, amount]) => amount > 1) // More than 1 cent
+        .filter(([_, amount]) => amount >= 1) // is owed at least 1 cent
         .sort((a, b) => b[1] - a[1]); // Most credit first
 
     const debts: Record<string, number> = {}; // myUserId -> targetUserId : amount (How much *I* owe *Target*)
 
     // We want to find specifically what *currentUserId* owes.
     // If currentUserId is not in debtors, they don't owe anything.
-    if (balances[currentUserId] > -1) return {}; // Less than 1 cent owed = settled
+    if (!(balances[currentUserId] <= -1)) return {}; // Owes nothing
 
     // Standard algo to resolve debts
     let i = 0; // debtor index

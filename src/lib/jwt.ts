@@ -10,7 +10,32 @@ function getKey() {
     return new TextEncoder().encode(secret);
 }
 
-export async function signToken(payload: JWTPayload) {
+/**
+ * Claims of a registered browser session (and the base of an MCP token).
+ * `tv` is the User.tokenVersion at mint time: a token is only accepted while it
+ * still equals the DB value (see token-version.ts), so bumping the column
+ * revokes every outstanding token of that user. Always pass it when minting;
+ * an omitted `tv` reads as 0, so it fails closed once the user has revoked.
+ */
+export type SessionClaims = JWTPayload & {
+    userId: string;
+    email?: string | null;
+    isAdmin?: boolean;
+    tv?: number;
+};
+
+/**
+ * Token version carried by a verified payload. Tokens issued before the `tv`
+ * claim existed count as version 0 (the column default), so the deploy that
+ * introduced revocation logs nobody out. A malformed claim yields NaN, which
+ * never matches a DB value (fail closed).
+ */
+export function tokenVersionOf(payload: JWTPayload): number {
+    if (payload.tv === undefined) return 0;
+    return typeof payload.tv === 'number' && Number.isInteger(payload.tv) ? payload.tv : Number.NaN;
+}
+
+export async function signToken(payload: SessionClaims) {
     return await new SignJWT(payload)
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuedAt()
@@ -59,7 +84,7 @@ export async function signGuestToken(
     const payload: GuestClaims = { ...claims, kind: 'guest', ...(hardCap != null ? { hardCap } : {}) };
     return await new SignJWT(payload)
         .setProtectedHeader({ alg: 'HS256' })
-        .setIssuedAt()
+        .setIssuedAt(now)
         .setExpirationTime(guestExp(now, hardCap))
         .sign(getKey());
 }
@@ -90,14 +115,51 @@ export async function refreshGuestToken(payload: JWTPayload): Promise<string | n
 /**
  * Sign an MCP access token — a longer-lived JWT (default 90 days) carrying
  * `kind: 'mcp'` so it can be distinguished from browser session tokens.
- * Issued by POST /api/me/mcp-token for use as a Bearer credential by external
- * agent clients (e.g. Hermes Agent).
+ * Issued by POST /api/me/mcp-token until issue #60 (it now creates an access
+ * token instead); only the test route /api/test/legacy-mcp-jwt still signs it.
+ * The ones already issued stay valid as Bearer (mcp-auth.ts) until #61 retires
+ * them. Carries the user's `tv` (revoked by
+ * bumping User.tokenVersion) and a unique `jti` so individual tokens can be
+ * told apart in logs / a future per-token denylist.
  */
-export async function signMcpToken(payload: JWTPayload, ttlDays = 90): Promise<string> {
+export async function signMcpToken(payload: SessionClaims, ttlDays = 90): Promise<string> {
     return await new SignJWT({ ...payload, kind: 'mcp' })
         .setProtectedHeader({ alg: 'HS256' })
+        .setJti(crypto.randomUUID())
         .setIssuedAt()
         .setExpirationTime(`${ttlDays}d`)
+        .sign(getKey());
+}
+
+/** Lifetime of the internal JWT minted per /api/mcp request (see signInternalMcpToken). */
+export const INTERNAL_MCP_TOKEN_SECONDS = 5 * 60;
+
+/**
+ * Claims of the short-lived internal MCP JWT. `tid` is the AccessToken id the
+ * external caller authenticated with (for logs / traceability).
+ */
+export type InternalMcpClaims = {
+    userId: string;
+    email?: string | null;
+    isAdmin?: boolean;
+    tv: number;
+    tid: string;
+};
+
+/**
+ * Sign the INTERNAL JWT of one MCP request authenticated with an opaque access
+ * token (`kb_…`, see access-tokens.ts). Once /api/mcp has validated the token,
+ * this mints a 5-minute `kind: 'mcp'` JWT that the InternalApiClient sends as
+ * the `session_token` cookie to the existing API routes, so the opaque token is
+ * never forwarded. It never leaves the server process. It carries the user's
+ * current `tv` (so getSession's revocation check still applies) and a unique `jti`.
+ */
+export async function signInternalMcpToken(claims: InternalMcpClaims): Promise<string> {
+    return await new SignJWT({ ...claims, kind: 'mcp' })
+        .setProtectedHeader({ alg: 'HS256' })
+        .setJti(crypto.randomUUID())
+        .setIssuedAt()
+        .setExpirationTime(`${INTERNAL_MCP_TOKEN_SECONDS}s`)
         .sign(getKey());
 }
 

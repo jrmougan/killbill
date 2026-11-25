@@ -1,6 +1,13 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["nextjs", "react", "jsx-a11y", "typescript", "import", "oxc"],
+  "plugins": [
+    "nextjs",
+    "react",
+    "jsx-a11y",
+    "typescript",
+    "import",
+    "oxc"
+  ],
   "categories": {
     "correctness": "error"
   },
@@ -19,5 +26,34 @@
     ],
     "nextjs/no-html-link-for-pages": "off"
   },
-  "ignorePatterns": [".next/**", "out/**", "build/**", "next-env.d.ts", "src/generated/**"]
+  "ignorePatterns": [
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    "src/generated/**"
+  ],
+  "overrides": [
+    {
+      "files": [
+        "src/app/api/**/*.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@/lib/auth",
+                "importNames": [
+                  "getSession"
+                ],
+                "message": "En rutas API usa getSessionCtx (@/lib/authz): revalida sesiones de invitado contra la DB."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

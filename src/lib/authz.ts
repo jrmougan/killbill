@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { getSession } from "./auth";
+import { tokenVersionOf } from "./jwt";
 import { assertSpaceWritable, SpacePolicyError } from "./space-policy";
 import type { Couple, Membership } from "@/generated/prisma/client";
 import { MembershipRole, MembershipStatus, SpaceStatus } from "@/generated/prisma/enums";
@@ -25,8 +26,14 @@ import { MembershipRole, MembershipStatus, SpaceStatus } from "@/generated/prism
 export type SessionCtx = {
     userId: string;
     isAdmin?: boolean;
-    /** Present only on guest sessions (Fase 3). */
-    kind?: "guest";
+    /**
+     * "guest" on guest sessions (Fase 3); "mcp" when the request carries an MCP
+     * token forwarded as the session cookie by the MCP internal client; absent
+     * on a regular browser session.
+     */
+    kind?: "guest" | "mcp";
+    /** User.tokenVersion the token was minted with (already checked == DB). */
+    tokenVersion?: number;
     /** The single space a guest is caged to (guest JWT claim). */
     groupId?: string;
     /** Role claim carried by a guest JWT (revalidated against DB regardless). */
@@ -72,7 +79,9 @@ export type SpaceAccessResult = SpaceAccessOk | SpaceAccessErr;
  * (expelled → REMOVED) or the whole space archived at any moment. So for guests
  * we ALWAYS revalidate against the DB — an expelled guest, or one whose space
  * left ACTIVE, is treated as unauthenticated on its very next request without
- * needing a JWT blacklist. Registered sessions skip the DB round-trip.
+ * needing a JWT blacklist. Registered/MCP sessions are revalidated by
+ * getSession() itself against User.tokenVersion (one cached PK lookup), so a
+ * revoked token ("cerrar sesión en todos los dispositivos") is rejected too.
  */
 export async function getSessionCtx(): Promise<SessionCtx | null> {
     const session = await getSession();
@@ -109,7 +118,8 @@ export async function getSessionCtx(): Promise<SessionCtx | null> {
     return {
         userId,
         isAdmin: session.isAdmin === true,
-        kind: undefined,
+        kind: session.kind === "mcp" ? "mcp" : undefined,
+        tokenVersion: tokenVersionOf(session),
         groupId: typeof session.groupId === "string" ? session.groupId : undefined,
         role: typeof session.role === "string" ? (session.role as MembershipRole) : undefined,
     };

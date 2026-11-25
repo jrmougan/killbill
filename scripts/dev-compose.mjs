@@ -1,0 +1,27 @@
+import { spawnSync } from 'node:child_process';
+
+// Docker is the default engine; Podman is opt-in via CONTAINER_ENGINE=podman, and
+// is also picked when CONTAINER_ENGINE is unset and only Podman is installed.
+// Both use the Compose implementation pinned in mise.toml.
+const has = (command) => spawnSync(command, ['--version'], { stdio: 'ignore' }).status === 0;
+const engine = process.env.CONTAINER_ENGINE || (!has('docker') && has('podman') ? 'podman' : 'docker');
+if (!['docker', 'podman'].includes(engine)) {
+  throw new Error('CONTAINER_ENGINE must be docker (default) or podman.');
+}
+if (!has(engine)) {
+  throw new Error(engine === 'docker'
+    ? 'Install Docker before starting local services (or set CONTAINER_ENGINE=podman).'
+    : 'Install Podman or unset CONTAINER_ENGINE to use Docker.');
+}
+if (!process.env.COMPOSE_PROJECT_NAME) {
+  throw new Error('Set a unique COMPOSE_PROJECT_NAME in .env (see .env.example).');
+}
+const args = ['--project-name', process.env.COMPOSE_PROJECT_NAME, '--file', 'compose.dev.yaml', ...process.argv.slice(2)];
+const result = engine === 'podman'
+  ? spawnSync('podman', ['compose', ...args], {
+    stdio: 'inherit',
+    env: { PODMAN_COMPOSE_WARNING_LOGS: 'false', ...process.env, PODMAN_COMPOSE_PROVIDER: 'docker-compose' },
+  })
+  : spawnSync('docker-compose', args, { stdio: 'inherit' });
+if (result.error) throw result.error;
+process.exit(result.status ?? 1);

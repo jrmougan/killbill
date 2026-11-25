@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolRegistrar } from "@/mcp/server";
-import { toToolResult } from "@/mcp/internal-client";
+import { apiPath, toToolResult } from "@/mcp/internal-client";
 
 export const registerBudgetShoppingTools: ToolRegistrar = (server, api) => {
   server.registerTool(
@@ -40,11 +40,11 @@ export const registerBudgetShoppingTools: ToolRegistrar = (server, api) => {
       },
     },
     async (args) => {
-      if (args.personal) {
+      if (args.personal || !args.groupId) {
         const result = await api.get("/api/me/categories");
         return toToolResult(result);
       }
-      const result = await api.get(`/api/spaces/${args.groupId}/categories`);
+      const result = await api.get(apiPath`/api/spaces/${args.groupId}/categories`);
       return toToolResult(result);
     },
   );
@@ -62,7 +62,7 @@ export const registerBudgetShoppingTools: ToolRegistrar = (server, api) => {
     },
     async (args) => {
       if (args.groupId) {
-        const result = await api.get(`/api/spaces/${args.groupId}/lists`);
+        const result = await api.get(apiPath`/api/spaces/${args.groupId}/lists`);
         return toToolResult(result);
       }
       const result = await api.get("/api/me/lists");
@@ -90,7 +90,7 @@ export const registerBudgetShoppingTools: ToolRegistrar = (server, api) => {
     async (args) => {
       const body = { name: args.name, description: args.description };
       if (args.groupId) {
-        const result = await api.post(`/api/spaces/${args.groupId}/lists`, body);
+        const result = await api.post(apiPath`/api/spaces/${args.groupId}/lists`, body);
         return toToolResult(result);
       }
       const result = await api.post("/api/me/lists", body);
@@ -129,12 +129,12 @@ export const registerBudgetShoppingTools: ToolRegistrar = (server, api) => {
       };
       if (args.groupId) {
         const result = await api.post(
-          `/api/spaces/${args.groupId}/lists/${args.listId}/items`,
+          apiPath`/api/spaces/${args.groupId}/lists/${args.listId}/items`,
           body,
         );
         return toToolResult(result);
       }
-      const result = await api.post(`/api/me/lists/${args.listId}/items`, body);
+      const result = await api.post(apiPath`/api/me/lists/${args.listId}/items`, body);
       return toToolResult(result);
     },
   );
@@ -157,13 +157,13 @@ export const registerBudgetShoppingTools: ToolRegistrar = (server, api) => {
       const body = { checked: args.checked };
       if (args.groupId) {
         const result = await api.patch(
-          `/api/spaces/${args.groupId}/lists/${args.listId}/items/${args.itemId}`,
+          apiPath`/api/spaces/${args.groupId}/lists/${args.listId}/items/${args.itemId}`,
           body,
         );
         return toToolResult(result);
       }
       const result = await api.patch(
-        `/api/me/lists/${args.listId}/items/${args.itemId}`,
+        apiPath`/api/me/lists/${args.listId}/items/${args.itemId}`,
         body,
       );
       return toToolResult(result);
@@ -186,11 +186,11 @@ export const registerBudgetShoppingTools: ToolRegistrar = (server, api) => {
     async (args) => {
       if (args.groupId) {
         const result = await api.post(
-          `/api/spaces/${args.groupId}/lists/${args.listId}/clear-checked`,
+          apiPath`/api/spaces/${args.groupId}/lists/${args.listId}/clear-checked`,
         );
         return toToolResult(result);
       }
-      const result = await api.post(`/api/me/lists/${args.listId}/clear-checked`);
+      const result = await api.post(apiPath`/api/me/lists/${args.listId}/clear-checked`);
       return toToolResult(result);
     },
   );

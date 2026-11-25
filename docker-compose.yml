@@ -14,9 +14,12 @@ services:
       - DATABASE_URL=mysql://killbill:${MYSQL_PASSWORD}@mysql:3306/killbill
       # Security
       - JWT_SECRET=${JWT_SECRET}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OPENROUTER_OCR_MODEL=${OPENROUTER_OCR_MODEL:-qwen/qwen3-vl-235b-a22b-instruct}
+      # Opcional: cifra las claves guardadas en /admin/ai (si está vacía, usa JWT_SECRET).
+      - AI_SETTINGS_ENCRYPTION_KEY=${AI_SETTINGS_ENCRYPTION_KEY:-}
+      # Opcionales: una clave o modelo guardado en /admin/ai tiene prioridad sobre estos.
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_OCR_MODEL=${OPENROUTER_OCR_MODEL:-xiaomi/mimo-v2.6-flash}
     networks:
       - mysql_network
       - traefik
@@ -24,7 +27,9 @@ services:
       # Volumen nombrado (NO bind mount): un volumen nombrado hereda la propiedad
       # del punto de montaje de la imagen (nextjs:nodejs), así el usuario no-root
       # puede escribir. Un bind mount `./uploads` quedaría como root → EACCES.
-      - killbill_uploads:/app/public/uploads
+      # Fuera de public/ (UPLOAD_DIR=/app/uploads en la imagen). Antes se montaba
+      # en /app/public/uploads: el mismo volumen montado aquí conserva los ficheros.
+      - killbill_uploads:/app/uploads
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.killbill.rule=Host(`finanzas.mougan.es`)"

@@ -1,83 +1,99 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Suspense, useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { EqCta } from "@/components/ui/eq";
+import { FlashToast } from "@/components/ui/flash-toast";
+import { AuthShell, AuthField, AuthError } from "@/components/auth/auth-shell";
 import { loginAction } from "./actions";
 import type { AuthState } from "@/lib/auth-types";
 
 function LoginForm() {
     const searchParams = useSearchParams();
     const inviteCode = searchParams.get("code");
+    const signedOut = searchParams.get("signedOut");
+    const signedOutNote =
+        signedOut === "all"
+            ? "Has cerrado la sesión en todos tus dispositivos y se han revocado tus tokens de acceso, también el de Hermes Agent."
+            : signedOut === "1"
+              ? "Has cerrado la sesión."
+              : null;
 
-    // Server Action handles auth + cookie + redirect("/dashboard") in a single
-    // server response, so navigation never races the cookie write (the old
-    // "tap login twice on mobile" bug). Errors come back as form state.
+    // Server Action handles auth + cookie + redirect in a single server response,
+    // so navigation never races the cookie write (the old "tap login twice on
+    // mobile" bug). Errors come back as form state.
     const [state, formAction, pending] = useActionState<AuthState, FormData>(loginAction, {});
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-8 max-w-md mx-auto">
-            <div className="text-center space-y-2">
-                <h1 className="text-4xl font-bold tracking-tighter text-primary italic">
-                    EQUIL
-                </h1>
-                <p className="text-muted-foreground">
-                    {inviteCode ? "Has sido invitado a un grupo. Inicia sesión para unirte." : "Entra para gestionar tus gastos."}
+        <AuthShell
+            title={inviteCode ? "Entra para unirte" : "Hola de nuevo"}
+            subtitle={
+                inviteCode
+                    ? "Te han invitado a un espacio. Inicia sesión y confirma que quieres unirte."
+                    : "Entra para ver vuestras cuentas."
+            }
+            footer={
+                <p className="text-sm text-muted-foreground">
+                    ¿No tienes cuenta?{" "}
+                    <Link
+                        href={`/register${inviteCode ? `?code=${encodeURIComponent(inviteCode)}` : ""}`}
+                        className="-my-3 inline-flex min-h-11 items-center px-1 font-semibold text-primary rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    >
+                        Regístrate
+                    </Link>
                 </p>
-            </div>
-
-            <form action={formAction} className="w-full space-y-4">
+            }
+        >
+            <form action={formAction} className="flex flex-col gap-3">
+                {signedOutNote && !state.error && (
+                    // <output> = role="status": announced politely on arrival.
+                    <output
+                        data-testid="login-signed-out"
+                        className="block rounded-[14px] bg-[var(--positive-tint)] px-3.5 py-3 text-sm font-medium text-pretty"
+                    >
+                        {signedOutNote}
+                    </output>
+                )}
                 {state.error && (
-                    <div data-testid="login-error" className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
+                    <AuthError id="login-error" data-testid="login-error">
                         {state.error}
-                    </div>
+                    </AuthError>
                 )}
 
                 {inviteCode && <input type="hidden" name="inviteCode" defaultValue={inviteCode} />}
 
-                <div className="space-y-4">
-                    <Input
-                        data-testid="login-email"
-                        name="email"
-                        type="email"
-                        placeholder="Email"
-                        required
-                        // oxlint-disable-next-line jsx-a11y/no-autofocus -- focuses primary email field on login form load (intentional UX)
-                        autoFocus
-                        autoComplete="email"
-                        className="text-lg h-12"
-                    />
-                    <Input
-                        data-testid="login-password"
-                        name="password"
-                        type="password"
-                        placeholder="Contraseña"
-                        required
-                        autoComplete="current-password"
-                        className="text-lg h-12"
-                    />
-                </div>
+                <AuthField
+                    data-testid="login-email"
+                    label="Email"
+                    name="email"
+                    type="email"
+                    required
+                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- focuses primary email field on login form load (intentional UX)
+                    autoFocus
+                    autoComplete="email"
+                    inputMode="email"
+                    // Keep what was typed after a failed attempt (the form resets).
+                    defaultValue={state.email}
+                    aria-invalid={state.error ? true : undefined}
+                    aria-describedby={state.error ? "login-error" : undefined}
+                />
+                <AuthField
+                    data-testid="login-password"
+                    label="Contraseña"
+                    name="password"
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                    aria-invalid={state.error ? true : undefined}
+                    aria-describedby={state.error ? "login-error" : undefined}
+                />
 
-                <Button
-                    data-testid="login-submit"
-                    type="submit"
-                    size="lg"
-                    className="w-full h-12 text-lg shadow-xl shadow-primary/20"
-                    isLoading={pending}
-                >
-                    Entrar
-                </Button>
-
-                <div className="text-center text-sm text-muted-foreground mt-4">
-                    ¿No tienes cuenta?{" "}
-                    <Link href={`/register${inviteCode ? `?code=${inviteCode}` : ''}`} className="text-primary hover:underline">
-                        Regístrate
-                    </Link>
-                </div>
+                <EqCta data-testid="login-submit" type="submit" disabled={pending} aria-busy={pending} className="mt-3">
+                    {pending ? "Entrando…" : "Entrar"}
+                </EqCta>
             </form>
-        </div>
+        </AuthShell>
     );
 }
 
@@ -85,6 +101,7 @@ export default function LoginPage() {
     return (
         <Suspense>
             <LoginForm />
+            <FlashToast />
         </Suspense>
-    )
+    );
 }

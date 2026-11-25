@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures/test.fixture';
 import { seedScenario } from '../fixtures/db.fixture';
 import { loginAs } from '../fixtures/auth.fixture';
 
@@ -7,7 +7,7 @@ import { loginAs } from '../fixtures/auth.fixture';
 test('lista de grupo: crear, añadir, auto-pasillo, marcar idempotente, vaciar comprados', async ({ page, context, request }) => {
   const seed = await seedScenario(request, 'couple-with-debt');
   const groupId = seed.coupleId;
-  await loginAs(page, { email: seed.userA.email, password: seed.userA.password });
+  await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password });
   const api = context.request; // comparte cookies de sesión con el contexto logueado
 
   // crear lista
@@ -44,11 +44,30 @@ test('lista de grupo: crear, añadir, auto-pasillo, marcar idempotente, vaciar c
   res = await api.get(`/api/spaces/${groupId}/lists/${list.id}/items`);
   const after = await res.json();
   expect(after.items.length, 'la lista queda vacía de comprados').toBe(0);
+
+  // con `ids` (los tachados que mostraba la hoja) solo borra esos: uno tachado
+  // después por otro miembro sobrevive, y `cleared` da el número real
+  const ids: string[] = [];
+  for (const name of ['Huevos', 'Arroz']) {
+    const r = await api.post(`/api/spaces/${groupId}/lists/${list.id}/items`, { data: { name } });
+    const { item } = await r.json();
+    await api.patch(`/api/spaces/${groupId}/lists/${list.id}/items/${item.id}`, { data: { checked: true } });
+    ids.push(item.id);
+  }
+  res = await api.post(`/api/spaces/${groupId}/lists/${list.id}/clear-checked`, { data: { ids: [ids[0]] } });
+  expect(res.status(), 'vaciar solo los mostrados').toBe(200);
+  expect((await res.json()).cleared, 'borra solo el id enviado').toBe(1);
+  res = await api.get(`/api/spaces/${groupId}/lists/${list.id}/items`);
+  expect((await res.json()).items.map((i: { id: string }) => i.id), 'el tachado no mostrado sigue').toEqual([ids[1]]);
+
+  res = await api.post(`/api/spaces/${groupId}/lists/${list.id}/clear-checked`, { data: { ids: 'x' } });
+  expect(res.status(), 'ids no válidos').toBe(400);
+  expect((await res.json()).code).toBe('INVALID_IDS');
 });
 
 test('lista personal se crea vía /api/me/lists', async ({ page, context, request }) => {
   const seed = await seedScenario(request, 'couple-with-debt');
-  await loginAs(page, { email: seed.userA.email, password: seed.userA.password });
+  await loginAs(page, { email: seed.userA!.email, password: seed.userA!.password });
   const api = context.request;
   const res = await api.post('/api/me/lists', { data: { name: 'Personal smoke' } });
   expect(res.status(), 'crear lista personal').toBe(201);

@@ -3,10 +3,15 @@ import { getSession } from "@/lib/auth";
 import { getActiveGroup } from "@/lib/membership";
 import { redirect } from "next/navigation";
 import { TagsClient } from "./client";
+import { isPersonalParam } from "@/app/settings/personal-scope";
 
 export const dynamic = "force-dynamic";
 
-export default async function TagsPage() {
+export default async function TagsPage({
+    searchParams,
+}: {
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
     const session = await getSession();
     if (!session?.userId) redirect("/login");
     const userId = session.userId as string;
@@ -31,5 +36,5 @@ export default async function TagsPage() {
         personal: t.coupleId === null && t.ownerId === userId,
     }));
 
-    return <TagsClient initialTags={tagData} hasGroup={Boolean(groupId)} />;
+    return <TagsClient initialTags={tagData} hasGroup={Boolean(groupId)} personalParam={isPersonalParam(await searchParams)} />;
 }

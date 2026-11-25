@@ -1,34 +1,25 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getSessionCtx, requireSpaceAccess } from '@/lib/authz';
+import { forbidden, notFound, requireSpace, route } from '@/lib/http';
+import { idParams } from '@/lib/http/schemas';
 
-export async function DELETE(
-    _request: Request,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    const { id } = await params;
-    const ctx = await getSessionCtx();
-    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+export const DELETE = route({ auth: 'user', params: idParams }, async ({ ctx, params: { id } }) => {
     const tag = await prisma.tag.findUnique({ where: { id } });
-    if (!tag) return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
+    if (!tag) throw notFound('Etiqueta no encontrada');
 
     // Fase 1: authorize against the tag's OWN scope, never the active-group cookie.
     // A personal tag (ownerId) is authorized by ownership; a group tag (coupleId)
     // by ACTIVE membership in THAT group (allowArchived: deleting a tag is a
     // housekeeping action valid even on a read-only archived space).
     if (tag.ownerId) {
-        if (tag.ownerId !== ctx.userId) {
-            return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
-        }
+        if (tag.ownerId !== ctx.userId) throw forbidden('No autorizado');
     } else if (tag.coupleId) {
-        const auth = await requireSpaceAccess(ctx, tag.coupleId, { allowArchived: true });
-        if (!auth.ok) return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
+        await requireSpace(ctx, tag.coupleId, { allowArchived: true });
     } else {
-        return NextResponse.json({ error: 'No autorizado' }, { status: 403 });
+        throw forbidden('No autorizado');
     }
 
     await prisma.tag.delete({ where: { id } });
 
     return NextResponse.json({ success: true });
-}
+});

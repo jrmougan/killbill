@@ -1,97 +1,209 @@
 # Kill Bill 💸
-**Split Expenses & Settle Debts** - A modern collaborative finance tracker for couples and groups.
-Built with Next.js 15, Prisma, TailwindCSS, and Secure JWT Authentication.
 
-## 🚀 Getting Started
+Aplicación para repartir gastos de parejas y grupos. Next.js 16, Prisma y MySQL,
+con autenticación JWT y lectura de tickets mediante OCR.
 
-### Prerequisites
-- Node.js 18+
-- MySQL Database (Local or Docker)
+## Desarrollo local
 
-### Installation
-1.  Clone the repository:
-    ```bash
-    git clone https://github.com/jrmougan/killbill.git
-    cd killbill
-    ```
-2.  Install dependencies:
-    ```bash
-    npm install
-    ```
-3.  Configure Environment:
-    Copy `.env.example` to `.env` and fill in your secrets.
-    ```bash
-    cp .env.example .env
-    ```
-    *   `DATABASE_URL`: Connection string for Prisma.
-    *   `JWT_SECRET`: Secure random string for session signing.
-
-4.  Initialize Database:
-    ```bash
-    npx prisma migrate dev
-    ```
-
-5.  Run Development Server:
-    ```bash
-    npm run dev
-    ```
-    Visit `http://localhost:3000`.
-
----
-
-## 🐳 Deployment (Docker / Portainer)
-
-This project is configured to run nicely with Portainer and a Shared Database architecture.
-
-### 1. Networking
-Create an external Bridge network in Docker (or via Portainer) named `app_network`. This allows Kill Bill to communicate with your shared services (MySQL, Traefik, etc.).
+Requisitos: [mise](https://mise.jdx.dev/getting-started.html) y Docker (Podman es opcional).
+`mise.toml` fija Node 26.13.1 (incluye npm 11.20.0) y Compose 5.8.0.
 
 ```bash
-docker network create app_network
+mise trust
+mise install
+mise run setup
+mise run services:up
+mise run db:migrate
+mise run db:seed
+mise run dev
 ```
 
-### 2. Database
-Ensure you have a MySQL container connected to `app_network`.
--   **Container Name**: `mysql-shared` (or update `DATABASE_HOST` env var).
--   **Database**: `killbill`
--   **User**: `killbill`
+`setup` instala las dependencias con `npm ci`, genera Prisma y crea `.env` si no
+existe. Genera credenciales locales aleatorias, un nombre de proyecto Compose y
+puertos por checkout. Muestra la URL del servidor; `PORT` queda guardado en `.env`.
+Repetirlo conserva el entorno y no modifica la base de datos.
 
-### 3. Deploy
-Deploy the stack using `docker-compose.yml`.
+`services:up` arranca MySQL 8.0 y espera a que acepte consultas con el usuario de
+la aplicación. Publica el puerto solo en `127.0.0.1`. Utiliza Docker por defecto
+con el Compose que instala mise. Podman es una alternativa opcional:
+`CONTAINER_ENGINE=podman mise run services:up`.
 
-```yaml
-version: '3.8'
-services:
-  app:
-    image: ghcr.io/jrmougan/killbill:latest
-    environment:
-      - DATABASE_HOST=mysql-shared
-      - JWT_SECRET=your_production_secret_here
-    networks:
-      - app_network
-```
+`db:migrate` aplica las migraciones versionadas (`prisma migrate deploy`). Para
+crear una migración nueva usa `mise exec -- npx prisma migrate dev` con una base
+de desarrollo y permisos para su shadow database. `db:seed` crea las categorías
+del sistema y el admin; el acceso local por defecto es
+`admin@killbill.app` / `password123`. Puedes configurar `SEED_ADMIN_EMAIL`,
+`SEED_ADMIN_PASSWORD` y `SEED_ADMIN_PIN` antes de la primera siembra.
 
-### 4. Initialize Database (First Run)
-Once the app is running in Portainer:
-1.  Open the container console (`>_` Exec Console).
-2.  Run migrations to create tables:
-    ```bash
-    npx prisma migrate deploy
-    ```
-3.  Seed the admin user:
-    ```bash
-    npx prisma db seed
-    ```
+Para desarrollar con datos reales **anonimizados** de producción hay una
+**réplica compartida** por máquina (contenedor Podman `prod-replica-killbill`,
+`127.0.0.1:23308`). `mise run setup` la arranca y apunta la app a ella sin cargar
+datos; `mise run db:replica:refresh` la vuelve a sacar de producción (solo
+lectura allí). El login queda en `admin@example.invalid` / `password`. Para una
+rama con migraciones nuevas, `mise run db:replica:local` carga la copia en la base
+propia del worktree. Los tests y el e2e usan **siempre** la base propia del
+worktree, nunca la réplica. Detalles, caché y avisos:
+[docs/prod-replica.md](docs/prod-replica.md).
 
----
+El OCR requiere una clave de Gemini o de OpenRouter, ya sea en `.env`
+(`GEMINI_API_KEY`, `OPENROUTER_API_KEY`) o guardada desde `/admin/ai`. Las claves
+quedan vacías inicialmente; el resto de la aplicación se puede desarrollar sin
+ellas. Si ya tienes `.env`, incorpora `PORT`, `COMPOSE_PROJECT_NAME` y los campos
+de `.env.example` que necesites; `setup` nunca lo sobrescribe. Mantén
+`DATABASE_URL` alineada con los campos `DATABASE_*`, especialmente el puerto.
 
-## 🔒 Security
--   **Authentication**: Custom JWT-based session system (`/lib/auth.ts`, `/lib/jwt.ts`).
--   **Middleware**: Edge-compatible middleware (`middleware.ts`) protects sensitive routes.
--   **HttpOnly Cookies**: Sessions are stored in secure, HTTP-only cookies.
+## Comandos
 
-## 🛠️ Tech Stack
--   **Framework**: Next.js 15 (App Router)
--   **Database**: MySQL + Prisma ORM
--   **Styling**: TailwindCSS + Shadcn/UI (Glassmorphism design)
--   **Auth**: jose (JWT) + bcryptjs
+| Comando | Acción |
+| --- | --- |
+| `mise run setup` | Preparar entorno, dependencias y cliente Prisma; apuntar la app a la réplica compartida |
+| `mise run dev` | Arrancar Next.js en el puerto de `.env` |
+| `mise run check` | Prisma generate, oxlint, typecheck y tests unitarios sin watch |
+| `mise run typecheck` | `next typegen` + `tsc` de la app y de `e2e/` |
+| `mise run test` | Tests unitarios sin watch |
+| `mise run lint` | Lint con oxlint |
+| `mise run build` | Generar Prisma y compilar producción |
+| `mise run services:up` | Arrancar la MySQL propia del worktree y esperar a que esté lista |
+| `mise run services:status` | Consultar los servicios de este checkout |
+| `mise run services:down` | Detener servicios conservando los datos |
+| `mise run db:migrate` | Aplicar migraciones existentes a la base propia del worktree |
+| `mise run db:seed` | Sembrar categorías y admin en la base propia del worktree |
+| `mise run db:replica:up` / `db:replica:down` | Arrancar o parar la réplica compartida (`down -- --purge` la borra) |
+| `mise run db:replica:refresh` | Volver a sacar la réplica de producción (solo lectura allí) y recargar la compartida |
+| `mise run db:replica:use-shared` | Apuntar la app a la réplica compartida |
+| `mise run db:replica:local` | Cargar la réplica en la base propia del worktree (ramas con migraciones) |
+| `mise run e2e` | Ejecutar Playwright contra la base propia del worktree |
+
+Antes del primer e2e: `mise exec -- npx playwright install chromium --with-deps`.
+Los fixtures e2e **borran los datos de su base**, que siempre es la MySQL propia
+del worktree (`WORKTREE_DATABASE_*` de `.env`), aunque la app apunte a la réplica
+compartida. El servidor de e2e y las rutas `/api/test/*` se niegan a usar un host
+que no sea local o la réplica compartida, aunque un túnel a otra base parecería
+local: no lo uses. Detén su servidor dev;
+Playwright arranca uno con las rutas de prueba habilitadas y usa el mismo `PORT`.
+CI levanta una MySQL 8.0 efímera con el mismo `compose.dev.yaml` (igual que
+producción) y usa los comandos mise del repositorio.
+Las variables que CI exporta tienen prioridad sobre las del archivo `.env`.
+
+Playwright separa los contratos API (`api`, una ejecución) de los flujos de interfaz
+(`chromium` y `mobile-chrome`). Los escenarios de autorización que comprueban la
+navegación del invitado conservan ambas pantallas. Usa
+`mise run e2e -- --project=api` para ejecutar solo los contratos.
+
+Todos los specs importan `test` y `expect` de `e2e/fixtures/test.fixture.ts`.
+Para sesiones adicionales usa el fixture `newContext`: hereda las opciones del
+proyecto y conserva los errores de navegador incluso si se cierra el contexto.
+Un error JavaScript no controlado hace fallar la prueba.
+
+El servidor de pruebas usa UTC y el navegador Europe/Madrid para detectar
+fechas inconsistentes durante la hidratación. Playwright arranca un proveedor
+OCR HTTP local con puerto efímero y claves ficticias; el recorrido de ticket
+mantiene reales la validación, subida y persistencia. El override del proveedor
+solo funciona con `TEST_ROUTES_ENABLED=true`, loopback y credenciales de prueba.
+Los tests de concurrencia consultan la base local para verificar dinero,
+membresías y usos persistidos después de las solicitudes simultáneas.
+
+CI falla también si una prueba solo pasa tras un reintento. El resumen de GitHub
+Actions identifica prueba, proyecto, intento y error; el artefacto
+`playwright-report` incluye el informe HTML y `test-results` con trazas y capturas.
+El informe local nunca arranca un servidor automáticamente.
+
+## Orca y worktrees
+
+Ejecuta `mise trust` y `mise run setup` desde cada worktree nuevo. No copies
+`.env` entre worktrees: el setup asigna a cada uno un proyecto Compose, volumen,
+credenciales y puertos propios. Comprueba que los puertos estén libres si
+preparas varios checkouts simultáneamente; si cambias el puerto MySQL, actualiza
+tanto `DATABASE_PORT` como `DATABASE_URL`. Los puertos se conservan al repetir setup.
+
+El comando de preparación para un hook de Orca es `mise run setup`, después de
+confiar en la configuración. El arranque y las migraciones son pasos explícitos.
+Antes de archivar un worktree, ejecuta `mise run services:down`; conserva su
+volumen para poder recuperar los datos. Los comandos requieren `mise` en `PATH`,
+sin depender de la activación de Node en un shell interactivo.
+
+## Producción
+
+`compose.dev.yaml` contiene exclusivamente los servicios de desarrollo.
+`docker-compose.yml` describe el despliegue con una imagen publicada y redes
+externas de MySQL/Traefik; **no crea una base de datos**.
+
+GitHub Actions ejecuta unit tests, lint, typecheck, `npm audit` (bloquea con
+avisos críticos en dependencias de runtime) y e2e antes de publicar la imagen en
+GHCR (`latest` + SHA del commit) y solicitar el despliegue a Coolify. El Dockerfile usa la misma versión de Node
+que `mise.toml`; al actualizarla, cambia ambos y ejecuta las comprobaciones.
+El contenedor aplica `prisma migrate deploy` antes de arrancar el servidor; si
+la migración falla, el contenedor termina con error y no llega a servir.
+Los secretos y la conexión de producción se configuran en Coolify. La base de
+producción es MySQL 8.0 (el driver se llama `@prisma/adapter-mariadb`, pero el
+servidor es MySQL).
+
+`DATABASE_ALLOW_PUBLIC_KEY_RETRIEVAL=true` activa `allowPublicKeyRetrieval` en el
+adaptador (app y seed). Solo hace falta con MySQL 8.4+, que ya no admite
+`--default-authentication-plugin` y autentica con `caching_sha2_password`: sin
+TLS, el driver necesita pedir la clave pública RSA del servidor. Por defecto está
+desactivado y MySQL 8.0 (`mysql_native_password`) no lo necesita. Antes de pasar
+producción a 8.4, planifica la migración y activa la variable en Coolify.
+
+`GET /api/health` es público y sin caché: responde 200 `{"status":"ok"}` tras un
+`SELECT 1` y 503 si la base no responde. La imagen trae un `HEALTHCHECK` que lo
+usa; también sirve como healthcheck de Coolify/Traefik.
+
+**Recomendado (operaciones):** separar las migraciones del arranque. Configura en
+Coolify un paso previo al despliegue (o un job one-shot con la misma imagen) que
+ejecute `cd /prisma-tools && ./node_modules/.bin/prisma migrate deploy`, y apunta
+el healthcheck de Coolify a `/api/health`. Mientras no exista ese paso, el `CMD`
+de la imagen sigue migrando al arrancar.
+
+### Claves y modelos de IA (OCR)
+
+Una persona administradora puede configurar las claves y los modelos de Gemini y
+OpenRouter en `/admin/ai`, para toda la instancia. Las variables de entorno siguen
+funcionando, así que un despliegue que solo las use no necesita ningún cambio. Por
+proveedor, lo guardado en la interfaz tiene prioridad, y al quitarlo se vuelve a lo
+siguiente de la lista:
+
+| Ajuste | Prioridad |
+| --- | --- |
+| Clave | Base de datos → `GEMINI_API_KEY` / `OPENROUTER_API_KEY` → sin clave |
+| Modelo de Gemini | Base de datos → `gemini-flash-latest` |
+| Modelo de OpenRouter | Base de datos → `OPENROUTER_OCR_MODEL` → `xiaomi/mimo-v2.6-flash` |
+
+El orden de los proveedores no cambia: primero Gemini y, si falla, OpenRouter.
+
+El campo «Modelo» propone los modelos de cada proveedor que aceptan imágenes. La
+lista se pide al proveedor desde el servidor al abrir el campo: la de Gemini usa la
+clave configurada (sin clave no hay lista) y la de OpenRouter es pública y se pide
+sin clave. Se puede filtrar escribiendo, y también guardar un identificador que no
+esté en la lista: si el proveedor no responde o rechaza la clave, el campo sigue
+funcionando como texto libre. En Gemini el filtro de modelos con visión es
+aproximado, porque su API no indica qué modelos aceptan imágenes.
+
+Las claves se guardan cifradas con AES-256-GCM y la interfaz solo muestra su origen
+y los 4 últimos caracteres. La clave de cifrado se deriva de
+`AI_SETTINGS_ENCRYPTION_KEY` (opcional) o, si no está definida, de `JWT_SECRET`.
+
+**Rotar ese secreto obliga a volver a introducir las claves.** Las que ya están
+guardadas dejan de poder descifrarse y `/admin/ai` avisa de cuáles hay que volver
+a guardar. Mientras tanto, el OCR usa las claves de las variables de entorno; si
+no hay ninguna, fallará hasta que las vuelvas a introducir. Si quieres
+rotar `JWT_SECRET` sin que esto ocurra, define antes
+`AI_SETTINGS_ENCRYPTION_KEY` y vuelve a guardar las claves.
+
+### Subidas (tickets y avatares)
+
+Los ficheros subidos se guardan en `UPLOAD_DIR` (por defecto `<cwd>/uploads`;
+`/app/uploads` en la imagen Docker), **fuera de `public/`**: Next sirve `public/`
+como estático antes de cualquier ruta, así que un fichero allí se descargaría sin
+sesión tras el siguiente reinicio. Solo se sirven por `/uploads/<uuid>.<ext>`
+(`src/app/uploads/[filename]/route.ts`), que exige sesión. Mientras queden
+ficheros en la ubicación antigua (`public/uploads`), la app los sigue leyendo
+(y la purga los borra) desde ahí, así que nada se rompe antes de migrarlos.
+
+**Migración única en el servidor (Coolify):** cambia el *mount path* del
+almacenamiento persistente de la app de `/app/public/uploads` a `/app/uploads`
+(mismo volumen → los ficheros aparecen en la ruta nueva sin copiarlos) y
+redespliega. Si los ficheros estaban en otro sitio, cópialos a `/app/uploads`
+del volumen (`chown 1001:1001`). Comprueba después que
+`curl -I https://finanzas.mougan.es/uploads/<fichero>` sin cookie devuelve 401.
+En local, mueve los ficheros con `mkdir -p uploads && mv public/uploads/* uploads/`.

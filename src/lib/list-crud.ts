@@ -23,13 +23,13 @@
  */
 import { prisma } from "./db";
 import { normalizeAisle, autoAssignAisle } from "./aisles";
+import { normalizeQuantity } from "./list-quantity";
 
 const MAX_LIST_NAME = 60;
 const MAX_DESCRIPTION = 200;
 const MAX_ITEM_NAME = 80;
 const MAX_UNIT = 20;
 const MAX_NOTE = 200;
-const MAX_QUANTITY = 100000;
 
 /**
  * Write scope for a list mutation. XOR by construction (discriminated union): a
@@ -114,13 +114,15 @@ function validateOptionalText(raw: unknown, max: number, code: string): string |
     return t;
 }
 
-/** Optional positive integer quantity → int or null. */
+/**
+ * Optional positive quantity (up to 3 decimals, ≤ 100 000) → number or null.
+ * Accepts a JSON number or typed text ("1,5"); the message says WHAT is wrong
+ * (not a number / too big / too many decimals).
+ */
 function validateQuantity(raw: unknown): number | null {
-    if (raw === undefined || raw === null || raw === "") return null;
-    if (typeof raw !== "number" || !Number.isInteger(raw) || raw <= 0 || raw > MAX_QUANTITY) {
-        throw new ListError(400, "INVALID_QUANTITY", "La cantidad debe ser un entero positivo");
-    }
-    return raw;
+    const r = normalizeQuantity(raw);
+    if (!r.ok) throw new ListError(400, "INVALID_QUANTITY", r.error);
+    return r.value;
 }
 
 /**
@@ -317,14 +319,25 @@ export async function reorderItemsForScope(scope: ListWriteScope, listId: string
     return { reordered: orderedIds.length };
 }
 
+/** Upper bound of `ids` in clear-checked (a list never gets near it). */
+const MAX_CLEAR_IDS = 1000;
+
 /**
  * "Vaciar comprados": DELETE the checked items of a list to recycle the weekly
  * list without recreating it. A scoped deleteMany (list asserted in scope first)
  * — the owner-fixed decision is to DELETE the checked rows, not just uncheck them.
- * Idempotent: returns the count removed (0 when nothing was checked).
+ * With `ids` (the checked items the client showed) only those that are still
+ * checked go, so an item another member ticked after the last poll survives;
+ * without it, every checked item. Idempotent: returns the count removed (0 when
+ * nothing was checked).
  */
-export async function clearCheckedForScope(scope: ListWriteScope, listId: string) {
+export async function clearCheckedForScope(scope: ListWriteScope, listId: string, ids?: unknown) {
     await loadListInScope(scope, listId);
-    const res = await prisma.shoppingListItem.deleteMany({ where: { listId, checked: true } });
+    if (ids != null && (!Array.isArray(ids) || ids.length > MAX_CLEAR_IDS || ids.some((x) => typeof x !== "string"))) {
+        throw new ListError(400, "INVALID_IDS", "Productos no válidos");
+    }
+    const res = await prisma.shoppingListItem.deleteMany({
+        where: ids == null ? { listId, checked: true } : { listId, checked: true, id: { in: ids as string[] } },
+    });
     return { cleared: res.count };
 }

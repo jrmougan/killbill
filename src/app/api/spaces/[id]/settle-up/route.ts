@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { getSessionCtx, requireSpaceAccess } from "@/lib/authz";
 import { getGroupBalances } from "@/lib/ledger-read";
 import { resolveMyDebts } from "@/lib/finance";
-import { assertStatusTransition, SpacePolicyError } from "@/lib/space-policy";
+import { assertStatusTransition } from "@/lib/space-policy";
 import { SpaceStatus } from "@/generated/prisma/enums";
+import { SettlementError } from "@/lib/settlement-rules";
+import { withSpaceLock } from "@/lib/settlement-service";
+import { conflict, requireSpace, route } from "@/lib/http";
+import { idParams } from "@/lib/http/schemas";
+
+const ARCHIVED_MESSAGE = "El espacio está archivado (solo lectura)";
 
 /**
  * Close the space for settling (Fase 1): move ACTIVE -> SETTLING and create the
@@ -15,89 +19,65 @@ import { SpaceStatus } from "@/generated/prisma/enums";
  *
  * Suggestions are for the CALLER only (they can only create settlements as the
  * payer). Idempotent: an equal PENDING settlement to the same creditor is not
- * duplicated on re-run.
+ * duplicated on re-run. No body is read.
  */
-export async function POST(
-    request: Request,
-    { params }: { params: Promise<{ id: string }> },
-) {
-    const { id } = await params;
-    const ctx = await getSessionCtx();
+export const POST = route(
+    { auth: "user", params: idParams, unauthorizedMessage: "Unauthorized" },
+    async ({ ctx, params: { id } }) => {
+        // OWNER/ADMIN drive the space-wide lifecycle change. allowArchived:true so a
+        // space already in SETTLING can re-run to refresh suggestions.
+        const auth = await requireSpace(ctx, id, { roles: ["OWNER", "ADMIN"], allowArchived: true });
 
-    // OWNER/ADMIN drive the space-wide lifecycle change. allowArchived:true so a
-    // space already in SETTLING can re-run to refresh suggestions.
-    const auth = await requireSpaceAccess(ctx, id, {
-        roles: ["OWNER", "ADMIN"],
-        allowArchived: true,
-    });
-    if (!auth.ok) {
-        return NextResponse.json({ error: auth.error, code: auth.code }, { status: auth.status });
-    }
+        const currentStatus = auth.space.status as SpaceStatus;
+        if (currentStatus === SpaceStatus.ARCHIVED) throw conflict(ARCHIVED_MESSAGE, "SPACE_NOT_WRITABLE");
 
-    const currentStatus = auth.space.status as SpaceStatus;
-    if (currentStatus === SpaceStatus.ARCHIVED) {
-        return NextResponse.json(
-            { error: "El espacio está archivado (solo lectura)", code: "SPACE_NOT_WRITABLE" },
-            { status: 409 },
-        );
-    }
+        // Transition to SETTLING only if not already there (SpacePolicyError → its 400 + code).
+        const willTransition = currentStatus === SpaceStatus.ACTIVE;
+        if (willTransition) assertStatusTransition(currentStatus, SpaceStatus.SETTLING);
 
-    // Transition to SETTLING only if not already there.
-    const willTransition = currentStatus === SpaceStatus.ACTIVE;
-    if (willTransition) {
-        try {
-            assertStatusTransition(currentStatus, SpaceStatus.SETTLING);
-        } catch (e) {
-            if (e instanceof SpacePolicyError) {
-                return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });
+        // Under the space lock (same one every settlement mutation takes) so the
+        // debts read here cannot race a concurrent confirm/"Ya he pagado".
+        const created = await withSpaceLock(id, async (tx, lockedStatus) => {
+            if (lockedStatus === SpaceStatus.ARCHIVED) {
+                throw new SettlementError(409, "SPACE_NOT_WRITABLE", ARCHIVED_MESSAGE);
             }
-            throw e;
-        }
-    }
+            if (willTransition) {
+                await tx.couple.update({ where: { id }, data: { status: SpaceStatus.SETTLING } });
+            }
 
-    // Compute what the caller owes from the ledger-sourced balances.
-    const balances = await getGroupBalances(id);
-    const myDebts = resolveMyDebts(balances, auth.userId); // { creditorId: cents }
+            // What the caller owes, from the ledger-sourced balances.
+            const balances = await getGroupBalances(id, tx);
+            const myDebts = resolveMyDebts(balances, auth.userId); // { creditorId: cents }
 
-    const created = await prisma.$transaction(async (tx) => {
-        if (willTransition) {
-            await tx.couple.update({ where: { id }, data: { status: SpaceStatus.SETTLING } });
-        }
+            const rows: { toUserId: string; amount: number }[] = [];
+            for (const [toUserId, amount] of Object.entries(myDebts)) {
+                if (amount <= 0) continue;
+                // Skip if an equal PENDING settlement to this creditor already
+                // exists (idempotent re-run).
+                const existing = await tx.settlement.findFirst({
+                    where: { coupleId: id, fromUserId: auth.userId, toUserId, amount, status: "PENDING" },
+                    select: { id: true },
+                });
+                if (existing) continue;
+                await tx.settlement.create({
+                    data: {
+                        coupleId: id,
+                        fromUserId: auth.userId,
+                        toUserId,
+                        amount,
+                        method: "CASH",
+                        status: "PENDING",
+                    },
+                });
+                rows.push({ toUserId, amount });
+            }
+            return rows;
+        });
 
-        const rows: { toUserId: string; amount: number }[] = [];
-        for (const [toUserId, amount] of Object.entries(myDebts)) {
-            if (amount <= 0) continue;
-            // Skip if an equal PENDING settlement to this creditor already exists
-            // (idempotent re-run).
-            const existing = await tx.settlement.findFirst({
-                where: {
-                    coupleId: id,
-                    fromUserId: auth.userId,
-                    toUserId,
-                    amount,
-                    status: "PENDING",
-                },
-                select: { id: true },
-            });
-            if (existing) continue;
-            await tx.settlement.create({
-                data: {
-                    coupleId: id,
-                    fromUserId: auth.userId,
-                    toUserId,
-                    amount,
-                    method: "CASH",
-                    status: "PENDING",
-                },
-            });
-            rows.push({ toUserId, amount });
-        }
-        return rows;
-    });
-
-    return NextResponse.json({
-        success: true,
-        status: SpaceStatus.SETTLING,
-        suggested: created,
-    });
-}
+        return NextResponse.json({
+            success: true,
+            status: SpaceStatus.SETTLING,
+            suggested: created,
+        });
+    },
+);

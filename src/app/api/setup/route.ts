@@ -1,74 +1,96 @@
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { z } from "zod";
+import { Prisma } from "@/generated/prisma/client";
+import { HttpError, parseJson, toErrorResponse } from "@/lib/http";
+import { jsonObject } from "@/lib/http/schemas";
+
+const SETUP_DONE = "Ya existen usuarios. El setup ya fue completado.";
+const INVALID_BODY = "Cuerpo de la petición no válido";
+
+class SetupAlreadyDone extends Error {}
+
+const trimmedOrEmpty = z.unknown().optional().transform((v) => (typeof v === "string" ? v.trim() : ""));
+
+/**
+ * {name, email, password}. Same checks and order as always: any field missing
+ * (a non-string name/email counts as missing) → then the password must be a
+ * string of ≥ 8 characters.
+ */
+const SetupBody = jsonObject({ name: trimmedOrEmpty, email: trimmedOrEmpty, password: z.unknown().optional() }, INVALID_BODY)
+    .superRefine(({ name, email, password }, ctx) => {
+        if (!name || !email || !password) {
+            ctx.addIssue({ code: "custom", message: "Se requiere nombre, email y contraseña" });
+        } else if (typeof password !== "string" || password.length < 8) {
+            ctx.addIssue({ code: "custom", path: ["password"], message: "La contraseña debe tener al menos 8 caracteres" });
+        }
+    })
+    .transform(({ name, email, password }) => ({ name, email, password: password as string }));
+
+const setupDone = () => new HttpError(403, SETUP_DONE);
+
+// Public bootstrap routes: no session involved, so they don't go through route()
+// (which would resolve one); errors still map through toErrorResponse.
 
 // POST: Setup first admin user (only works if no users exist)
 export async function POST(request: Request) {
     try {
-        // Check if any users exist
-        const userCount = await prisma.user.count();
+        // Cheap early exit (no hashing work) once the instance is set up. The
+        // authoritative check is repeated inside the transaction below.
+        if ((await prisma.user.count()) > 0) throw setupDone();
 
-        if (userCount > 0) {
-            return NextResponse.json(
-                { error: "Ya existen usuarios. El setup ya fue completado." },
-                { status: 403 }
-            );
-        }
-
-        const body = await request.json();
-        const { name, email, password } = body;
-
-        if (!name || !email || !password) {
-            return NextResponse.json(
-                { error: "Se requiere nombre, email y contraseña" },
-                { status: 400 }
-            );
-        }
-
-        if (typeof password !== "string" || password.length < 8) {
-            return NextResponse.json(
-                { error: "La contraseña debe tener al menos 8 caracteres" },
-                { status: 400 }
-            );
-        }
+        const { name, email, password } = await parseJson(request, SetupBody, { invalidMessage: INVALID_BODY });
 
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create admin user
-        const admin = await prisma.user.create({
-            data: {
-                name,
-                email,
-                password: hashedPassword,
-                isAdmin: true,
-                avatar: "👑",
-            },
-        });
+        // Atomic "count then create": SERIALIZABLE makes the COUNT take shared
+        // locks on the (empty) User index, so two concurrent bootstraps cannot
+        // both see 0 and both insert — InnoDB aborts one of them (deadlock /
+        // write conflict), which is then reported as "setup already done".
+        let admin: { id: string; name: string; email: string | null };
+        try {
+            admin = await prisma.$transaction(
+                async (tx) => {
+                    if ((await tx.user.count()) > 0) throw new SetupAlreadyDone();
+                    return tx.user.create({
+                        data: {
+                            name,
+                            email,
+                            password: hashedPassword,
+                            isAdmin: true,
+                            avatar: "👑",
+                        },
+                        select: { id: true, name: true, email: true },
+                    });
+                },
+                { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+            );
+        } catch (error) {
+            if (error instanceof SetupAlreadyDone) throw setupDone();
+            // Lost a race against a concurrent bootstrap: the winner's row exists.
+            if ((await prisma.user.count()) > 0) throw setupDone();
+            throw error;
+        }
 
         return NextResponse.json({
             success: true,
             message: "Usuario administrador creado. Ahora puedes iniciar sesión.",
-            user: { id: admin.id, name: admin.name, email: admin.email },
+            user: admin,
         });
-
     } catch (error) {
-        console.error("Setup Error:", error);
-        return NextResponse.json({ error: "Error interno" }, { status: 500 });
+        return toErrorResponse(error, { fallbackMessage: "Error interno", logLabel: "Setup Error:" });
     }
 }
 
-// GET: Check if setup is needed
+// GET: Check if setup is needed (public: never reveals how many users exist).
 export async function GET() {
     try {
         const userCount = await prisma.user.count();
 
-        return NextResponse.json({
-            setupRequired: userCount === 0,
-            userCount,
-        });
+        return NextResponse.json({ setupRequired: userCount === 0 });
     } catch (error) {
-        console.error("Setup check error:", error);
-        return NextResponse.json({ error: "Error interno" }, { status: 500 });
+        return toErrorResponse(error, { fallbackMessage: "Error interno", logLabel: "Setup check error:" });
     }
 }

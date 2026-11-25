@@ -46,6 +46,24 @@ next-env.d.ts
 /playwright-report/
 /test-results/
 
-# Uploaded receipts (runtime, served from a persistent volume in prod)
-/public/uploads/*
-!/public/uploads/.gitkeep
+# Uploaded receipts (runtime; UPLOAD_DIR, a persistent volume in prod).
+# public/uploads is the legacy location (still read until migrated).
+/uploads/
+/public/uploads/
+
+# stray build/typecheck output
+*.log
+tsc_output*
+
+# Ralph UX loop screenshots and iteration logs (scripts/ralph)
+/scripts/ralph/shots/
+/scripts/ralph/logs/
+
+# Database dumps (prod replica cache lives outside the repo; never commit a dump)
+*.sql.gz
+*.sql.bz2
+*.sql.xz
+*.sql.zst
+*.dump
+*.dump.gz
+/dumps/

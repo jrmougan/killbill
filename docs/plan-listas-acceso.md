@@ -1,3 +1,5 @@
+> **HISTÓRICO, IMPLEMENTADO de otra forma.** `/lists` es una pestaña de la barra inferior. "Liquidar" está retirado del vocabulario. Las rutas /Users/jeromo son de otra máquina.
+
 # Plan de implementación — Hacer las listas de la compra más accesibles en Kill Bill
 
 ## 1. Problema

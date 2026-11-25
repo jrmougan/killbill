@@ -7,12 +7,18 @@ export interface SeedUser {
   name?: string;
 }
 
+/** A registered user as returned by /api/test/seed (always id + shared password). */
+export interface SeededUser extends SeedUser {
+  id: string;
+  password: string;
+}
+
 export interface SeedResult {
   inviteCode?: string;
   admin?: SeedUser;
-  user?: SeedUser;
-  userA?: SeedUser;
-  userB?: SeedUser;
+  user?: SeededUser;
+  userA?: SeededUser;
+  userB?: SeededUser;
   [key: string]: unknown;
 }
 
@@ -23,5 +29,6 @@ export async function seedScenario(request: APIRequestContext, scenario: string)
 }
 
 export async function resetDb(request: APIRequestContext): Promise<void> {
-  await request.post('/api/test/reset');
+  const res = await request.post('/api/test/reset');
+  if (!res.ok()) throw new Error(`Reset failed: ${await res.text()}`);
 }

@@ -12,6 +12,8 @@ vi.mock('@/lib/category-db', () => ({
 }));
 vi.mock('@/lib/db', () => ({
     prisma: {
+        // getSessionCtx revalidates a GUEST session against its Membership row.
+        membership: { findUnique: async () => ({ role: 'GUEST', status: 'ACTIVE', group: { status: 'ACTIVE' } }) },
         expense: {
             findMany: (...a: unknown[]) => mockFindMany(...a),
             createMany: (...a: unknown[]) => mockCreateMany(...a),
@@ -50,6 +52,49 @@ describe('POST /api/expenses/import', () => {
         expect((await POST(req({ rows: [row({ dateISO: '09/07/2026' })] }))).status).toBe(400);
         expect((await POST(req({ rows: [row({ amountCents: 0 })] }))).status).toBe(400);
         expect((await POST(req({ rows: [row({ description: '  ' })] }))).status).toBe(400);
+    });
+
+    it.each(['2026-02-31', '2025-02-29', '1999-12-31', '9999-01-01'])('400 with a Spanish message on impossible / out-of-range date %s (G-06)', async (dateISO) => {
+        const res = await POST(req({ rows: [row({ dateISO })] }));
+        expect(res.status).toBe(400);
+        expect((await res.json()).error).toMatch(/fecha/i);
+        expect(mockCreateMany).not.toHaveBeenCalled();
+    });
+
+    it('keeps the historical messages (quoting the row) and adds `issues`', async () => {
+        const res = await POST(req({ rows: [row(), row({ amountCents: 1.5, description: 'Bar' })] }));
+        expect(res.status).toBe(400);
+        expect(await res.json()).toEqual({
+            error: 'Importe no válido en "Bar"',
+            issues: [{ path: 'rows.1', message: 'Importe no válido en "Bar"' }],
+        });
+        const many = await POST(req({ rows: Array.from({ length: 2001 }, () => row()) }));
+        expect((await many.json()).error).toBe('Demasiadas filas (máximo 2000)');
+        const noRows = await POST(req(null));
+        expect((await noRows.json()).error).toBe('No hay movimientos que importar');
+        const badJson = await POST(new Request('http://localhost/api/expenses/import', { method: 'POST', body: '{' }));
+        expect(await badJson.json()).toEqual({ error: 'Petición no válida' });
+        expect(mockCreateMany).not.toHaveBeenCalled();
+    });
+
+    it('403 for guests, 500 "Error al importar" when the insert fails', async () => {
+        mockGetSession.mockResolvedValue({ userId: 'g1', kind: 'guest', groupId: 'trip' });
+        const guest = await POST(req({ rows: [row()] }));
+        expect(guest.status).toBe(403);
+        expect(await guest.json()).toEqual({ error: 'Los invitados no pueden importar movimientos' });
+
+        mockGetSession.mockResolvedValue({ userId: 'u1' });
+        mockCreateMany.mockRejectedValue(new Error('db down'));
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const res = await POST(req({ rows: [row()] }));
+        expect(res.status).toBe(500);
+        expect(await res.json()).toEqual({ error: 'Error al importar' });
+        spy.mockRestore();
+    });
+
+    it('stores the day at 12:00 UTC', async () => {
+        await POST(req({ rows: [row()] }));
+        expect(mockCreateMany.mock.calls[0][0].data[0].date).toEqual(new Date('2026-07-09T12:00:00.000Z'));
     });
 
     it('creates PERSONAL expenses with date + fingerprint', async () => {

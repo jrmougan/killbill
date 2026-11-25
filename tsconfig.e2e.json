@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "plugins": []
+  },
+  "include": [
+    "e2e/**/*.ts",
+    "e2e/**/*.mts",
+    "playwright.config.ts",
+    "scripts/ralph/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

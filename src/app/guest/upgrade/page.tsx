@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 import { getSessionCtx } from "@/lib/authz";
 import { ephemeralSpacesEnabled } from "@/lib/flags";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { UpgradeForm } from "./upgrade-form";
 
 /**
  * Guest → account upgrade screen (Fase 3). Only a live guest session may reach it;
  * a registered user is bounced to the dashboard, an anonymous visitor to login.
+ * It is a tab of the guest nav, so it leaves room for the bottom bar.
  */
 export const dynamic = "force-dynamic";
 
@@ -17,16 +19,12 @@ export default async function GuestUpgradePage() {
     if (ctx.kind !== "guest") redirect("/dashboard");
 
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-6 space-y-8 max-w-md mx-auto">
-            <div className="text-center space-y-2">
-                <h1 className="text-3xl font-bold tracking-tighter text-primary italic">EQUIL</h1>
-                <p className="text-muted-foreground">Crea tu cuenta para conservar el acceso</p>
-            </div>
-            <p className="text-sm text-center text-muted-foreground max-w-xs">
-                Conservarás todos tus gastos y saldos de este espacio. Solo añadimos un email y una
-                contraseña a lo que ya eres.
-            </p>
+        <AuthShell
+            title="Crea tu cuenta"
+            subtitle="Conservarás todos tus gastos y saldos de este espacio: solo añadimos un email y una contraseña a lo que ya eres."
+            className="pb-[calc(110px+env(safe-area-inset-bottom))]"
+        >
             <UpgradeForm />
-        </div>
+        </AuthShell>
     );
 }

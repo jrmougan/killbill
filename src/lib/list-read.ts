@@ -32,6 +32,39 @@ export async function getListsForScope(scope: ListWriteScope): Promise<ListSumma
     }));
 }
 
+/**
+ * Change stamp of a list: item count + newest item `updatedAt` + the list's own
+ * `updatedAt` (rename). Any add / edit / toggle / delete / clear-checked moves
+ * it, so the Listas poll only re-renders the screen when something changed.
+ */
+export function listVersionStamp(listUpdatedAt: Date, itemCount: number, maxItemUpdatedAt: Date | null): string {
+    return `${itemCount}.${maxItemUpdatedAt?.getTime() ?? 0}.${listUpdatedAt.getTime()}`;
+}
+
+/** Same stamp computed from an already loaded list (no extra query). */
+export function listVersionOf(list: { updatedAt: Date; items: { updatedAt: Date }[] }): string {
+    const max = list.items.reduce<Date | null>((acc, i) => (!acc || i.updatedAt > acc ? i.updatedAt : acc), null);
+    return listVersionStamp(list.updatedAt, list.items.length, max);
+}
+
+/**
+ * Cheap version of a list for polling (2 indexed queries, no item rows), or
+ * null if missing / out of scope. Authorization is the caller's (route) job.
+ */
+export async function getListVersion(scope: ListWriteScope, listId: string): Promise<string | null> {
+    const list = await prisma.shoppingList.findFirst({
+        where: { id: listId, ...scopeWhere(scope) },
+        select: { updatedAt: true },
+    });
+    if (!list) return null;
+    const agg = await prisma.shoppingListItem.aggregate({
+        where: { listId },
+        _count: { _all: true },
+        _max: { updatedAt: true },
+    });
+    return listVersionStamp(list.updatedAt, agg._count._all, agg._max.updatedAt);
+}
+
 /** A single list with its items (ordered), or null if missing / out of scope. */
 export async function getListWithItems(scope: ListWriteScope, listId: string) {
     const list = await prisma.shoppingList.findUnique({

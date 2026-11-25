@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseDateISO, parseSignedCents, normalizeRow, type ColumnMapping } from './bank-csv';
+import { parseDateISO, parseSignedCents, normalizeRow, guessColumns, type ColumnMapping } from './bank-csv';
 
 describe('parseDateISO', () => {
     it('parses DMY with / or - or .', () => {
@@ -17,6 +17,11 @@ describe('parseDateISO', () => {
     it('rejects invalid', () => {
         expect(parseDateISO('nope', 'DMY')).toBeNull();
         expect(parseDateISO('32/13/2026', 'DMY')).toBeNull();
+        // Impossible calendar days are rejected instead of rolling over (G-06).
+        expect(parseDateISO('31/02/2026', 'DMY')).toBeNull();
+        expect(parseDateISO('29/02/2025', 'DMY')).toBeNull();
+        expect(parseDateISO('29/02/2024', 'DMY')).toBe('2024-02-29');
+        expect(parseDateISO('2026-04-31', 'YMD')).toBeNull();
         expect(parseDateISO('09/07', 'DMY')).toBeNull();
     });
 });
@@ -66,5 +71,31 @@ describe('normalizeRow', () => {
         expect(normalizeRow({ Fecha: 'bad', Importe: '-1,00', Concepto: 'x' }, mapping).error).toMatch(/Fecha/);
         expect(normalizeRow({ Fecha: '09/07/2026', Importe: 'bad', Concepto: 'x' }, mapping).error).toMatch(/Importe/);
         expect(normalizeRow({ Fecha: '09/07/2026', Importe: '-1,00', Concepto: '' }, mapping).error).toMatch(/Concepto/);
+        expect(normalizeRow({ Fecha: '31/02/2026', Importe: '-3,00', Concepto: 'Fecha rara' }, mapping).error).toMatch(/Fecha inválida/);
+        expect(normalizeRow({ Fecha: '01/01/1990', Importe: '-3,00', Concepto: 'Antiguo' }, mapping).error).toMatch(/2000/);
+    });
+});
+
+describe('guessColumns', () => {
+    it('guesses the common Spanish and English headers', () => {
+        expect(guessColumns(['Fecha', 'Concepto', 'Importe'])).toEqual({ dateCol: 'Fecha', descriptionCol: 'Concepto', amountCol: 'Importe' });
+        expect(guessColumns(['Date', 'Description', 'Amount'])).toEqual({ dateCol: 'Date', descriptionCol: 'Description', amountCol: 'Amount' });
+    });
+    it('never reuses the date/concept column as amount with verbose bank headers', () => {
+        const headers = ['Fecha operación contable del movimiento', 'Concepto detallado del cargo bancario', 'Importe EUR', 'Saldo disponible'];
+        expect(guessColumns(headers)).toEqual({
+            dateCol: headers[0],
+            descriptionCol: headers[1],
+            amountCol: 'Importe EUR',
+        });
+    });
+    it('prefers importe over weaker words, in any column order', () => {
+        expect(guessColumns(['Cargo', 'Fecha valor', 'Concepto', 'Cantidad']).amountCol).toBe('Cantidad');
+    });
+    it('falls back to weak words, never to the balance column', () => {
+        expect(guessColumns(['Fecha', 'Concepto', 'Saldo en euros', 'Cargo en euros']).amountCol).toBe('Cargo en euros');
+    });
+    it('falls back to a free column when nothing matches', () => {
+        expect(guessColumns(['Fecha', 'Concepto', 'X'])).toEqual({ dateCol: 'Fecha', descriptionCol: 'Concepto', amountCol: 'X' });
     });
 });

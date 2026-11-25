@@ -1,126 +1,128 @@
+<!-- Budget: ≤ 10 KB. Subsystem detail goes in docs/agents/, with a row in "Read before touching". -->
 # Kill Bill — Agent Instructions
+
+Couples/group expense-splitting app: Next.js App Router, Prisma + MySQL 8.0 (`@prisma/adapter-mariadb` driver), JWT auth. This file and the code win over anything historical in `docs/`.
+
+## Non-negotiables
+
+- **Money** is stored as integer cents; convert only for display (`src/lib/currency.ts`). API bodies are mixed: top-level `amount` (expenses, settlements, budgets) is euros; `customSplits[].amount` and `*Cents` fields are cents (see the domain `*-schemas.ts`). User-typed money goes through `parseEuroInput`, never `parseFloat`/`Number()`.
+- **Balances** are `LedgerEntry` sums (`getGroupBalances` in `ledger-read.ts`), not `calculateBalances`.
+- **API contract**: new or changed routes under `src/app/api/` use `route()` from `src/lib/http`; handlers throw `HttpError` or domain errors and authorize explicitly with `requireSpace`. Error shapes, statuses and Spanish messages are a contract: never change them in a refactor.
+- **Sessions**: route handlers (oxlint enforces it under `src/app/api/**`) and guest pages that read or write space data use `getSessionCtx`; raw `getSession` does not revalidate guests against the DB.
+- **Space lock**: every write whose validity depends on a space's status, roster or balances runs in `withSpaceLock` (`src/lib/expense-tx.ts`) and re-checks with `assertWritableUnderLock` / `assertRosterUnchanged` (409 `MEMBERS_CHANGED`). Kicking a member with an open balance is 409 `HAS_BALANCE`.
+- **Migrations** auto-apply on deploy: never edit an applied one; expand then contract across releases (`docs/agents/migrations.md`).
+- **Lists never generate an expense**: no bridge, no `linkedExpenseId`, no prices.
+- **Colors** render inline from `hex`, never a dynamic tailwind class (the JIT purges those).
+- **Uploads** never go under `public/`.
+- **`TEST_ROUTES_ENABLED=true`** enables `/api/test/*` and the OCR test seam and disables ALL rate limiting. Never set it in production.
+- **Never edit** `src/generated/prisma/`.
 
 ## Commands
 
+Use the versions pinned in `mise.toml`.
+
 ```bash
-# Development
-npm run dev          # Start dev server on http://localhost:3000
-
-# Build & Production
-npm run build        # Build production bundle (standalone output)
-npm start            # Run production server
-
-# Linting
-npm run lint         # ESLint with Next.js + TypeScript rules
-
-# Testing
-npm test             # Run all Vitest tests (watch mode — use `npx vitest run` for one pass)
-npx vitest run src/lib/finance.test.ts   # Run a single test file
-npm run test:e2e     # Run Playwright end-to-end tests (e2e/)
-
-# Database
-npx prisma migrate dev    # Run migrations + regenerate client
-npx prisma db seed        # Seed admin user
-npx prisma studio         # Open Prisma Studio GUI
-
-# Docker
-docker compose up -d      # Start full stack (app + MySQL)
+mise trust && mise install
+mise run setup          # .env, npm ci, Prisma generate; app -> shared replica
+mise run services:up    # Local MySQL (CONTAINER_ENGINE=podman optional)
+mise run services:status
+mise run db:migrate     # Apply committed migrations (own DB)
+mise run db:seed        # Seed system categories and admin
+mise run dev            # Next.js on the PORT in .env
+mise run check          # Prisma generate, oxlint, typecheck (app + e2e), unit tests
+mise run lint
+mise run test           # Unit tests once
+mise exec -- npx vitest run src/lib/finance.test.ts  # One file
+mise run typecheck
+mise run build
+mise exec -- npx playwright install chromium --with-deps  # Before first e2e
+mise run e2e            # Own server; RESETS the worktree's own DB; stop dev
+mise run e2e -- e2e/<dir>      # Or: -- --project=api
+mise exec -- npx prisma migrate dev  # NEW migration; interactive (agents: prisma-migration skill)
+mise run services:down  # Keep the DB volume
+SCREENS=a,b mise run ux:capture  # Screenshot, a11y tree, overflow and <44px report at 360×760; wipes the DB, stop dev first
+mise run ux:design      # Render the EQUIL mockups
 ```
 
-## Environment Variables
+- `compose.dev.yaml` is local only; `docker-compose.yml` describes production and provisions no DB.
+- Each worktree runs `setup` independently (own `.env`, Compose project, ports, volume).
+- npm scripts stay available through `mise exec -- npm …`.
+- The Ralph loop is finished: `scripts/ralph/README.md`.
 
-Copy `.env.example` to `.env`. Required variables:
-- `DATABASE_URL`, `DATABASE_HOST`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME`
-- `JWT_SECRET` — used for signing session tokens
-- `GEMINI_API_KEY` — primary provider for OCR receipt parsing
-- `OPENROUTER_API_KEY` — optional OCR fallback when Gemini fails or returns invalid output
-- `OPENROUTER_OCR_MODEL` — optional fallback model override (defaults to `qwen/qwen3-vl-235b-a22b-instruct`)
+## Environment
 
-## Architecture
+`setup` creates `.env` from `.env.example` (never overwrites) and generates `PORT`, `COMPOSE_PROJECT_NAME`, `DATABASE_PORT`, `MYSQL_ROOT_PASSWORD` and credentials.
 
-Kill Bill is a couples/group expense-splitting app. Full-stack Next.js with App Router, Prisma + MariaDB, and JWT auth.
+- Required: `DATABASE_URL`, `DATABASE_HOST`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_NAME`, `JWT_SECRET` (signs session tokens).
+- Flags: `EPHEMERAL_SPACES_ENABLED` (guest and ephemeral surface, off by default).
+- Seed: `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_ADMIN_PIN`; set before seeding a shared environment.
+- All others are listed with their subsystem doc (`ocr-llm`, `deployment`, `mcp`).
 
-### Key directories
+## Layout
 
-- `src/app/` — Pages and API routes (App Router)
-- `src/components/` — React components grouped by feature (`dashboard/`, `expense/`, `expenses/`, `ui/`)
-- `src/lib/` — Core logic: `finance.ts` (balance/settlement math), `splits.ts` (split distributions), `receipt-ocr-ai.ts` (Gemini/OpenRouter receipt OCR), `auth.ts` (session/cookie management), `jwt.ts` (sign/verify), `db.ts` (Prisma singleton)
-- `src/proxy.ts` — Edge middleware protecting `/dashboard`, `/admin`, and `/api/admin` routes (Next.js 16 renamed `middleware.ts` → `proxy.ts`)
-- `prisma/` — Schema, migrations, seed script, and fix scripts
-- `src/generated/prisma/` — Generated Prisma client (do not edit manually)
+- `src/app/` — pages and API routes. A new top-level page is public until its prefix is added to `PROTECTED_PATHS` (`src/proxy.ts`); guests need an explicit entry in `src/lib/authz-guest.ts` (deny-by-default).
+- `src/components/` — React by feature; shared primitives in `ui/`. `src/hooks/` — `useApiMutation` over `apiRequest`.
+- `src/lib/` — money: `finance.ts`, `splits.ts`, `ledger.ts`, `ledger-read.ts`, `expense-tx.ts`; auth: `auth.ts`, `authz.ts`, `jwt.ts`; OCR: `receipt-ocr-ai.ts`, `ai-settings.ts`, `secret-box.ts`, `uploads.ts`; `db.ts` (Prisma); `http/`.
+- `src/proxy.ts` — request proxy (Next.js 16's rename of `middleware.ts`, Node.js runtime by default). Other API routes authenticate themselves.
+- `src/mcp/` — MCP. `prisma/` — schema, migrations, seed. `e2e/` — Playwright. `docs/` — index in `docs/README.md`.
+- `scripts/` — dev tooling (`dev-env.mjs`, `dev-compose.mjs`), one-off backfill/repair/validation scripts, the production migration runbook, `ralph/`.
 
-### Data model
+## Domain in brief
 
-All monetary amounts are stored in **cents** (integers). Convert to euros only for display using `src/lib/currency.ts`.
+- **Spaces**: a `Couple` row is a space with a `SpaceType` chosen at creation, never inferred: INDIVIDUAL (virtual, no rows), COUPLE, GROUP, EPHEMERAL (guests). Rules: `src/lib/space-policy.ts`.
+- **Lifecycle**: `ACTIVE ⇄ SETTLING`, and either can go to `ARCHIVED` (terminal, read-only). SETTLING blocks new expenses but allows "Saldar deuda" (UI: "Cerrando cuentas").
+- **Authorization** is against the resource's group, not the `active_group` cookie: `requireSpaceAccess` re-checks the DB Membership row.
+- **Core models**: `Couple` → `Membership[]` (→ `User`), `Expense[]`, `Settlement[]`; `Expense` → `Split[]`, `Tag[]` via `ExpenseTag`; `Account`/`LedgerTransaction`/`LedgerEntry` hold the ledger. `prisma/schema.prisma` is the source of truth.
+- **Enums**: `RecurringSeries.interval` and `Settlement.status`/`method` are Prisma enums. An expense category is relational (`Expense.categoryId` → `Category`); recurrence lives in `RecurringSeries`, not on `Expense`.
+- **Balance flow**: saving an expense or a CONFIRMED settlement posts zero-sum entries in the same transaction (`postExpenseLedger`/`postSettlementLedger`). PENDING and REJECTED settlements never reach the ledger. `calculateBalances` is a reference formula for tests and `scripts/`.
+- **Debt numbers differ**: `resolveMyDebts` = suggested greedy pairing only; `debtOf` = what a member really owes; `settlementCap` = max for one payment; `close-plan.ts` = what is left when closing. Display treats 1 cent as a debt (`isAtPeace`); blocking rules (leave, kick, archive) use `hasOpenBalance` (±1 cent).
+- **CHECK constraints** (MySQL ≥ 8.0.16) guard money columns and scope rules; a bad write fails in the DB.
+- **`scopeKey`**: VIRTUAL generated column, never written by the app, on Category/Tag/Budget/ShoppingList/Expense. Enforces group XOR personal; backs `UNIQUE(scopeKey, key|name)`.
+- **Dates**: business dates are Europe/Madrid (servers run UTC): `APP_TZ` from `home-format.ts`, month bounds from `monthRange()`. Expense dates are stored at 12:00 UTC. In Server Components use `requestTime()`, never `new Date()` in render.
 
-Nine Prisma models: `Couple` → `User[]`, `Expense[]`, `Settlement[]`. An `Expense` has `Split[]` records (one per user) and links to `Tag[]` through `ExpenseTag`. `InviteCode` controls registration, and `Budget` tracks per-category spending limits. `Expense.category`/`recurringInterval` and `Settlement.status`/`method` are Prisma enums (not free-form strings).
+## UI language
 
-### Espacios (spaces)
+- The user-facing product is EQUIL. UI copy and API errors are hardcoded Spanish; identifiers are English.
+- Wording about debts, payments, closing or deleting comes from the glossary in `docs/ux/plan-acciones-criticas.md` §1 (`Saldar deuda`, `Al día`; never `Quedar en paz`, `liquidar`).
+- The app sends no notifications and moves no money: do not promise it.
+- Before changing visible text, grep it in `e2e/` and `scripts/ralph/capture.spec.ts`; specs assert exact Spanish strings, so update and run them in the same commit.
 
-A `Couple` row doubles as a **space** with four modes selected at creation (`SpaceType`, never inferred from member count): **INDIVIDUAL** (virtual — no rows, `visibility=PERSONAL` + `ownerId`), **COUPLE** (cap 2), **GROUP** (cap 20), **EPHEMERAL** (cap 20, `expiresAt`, the only mode allowing guests). Caps and rules live in `src/lib/space-policy.ts`; the only allowed upgrade is COUPLE→GROUP. A space has a lifecycle `SpaceStatus` `ACTIVE → SETTLING → ARCHIVED` (reopenable); `SETTLING` blocks new expenses but allows settling, `ARCHIVED` is read-only. Membership/status is authorized **against the group of the resource** (not the `active_group` UI cookie) via `src/lib/authz.ts` `requireSpaceAccess`, which re-checks the DB Membership row, not the JWT claim. `GroupInvite` replaces eternal `Couple.code` links: link tokens are 256-bit bearer secrets stored **only as sha256 hash** (`tokenHash` + `tokenPrefix`), with `expiresAt`, `maxUses` and `revokedAt`; the plaintext is shown once. Login/register never silently auto-join — `/i/[token]` is the explicit consent screen. **Guest** access (shadow `User` with `isGuest=true`, Membership role `GUEST`) uses a short-lived `kind:'guest'` JWT (72h, sliding, hard-capped at the space `expiresAt`) that `getSessionCtx` **revalidates against the DB on every request** (revocation without a blacklist). The entire guest/ephemeral surface is gated behind the `EPHEMERAL_SPACES_ENABLED` env flag (see `src/lib/flags.ts`) — off by default; turning it off never breaks already-upgraded accounts.
+## Read before touching
 
-### Auth flow
+| When you touch | Read |
+| --- | --- |
+| `src/app/api/**` | `docs/route-handlers.md` |
+| `prisma/schema.prisma`, `prisma/migrations/`, new models | `docs/agents/migrations.md` |
+| Auth, invites, guests, space lifecycle, `src/proxy.ts` | `docs/agents/spaces-auth.md` |
+| Shopping lists, aisles | `docs/agents/shopping-lists.md` |
+| Categories | `docs/agents/categories.md` |
+| OCR, uploads, `/admin/ai`, LLM keys | `docs/agents/ocr-llm.md` |
+| `src/mcp/**`, `src/app/api/mcp/` | `docs/agents/mcp.md` |
+| `Dockerfile`, compose, CI, cron, health, dependency pins | `docs/agents/deployment.md` |
+| `e2e/`, Playwright fixtures, test routes | `docs/agents/testing.md` |
+| Screens, components, layout, refresh | `docs/agents/ui-patterns.md`, `docs/design/README.md` |
+| UI copy, critical confirmations (`CriticalActionSheet`) | `docs/ux/plan-acciones-criticas.md` §1-2 |
 
-Login → bcryptjs password check → JWT signed with `jose` → stored as HttpOnly cookie. Middleware verifies JWT on every protected request. Session is refreshed on each API call in `src/lib/auth.ts`.
+## Skills (`.agents/skills/`)
 
-### Expense & balance flow
+Before a migration use `prisma-migration`; before touching finance/splits/ledger/settlements use `money-change`; to boot the app, query the local DB or run e2e use `local-stack`.
 
-1. User creates expense: payer + total amount + splits (equal or custom)
-2. `finance.ts` calculates each user's net balance: `amount paid − fair share of splits ± settlements`
-3. Settlement records zero out debts between specific users
+## Testing and done
 
-### Category system
+- Before declaring work done: `mise run check`; for routes or UI also `mise run build` and the e2e of the area. `check` excludes build, e2e and `e2e/fixtures/*.test.ts`.
+- `finance.ts`, `splits.ts`, `ledger.ts` and `ledger-read.ts` are the most critical.
 
-Categories live in the `Category` table on three levels: **system** (8 seeded rows, `isSystem=true`, `groupId=null`+`ownerId=null`), **space** (custom rows scoped by `groupId`, for shared/couple spaces), and **personal** (custom rows scoped by `ownerId`, for INDIVIDUAL mode). A custom row *shadows* the system row with the same `key`; the effective set of a context is `system ∪ context-custom` (merge in `category-read.ts`, DB fetch in `category-db.ts` via `getEffectiveCategories`/`resolveCategoryId`). Space and personal customs never leak across scopes — resolution queries one discriminant at a time.
+## Commits and PRs
 
-- **No whitelists**: `/api/expenses` and `/api/budget` validate the category key against the effective set via `resolveCategoryId` — an unknown key is a **400**, never silently coerced to `other`.
-- **Icons**: `Category.icon` stores a lucide component *name* (string). `ICON_REGISTRY` (`category-icons.ts`) is the single string→component resolver (`getIconComponent`, `isValidIconName`); the 8 system icon names must stay registered (guarded by `category-icons.test.ts`).
-- **Colors**: rendered inline from `hex` (never a dynamic tailwind class — the JIT purges those). Writes must pass the closed palette check (`isValidCategoryHex`).
-- **CRUD**: `/api/spaces/[id]/categories` (OWNER/ADMIN only) and `/api/me/categories` (session-scoped) share `category-crud.ts`. Reserved system keys → 400; delete **requires** an explicit reassignment target (no orphan/silent `other`) and a Budget period collision on the target aborts with **409**. `…/categories/duplicate` clones a system/custom row into a new custom.
-- **Manual step**: system categories must be seeded (`prisma db seed`); the `add_category_owner` migration is additive (nullable `ownerId` column + indexes + FK only).
+- `type(scope): asunto en español` (short scope; body explains cause and impact). Branch `jrmougan/<slug>`.
+- PR body in Spanish, stating what could not be verified. Pushing to `main` deploys and migrates production, so go through a PR.
 
-### Shopping lists (listas de la compra)
+<!-- BEGIN:nextjs-agent-rules -->
 
-`ShoppingList` + `ShoppingListItem` (migration `add_shopping_lists` creates them; `remove_list_bridge_add_aisle` prunes the bridge and adds `aisle` — expand/contract). A list is **group** (`groupId`) or **personal** (`ownerId`) — XOR discriminated; items are lightweight (name required, optional `quantity`/`unit`/`note`/`aisle`) and carry **no `categoryId`**.
+## This is NOT the Next.js you know
 
-**A list is a PLANNING tool only — it NEVER generates an expense.** There is no list→expense bridge: no `checkoutList`, no `linkedExpenseId`, no `priceCents`, no `CheckoutSheet`. The spend is materialized by the receipt **OCR** (`/api/ocr` → `ocr_parser.ts`), which is the single source of truth for the money; the list just tracks what's missing, who grabs it and in which aisle order, ticked off together in near-real-time. All validation, scope/XOR enforcement, sortOrder allocation and the idempotent `checked` toggle (condition-by-id `updateMany`, never read-modify-write) live in `src/lib/list-crud.ts` (reads in `list-read.ts`, error mapping in `list-http.ts`); routes own only authorization.
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
 
-**Aisle** (`aisle`, nullable): an OPTIONAL per-item supermarket-aisle key, **orthogonal to the 8 expense categories** — it organizes the physical walk through the shop, it does NOT classify spend and never touches the expense `CategoryPicker`. Its own static vocabulary (slug + emoji + `sortOrder` + keywords) lives in `src/lib/aisles.ts`; `autoAssignAisle(name)` best-effort assigns it from the item name (accent-folded keyword match, longest keyword wins, unmatched stays `null` — never forced to "otros"), and an explicit value is validated via `normalizeAisle`.
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
-Routes: space `/api/spaces/[id]/lists/**` (authorized via `requireSpaceAccess`, `allowGuest:false`, writability blocks SETTLING/ARCHIVED) and personal `/api/me/lists/**` (session-scoped by `ownerId`), each with `…/[listId]/clear-checked` (deletes the checked items to recycle the weekly list). `clear-checked`/item routes all re-assert the list belongs to the scope (`getListWithItems`/`loadListInScope`) after the space-access gate. UI under `/lists` (índice Común/Personal + detalle) — `/lists` is proxy-protected.
-
-### OCR flow
-
-Receipt image uploaded → stored via `/api/upload` → path sent to `/api/ocr` → Gemini Vision returns structured JSON (items + amounts) for user confirmation before saving. Provider calls and response validation live in `receipt-ocr-ai.ts`; an API, empty-response, or invalid-JSON failure falls back to OpenRouter when `OPENROUTER_API_KEY` is configured.
-
-### MCP server (Model Context Protocol)
-
-The app exposes an MCP endpoint at `POST /api/mcp` (Streamable HTTP transport) so external AI agents (Hermes Agent, Claude Desktop, etc.) can interact with Kill Bill programmatically.
-
-**Architecture**: The MCP endpoint is served by the existing Next.js standalone process — no second process or Docker changes. Auth is `Authorization: Bearer <jwt>` validated via the same `JWT_SECRET` used for browser sessions (`src/lib/mcp-auth.ts` `validateBearerToken`). Guest tokens are rejected. Each MCP session creates an `McpServer` instance (`src/mcp/server.ts` `createServer`) that wraps the raw JWT in an `InternalApiClient` (`src/mcp/internal-client.ts`) — this client injects the JWT as the `session_token` cookie on internal HTTP calls to the existing API routes, so **every tool reuses the full authorization stack** (`requireSpaceAccess`, role gates, space-policy) with zero duplication. The transport is `WebStandardStreamableHTTPServerTransport` (Web-standard `Request`/`Response`, native to Next.js route handlers). Module-level `Map<Mcp-Session-Id, {server, transport}>` stores stateful sessions.
-
-**Token issuance**: `POST /api/me/mcp-token` (requires normal session cookie auth) issues a 90-day JWT with `kind:'mcp'` (`signMcpToken` in `jwt.ts`). TTL configurable via `MCP_TOKEN_TTL_DAYS` env var.
-
-**Tool modules** (`src/mcp/tools/`): each exports a `ToolRegistrar` function that registers tools on the `McpServer`. Tool inputs are validated with Zod (raw shapes, not `z.object()`); outputs are JSON content blocks. Tool `inputSchema` fields use `.describe()` for agent UX. Tools are wired in the `registrars` array in `src/mcp/server.ts`.
-
-- `finance.ts` — `list_spaces`, `get_balance`, `list_expenses`, `create_expense`, `update_expense`, `delete_expense`, `create_settlement`, `confirm_settlement`. Monetary inputs in euros (floats); `customSplits` amounts are converted to cents via `toCents` before posting to the API.
-- `budget-shopping.ts` — `get_budgets`, `get_categories`, `list_shopping_lists`, `create_shopping_list`, `add_shopping_item`, `check_shopping_item`, `clear_checked_items`. Space-vs-personal routing is driven by whether `groupId` is provided.
-- `ocr.ts` — `parse_receipt` accepts base64 image data, forwards to `/api/ocr` as multipart form.
-- `resources-prompts.ts` — Resources `kb://spaces` and `kb://budget-summary`; Prompts `monthly_report`, `settle_up_guide`, `shopping_trip`.
-
-**Hermes Agent config** (`~/.hermes/config.yaml`):
-```yaml
-mcp_servers:
-  killbill:
-    url: "https://finanzas.mougan.es/api/mcp"
-    headers:
-      Authorization: "Bearer <jwt from POST /api/me/mcp-token>"
-```
-
-### Deployment
-
-GitHub Actions (`.github/workflows/deploy.yml`) on push to `main`: runs the e2e + unit/lint gates, builds a Docker image, pushes it to GHCR (`ghcr.io/jrmougan/killbill`), then triggers a **Coolify** webhook that pulls the new image and redeploys. Migrations run from the **container's start command** (`Dockerfile` `CMD`): `prisma migrate deploy` from the bundled `/prisma-tools` (Prisma CLI + `prisma/migrations`) executes before `node server.js`, so pending migrations auto-apply on every deploy and the server only starts if they succeed (a failed migration leaves the previous container serving). Coolify itself has no pre/post-deploy command. The container runs behind **Traefik** (host `finanzas.mougan.es`) and connects to a dedicated **MySQL 8.0** database (`killbill-mysql-8`, user in `mysql_native_password` — the `@prisma/adapter-mariadb` driver needs it) over the `coolify` Docker network. The production environment must set `JWT_SECRET` and at least one OCR provider key (`GEMINI_API_KEY` and/or `OPENROUTER_API_KEY`); configure both to enable failover (auth fails loudly without `JWT_SECRET`).
-
-## Testing
-
-Unit tests live alongside the code in `src/lib/` (`.test.ts` files), using Vitest with jsdom. The `finance.ts` and `splits.ts` files are the most critical to keep tested — they contain the core financial math. End-to-end tests live in `e2e/` (Playwright) and run in CI against a MariaDB service; both unit tests and lint are blocking gates for the deploy. Test-only API routes (`/api/test/*`) and the login rate limiter are gated on `TEST_ROUTES_ENABLED=true`.
+<!-- END:nextjs-agent-rules -->

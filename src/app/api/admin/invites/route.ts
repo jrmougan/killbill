@@ -1,44 +1,23 @@
 import { prisma } from "@/lib/db";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
-import { verifyToken } from "@/lib/auth";
+import { conflict, notFound, route } from "@/lib/http";
+import { createInviteFor, deleteInvite } from "@/app/admin/admin-data";
+import { id, jsonObject } from "@/lib/http/schemas";
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-async function checkAdmin() {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("session_token")?.value;
+// auth: 'admin' — getSessionCtx verifies the JWT AND its tokenVersion (revoked
+// tokens fail); only a regular browser session administers (not a guest, not an
+// MCP token), and isAdmin is read from the DB, never trusted from the JWT claim.
+// 401 "No autorizado" / 403 "Acceso denegado".
 
-    if (!token) return null;
-
-    const payload = await verifyToken(token);
-    if (!payload || !payload.userId) return null;
-
-    // Optional: Verify against DB if we want strictly 100% fresh state
-    // For admin, it's safer to check DB field.
-    const user = await prisma.user.findUnique({
-        where: { id: payload.userId as string },
-        select: { id: true, email: true, isAdmin: true }
-    });
-
-    return user;
-}
+const DeleteBody = jsonObject({ id: id() });
 
 // GET: List all invite codes
-export async function GET() {
-    try {
-        const user = await checkAdmin();
-
-        if (!user) {
-            return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-        }
-
-        if (!user.isAdmin) {
-            return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
-        }
-
+export const GET = route(
+    { auth: 'admin', errorMessage: "Error al obtener invitaciones", logLabel: "Error fetching invites:" },
+    async () => {
         const invites = await prisma.inviteCode.findMany({
             orderBy: { createdAt: "desc" },
             include: {
@@ -47,63 +26,28 @@ export async function GET() {
         });
 
         return NextResponse.json(invites);
-    } catch (error) {
-        console.error("Error fetching invites:", error);
-        return NextResponse.json({ error: "Error al obtener invitaciones" }, { status: 500 });
-    }
-}
+    },
+);
 
 // POST: Create a new invite code
-export async function POST() {
-    try {
-        const user = await checkAdmin();
+export const POST = route(
+    { auth: 'admin', errorMessage: "Error al crear invitación", logLabel: "Error creating invite:" },
+    async ({ ctx }) => {
+        // Random 8-character code, valid for 7 days: the same helper as the admin panel.
+        return NextResponse.json(await createInviteFor(ctx.userId));
+    },
+);
 
-        if (!user) {
-            return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-        }
+// DELETE: Void an invite code nobody has used. Same rule as the admin panel
+// (`deleteInvite`): a used code stays as the record of who registered with it
+// (409 INVITE_USED); an id that does not exist is a 404, not a 500.
+export const DELETE = route(
+    { auth: 'admin', body: DeleteBody, errorMessage: "Error al eliminar invitación", logLabel: "Error deleting invite:" },
+    async ({ body: { id } }) => {
+        if (await deleteInvite(id)) return NextResponse.json({ success: true });
 
-        if (!user.isAdmin) {
-            return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
-        }
-
-        // Generate random 8-character code
-        const code = randomBytes(4).toString("hex").toUpperCase();
-
-        const invite = await prisma.inviteCode.create({
-            data: {
-                code,
-                createdById: user.id,
-                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-            },
-        });
-
-        return NextResponse.json(invite);
-    } catch (error) {
-        console.error("Error creating invite:", error);
-        return NextResponse.json({ error: "Error al crear invitación" }, { status: 500 });
-    }
-}
-
-// DELETE: Delete an invite code
-export async function DELETE(request: Request) {
-    try {
-        const user = await checkAdmin();
-
-        if (!user) {
-            return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-        }
-
-        if (!user.isAdmin) {
-            return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
-        }
-
-        const { id } = await request.json();
-
-        await prisma.inviteCode.delete({ where: { id } });
-
-        return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error("Error deleting invite:", error);
-        return NextResponse.json({ error: "Error al eliminar invitación" }, { status: 500 });
-    }
-}
+        const invite = await prisma.inviteCode.findUnique({ where: { id }, select: { id: true } });
+        if (!invite) throw notFound("Invitación no encontrada");
+        throw conflict("Esta invitación ya se ha usado y no se puede anular", "INVITE_USED");
+    },
+);

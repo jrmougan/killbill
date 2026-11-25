@@ -1,85 +1,113 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { CriticalActionSheet } from "@/components/ui/critical-action-sheet";
+import { formatCurrency } from "@/lib/currency";
+import { setFlashToast } from "@/lib/flash-toast";
 import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { deleteEffectLines, type DeleteEffectSplit } from "./delete-effect";
 
 interface DeleteExpenseButtonProps {
     expenseId: string;
+    description: string;
+    /** Total in cents. */
+    amount: number;
+    /** Shared expenses carry their space; personal ones have none. */
+    coupleId: string | null;
+    viewerId: string;
+    payer: { id: string; name: string };
+    splits: DeleteEffectSplit[];
+    /** The expense is the template of an active recurring series. */
+    isRecurringTemplate?: boolean;
+    /** Where to go after deleting (keeps the Común/Personal context — G-24/T-05). */
+    redirectTo?: string;
 }
 
-export function DeleteExpenseButton({ expenseId }: DeleteExpenseButtonProps) {
+/**
+ * Delete with a danger `CriticalActionSheet` (alertdialog, focus on Cancelar,
+ * Escape cancels): names the expense and amount, spells out the balance effect
+ * for the viewer and warns that a recurring template stops generating.
+ */
+export function DeleteExpenseButton({
+    expenseId,
+    description,
+    amount,
+    coupleId,
+    viewerId,
+    payer,
+    splits,
+    isRecurringTemplate = false,
+    redirectTo = "/expenses/list",
+}: DeleteExpenseButtonProps) {
     const router = useRouter();
     const [showConfirm, setShowConfirm] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const personal = !coupleId;
 
     const handleDelete = async () => {
         setLoading(true);
+        setError(null);
         try {
-            const res = await fetch(`/api/expenses/${expenseId}`, {
-                method: "DELETE",
-            });
-
+            const res = await fetch(`/api/expenses/${expenseId}`, { method: "DELETE" });
             if (res.ok) {
-                router.push("/dashboard");
+                setFlashToast(
+                    `Gasto «${description}» eliminado · saldo actualizado`,
+                    coupleId ? { label: "Saldar deuda", href: `/settle?space=${encodeURIComponent(coupleId)}` } : undefined,
+                );
+                router.push(redirectTo);
                 router.refresh();
-            } else {
-                alert("Error al eliminar el gasto");
+                return;
             }
+            const body = await res.json().catch(() => null);
+            setError(body?.error || "No se pudo eliminar el gasto.");
         } catch (err) {
             console.error(err);
-            alert("Error de conexión");
+            setError("Error de conexión. Inténtalo de nuevo.");
         } finally {
             setLoading(false);
         }
     };
 
-    if (showConfirm) {
-        return (
-            <div className="fixed inset-0 bg-[color:var(--ink)]/40 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-in fade-in duration-200">
-                <div className="bg-card border border-[color:var(--line)] rounded-2xl p-6 max-w-sm w-full space-y-4 animate-in zoom-in-95 duration-200">
-                    <div className="text-center space-y-2">
-                        <div className="h-12 w-12 rounded-full bg-[var(--negative-tint)] flex items-center justify-center mx-auto">
-                            <Trash2 className="h-6 w-6 text-destructive" />
-                        </div>
-                        <h3 className="text-lg font-bold">¿Eliminar gasto?</h3>
-                        <p className="text-sm text-muted-foreground">
-                            Esta acción no se puede deshacer. El gasto se eliminará permanentemente.
-                        </p>
-                    </div>
-                    <div className="flex gap-3">
-                        <Button
-                            variant="secondary"
-                            className="flex-1"
-                            onClick={() => setShowConfirm(false)}
-                            disabled={loading}
-                        >
-                            Cancelar
-                        </Button>
-                        <Button
-                            variant="destructive"
-                            className="flex-1"
-                            onClick={handleDelete}
-                            isLoading={loading}
-                        >
-                            Eliminar
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        );
+    // The balance effect leads, in ink: it is what the person is deciding on.
+    const consequences: React.ReactNode[] = deleteEffectLines({ viewerId, payer, splits, personal })
+        .map((line) => <span key={line} className="font-semibold text-foreground">{line}</span>);
+    if (!personal) {
+        consequences.push("Si ya saldasteis esta deuda, el saldo cambiará y puede que tengáis que saldar deuda de nuevo.");
+    }
+    if (isRecurringTemplate) {
+        consequences.push("Al eliminarlo dejarán de crearse los próximos. Los ya creados se mantienen.");
     }
 
     return (
-        <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-            onClick={() => setShowConfirm(true)}
-        >
-            <Trash2 className="h-4 w-4 sm:mr-2" />
-            <span className="hidden sm:inline">Eliminar</span>
-        </Button>
+        <>
+            <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Eliminar"
+                aria-haspopup="dialog"
+                className="-my-1 h-11 w-11 rounded-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => { setError(null); setShowConfirm(true); }}
+                data-testid="expense-delete"
+            >
+                <Trash2 className="h-4 w-4" />
+            </Button>
+            {showConfirm && (
+                <CriticalActionSheet
+                    title={`¿Eliminar «${description}» de ${formatCurrency(amount)}?`}
+                    consequences={consequences}
+                    reversible={false}
+                    tone="danger"
+                    confirmLabel={isRecurringTemplate ? "Eliminar y detener recurrencia" : "Eliminar gasto"}
+                    busy={loading}
+                    error={error}
+                    onConfirm={handleDelete}
+                    onClose={() => setShowConfirm(false)}
+                    testId="expense-delete-sheet"
+                />
+            )}
+        </>
     );
 }
