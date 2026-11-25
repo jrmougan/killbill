@@ -130,7 +130,10 @@ externas de MySQL/Traefik; **no crea una base de datos**.
 
 GitHub Actions ejecuta unit tests, lint, typecheck, `npm audit` (bloquea con
 avisos críticos en dependencias de runtime) y e2e antes de publicar la imagen en
-GHCR (`latest` + SHA del commit) y solicitar el despliegue a Coolify. El Dockerfile usa la misma versión de Node
+GHCR (SHA completo del commit, inmutable, y `latest` solo por compatibilidad),
+fijar por API ese SHA como tag de la imagen en Coolify (secret
+`COOLIFY_API_TOKEN`, token con permiso write) y solicitar el despliegue con el
+webhook. Si falta algún secret de Coolify, el job falla antes de tocar Coolify. El Dockerfile usa la misma versión de Node
 que `mise.toml`; al actualizarla, cambia ambos y ejecuta las comprobaciones.
 El contenedor aplica `prisma migrate deploy` antes de arrancar el servidor; si
 la migración falla, el contenedor termina con error y no llega a servir.
