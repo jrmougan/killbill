@@ -7,8 +7,12 @@ Read before touching `Dockerfile`, compose files, CI, cron routes, the health ro
 GitHub Actions (`.github/workflows/deploy.yml`, `concurrency: deploy-main`, never cancelled), on push to `main`:
 
 1. Runs the e2e, unit, lint, typecheck and audit gates.
-2. Builds a Docker image (Buildx, GHA cache) and pushes it to GHCR (`ghcr.io/jrmougan/killbill`, tags `latest` + commit SHA).
-3. Triggers a **Coolify** webhook that pulls the new image and redeploys.
+2. Builds a Docker image (Buildx, GHA cache) and pushes it to GHCR (`ghcr.io/jrmougan/killbill`, tags: full commit SHA, immutable, and `latest`, kept only for compatibility).
+3. Checks the `COOLIFY_API_TOKEN`, `COOLIFY_WEBHOOK` and `COOLIFY_TOKEN` secrets; if one is missing the job fails with an error naming it, before any call to Coolify.
+4. `PATCH /api/v1/applications/<uuid>` sets `docker_registry_image_tag` to the commit SHA, so Coolify runs exactly that image (also on restarts). Needs `COOLIFY_API_TOKEN`, a Coolify API token with **write** permission; the deploy-only `COOLIFY_TOKEN` cannot update the application. If the PATCH fails, no deploy is triggered.
+5. Triggers the **Coolify** deploy webhook (`POST`, `COOLIFY_WEBHOOK` + `COOLIFY_TOKEN`), which pulls that tag and redeploys.
+
+Rollback: PATCH (or set in Coolify) `docker_registry_image_tag` to an earlier commit SHA and redeploy.
 
 ## Migrations at start
 
